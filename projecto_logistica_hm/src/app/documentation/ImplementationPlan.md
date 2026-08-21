@@ -82,6 +82,8 @@ Realizar una revisión profunda del proyecto actual.
 * [ ] Identificar modelos.
 * [ ] Identificar migraciones.
 * [ ] Revisar Supabase.
+* [ ] Volcar el esquema real de Supabase a `DATABASE_SCHEMA.md` con sentencias `CREATE TABLE` (correspondencia 1:1).
+* [ ] Verificar que cada tabla existente en Supabase esté documentada como DDL y ninguna tabla documentada falte en Supabase.
 * [ ] Revisar autenticación.
 * [ ] Revisar RLS.
 * [ ] Revisar rutas protegidas.

@@ -65,6 +65,7 @@ Cuando OpenCode inicie una nueva tarea importante debe comprobar:
 * `BRAIN.md`
 * `PROJECT_STATUS.md`
 * `IMPLEMENTATION_PLAN.md`
+* `DATABASE_SCHEMA.md`
 
 ### Código
 

@@ -406,6 +406,12 @@ Actualmente puede encargarse de:
 * Almacenamiento de vehículos incorporados manualmente.
 * Registro de historial y trazabilidad.
 
+Regla del esquema:
+
+* La documentación debe mantener un **esquema 1:1 con la base de datos real de Supabase**.
+* Cada tabla existente en Supabase se documenta **como si se estuviera creando el esquema**, mediante sentencias `CREATE TABLE` (DDL), no mediante `SELECT` ni descripciones informales.
+* El espejo del esquema se mantiene en `DATABASE_SCHEMA.md`.
+
 ---
 
 # 14. Incorporación manual de vehículos
@@ -446,7 +452,14 @@ Solicitud
 Sucursal
 ```
 
-La estructura definitiva debe mantenerse documentada en la documentación correspondiente de base de datos.
+La estructura definitiva debe mantenerse documentada en la documentación correspondiente de base de datos (`DATABASE_SCHEMA.md`).
+
+Reglas del modelo de datos:
+
+* La documentación de la base de datos debe mantener correspondencia **1:1** con el esquema real de Supabase.
+* Cada tabla existente debe documentarse en estilo DDL, con su sentencia `CREATE TABLE` completa, **como si se estuviera creando el esquema**, incluyendo tipos, restricciones, llaves foráneas e índices.
+* No está permitido documentar las tablas mediante consultas `SELECT`, capturas del dashboard ni descripciones informales.
+* Cualquier cambio de esquema aplicado en Supabase debe reflejarse en `DATABASE_SCHEMA.md` dentro de la misma tarea.
 
 No asumir nuevas entidades sin analizar primero el modelo existente.
 
@@ -536,7 +549,8 @@ La documentación principal del proyecto se organiza de la siguiente manera:
 /docs/
 ├── BRAIN.md
 ├── PROJECT_STATUS.md
-└── IMPLEMENTATION_PLAN.md
+├── IMPLEMENTATION_PLAN.md
+└── DATABASE_SCHEMA.md
 ```
 
 ### BRAIN.md
@@ -550,6 +564,10 @@ Estado real del proyecto.
 ### IMPLEMENTATION_PLAN.md
 
 Plan de implementación y seguimiento de tareas.
+
+### DATABASE_SCHEMA.md
+
+Espejo 1:1 del esquema de Supabase, documentado con sentencias `CREATE TABLE`.
 
 ---
 
