@@ -141,8 +141,6 @@ Registrar aquí los archivos reales encontrados durante la auditoría.
 * Asociación a sucursal.
 * Estado del vehículo.
 * Datos del vehículo.
-* Integración externa cuando corresponda.
-* Cache de información externa cuando corresponda.
 
 ### Pendientes
 
