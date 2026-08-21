@@ -4,7 +4,7 @@
 >
 > Este documento contiene la visión, contexto, arquitectura, módulos, actores, reglas generales y decisiones estructurales del sistema.
 >
-> **No utilizar este documento como registro detallado del progreso.** El progreso debe mantenerse en `PROJECT_STATUS.md` y el trabajo planificado en `IMPLEMENTATION_PLAN.md`.
+> **No utilizar este documento como registro detallado del progreso.** El progreso debe mantenerse en `PROJECT_STATUS.md`, el trabajo planificado en `IMPLEMENTATION_PLAN.md` y el esquema de base de datos en `DATABASE_SCHEMA.md`.
 
 ---
 
@@ -406,11 +406,7 @@ Actualmente puede encargarse de:
 * Almacenamiento de vehículos incorporados manualmente.
 * Registro de historial y trazabilidad.
 
-Regla del esquema:
-
-* La documentación debe mantener un **esquema 1:1 con la base de datos real de Supabase**.
-* Cada tabla existente en Supabase se documenta **como si se estuviera creando el esquema**, mediante sentencias `CREATE TABLE` (DDL), no mediante `SELECT` ni descripciones informales.
-* El espejo del esquema se mantiene en `DATABASE_SCHEMA.md`.
+El espejo del esquema de base de datos se mantiene en `DATABASE_SCHEMA.md`. Las reglas del modelo de datos están definidas en la sección 15.
 
 ---
 
@@ -546,7 +542,7 @@ No se deben implementar integraciones externas que no formen parte del alcance a
 La documentación principal del proyecto se organiza de la siguiente manera:
 
 ```text
-/docs/
+src/app/documentation/
 ├── BRAIN.md
 ├── PROJECT_STATUS.md
 ├── IMPLEMENTATION_PLAN.md
@@ -587,6 +583,25 @@ Antes de implementar una funcionalidad grande, la IA debe:
 10. Implementar.
 11. Verificar.
 12. Actualizar la documentación.
+
+### Carga selectiva de documentación
+
+Para no desperdiciar contexto, los documentos se cargan según el tipo de tarea:
+
+| Tipo de tarea                        | Lectura obligatoria     | Lectura adicional                                    |
+| ------------------------------------ | ----------------------- | ---------------------------------------------------- |
+| Cualquier tarea                      | `BRAIN.md`              |                                                      |
+| Implementar una funcionalidad        | `IMPLEMENTATION_PLAN.md`| Módulo correspondiente en `PROJECT_STATUS.md`        |
+| Trabajar con datos o repositorios    | `DATABASE_SCHEMA.md`    |                                                      |
+| Modificar el esquema de Supabase     | `DATABASE_SCHEMA.md`    | `PROJECT_STATUS.md` para registrar el cambio         |
+| Auditar o retomar el proyecto        | Los cuatro documentos   | Código real del repositorio                          |
+
+Reglas de esta tabla:
+
+* `BRAIN.md` es el único documento de lectura obligatoria siempre.
+* La carga selectiva no reemplaza el análisis del código real (pasos anteriores).
+* Si un documento relevante no ha sido leído y la tarea lo requiere según esta tabla, debe leerse antes de implementar.
+* Para funcionalidades grandes rige además la secuencia completa definida al inicio de esta sección.
 
 Nunca asumir que la documentación representa automáticamente el estado real del código.
 

@@ -322,8 +322,9 @@ Después de implementar una funcionalidad importante:
 5. Registrar pruebas realizadas.
 6. Registrar pendientes.
 7. Actualizar `IMPLEMENTATION_PLAN.md`.
-8. Registrar cualquier nueva deuda técnica.
-9. Actualizar este documento.
+8. Si la tarea modificó el esquema de base de datos, actualizar `DATABASE_SCHEMA.md` manteniendo la correspondencia 1:1 con Supabase.
+9. Registrar cualquier nueva deuda técnica.
+10. Actualizar este documento.
 
 ---
 
