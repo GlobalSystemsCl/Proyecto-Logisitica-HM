@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useActionState, useState } from 'react';
 import { updatePasswordAction } from '@/app/actions/auth.actions';
@@ -17,34 +17,34 @@ export default function EstablecerClavePage() {
   const isValid = hasMinLength && passwordsMatch;
 
   return (
-    <div className="min-h-screen flex flex-col justify-center items-center bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950 px-4 py-12 sm:px-6 lg:px-8 text-slate-100">
+    <div className="min-h-screen flex flex-col justify-center items-center bg-neutral-100 px-4 py-12 sm:px-6 lg:px-8 text-neutral-900">
       <div className="w-full max-w-md space-y-8 relative z-10">
         {/* Header */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 shadow-lg shadow-emerald-500/20 text-white font-bold text-2xl tracking-wider">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-neutral-900 text-white font-bold text-2xl tracking-wider">
             <ShieldCheck className="w-8 h-8" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
               Establecer Contraseña
             </h1>
-            <p className="text-sm text-slate-400 mt-1">
+            <p className="text-sm text-neutral-500 mt-1">
               Crea tu contraseña personal de acceso para la plataforma H.Motores
             </p>
           </div>
         </div>
 
         {/* Card Form */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-700/60 shadow-2xl rounded-2xl p-8 space-y-6">
-          <div className="border-b border-slate-800 pb-3">
-            <p className="text-xs text-slate-400">
+        <div className="bg-white border border-neutral-200 shadow-xl rounded-2xl p-8 space-y-6">
+          <div className="border-b border-neutral-200 pb-3">
+            <p className="text-xs text-neutral-500">
               Por tu seguridad, esta contraseña solo es conocida por ti y reemplaza cualquier acceso provisorio.
             </p>
           </div>
 
           {state?.error && (
-            <div className="flex items-start gap-3 p-3.5 bg-red-950/60 border border-red-800/60 rounded-xl text-red-300 text-sm">
-              <AlertCircle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div className="flex items-start gap-3 p-3.5 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+              <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
               <div className="flex-1">
                 <span className="font-semibold block">Error al guardar</span>
                 <span className="text-xs leading-relaxed opacity-90">{state.error}</span>
@@ -57,12 +57,12 @@ export default function EstablecerClavePage() {
             <div className="space-y-1.5">
               <label
                 htmlFor="password"
-                className="block text-xs font-semibold text-slate-300 uppercase tracking-wider"
+                className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider"
               >
                 Nueva Contraseña
               </label>
               <div className="relative rounded-xl shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-400">
                   <Lock className="h-4 w-4" />
                 </div>
                 <input
@@ -73,12 +73,12 @@ export default function EstablecerClavePage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Mínimo 8 caracteres"
-                  className="block w-full pl-10 pr-10 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  className="block w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-200 transition-colors"
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-neutral-500 hover:text-neutral-700 transition-colors"
                 >
                   {showPassword ? (
                     <EyeOff className="h-4 w-4" />
@@ -93,12 +93,12 @@ export default function EstablecerClavePage() {
             <div className="space-y-1.5">
               <label
                 htmlFor="confirmPassword"
-                className="block text-xs font-semibold text-slate-300 uppercase tracking-wider"
+                className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider"
               >
                 Confirmar Contraseña
               </label>
               <div className="relative rounded-xl shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-400">
                   <KeyRound className="h-4 w-4" />
                 </div>
                 <input
@@ -109,40 +109,40 @@ export default function EstablecerClavePage() {
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   placeholder="Repite tu contraseña"
-                  className="block w-full pl-10 pr-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all"
+                  className="block w-full pl-10 pr-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
               </div>
             </div>
 
             {/* Requirements Checklist */}
-            <div className="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50 space-y-1.5 text-xs text-slate-400">
+            <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 space-y-1.5 text-xs text-neutral-500">
               <div className="flex items-center gap-2">
                 {hasMinLength ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-neutral-900" />
                 ) : (
-                  <div className="w-3.5 h-3.5 rounded-full border border-slate-600" />
+                  <div className="w-3.5 h-3.5 rounded-full border border-neutral-300" />
                 )}
-                <span className={hasMinLength ? 'text-emerald-300' : ''}>
+                <span className={hasMinLength ? 'text-neutral-900' : ''}>
                   Mínimo 8 caracteres
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 {hasNumber ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-neutral-900" />
                 ) : (
-                  <div className="w-3.5 h-3.5 rounded-full border border-slate-600" />
+                  <div className="w-3.5 h-3.5 rounded-full border border-neutral-300" />
                 )}
-                <span className={hasNumber ? 'text-emerald-300' : ''}>
+                <span className={hasNumber ? 'text-neutral-900' : ''}>
                   Contiene al menos un número (recomendado)
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 {passwordsMatch ? (
-                  <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-neutral-900" />
                 ) : (
-                  <div className="w-3.5 h-3.5 rounded-full border border-slate-600" />
+                  <div className="w-3.5 h-3.5 rounded-full border border-neutral-300" />
                 )}
-                <span className={passwordsMatch ? 'text-emerald-300' : ''}>
+                <span className={passwordsMatch ? 'text-neutral-900' : ''}>
                   Las contraseñas coinciden
                 </span>
               </div>
@@ -152,7 +152,7 @@ export default function EstablecerClavePage() {
             <button
               type="submit"
               disabled={isPending || !isValid}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-600/30 transition-all duration-150"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 active:bg-black disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-150"
             >
               {isPending ? (
                 <>
