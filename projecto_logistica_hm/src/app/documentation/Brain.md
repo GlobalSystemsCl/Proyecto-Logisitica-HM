@@ -185,8 +185,6 @@ La información histórica debe conservarse incluso cuando un usuario posteriorm
 El flujo general actualmente definido es:
 
 ```text
-CREADA
-   ↓
 PENDIENTE
    ↓
 PRIORIZADA
@@ -195,7 +193,7 @@ ASIGNADA
    ↓
 CALENDARIZADA
    ↓
-DESPACHADA
+EN_TRANSITO
    ↓
 ENTREGADA
    ↓
@@ -205,23 +203,20 @@ FINALIZADA
 Estados adicionales:
 
 ```text
-RECHAZADA
 CANCELADA
 ```
+
+> Los valores corresponden exactamente al enum `estado_solicitud` de la base de datos (`DATABASE_SCHEMA.md`, sección 5.0). No existen `CREADA` ni `RECHAZADA` en el modelo actual: una solicitud se registra directamente como `pendiente`, y un rechazo se representa con `cancelada` + `motivo_cancelacion`.
 
 ---
 
 # 7. Definición de estados
 
-## CREADA
-
-La solicitud fue registrada en el sistema.
-
----
+Los estados se representan en la base de datos mediante el enum `public.estado_solicitud`.
 
 ## PENDIENTE
 
-La solicitud existe pero todavía no ha sido priorizada.
+La solicitud fue registrada en el sistema y espera priorización. Es el estado inicial del flujo.
 
 ---
 
@@ -243,9 +238,9 @@ La solicitud tiene una fecha tentativa definida para el traslado.
 
 ---
 
-## DESPACHADA
+## EN_TRANSITO
 
-El vehículo se encuentra en proceso de traslado.
+El vehículo se encuentra en tránsito hacia la sucursal destino (antes referido conceptualmente como "despachada"; el valor real del enum es `en_transito`).
 
 ---
 
@@ -263,17 +258,9 @@ Este es el último estado exitoso del flujo.
 
 ---
 
-## RECHAZADA
-
-La solicitud fue rechazada.
-
-Debe registrarse quién realizó la acción y cuándo corresponda.
-
----
-
 ## CANCELADA
 
-La solicitud fue cancelada.
+La solicitud fue cancelada (incluye rechazos). El motivo se registra en `motivo_cancelacion`.
 
 Debe conservarse el historial de la cancelación.
 
@@ -303,6 +290,7 @@ Reglas actualmente conocidas:
 * La entrega debe ser confirmada por la sucursal destino.
 * La entrega debe finalizarse formalmente después de ser marcada como entregada.
 * Los datos de los vehículos deben validarse antes de guardarse.
+* Los estados de las solicitudes se representan mediante el enum `estado_solicitud` de la base de datos (`pendiente`, `priorizada`, `asignada`, `calendarizada`, `en_transito`, `entregada`, `finalizada`, `cancelada`). La documentación se adapta al esquema real, no al revés.
 * Durante el MVP no se utilizará una API externa de vehículos.
 * No se debe implementar lógica de integración, sincronización o cache relacionada con una API externa de vehículos.
 
@@ -448,6 +436,10 @@ Usuario
 Vehículo
 Solicitud
 Sucursal
+SolicitudVehículo (tabla puente N:M)
+Auditoría
+Observación
+Notificación
 ```
 
 La estructura definitiva debe mantenerse documentada en la documentación correspondiente de base de datos (`DATABASE_SCHEMA.md`).
@@ -548,7 +540,8 @@ src/app/documentation/
 ├── BRAIN.md
 ├── PROJECT_STATUS.md
 ├── IMPLEMENTATION_PLAN.md
-└── DATABASE_SCHEMA.md
+├── DATABASE_SCHEMA.md
+└── auditoria_esquema_supabase.sql (script auxiliar de volcado/auditoría)
 ```
 
 ### BRAIN.md

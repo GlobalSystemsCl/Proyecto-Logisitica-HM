@@ -1,4 +1,4 @@
-export type UserRole = 'administrador' | 'ejecutivo' | 'jefe_local' | 'logistica';
+﻿export type UserRole = 'administrador' | 'ejecutivo' | 'jefe_local' | 'logistica';
 
 export interface UserProfile {
   id: string;
@@ -10,7 +10,7 @@ export interface UserProfile {
   requiere_cambio_clave: boolean;
   intentos_fallidos?: number;
   bloqueado_hasta?: string | null;
-  sucursal_id?: string | null;
+  sucursal_id?: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -20,7 +20,7 @@ export interface CreateUserInput {
   nombre: string;
   apellido: string;
   rol: UserRole;
-  sucursal_id?: string | null;
+  sucursal_id?: number | null;
 }
 
 export interface UpdateUserInput {
@@ -29,7 +29,7 @@ export interface UpdateUserInput {
   rol?: UserRole;
   activo?: boolean;
   requiere_cambio_clave?: boolean;
-  sucursal_id?: string | null;
+  sucursal_id?: number | null;
 }
 
 export interface AuthState {
