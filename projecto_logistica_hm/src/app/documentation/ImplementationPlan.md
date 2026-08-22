@@ -96,9 +96,32 @@ Realizar una revisión profunda del proyecto actual.
 * [ ] Comparar implementación con documentación.
 * [ ] Actualizar `PROJECT_STATUS.md`.
 
-### Resultado esperado
+## Fase 1 — Autenticación y Gestión de Usuarios
 
-Obtener una fotografía real del estado del proyecto.
+**Estado:** `COMPLETADA`
 
+### Objetivo
+
+Implementar sistema de autenticación cerrado corporativo con Supabase Email, gestión de cuentas por administrador, activación/desactivación, protección contra intentos excesivos y recuperación/establecimiento de contraseñas.
+
+### Tareas
+
+* [x] Diseñar y crear tabla `public.usuario` en Supabase con RLS y triggers de sincronización.
+* [x] Configurar clientes Supabase SSR, Browser y Admin con Service Role.
+* [x] Crear middleware de protección de rutas y actualización de sesión.
+* [x] Implementar capa de servicio `AuthService` y `UsersService`.
+* [x] Crear Server Actions para login, logout, recuperación y cambio de clave.
+* [x] Crear Server Actions para CRUD administrativo de usuarios.
+* [x] Diseñar página corporativa de Login (`/login`).
+* [x] Diseñar página de recuperación de contraseña (`/recuperar-clave`).
+* [x] Diseñar página de establecimiento de contraseña inicial (`/establecer-clave`).
+* [x] Diseñar panel de control administrativo de usuarios (`/admin/usuarios`).
+* [x] Integrar servicio de envío de correos transaccionales con **Brevo API** (`EmailService`).
+* [x] Diseñar plantilla corporativa HTML para envío de credenciales por correo con remitente `globalsystemschile@gmail.com`.
+* [x] Implementar flujo de contraseñas provisorias con cambio obligatorio en el primer ingreso.
+* [x] Configurar usuario administrador inicial: `maic.hernandez.dev@gmail.com`.
+* [x] Actualizar `DATABASE_SCHEMA.md`, `BRAIN.md` y `PROJECT_STATUS.md`.
+
+---
 
 El objetivo es que una nueva sesión pueda continuar el desarrollo **sin depender del contexto de una conversación anterior**.

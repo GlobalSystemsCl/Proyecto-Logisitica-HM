@@ -44,7 +44,7 @@ Debe existir un flujo funcional completo y validado.
 
 | Módulo                   | Estado               | Progreso | Prioridad | Observaciones                 |
 | ------------------------ | -------------------- | -------: | --------- | ----------------------------- |
-| Autenticación y usuarios | `PENDIENTE_REVISION` |       0% | Alta      | Revisar implementación actual |
+| Autenticación y usuarios | `COMPLETADO`         |     100% | Alta      | Sistema y Brevo implementados |
 | Vehículos                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar CRUD e integración    |
 | Solicitudes              | `PENDIENTE_REVISION` |       0% | Alta      | Revisar flujo completo        |
 | Sucursales               | `PENDIENTE_REVISION` |       0% | Alta      | Revisar modelo actual         |
@@ -102,31 +102,45 @@ Si existen diferencias, debe identificarlas.
 
 ## 5.1 Autenticación y usuarios
 
-**Estado:** `PENDIENTE_REVISION`
+**Estado:** `COMPLETADO`
 
-**Progreso:** 0% inicial
+**Progreso:** 100%
 
-### Debe incluir
+### Implementado
 
-* Login.
-* Gestión de usuarios.
-* Creación por Administrador.
-* Correo `@hmotores.cl`.
-* Roles.
-* Activación/desactivación.
-* Recuperación de contraseña.
-* Establecimiento de contraseña inicial.
-* Protección de acceso.
-* Protección contra intentos excesivos.
-* Permisos.
-
-### Pendientes
-
-OpenCode debe analizar el repositorio y registrar aquí los pendientes reales.
+* Login corporativo con Supabase Email (`/login`).
+* Gestión completa de usuarios y cuentas por Administrador (`/admin/usuarios`).
+* Generación de contraseñas provisorias seguras con cambio obligatorio en el primer ingreso.
+* Integración transaccional con **Brevo API** (`EmailService`) con remitente `globalsystemschile@gmail.com` y plantilla HTML responsive.
+* Envío automático de credenciales al crear un usuario y al resetear contraseñas.
+* Botón interactivo para **Copiar Credenciales** directamente desde el panel de administración.
+* Recuperación de contraseña (`/recuperar-clave`).
+* Establecimiento / cambio de contraseña inicial obligatoria (`/establecer-clave`).
+* Activación y desactivación de usuarios en tiempo real (bloqueo inmediato en middleware/servicio).
+* Protección contra intentos fallidos excesivos (bloqueo temporal tras 5 intentos).
+* Control de roles (`administrador`, `ejecutivo`, `jefe_local`, `logistica`).
+* Soporte para dominio de pruebas (`gmail.com`) y corporativo (`hmotores.cl`).
+* Usuario Administrador Principal configurado y validado: `maic.hernandez.dev@gmail.com`.
 
 ### Archivos relacionados
 
-Registrar aquí los archivos reales encontrados durante la auditoría.
+* Migración SQL: `supabase/migrations/20260822_auth_and_users.sql`
+* Clientes Supabase: `src/lib/supabase/client.ts`, `src/lib/supabase/server.ts`, `src/lib/supabase/admin.ts`, `src/lib/supabase/middleware.ts`
+* Middleware de rutas: `src/middleware.ts`
+* Tipos: `src/types/auth.types.ts`
+* Capa de servicios: 
+  - `src/services/auth.service.ts`
+  - `src/services/users.service.ts`
+  - `src/services/email.service.ts` (Brevo API)
+* Server Actions: `src/app/actions/auth.actions.ts`, `src/app/actions/users.actions.ts`
+* Páginas y UI:
+  - `src/app/login/page.tsx`
+  - `src/app/recuperar-clave/page.tsx`
+  - `src/app/establecer-clave/page.tsx`
+  - `src/app/auth/callback/route.ts`
+  - `src/app/dashboard/page.tsx`
+  - `src/app/admin/usuarios/page.tsx`
+  - `src/app/admin/usuarios/UsersTableClient.tsx`
 
 ---
 

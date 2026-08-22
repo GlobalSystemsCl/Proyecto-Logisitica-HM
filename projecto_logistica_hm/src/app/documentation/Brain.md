@@ -86,13 +86,15 @@ El sistema está compuesto conceptualmente por los siguientes módulos:
 
 Responsable de:
 
-* Login.
-* Gestión de cuentas.
-* Roles.
-* Activación/desactivación.
-* Recuperación de contraseña.
-* Seguridad.
-* Control de acceso.
+* Inicio de sesión corporativo vía Supabase Email.
+* Gestión centralizada de cuentas por Administrador (sin autoregistro público).
+* Roles del sistema (`administrador`, `ejecutivo`, `jefe_local`, `logistica`).
+* Generación de contraseñas provisorias y envío automático por correo electrónico vía **Brevo API**.
+* Establecimiento obligatorio de contraseña personal definitiva en el primer ingreso (`/establecer-clave`).
+* Control de activación/desactivación en tiempo real (usuarios inactivos no pueden iniciar sesión).
+* Protección contra intentos excesivos de acceso con bloqueo temporal de 15 minutos tras 5 intentos fallidos consecutivos.
+* Recuperación y reseteo de contraseñas.
+* Soporte para dominio de pruebas (`@gmail.com`) y corporativo (`@hmotores.cl`).
 
 ---
 
