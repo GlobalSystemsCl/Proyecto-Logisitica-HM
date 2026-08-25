@@ -3,8 +3,9 @@
 import { useActionState, useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { loginAction } from '@/app/actions/auth.actions';
-import { Shield, Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
 
 function LoginForm() {
   const [state, formAction, isPending] = useActionState(loginAction, null);
@@ -44,9 +45,14 @@ function LoginForm() {
       <div className="w-full max-w-md space-y-8 relative z-10">
         {/* Header / Logo */}
         <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-neutral-900 text-white font-bold text-2xl tracking-wider">
-            <Shield className="w-8 h-8" />
-          </div>
+          <Image
+            src="/images.png"
+            alt="Escudo H.Motores"
+            width={80}
+            height={80}
+            priority
+            className="h-20 w-auto mx-auto mix-blend-multiply"
+          />
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
               H.Motores

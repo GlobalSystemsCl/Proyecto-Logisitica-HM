@@ -52,6 +52,7 @@ Debe existir un flujo funcional completo y validado.
 | Logística                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar flujo de traslado     |
 | Historial / trazabilidad | `PENDIENTE_REVISION` |       0% | Media     | Existen tablas auditoria/observacion/notificacion por auditar |
 | Permisos / roles         | `PENDIENTE_REVISION` |       0% | Alta      | Políticas RLS aplicadas por rol (2026-08-22); validar autorización en la app |
+| Identidad visual / UI    | `COMPLETADO`         |     100% | Media     | Rediseño monocromo corporativo + escudo aplicados a auth, dashboard y admin (2026-08-25); resto de módulos al crearlos |
 
 > **IMPORTANTE:** Los porcentajes anteriores son valores iniciales. OpenCode debe realizar un análisis real del repositorio antes de establecer el porcentaje definitivo.
 
@@ -294,6 +295,8 @@ Cada vez que una implementación quede incompleta debe registrarse aquí.
 | Limpieza de esquema: función muerta `traspaso_auth_tabla_usuario` y default anómalo `sucursal.usuario_id` eliminados | Base de datos | 2026-08-22 | `COMPLETADO` | Sí — migración `20260822_cleanup_funcion_muerta_y_defaults.sql`, verificado vía API |
 | Políticas RLS por rol para las 7 tablas de negocio + helpers `usuario_activo()`/`tiene_rol()` + corrección `usuario.sucursal_id` UUID→BIGINT con FK | Base de datos / Permisos | 2026-08-22 | `COMPLETADO` | Sí — migración `20260822_politicas_rls.sql`; tipo verificado vía OpenAPI (`int64`). Falta validar permisos por rol dentro de la app |
 | Actualización tipos TS (`sucursal_id?: number`) tras cambio de columna | Código | 2026-08-22 | `COMPLETADO` | Sí — `tsc --noEmit` sin errores |
+| Rediseño visual corporativo (monocromo 90% blanco / 10% negro) en `globals.css`, login, recuperar-clave, establecer-clave, dashboard y módulo admin/usuarios; corrección de contrastes y jerarquía tonal en badges/métricas | UI / Frontend | 2026-08-25 | `COMPLETADO` | Sí — `tsc --noEmit` y `eslint` sin errores |
+| Integración del escudo real (`public/images.png`) vía `next/image` + `mix-blend-multiply` en login, top bar del dashboard y header del módulo admin | UI / Frontend | 2026-08-25 | `COMPLETADO` | Sí — compilación y lint limpios |
 
 Una funcionalidad solamente puede pasar a `COMPLETADO` cuando haya sido validada.
 

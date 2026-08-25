@@ -345,6 +345,19 @@ Responsabilidades:
 
 El frontend no debe contener reglas críticas de seguridad como única barrera.
 
+## 10.1 Identidad visual (convención obligatoria)
+
+Sistema monocromo corporativo definido el 2026-08-25: **~90% blanco / 10% negro**.
+
+* Fondos de página: `bg-neutral-100`. Superficies/tarjetas: `bg-white` con borde `border-neutral-200`.
+* Texto principal `text-neutral-900`; jerarquía secundaria `neutral-500` / `neutral-400`.
+* El negro (`neutral-900`) es el único acento: botones primarios, badge de rol Administrador, tarjeta destacada "Activos", avatares, tile del escudo. Blanco como texto solo sobre fondo negro.
+* Rojo semántico únicamente para errores o acciones destructivas (`red-50`/`red-200`/`red-600`/`red-700`). Estados de éxito se expresan con bloque negro + texto blanco; no usar verde.
+* Badges de rol por jerarquía tonal: administrador = negro sólido, jefe_local = `neutral-700`, ejecutivo = `neutral-200`, logistica = `neutral-100`.
+* Sin modo oscuro automático: tokens fijos en `globals.css` (`--background #ffffff`, `--foreground #171717`).
+* Logo corporativo: `public/images.png` (escudo blanco y negro). Se usa con `next/image` y clase `mix-blend-multiply` para fundir su fondo blanco sobre superficies claras. Ubicaciones actuales: login, top bar del dashboard, header del módulo admin.
+* Toda página nueva debe seguir esta convención; no introducir colores fuera de la escala neutral salvo el rojo semántico.
+
 ---
 
 # 11. Service Layer
