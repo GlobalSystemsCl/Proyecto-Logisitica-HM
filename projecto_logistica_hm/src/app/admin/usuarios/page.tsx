@@ -3,7 +3,8 @@ import { UsersService } from '@/services/users.service';
 import { redirect } from 'next/navigation';
 import UsersTableClient from './UsersTableClient';
 import Link from 'next/link';
-import { Shield, ArrowLeft, LogOut } from 'lucide-react';
+import Image from 'next/image';
+import { ArrowLeft, LogOut } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
 
 export const dynamic = 'force-dynamic';
@@ -35,9 +36,13 @@ export default async function AdminUsuariosPage() {
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-neutral-900 flex items-center justify-center text-white font-bold">
-                <Shield className="w-5 h-5" />
-              </div>
+              <Image
+                src="/images.png"
+                alt="Escudo H.Motores"
+                width={36}
+                height={36}
+                className="h-9 w-auto mix-blend-multiply"
+              />
               <div>
                 <span className="font-bold text-neutral-900 tracking-tight">H.Motores</span>
                 <span className="text-xs text-neutral-500 block -mt-1 font-mono">

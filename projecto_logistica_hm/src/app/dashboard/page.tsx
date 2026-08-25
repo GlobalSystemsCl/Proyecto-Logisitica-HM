@@ -1,8 +1,8 @@
 ﻿import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
-  Shield,
   Users,
   Car,
   FileText,
@@ -42,9 +42,13 @@ export default async function DashboardPage() {
       <header className="border-b border-neutral-200 bg-white/90 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-neutral-900 flex items-center justify-center text-white font-bold">
-              <Shield className="w-6 h-6" />
-            </div>
+            <Image
+              src="/images.png"
+              alt="Escudo H.Motores"
+              width={40}
+              height={40}
+              className="h-10 w-auto mix-blend-multiply"
+            />
             <div>
               <span className="font-bold text-lg text-neutral-900 tracking-tight">H.Motores</span>
               <span className="text-[11px] text-neutral-500 block -mt-1 font-mono">
