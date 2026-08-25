@@ -47,8 +47,8 @@ Debe existir un flujo funcional completo y validado.
 | Base de datos (Supabase) | `COMPLETADO`        |     100% | Alta      | Volcado 1:1 cerrado contra catálogo real (2026-08-22) |
 | Autenticación y usuarios | `COMPLETADO`         |     100% | Alta      | Sistema y Brevo implementados |
 | Vehículos                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar CRUD e integración    |
-| Solicitudes              | `PENDIENTE_REVISION` |       0% | Alta      | Revisar flujo completo        |
-| Sucursales               | `EN_PROGRESO`        |      70% | Alta      | Módulo admin implementado (2026-08-25); pendiente validación del usuario y diseño `sucursal_destino` |
+| Solicitudes              | `EN_PROGRESO`        |      80% | Alta      | v1 implementada (2026-08-25): crear/priorizar/cancelar/eliminar + reserva de vehículos; pendiente validación del usuario y fase Logística |
+| Sucursales               | `COMPLETADO`         |     100% | Alta      | Módulo admin validado por el usuario (2026-08-25); deuda de diseño `sucursal_destino` registrada en Fase 2 |
 | Logística                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar flujo de traslado     |
 | Historial / trazabilidad | `PENDIENTE_REVISION` |       0% | Media     | Existen tablas auditoria/observacion/notificacion por auditar |
 | Permisos / roles         | `PENDIENTE_REVISION` |       0% | Alta      | Políticas RLS aplicadas por rol (2026-08-22); validar autorización en la app |
@@ -219,9 +219,9 @@ No existen `creada` ni `rechazada`: una solicitud nace directamente en `pendient
 
 ## 5.4 Gestión de sucursales
 
-**Estado:** `EN_PROGRESO`
+**Estado:** `COMPLETADO`
 
-**Progreso:** 70%
+**Progreso:** 100%
 
 ### Implementado (2026-08-25)
 
@@ -243,13 +243,46 @@ No existen `creada` ni `rechazada`: una solicitud nace directamente en `pendient
 
 ### Pendientes
 
-* Validación funcional del usuario en `/admin/sucursales`.
 * Diseño faltante: `solicitud.sucursal_destino`/`fecha_entrega`; la vista muestra solo el origen.
-* Regla de eliminación de solicitudes pre-despacho (registrada en `ImplementationPlan.md`, Fase 2) para implementar en el módulo de Solicitudes junto con su migración RLS.
+* Regla de eliminación de solicitudes pre-despacho implementada en el módulo de Solicitudes (Fase 3); migración RLS pendiente.
 
 ---
 
-## 5.5 Gestión logística
+## 5.5 Gestión de solicitudes (v1)
+
+**Estado:** `EN_PROGRESO`
+
+**Progreso:** 80%
+
+### Implementado (2026-08-25)
+
+* Página `/solicitudes` accesible para cualquier usuario activo; visibilidad filtrada por rol: Administrador y Logística ven todo, Ejecutivo solo sus solicitudes (`ejecutivo_id`), Jefe de Local las de su sucursal (requiere `usuario.sucursal_id` poblado).
+* Creación de solicitudes (Ejecutivo/Administrador): sucursal origen, tipo (`venta`/`evento`), fecha límite opcional; nace en `pendiente`. El Administrador puede además reservar múltiples vehículos en la creación.
+* Cola de priorización: botón Priorizar para Administrador o Jefe de Local de la sucursal origen sobre solicitudes `pendiente`; asigna `posicion_prioridad = max+1` y muestra "#N en cola".
+* Reserva de vehículos: gestión exclusiva del Administrador en esta versión (agregar/quitar desde el detalle, solo pre-despacho, con anti-doble-reserva). Disponibilidad global calculada contra solicitudes en estados activos (`ESTADOS_ACTIVOS_RESERVA`).
+* Cancelación con motivo obligatorio (mín. 5 caracteres): ejecutivo creador (`pendiente`/`priorizada`), jefe_local de la sucursal o administrador, siempre pre-despacho; libera las reservas.
+* Eliminación según regla aprobada (Brain §8 / Fase 2): solo pre-despacho por admin/creador/jefe_local; desde `en_transito` nadie; `cancelada` nunca se elimina.
+* Tile activo "Gestión de Solicitudes" en el dashboard para todos los roles.
+
+### Archivos relacionados
+
+* `src/types/solicitud.types.ts`
+* `src/services/solicitudes.service.ts`
+* `src/app/actions/solicitudes.actions.ts`
+* `src/app/solicitudes/page.tsx`
+* `src/app/solicitudes/SolicitudesClient.tsx`
+* `src/app/dashboard/page.tsx`
+
+### Pendientes
+
+* Validación funcional del usuario en `/solicitudes`.
+* Estados post-priorizada (asignada → calendarizada → en_transito → entregada → finalizada): fase Logística.
+* Migración RLS para ampliar `solicitud_delete_admin` (creador/jefe_local pre-despacho); hoy se valida en Server Actions vía `createAdminClient()`.
+* Deuda de diseño: `solicitud.sucursal_destino`/`fecha_entrega`; vehículos sin FK a sucursal ni `creado_por`.
+
+---
+
+## 5.6 Gestión logística
 
 **Estado:** `PENDIENTE_REVISION`
 
@@ -311,7 +344,8 @@ Cada vez que una implementación quede incompleta debe registrarse aquí.
 | Actualización tipos TS (`sucursal_id?: number`) tras cambio de columna | Código | 2026-08-22 | `COMPLETADO` | Sí — `tsc --noEmit` sin errores |
 | Rediseño visual corporativo (monocromo 90% blanco / 10% negro) en `globals.css`, login, recuperar-clave, establecer-clave, dashboard y módulo admin/usuarios; corrección de contrastes y jerarquía tonal en badges/métricas | UI / Frontend | 2026-08-25 | `COMPLETADO` | Sí — `tsc --noEmit` y `eslint` sin errores |
 | Integración del escudo real (`public/images.png`) vía `next/image` + `mix-blend-multiply` en login, top bar del dashboard y header del módulo admin | UI / Frontend | 2026-08-25 | `COMPLETADO` | Sí — compilación y lint limpios |
-| Módulo Gestión de Sucursales (`/admin/sucursales`): CRUD admin, capacidad con ajuste manual, detalle de solicitudes por sucursal con responsables y vehículos, eliminación protegida, tile activo en dashboard | Sucursales | 2026-08-25 | `COMPLETADO` | Sí — `tsc --noEmit` y ESLint sin errores; validación funcional pendiente del usuario (módulo queda `EN_PROGRESO`) |
+| Módulo Gestión de Sucursales (`/admin/sucursales`): CRUD admin, capacidad con ajuste manual, detalle de solicitudes por sucursal con responsables y vehículos, eliminación protegida, tile activo en dashboard | Sucursales | 2026-08-25 | `COMPLETADO` | Sí — `tsc --noEmit` y ESLint sin errores; validación funcional del usuario confirmada (2026-08-25) tras resolver bug de entorno (HMR WebSocket roto por caché `.next` + `.env.local` duplicado) |
+| Gestión de Solicitudes v1 (`/solicitudes`): crear (ejecutivo/admin), cola de priorización (jefe_local/admin), cancelación con motivo, eliminación según regla pre-despacho, reserva/liberación de vehículos solo admin, visibilidad por rol, tile activo en dashboard | Solicitudes | 2026-08-25 | `IMPLEMENTADO` | Sí — `tsc --noEmit` y ESLint sin errores/warnings; validación funcional pendiente del usuario |
 
 Una funcionalidad solamente puede pasar a `COMPLETADO` cuando haya sido validada.
 
@@ -329,6 +363,7 @@ Una funcionalidad solamente puede pasar a `COMPLETADO` cuando haya sido validada
 | `usuario.sucursal_id` era UUID mientras `solicitud.sucursal` es BIGINT → política RLS fallaba con `operator does not exist: bigint = uuid` | Base de datos | Media | Resuelto (2026-08-22) | Columna cambiada a BIGINT con guardia anti-pérdida (`USING NULL` tras verificar que todos los valores eran NULL); FK agregada; tipos TS actualizados a `number` |
 | Función muerta `traspaso_auth_tabla_usuario`: sin trigger e inserta rol 'EJECUTIVO' inválido para el enum | Base de datos | Baja | Resuelto (2026-08-22) | Eliminada vía migración `20260822_cleanup_funcion_muerta_y_defaults.sql`; verificado vía catálogo |
 | Default anómalo `sucursal.usuario_id DEFAULT gen_random_uuid()` (FK que autogeneraba UUID inexistente) | Base de datos | Media | Resuelto (2026-08-22) | Default eliminado con la misma migración; verificado vía API |
+| `.env.local` con claves duplicadas (la `sb_secret_` ya rotada/inválida ganaba al parseo) + HMR WebSocket roto (`ws://192.168.1.6:3000/_next/hmr` → `ERR_INVALID_HTTP_RESPONSE`) dejaban la página sin hidratar: los clics no respondían (p. ej. "Registrar Nueva Sucursal" no abría modal) | Infraestructura / Frontend | Alta | Resuelto (2026-08-25) | `.env.local` saneado a una línea por variable (JWT `service_role` vigente, `sb_secret_` eliminada) y caché `.next` borrada; acceder vía `http://localhost:3000` y Ctrl+F5 |
 
 ---
 

@@ -145,7 +145,7 @@ Implementar sistema de autenticación cerrado corporativo con Supabase Email, ge
 
 ## Fase 2 — Gestión de Sucursales
 
-**Estado:** `EN_PROGRESO`
+**Estado:** `COMPLETADO`
 
 ### Objetivo
 
@@ -160,12 +160,33 @@ Implementar el módulo administrativo de sucursales: CRUD completo por parte del
 * [x] Implementar cliente `SucursalesTableClient.tsx`: métricas (Total / Capacidad Total / Estacionados), búsqueda, tabla con barra de ocupación, modal crear/editar, confirmación de borrado con aviso de cascada, y modal detalle con estados reales del enum, posición de prioridad, fechas, personas asociadas y tarjetas de vehículos (patente/marca/modelo/año/color + disponibilidad `reservado`/`liberado`).
 * [x] Activar tile "Gestión de Sucursales" en el dashboard (solo administrador).
 * [x] Validación estática: `tsc --noEmit` y ESLint sin errores (2026-08-25).
-* [ ] Validación funcional por el usuario en la app.
+* [x] Validación funcional por el usuario en la app (2026-08-25: "funcionó"; antes se resolvió un bug de entorno — HMR WebSocket roto por caché `.next` + `.env.local` duplicado).
 * [ ] Decidir diseño faltante relacionado: `solicitud.sucursal_destino`/`fecha_entrega` (la vista actual muestra solo el origen).
 
-### Decisiones de diseño registradas para Gestión de Solicitudes (fase futura)
+### Decisiones de diseño registradas para Gestión de Solicitudes
 
-* [ ] **Eliminación de solicitudes** (regla aprobada el 2026-08-25): permitida solo pre-despacho (`pendiente`, `priorizada`, `asignada`, `calendarizada`) por Administrador, ejecutivo creador o jefe_local de la sucursal origen; desde `en_transito` nadie puede eliminarlas; `cancelada` nunca se elimina. Requerirá migración RLS para ampliar la política `solicitud_delete_admin` (hoy solo administrador).
+* [x] **Eliminación de solicitudes** (regla aprobada el 2026-08-25): permitida solo pre-despacho (`pendiente`, `priorizada`, `asignada`, `calendarizada`) por Administrador, ejecutivo creador o jefe_local de la sucursal origen; desde `en_transito` nadie puede eliminarlas; `cancelada` nunca se elimina. Requerirá migración RLS para ampliar la política `solicitud_delete_admin` (hoy solo administrador).
+
+---
+
+## Fase 3 — Gestión de Solicitudes (v1)
+
+**Estado:** `EN_PROGRESO`
+
+### Objetivo
+
+Primera versión operativa del módulo `/solicitudes`: creación de solicitudes de traslado por Ejecutivo/Administrador, cola de priorización por Jefe de Local de la sucursal origen, reserva y liberación de vehículos (gestión exclusiva del Administrador en esta versión), cancelación con motivo obligatorio y eliminación restringida según la regla aprobada en Fase 2. Los estados posteriores a priorizada (asignada → calendarizada → en_transito → entregada → finalizada) quedan para la fase de Logística.
+
+### Tareas
+
+* [x] Crear tipos (`src/types/solicitud.types.ts`): `SolicitudLista` (joins resueltos), `CreateSolicitudInput`, `VehiculoInventario`, re-export del dominio compartido.
+* [x] Crear servicio (`src/services/solicitudes.service.ts`): listado con joins (sucursal, personas, vehículos vía `solicitud_vehiculo`), inventario global con marcaje `reservado_en_activa` (estados activos = `ESTADOS_ACTIVOS_RESERVA`), crear con reservas atómicas, priorizar (max+1), cancelar (motivo obligatorio + libera reservas), eliminar según regla histórica, agregar/quitar vehículo anti-doble-reserva.
+* [x] Crear Server Actions (`src/app/actions/solicitudes.actions.ts`) con permisos por rol: crear (ejecutivo/admin), priorizar (admin/jefe_local sucursal propia), cancelar (creador pendiente|priorizada / jefe_local / admin pre-despacho), eliminar (regla Fase 2), gestionar vehículos (solo admin).
+* [x] Implementar página `/solicitudes` (guard usuario activo, header corporativo con escudo) y cliente `SolicitudesClient.tsx`: visibilidad por rol (admin/logística todo; ejecutivo lo suyo; jefe_local su sucursal), métricas, filtros, tabla con cola de prioridad, modal creación (multi-reserva solo admin), detalle con gestión de vehículos, modales cancelar/eliminar.
+* [x] Activar tile "Gestión de Solicitudes" en el dashboard (todos los roles).
+* [x] Validación estática: `tsc --noEmit` y ESLint sin errores/warnings (2026-08-25).
+* [ ] Validación funcional por el usuario en la app.
+* [ ] Migración RLS futura: ampliar `solicitud_delete_admin` para creador/jefe_local pre-despacho (la app hoy valida en Server Actions porque los servicios usan `createAdminClient()`).
 
 ---
 

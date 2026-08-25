@@ -10,8 +10,6 @@ import {
   Truck,
   History,
   LogOut,
-  CheckCircle2,
-  Lock,
   ArrowRight,
   Sparkles,
 } from 'lucide-react';
@@ -161,22 +159,28 @@ export default async function DashboardPage() {
             </Link>
 
             {/* Requests Management */}
-            <div className="bg-white border border-neutral-200 rounded-2xl p-6 flex flex-col justify-between opacity-85">
+            <Link
+              href="/solicitudes"
+              className="group bg-white border border-neutral-200 hover:border-neutral-900 rounded-2xl p-6 transition-all duration-200 hover:shadow-xl flex flex-col justify-between"
+            >
               <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-400">
+                <div className="w-12 h-12 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white group-hover:scale-105 transition-transform">
                   <FileText className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-neutral-900">Gestión de Solicitudes</h3>
+                  <h3 className="font-bold text-neutral-900 group-hover:text-neutral-600 transition-colors">
+                    Gestión de Solicitudes
+                  </h3>
                   <p className="text-xs text-neutral-500 mt-1">
-                    Flujo de estados: Pendiente, Priorizada, Asignada, Calendarizada, En Tránsito, Entregada y Finalizada.
+                    Creación de traslados, cola de priorización por sucursal y reserva de vehículos.
                   </p>
                 </div>
               </div>
-              <div className="mt-6 flex items-center gap-1.5 text-xs text-neutral-400 font-medium">
-                <span>Próximo módulo operativo</span>
+              <div className="mt-6 flex items-center gap-1 text-xs font-semibold text-neutral-900 group-hover:text-neutral-600">
+                <span>Gestionar solicitudes</span>
+                <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
               </div>
-            </div>
+            </Link>
 
             {/* Branches Management */}
             {isAdmin && (
