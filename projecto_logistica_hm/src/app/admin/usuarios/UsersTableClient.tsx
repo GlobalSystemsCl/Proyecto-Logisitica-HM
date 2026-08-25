@@ -1,6 +1,6 @@
 ﻿'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { UserProfile, UserRole } from '@/types/auth.types';
 import { createUserAction, toggleUserStatusAction, resetUserPasswordAction } from '@/app/actions/users.actions';
 import {
@@ -46,6 +46,7 @@ const roleLabels: Record<UserRole, { label: string; color: string }> = {
 };
 
 export default function UsersTableClient({ users, currentAdminEmail, currentAdminId }: Props) {
+  const [isHydrated, setIsHydrated] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('todos');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,8 +67,14 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
   const [rol, setRol] = useState<UserRole>('ejecutivo');
   const [isSubmitting, startTransition] = useTransition();
 
-  // Filter users
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
+
+  // Filter users - only apply filters after hydration to avoid SSR mismatch
   const filteredUsers = users.filter((u) => {
+    if (!isHydrated) return true;
+    
     const matchesSearch =
       u.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       u.apellido.toLowerCase().includes(searchTerm.toLowerCase()) ||
