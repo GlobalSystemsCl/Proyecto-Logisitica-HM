@@ -143,4 +143,30 @@ Implementar sistema de autenticación cerrado corporativo con Supabase Email, ge
 
 ---
 
+## Fase 2 — Gestión de Sucursales
+
+**Estado:** `EN_PROGRESO`
+
+### Objetivo
+
+Implementar el módulo administrativo de sucursales: CRUD completo por parte del Administrador, control de capacidad de estacionamiento (ajuste manual de `slots_ocupados` solo en este módulo) y consulta de las solicitudes —con sus vehículos y responsables— cuyo origen es cada sucursal. Este módulo precede a Gestión de Solicitudes porque la solicitud depende de la sucursal.
+
+### Tareas
+
+* [x] Crear tipos del dominio (`src/types/sucursal.types.ts`: `Sucursal`, inputs CRUD, `SucursalSolicitudItem` con vehículos asociados).
+* [x] Crear servicio (`src/services/sucursales.service.ts`): `getSucursales` (join encargado), `getSolicitudesPorSucursal` (consulta anidada con responsables y vehículos vía `solicitud_vehiculo`), `createSucursal`, `updateSucursal`, `deleteSucursal` con protecciones (bloquea si hay usuarios asignados; informa solicitudes en cascada).
+* [x] Crear Server Actions con guard de Administrador (`src/app/actions/sucursales.actions.ts`): crear, editar, eliminar + `revalidatePath`.
+* [x] Implementar página `/admin/sucursales` con guard idéntico al módulo de usuarios y header corporativo con escudo.
+* [x] Implementar cliente `SucursalesTableClient.tsx`: métricas (Total / Capacidad Total / Estacionados), búsqueda, tabla con barra de ocupación, modal crear/editar, confirmación de borrado con aviso de cascada, y modal detalle con estados reales del enum, posición de prioridad, fechas, personas asociadas y tarjetas de vehículos (patente/marca/modelo/año/color + disponibilidad `reservado`/`liberado`).
+* [x] Activar tile "Gestión de Sucursales" en el dashboard (solo administrador).
+* [x] Validación estática: `tsc --noEmit` y ESLint sin errores (2026-08-25).
+* [ ] Validación funcional por el usuario en la app.
+* [ ] Decidir diseño faltante relacionado: `solicitud.sucursal_destino`/`fecha_entrega` (la vista actual muestra solo el origen).
+
+### Decisiones de diseño registradas para Gestión de Solicitudes (fase futura)
+
+* [ ] **Eliminación de solicitudes** (regla aprobada el 2026-08-25): permitida solo pre-despacho (`pendiente`, `priorizada`, `asignada`, `calendarizada`) por Administrador, ejecutivo creador o jefe_local de la sucursal origen; desde `en_transito` nadie puede eliminarlas; `cancelada` nunca se elimina. Requerirá migración RLS para ampliar la política `solicitud_delete_admin` (hoy solo administrador).
+
+---
+
 El objetivo es que una nueva sesión pueda continuar el desarrollo **sin depender del contexto de una conversación anterior**.
