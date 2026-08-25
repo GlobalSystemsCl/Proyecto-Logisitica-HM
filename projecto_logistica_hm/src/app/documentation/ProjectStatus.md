@@ -48,7 +48,7 @@ Debe existir un flujo funcional completo y validado.
 | Autenticación y usuarios | `COMPLETADO`         |     100% | Alta      | Sistema y Brevo implementados |
 | Vehículos                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar CRUD e integración    |
 | Solicitudes              | `PENDIENTE_REVISION` |       0% | Alta      | Revisar flujo completo        |
-| Sucursales               | `PENDIENTE_REVISION` |       0% | Alta      | Revisar modelo actual         |
+| Sucursales               | `EN_PROGRESO`        |      70% | Alta      | Módulo admin implementado (2026-08-25); pendiente validación del usuario y diseño `sucursal_destino` |
 | Logística                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar flujo de traslado     |
 | Historial / trazabilidad | `PENDIENTE_REVISION` |       0% | Media     | Existen tablas auditoria/observacion/notificacion por auditar |
 | Permisos / roles         | `PENDIENTE_REVISION` |       0% | Alta      | Políticas RLS aplicadas por rol (2026-08-22); validar autorización en la app |
@@ -219,19 +219,33 @@ No existen `creada` ni `rechazada`: una solicitud nace directamente en `pendient
 
 ## 5.4 Gestión de sucursales
 
-**Estado:** `PENDIENTE_REVISION`
+**Estado:** `EN_PROGRESO`
 
-**Progreso:** 0% inicial
+**Progreso:** 70%
 
-Debe revisarse:
+### Implementado (2026-08-25)
 
-* CRUD.
-* Asociación con usuarios.
-* Asociación con vehículos.
-* Capacidad.
-* Disponibilidad.
-* Sucursal origen.
-* Sucursal destino.
+* CRUD completo de sucursales restringido a Administrador (guard en página + verificación en cada Server Action).
+* Capacidad de estacionamiento: `slots` y `slots_ocupados` editables desde este módulo, con validación `ocupados ≤ slots` y barra de ocupación por sucursal.
+* Encargado (`sucursal.usuario_id`) visible en tabla y detalle; se asigna desde Gestión de Usuarios.
+* Vista de solicitudes con origen en cada sucursal: estado real del enum, posición de prioridad, fechas (creación / despacho tentativo / límite), personas asociadas (ejecutivo / jefe_local / logística), motivo de cancelación y vehículos asociados vía `solicitud_vehiculo` (patente, marca, modelo, año, color, disponibilidad).
+* Eliminación protegida: bloqueada si hay usuarios con la sucursal asignada; si hay solicitudes, confirmación fuerte indicando la cascada.
+* Tile activo "Gestión de Sucursales" en el dashboard (solo administrador).
+
+### Archivos relacionados
+
+* `src/types/sucursal.types.ts`
+* `src/services/sucursales.service.ts`
+* `src/app/actions/sucursales.actions.ts`
+* `src/app/admin/sucursales/page.tsx`
+* `src/app/admin/sucursales/SucursalesTableClient.tsx`
+* `src/app/dashboard/page.tsx`
+
+### Pendientes
+
+* Validación funcional del usuario en `/admin/sucursales`.
+* Diseño faltante: `solicitud.sucursal_destino`/`fecha_entrega`; la vista muestra solo el origen.
+* Regla de eliminación de solicitudes pre-despacho (registrada en `ImplementationPlan.md`, Fase 2) para implementar en el módulo de Solicitudes junto con su migración RLS.
 
 ---
 
@@ -297,6 +311,7 @@ Cada vez que una implementación quede incompleta debe registrarse aquí.
 | Actualización tipos TS (`sucursal_id?: number`) tras cambio de columna | Código | 2026-08-22 | `COMPLETADO` | Sí — `tsc --noEmit` sin errores |
 | Rediseño visual corporativo (monocromo 90% blanco / 10% negro) en `globals.css`, login, recuperar-clave, establecer-clave, dashboard y módulo admin/usuarios; corrección de contrastes y jerarquía tonal en badges/métricas | UI / Frontend | 2026-08-25 | `COMPLETADO` | Sí — `tsc --noEmit` y `eslint` sin errores |
 | Integración del escudo real (`public/images.png`) vía `next/image` + `mix-blend-multiply` en login, top bar del dashboard y header del módulo admin | UI / Frontend | 2026-08-25 | `COMPLETADO` | Sí — compilación y lint limpios |
+| Módulo Gestión de Sucursales (`/admin/sucursales`): CRUD admin, capacidad con ajuste manual, detalle de solicitudes por sucursal con responsables y vehículos, eliminación protegida, tile activo en dashboard | Sucursales | 2026-08-25 | `COMPLETADO` | Sí — `tsc --noEmit` y ESLint sin errores; validación funcional pendiente del usuario (módulo queda `EN_PROGRESO`) |
 
 Una funcionalidad solamente puede pasar a `COMPLETADO` cuando haya sido validada.
 

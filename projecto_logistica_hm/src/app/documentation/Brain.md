@@ -285,6 +285,7 @@ Reglas actualmente conocidas:
 * Los usuarios de Logística pueden incorporar vehículos manualmente.
 * El Ejecutivo no incorpora vehículos, salvo que esta regla sea modificada posteriormente.
 * El flujo de solicitudes debe respetar sus estados.
+* Una solicitud puede eliminarse únicamente antes de su despacho (estados `pendiente`, `priorizada`, `asignada`, `calendarizada`), por el Administrador, el ejecutivo que la creó o el jefe_local de la sucursal de origen. Desde `en_transito` en adelante ninguna persona puede eliminarla. Las solicitudes en estado `cancelada` nunca se eliminan: quedan como registro histórico.
 * Logística gestiona el traslado.
 * La sucursal destino debe tener disponibilidad para recibir el vehículo cuando corresponda.
 * La entrega debe ser confirmada por la sucursal destino.
