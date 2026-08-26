@@ -20,9 +20,10 @@ export default async function AdminSucursalesPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const [sucursales, solicitudes] = await Promise.all([
+  const [sucursales, solicitudes, jefesDeLocal] = await Promise.all([
     SucursalesService.getSucursales(),
     SucursalesService.getSolicitudesPorSucursal(),
+    SucursalesService.getJefesDeLocal(),
   ]);
 
   return (
@@ -79,7 +80,7 @@ export default async function AdminSucursalesPage() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <SucursalesTableClient sucursales={sucursales} solicitudes={solicitudes} />
+        <SucursalesTableClient sucursales={sucursales} solicitudes={solicitudes} jefesDeLocal={jefesDeLocal} />
       </main>
     </div>
   );

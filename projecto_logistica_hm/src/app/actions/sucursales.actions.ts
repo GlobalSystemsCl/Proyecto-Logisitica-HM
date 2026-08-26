@@ -23,6 +23,7 @@ export interface SucursalFormData {
   direccion?: string;
   slots: string;
   slots_ocupados: string;
+  usuario_id?: string;
 }
 
 export async function createSucursalAction(data: SucursalFormData) {
@@ -50,6 +51,7 @@ export async function createSucursalAction(data: SucursalFormData) {
       direccion: data.direccion?.trim() || null,
       slots,
       slots_ocupados: ocupados,
+      usuario_id: data.usuario_id || null,
     });
 
     if (!result.success) {
@@ -89,6 +91,7 @@ export async function updateSucursalAction(id: number, data: SucursalFormData) {
       direccion: data.direccion?.trim() || null,
       slots,
       slots_ocupados: ocupados,
+      usuario_id: data.usuario_id || null,
     });
 
     if (!result.success) {

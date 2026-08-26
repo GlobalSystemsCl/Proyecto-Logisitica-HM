@@ -21,6 +21,7 @@ import {
 } from '@/app/actions/sucursales.actions';
 import {
   EstadoSolicitud,
+  JefeDeLocal,
   Sucursal,
   SucursalSolicitudItem,
 } from '@/types/sucursal.types';
@@ -49,6 +50,7 @@ interface FeedbackState {
 interface SucursalesTableClientProps {
   sucursales: Sucursal[];
   solicitudes: SucursalSolicitudItem[];
+  jefesDeLocal: JefeDeLocal[];
 }
 
 function formatFecha(iso: string | null): string {
@@ -56,7 +58,7 @@ function formatFecha(iso: string | null): string {
   return new Date(iso).toLocaleDateString('es-CL');
 }
 
-export default function SucursalesTableClient({ sucursales, solicitudes }: SucursalesTableClientProps) {
+export default function SucursalesTableClient({ sucursales, solicitudes, jefesDeLocal }: SucursalesTableClientProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -71,6 +73,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
   const [direccion, setDireccion] = useState('');
   const [slots, setSlots] = useState('');
   const [slotsOcupados, setSlotsOcupados] = useState('0');
+  const [usuarioId, setUsuarioId] = useState('');
 
   const totalSucursales = sucursales.length;
   const capacidadTotal = useMemo(
@@ -108,6 +111,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
     setDireccion('');
     setSlots('');
     setSlotsOcupados('0');
+    setUsuarioId('');
     setIsModalOpen(true);
   }
 
@@ -121,6 +125,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
         ? String(sucursal.slots_ocupados)
         : '0'
     );
+    setUsuarioId(sucursal.usuario_id || '');
     setIsModalOpen(true);
   }
 
@@ -128,7 +133,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const data = { nombre, direccion, slots, slots_ocupados: slotsOcupados };
+      const data = { nombre, direccion, slots, slots_ocupados: slotsOcupados, usuario_id: usuarioId };
       const result = editingSucursal
         ? await updateSucursalAction(editingSucursal.id, data)
         : await createSucursalAction(data);
@@ -491,6 +496,24 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   />
                 </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Jefe de Local
+                </label>
+                <select
+                  value={usuarioId}
+                  onChange={(e) => setUsuarioId(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                >
+                  <option value="">Sin asignar</option>
+                  {jefesDeLocal.map((jefe) => (
+                    <option key={jefe.id} value={jefe.id}>
+                      {jefe.nombre} {jefe.apellido}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl flex items-start gap-2.5 text-xs text-neutral-600">
