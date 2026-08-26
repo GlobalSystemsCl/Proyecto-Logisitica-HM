@@ -18,13 +18,6 @@ export interface SucursalEncargado {
   apellido: string;
 }
 
-export interface JefeDeLocal {
-  id: string;
-  nombre: string;
-  apellido: string;
-  email: string;
-}
-
 export interface Sucursal {
   id: number;
   created_at: string;
@@ -41,7 +34,6 @@ export interface CreateSucursalInput {
   direccion?: string | null;
   slots: number;
   slots_ocupados: number;
-  usuario_id?: string | null;
 }
 
 export interface UpdateSucursalInput {
@@ -49,7 +41,6 @@ export interface UpdateSucursalInput {
   direccion?: string | null;
   slots?: number;
   slots_ocupados?: number;
-  usuario_id?: string | null;
 }
 
 export interface VehiculoAsociado {
