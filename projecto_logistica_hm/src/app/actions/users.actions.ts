@@ -19,13 +19,14 @@ export interface CreateUserData {
   email: string;
   rol: UserRole;
   password?: string;
+  sucursal_id?: number | null;
 }
 
 export async function createUserAction(data: CreateUserData) {
   try {
     await verifyAdminPermission();
 
-    const { nombre, apellido, email, rol, password } = data;
+    const { nombre, apellido, email, rol, password, sucursal_id } = data;
 
     if (!nombre?.trim() || !apellido?.trim() || !email?.trim() || !rol) {
       return {
@@ -39,6 +40,7 @@ export async function createUserAction(data: CreateUserData) {
       apellido: apellido.trim(),
       email: email.trim().toLowerCase(),
       rol,
+      sucursal_id: sucursal_id ?? null,
     };
 
     const result = await UsersService.createUser(input, password);
@@ -104,6 +106,46 @@ export async function resetUserPasswordAction(userId: string, email: string) {
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error al generar nueva contraseña';
+    return { success: false, error: msg };
+  }
+}
+
+export interface UpdateUserData {
+  userId: string;
+  nombre: string;
+  apellido: string;
+  rol: UserRole;
+  sucursal_id?: number | null;
+}
+
+export async function updateUserAction(data: UpdateUserData) {
+  try {
+    await verifyAdminPermission();
+
+    const { userId, nombre, apellido, rol, sucursal_id } = data;
+
+    if (!userId || !nombre?.trim() || !apellido?.trim() || !rol) {
+      return {
+        success: false,
+        error: 'Todos los campos marcados son obligatorios.',
+      };
+    }
+
+    const result = await UsersService.updateUser(userId, {
+      nombre: nombre.trim(),
+      apellido: apellido.trim(),
+      rol,
+      sucursal_id: sucursal_id ?? null,
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error || 'Error al actualizar usuario.' };
+    }
+
+    revalidatePath('/admin/usuarios');
+    return { success: true, message: 'Usuario actualizado exitosamente.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };
   }
 }

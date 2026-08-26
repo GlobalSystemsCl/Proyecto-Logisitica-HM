@@ -1,5 +1,6 @@
 ﻿import { AuthService } from '@/services/auth.service';
 import { UsersService } from '@/services/users.service';
+import { SucursalesService } from '@/services/sucursales.service';
 import { redirect } from 'next/navigation';
 import UsersTableClient from './UsersTableClient';
 import Link from 'next/link';
@@ -21,6 +22,7 @@ export default async function AdminUsuariosPage() {
   }
 
   const users = await UsersService.getUsers();
+  const sucursales = await SucursalesService.getSucursales();
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
@@ -78,6 +80,7 @@ export default async function AdminUsuariosPage() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <UsersTableClient
           users={users}
+          sucursales={sucursales}
           currentAdminEmail={profile.email}
           currentAdminId={profile.id}
         />
