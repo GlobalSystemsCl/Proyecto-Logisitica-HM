@@ -120,7 +120,15 @@ export class UsersService {
         };
       }
 
-      // 4. Enviar correo con credenciales a través de Brevo
+      // 4. Si es jefe_local con sucursal asignada, vincularlo como encargado de la sucursal
+      if (input.rol === 'jefe_local' && input.sucursal_id) {
+        await admin
+          .from('sucursal')
+          .update({ usuario_id: authUserId })
+          .eq('id', input.sucursal_id);
+      }
+
+      // 5. Enviar correo con credenciales a través de Brevo
       const emailResult = await EmailService.sendUserCredentialsEmail({
         toEmail: cleanEmail,
         recipientName: `${input.nombre.trim()} ${input.apellido.trim()}`,

@@ -1,7 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import {
   CreateSucursalInput,
-  JefeDeLocal,
   Sucursal,
   SucursalSolicitudItem,
   UpdateSucursalInput,
@@ -56,28 +55,6 @@ export class SucursalesService {
       return (data || []) as unknown as Sucursal[];
     } catch (err) {
       console.error('Error en getSucursales:', err);
-      return [];
-    }
-  }
-
-  static async getJefesDeLocal(): Promise<JefeDeLocal[]> {
-    try {
-      const admin = createAdminClient();
-      const { data, error } = await admin
-        .from('usuario')
-        .select('id, nombre, apellido, email')
-        .eq('rol', 'jefe_local')
-        .eq('activo', true)
-        .order('nombre', { ascending: true });
-
-      if (error) {
-        console.error('Error al listar jefes de local:', error);
-        return [];
-      }
-
-      return (data || []) as JefeDeLocal[];
-    } catch (err) {
-      console.error('Error en getJefesDeLocal:', err);
       return [];
     }
   }
@@ -162,7 +139,6 @@ export class SucursalesService {
           direccion: input.direccion?.trim() || null,
           slots: input.slots,
           slots_ocupados: input.slots_ocupados,
-          usuario_id: input.usuario_id || null,
         })
         .select()
         .single();
@@ -206,7 +182,6 @@ export class SucursalesService {
       if (input.direccion !== undefined) updateData.direccion = input.direccion?.trim() || null;
       if (input.slots !== undefined) updateData.slots = input.slots;
       if (input.slots_ocupados !== undefined) updateData.slots_ocupados = input.slots_ocupados;
-      if (input.usuario_id !== undefined) updateData.usuario_id = input.usuario_id || null;
 
       const { data, error } = await admin
         .from('sucursal')
