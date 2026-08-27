@@ -542,7 +542,7 @@ export class SolicitudesService {
     }
   }
 
-  static async cancelarSolicitud(id: string, motivo: string): Promise<{ success: boolean; error?: string }> {
+  static async cancelarSolicitud(id: string, motivo: string, userId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
@@ -563,7 +563,7 @@ export class SolicitudesService {
 
       if (error) return { success: false, error: error.message };
 
-      await this.registrarAuditoria(usuarioId, 'solicitud', id, 'CAMBIO_ESTADO', { estado: actual.estado }, { estado: 'cancelada', motivo: motivo.trim() });
+      await this.registrarAuditoria(userId, 'solicitud', id, 'CAMBIO_ESTADO', { estado: actual.estado }, { estado: 'cancelada', motivo: motivo.trim() });
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al cancelar';
