@@ -1025,5 +1025,5 @@ COMMENT ON COLUMN public.solicitud.sucursal IS 'Sucursal desde la que nace la so
 COMMENT ON COLUMN public.solicitud.fecha_tentativa_despacho IS 'Fecha tentativa en la que el despacho estaria programado';
 COMMENT ON COLUMN public.solicitud.fecha_despacho IS 'Fecha real de salida del vehiculo desde logistica';
 COMMENT ON COLUMN public.solicitud.motivo_cancelacion IS 'Motivo de la cancelacion de una solicitud';
-COMMENT ON COLUMN public.solicitud.posicion_prioridad IS 'Numero que indica que prioridad tiene una solicitud';
+COMMENT ON COLUMN public.solicitud.posicion_prioridad IS 'Numero que indica la prioridad de una solicitud dentro de la cola de su sucursal (1..N por sucursal, UNIQUE compuesto con sucursal)';
 COMMENT ON COLUMN public.solicitud_vehiculo.disponibilidad IS 'Indica si un vehiculo que ya tuvo una solicitud puede estar disponible para otra soliciutd si el estado es reservado entonces no si es liberado entonces si';
