@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import { UserProfile, UserRole } from '@/types/auth.types';
-import { createUserAction, toggleUserStatusAction, resetUserPasswordAction } from '@/app/actions/users.actions';
+import { Sucursal } from '@/types/sucursal.types';
+import { createUserAction, updateUserAction, toggleUserStatusAction, resetUserPasswordAction } from '@/app/actions/users.actions';
 import {
   Users,
   UserPlus,
@@ -18,10 +19,13 @@ import {
   Check,
   ShieldAlert,
   Lock,
+  Building2,
+  Pencil,
 } from 'lucide-react';
 
 interface Props {
   users: UserProfile[];
+  sucursales: Sucursal[];
   currentAdminEmail: string;
   currentAdminId: string;
 }
@@ -45,7 +49,7 @@ const roleLabels: Record<UserRole, { label: string; color: string }> = {
   },
 };
 
-export default function UsersTableClient({ users, currentAdminEmail, currentAdminId }: Props) {
+export default function UsersTableClient({ users, sucursales, currentAdminEmail, currentAdminId }: Props) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('todos');
@@ -65,7 +69,16 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
   const [emailDomain, setEmailDomain] = useState('gmail.com');
   const [customPassword, setCustomPassword] = useState('');
   const [rol, setRol] = useState<UserRole>('ejecutivo');
+  const [sucursalId, setSucursalId] = useState<number | null>(null);
   const [isSubmitting, startTransition] = useTransition();
+
+  // Edit User modal states
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editUserId, setEditUserId] = useState('');
+  const [editNombre, setEditNombre] = useState('');
+  const [editApellido, setEditApellido] = useState('');
+  const [editRol, setEditRol] = useState<UserRole>('ejecutivo');
+  const [editSucursalId, setEditSucursalId] = useState<number | null>(null);
 
   useEffect(() => {
     setIsHydrated(true);
@@ -88,6 +101,14 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
   const activeUsers = users.filter((u) => u.activo).length;
   const inactiveUsers = totalUsers - activeUsers;
 
+  const resetForm = () => {
+    setNombre('');
+    setApellido('');
+    setEmailPrefix('');
+    setCustomPassword('');
+    setSucursalId(null);
+  };
+
   const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFeedback(null);
@@ -105,6 +126,7 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
         email: fullEmail,
         rol,
         password: customPassword.trim() || undefined,
+        sucursal_id: sucursalId,
       });
 
       if (res.success) {
@@ -115,10 +137,7 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
           tempPassword: res.tempPassword,
         });
         setIsModalOpen(false);
-        setNombre('');
-        setApellido('');
-        setEmailPrefix('');
-        setCustomPassword('');
+        resetForm();
       } else {
         setFeedback({
           type: 'error',
@@ -188,6 +207,52 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
     navigator.clipboard.writeText(text);
     setCopiedCreds(true);
     setTimeout(() => setCopiedCreds(false), 3000);
+  };
+
+  const openEditModal = (user: UserProfile) => {
+    setEditUserId(user.id);
+    setEditNombre(user.nombre);
+    setEditApellido(user.apellido);
+    setEditRol(user.rol);
+    setEditSucursalId(user.sucursal_id ?? null);
+    setIsEditModalOpen(true);
+  };
+
+  const resetEditForm = () => {
+    setEditUserId('');
+    setEditNombre('');
+    setEditApellido('');
+    setEditRol('ejecutivo');
+    setEditSucursalId(null);
+  };
+
+  const handleEditUser = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setFeedback(null);
+
+    startTransition(async () => {
+      const res = await updateUserAction({
+        userId: editUserId,
+        nombre: editNombre.trim(),
+        apellido: editApellido.trim(),
+        rol: editRol,
+        sucursal_id: editSucursalId,
+      });
+
+      if (res.success) {
+        setFeedback({
+          type: 'success',
+          message: res.message || 'Usuario actualizado exitosamente.',
+        });
+        setIsEditModalOpen(false);
+        resetEditForm();
+      } else {
+        setFeedback({
+          type: 'error',
+          message: res.error || 'Error al actualizar usuario.',
+        });
+      }
+    });
   };
 
   return (
@@ -356,6 +421,7 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
                 <th className="py-3.5 px-4">Usuario</th>
                 <th className="py-3.5 px-4">Correo</th>
                 <th className="py-3.5 px-4">Rol</th>
+                <th className="py-3.5 px-4">Sucursal</th>
                 <th className="py-3.5 px-4">Estado</th>
                 <th className="py-3.5 px-4">Clave Inicial</th>
                 <th className="py-3.5 px-4">Registro</th>
@@ -365,7 +431,7 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-neutral-400">
+                  <td colSpan={8} className="py-8 text-center text-neutral-400">
                     No se encontraron usuarios que coincidan con la búsqueda.
                   </td>
                 </tr>
@@ -416,6 +482,25 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
                         </span>
                       </td>
 
+                      {/* Sucursal */}
+                      <td className="py-3.5 px-4">
+                        {user.sucursal_id ? (
+                          (() => {
+                            const suc = sucursales.find((s) => s.id === user.sucursal_id);
+                            return suc ? (
+                              <div className="flex items-center gap-1.5">
+                                <Building2 className="w-3.5 h-3.5 text-neutral-400" />
+                                <span className="text-xs font-medium text-neutral-700">{suc.nombre}</span>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-neutral-400">Sin asignar</span>
+                            );
+                          })()
+                        ) : (
+                          <span className="text-xs text-neutral-400">Sin asignar</span>
+                        )}
+                      </td>
+
                       {/* Status */}
                       <td className="py-3.5 px-4">
                         {user.activo ? (
@@ -453,6 +538,15 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
 
                       {/* Action buttons */}
                       <td className="py-3.5 px-4 text-right space-x-2">
+                        {/* Edit user button */}
+                        <button
+                          onClick={() => openEditModal(user)}
+                          title="Editar usuario"
+                          className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+
                         {/* Reset password button */}
                         <button
                           onClick={() => handleResetPassword(user.id, user.email)}
@@ -500,7 +594,7 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
                 </div>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
+                onClick={() => { setIsModalOpen(false); resetForm(); }}
                 className="text-neutral-400 hover:text-neutral-900 p-1 rounded-lg hover:bg-neutral-100"
               >
                 <X className="w-5 h-5" />
@@ -583,6 +677,25 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
                 </select>
               </div>
 
+              {/* Sucursal */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Sucursal Asignada *
+                </label>
+                <select
+                  value={sucursalId ?? ''}
+                  onChange={(e) => setSucursalId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                >
+                  <option value="">Seleccionar sucursal...</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}{s.direccion ? ` - ${s.direccion}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Optional Custom Password */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider flex items-center justify-between">
@@ -610,7 +723,7 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  onClick={() => { setIsModalOpen(false); resetForm(); }}
                   className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer"
                 >
                   Cancelar
@@ -621,6 +734,115 @@ export default function UsersTableClient({ users, currentAdminEmail, currentAdmi
                   className="px-5 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 active:bg-black rounded-xl disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? 'Creando...' : 'Crear Cuenta'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Editar Usuario */}
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-neutral-900">Editar Usuario</h2>
+                  <p className="text-xs text-neutral-500">Modificar datos de la cuenta</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setIsEditModalOpen(false); resetEditForm(); }}
+                className="text-neutral-400 hover:text-neutral-900 p-1 rounded-lg hover:bg-neutral-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditUser} className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Nombre *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editNombre}
+                    onChange={(e) => setEditNombre(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Apellido *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editApellido}
+                    onChange={(e) => setEditApellido(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+              </div>
+
+              {/* Rol */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Rol Asignado *
+                </label>
+                <select
+                  value={editRol}
+                  onChange={(e) => setEditRol(e.target.value as UserRole)}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                >
+                  <option value="ejecutivo">Ejecutivo (Gestión de solicitudes/vehículos)</option>
+                  <option value="jefe_local">Jefe de Local (Aprobación, priorización, entrega)</option>
+                  <option value="logistica">Logística (Coordinación de traslados)</option>
+                  <option value="administrador">Administrador (Control total del sistema)</option>
+                </select>
+              </div>
+
+              {/* Sucursal */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Sucursal Asignada
+                </label>
+                <select
+                  value={editSucursalId ?? ''}
+                  onChange={(e) => setEditSucursalId(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                >
+                  <option value="">Seleccionar sucursal...</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.nombre}{s.direccion ? ` - ${s.direccion}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
+                <button
+                  type="button"
+                  onClick={() => { setIsEditModalOpen(false); resetEditForm(); }}
+                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 active:bg-black rounded-xl disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
                 </button>
               </div>
             </form>
