@@ -85,7 +85,13 @@ export default async function SolicitudesPage() {
           solicitudes={solicitudes}
           sucursales={sucursales}
           vehiculos={vehiculos}
-          viewer={{ id: profile.id, rol: profile.rol, sucursal_id: profile.sucursal_id ?? null }}
+          viewer={{
+            id: profile.id,
+            nombre: profile.nombre,
+            apellido: profile.apellido,
+            rol: profile.rol,
+            sucursal_id: profile.sucursal_id ?? null,
+          }}
         />
       </main>
     </div>

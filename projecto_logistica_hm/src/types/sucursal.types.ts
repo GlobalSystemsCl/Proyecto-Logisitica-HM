@@ -1,4 +1,6 @@
 export type EstadoSolicitud =
+  | 'pendiente_aprobacion'
+  | 'aprobada'
   | 'pendiente'
   | 'priorizada'
   | 'asignada'
@@ -6,6 +8,7 @@ export type EstadoSolicitud =
   | 'en_transito'
   | 'entregada'
   | 'cancelada'
+  | 'rechazada'
   | 'finalizada';
 
 export type TipoSolicitud = 'evento' | 'venta';

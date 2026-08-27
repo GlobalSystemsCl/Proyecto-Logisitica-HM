@@ -26,6 +26,8 @@ import {
 } from '@/types/sucursal.types';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
+  pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  aprobada: { label: 'Aprobada', color: 'bg-green-50 text-green-700 border-green-200' },
   pendiente: { label: 'Pendiente', color: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   priorizada: { label: 'Priorizada', color: 'bg-neutral-200 text-neutral-900 border-neutral-200' },
   asignada: { label: 'Asignada', color: 'bg-white text-neutral-900 border-neutral-400' },
@@ -34,6 +36,7 @@ const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = 
   entregada: { label: 'Entregada', color: 'bg-neutral-900 text-white border-neutral-900' },
   finalizada: { label: 'Finalizada', color: 'bg-black text-white border-black ring-2 ring-neutral-300' },
   cancelada: { label: 'Cancelada', color: 'bg-red-50 text-red-700 border-red-200' },
+  rechazada: { label: 'Rechazada', color: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 const tipoLabel: Record<string, string> = {

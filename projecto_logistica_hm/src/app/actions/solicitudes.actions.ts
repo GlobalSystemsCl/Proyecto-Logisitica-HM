@@ -14,31 +14,23 @@ async function getProfileOrThrow(): Promise<UserProfile> {
   return profile;
 }
 
-function puedeGestionarPreDespacho(
-  profile: UserProfile,
-  solicitud: { sucursal: number; ejecutivo_id: string }
-): boolean {
-  if (profile.rol === 'administrador') return true;
-  if (profile.rol === 'ejecutivo') return solicitud.ejecutivo_id === profile.id;
-  if (profile.rol === 'jefe_local') {
-    return profile.sucursal_id !== null && profile.sucursal_id !== undefined && solicitud.sucursal === profile.sucursal_id;
-  }
-  return false;
-}
-
 export interface CreateSolicitudData {
   sucursal: string;
   tipo_solicitud: TipoSolicitud;
   fecha_limite?: string;
   vehiculo_ids?: string[];
+  sucursal_destino?: string;
+  direccion_evento?: string;
+  titulo_evento?: string;
+  ejecutivo_id?: string;
 }
 
 export async function createSolicitudAction(data: CreateSolicitudData) {
   try {
     const profile = await getProfileOrThrow();
 
-    if (profile.rol !== 'ejecutivo' && profile.rol !== 'administrador') {
-      return { success: false, error: 'Solo Ejecutivos y Administradores pueden crear solicitudes.' };
+    if (profile.rol !== 'ejecutivo' && profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
+      return { success: false, error: 'No tienes permisos para crear solicitudes.' };
     }
 
     const sucursal = Number(data.sucursal);
@@ -51,34 +43,147 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
     }
 
     const fechaLimite = data.fecha_limite?.trim() || null;
-    if (fechaLimite && isNaN(Date.parse(fechaLimite))) {
+    if (!fechaLimite) {
+      return { success: false, error: 'La fecha límite es obligatoria.' };
+    }
+    if (isNaN(Date.parse(fechaLimite))) {
       return { success: false, error: 'La fecha límite no es válida.' };
+    }
+
+    if (data.tipo_solicitud === 'venta') {
+      const destino = Number(data.sucursal_destino);
+      if (!Number.isInteger(destino) || destino <= 0) {
+        return { success: false, error: 'Debes seleccionar una sucursal destino.' };
+      }
+      if (destino === sucursal) {
+        return { success: false, error: 'La sucursal destino no puede ser igual a la origen.' };
+      }
+    }
+
+    if (data.tipo_solicitud === 'evento') {
+      if (!data.direccion_evento || data.direccion_evento.trim().length < 3) {
+        return { success: false, error: 'La dirección del evento es obligatoria (mínimo 3 caracteres).' };
+      }
+      if (!data.titulo_evento || data.titulo_evento.trim().length < 3) {
+        return { success: false, error: 'El título del evento es obligatorio (mínimo 3 caracteres).' };
+      }
+    }
+
+    let ejecutivoId: string | null = null;
+
+    if (profile.rol === 'ejecutivo') {
+      if (sucursal !== profile.sucursal_id) {
+        return { success: false, error: 'Como ejecutivo, solo puedes crear solicitudes en tu sucursal.' };
+      }
+      ejecutivoId = profile.id;
+    } else if (profile.rol === 'jefe_local') {
+      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
+        return { success: false, error: 'No tienes una sucursal asignada.' };
+      }
+      if (data.ejecutivo_id) {
+        ejecutivoId = data.ejecutivo_id;
+      }
     }
 
     const vehiculoIds = (data.vehiculo_ids || []).filter((v) => typeof v === 'string' && v.length > 0);
 
     const result = await SolicitudesService.createSolicitud(
       {
-        ejecutivo_id: profile.id,
+        ejecutivo_id: ejecutivoId,
         sucursal,
         tipo_solicitud: data.tipo_solicitud,
         fecha_limite: fechaLimite,
+        sucursal_destino: data.tipo_solicitud === 'venta' ? Number(data.sucursal_destino) : null,
+        direccion_evento: data.tipo_solicitud === 'evento' ? data.direccion_evento?.trim() : null,
+        titulo_evento: data.tipo_solicitud === 'evento' ? data.titulo_evento?.trim() : null,
       },
-      profile.rol === 'administrador' ? vehiculoIds : []
+      vehiculoIds
     );
 
     if (!result.success) {
       return { success: false, error: result.error || 'Error al crear la solicitud.' };
     }
 
+    const autoAprobada = profile.rol === 'jefe_local' && !ejecutivoId;
+    if (autoAprobada && result.solicitud) {
+      await SolicitudesService.aprobarSolicitud(result.solicitud.id, profile.id);
+    }
+
     revalidatePath('/solicitudes');
     return {
       success: true,
-      message:
-        result.error
-          ? result.error
-          : `Solicitud creada exitosamente${vehiculoIds.length > 0 && profile.rol === 'administrador' ? ` con ${vehiculoIds.length} vehículo(s) reservado(s)` : ''}.`,
+      message: autoAprobada
+        ? 'Solicitud creada y aprobada automáticamente.'
+        : ejecutivoId
+          ? 'Solicitud creada. Pendiente de aprobación por el Jefe de Local.'
+          : 'Solicitud creada exitosamente.',
     };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function aprobarSolicitudAction(id: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
+      return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden aprobar.' };
+    }
+
+    const solicitud = await SolicitudesService.getSolicitudById(id);
+    if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
+
+    if (profile.rol === 'jefe_local') {
+      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
+        return { success: false, error: 'No tienes una sucursal asignada.' };
+      }
+      if (solicitud.sucursal !== profile.sucursal_id) {
+        return { success: false, error: 'Solo puedes aprobar solicitudes de tu propia sucursal.' };
+      }
+    }
+
+    const result = await SolicitudesService.aprobarSolicitud(id, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    return { success: true, message: 'Solicitud aprobada exitosamente.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function rechazarSolicitudAction(id: string, motivo: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
+      return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden rechazar.' };
+    }
+
+    if (!motivo || motivo.trim().length < 5) {
+      return { success: false, error: 'El motivo de rechazo es obligatorio (mínimo 5 caracteres).' };
+    }
+
+    const solicitud = await SolicitudesService.getSolicitudById(id);
+    if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
+
+    if (profile.rol === 'jefe_local') {
+      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
+        return { success: false, error: 'No tienes una sucursal asignada.' };
+      }
+      if (solicitud.sucursal !== profile.sucursal_id) {
+        return { success: false, error: 'Solo puedes rechazar solicitudes de tu propia sucursal.' };
+      }
+    }
+
+    const result = await SolicitudesService.rechazarSolicitud(id, motivo, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    return { success: true, message: 'Solicitud rechazada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };
@@ -127,18 +232,21 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
     const solicitud = await SolicitudesService.getSolicitudById(id);
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
 
-    if (!puedeGestionarPreDespacho(profile, solicitud)) {
-      return {
-        success: false,
-        error: 'No tienes permisos para cancelar esta solicitud.',
-      };
+    const esEncargado =
+      profile.rol === 'administrador' ||
+      (profile.rol === 'jefe_local' && solicitud.sucursal === profile.sucursal_id) ||
+      (profile.rol === 'ejecutivo' && solicitud.ejecutivo_id === profile.id) ||
+      profile.rol === 'logistica';
+
+    if (!esEncargado) {
+      return { success: false, error: 'No tienes permisos para cancelar esta solicitud.' };
     }
 
     const result = await SolicitudesService.cancelarSolicitud(id, motivo);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
-    return { success: true, message: 'Solicitud cancelada. Los vehículos reservados fueron liberados automáticamente.' };
+    return { success: true, message: 'Solicitud cancelada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };
@@ -152,7 +260,12 @@ export async function eliminarSolicitudAction(id: string) {
     const solicitud = await SolicitudesService.getSolicitudById(id);
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
 
-    if (!puedeGestionarPreDespacho(profile, solicitud)) {
+    const esEncargado =
+      profile.rol === 'administrador' ||
+      (profile.rol === 'jefe_local' && solicitud.sucursal === profile.sucursal_id) ||
+      (profile.rol === 'ejecutivo' && solicitud.ejecutivo_id === profile.id);
+
+    if (!esEncargado) {
       return { success: false, error: 'No tienes permisos para eliminar esta solicitud.' };
     }
 
@@ -171,8 +284,8 @@ export async function agregarVehiculoAction(solicitudId: string, vehiculoId: str
   try {
     const profile = await getProfileOrThrow();
 
-    if (profile.rol !== 'administrador') {
-      return { success: false, error: 'Solo el Administrador gestiona las reservas de vehículos en esta versión.' };
+    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local' && profile.rol !== 'logistica') {
+      return { success: false, error: 'No tienes permisos para gestionar vehículos.' };
     }
 
     const result = await SolicitudesService.agregarVehiculo(solicitudId, vehiculoId);
@@ -190,8 +303,8 @@ export async function quitarVehiculoAction(solicitudVehiculoId: string) {
   try {
     const profile = await getProfileOrThrow();
 
-    if (profile.rol !== 'administrador') {
-      return { success: false, error: 'Solo el Administrador gestiona las reservas de vehículos en esta versión.' };
+    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local' && profile.rol !== 'logistica') {
+      return { success: false, error: 'No tienes permisos para gestionar vehículos.' };
     }
 
     const result = await SolicitudesService.quitarVehiculo(solicitudVehiculoId);
@@ -203,4 +316,35 @@ export async function quitarVehiculoAction(solicitudVehiculoId: string) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };
   }
+}
+
+export async function agregarObservacionAction(solicitudId: string, texto: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (!texto || texto.trim().length < 1) {
+      return { success: false, error: 'La observación no puede estar vacía.' };
+    }
+
+    const result = await SolicitudesService.agregarObservacion(solicitudId, profile.id, texto);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    return { success: true, message: 'Observación agregada.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function getObservacionesAction(solicitudId: string) {
+  return SolicitudesService.getObservaciones(solicitudId);
+}
+
+export async function getAuditoriaAction(solicitudId: string) {
+  return SolicitudesService.getAuditoria(solicitudId);
+}
+
+export async function getEjecutivosPorSucursalAction(sucursalId: number) {
+  return SolicitudesService.getEjecutivosPorSucursal(sucursalId);
 }
