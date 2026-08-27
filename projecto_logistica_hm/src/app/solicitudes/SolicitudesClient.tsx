@@ -125,6 +125,11 @@ export default function SolicitudesClient({
   const [ejecutivoSel, setEjecutivoSel] = useState('');
   const [ejecutivosDisponibles, setEjecutivosDisponibles] = useState<Array<{ id: string; nombre: string; apellido: string }>>([]);
 
+  const [vehiculoSearch, setVehiculoSearch] = useState('');
+  const [vehiculoMarca, setVehiculoMarca] = useState('');
+  const [vehiculoError, setVehiculoError] = useState(false);
+  const [obsCreacion, setObsCreacion] = useState('');
+
   const [motivo, setMotivo] = useState('');
   const [nuevoVehiculoId, setNuevoVehiculoId] = useState('');
   const [obsText, setObsText] = useState('');
@@ -142,6 +147,25 @@ export default function SolicitudesClient({
     const origenId = Number(sucursalSel);
     return sucursales.filter((s) => s.id !== origenId);
   }, [sucursales, sucursalSel]);
+
+  const marcasVehiculos = useMemo(() => {
+    const marcas = new Set<string>();
+    vehiculos.forEach((v) => { if (v.marca) marcas.add(v.marca); });
+    return Array.from(marcas).sort((a, b) => a.localeCompare(b));
+  }, [vehiculos]);
+
+  const vehiculosFiltrados = useMemo(() => {
+    const term = vehiculoSearch.trim().toLowerCase();
+    return vehiculos.filter((v) => {
+      if (vehiculoMarca && v.marca !== vehiculoMarca) return false;
+      if (term) {
+        const patente = v.patente.toLowerCase().includes(term);
+        const chasis = (v.chasis || '').toLowerCase().includes(term);
+        if (!patente && !chasis) return false;
+      }
+      return true;
+    });
+  }, [vehiculos, vehiculoSearch, vehiculoMarca]);
 
   const visibles = useMemo(() => {
     if (esAdmin || esLogistica) return solicitudes;
@@ -257,6 +281,10 @@ export default function SolicitudesClient({
     setTipoSel('venta');
     setFechaLimite('');
     setSelectedVehiculos(new Set());
+    setVehiculoSearch('');
+    setVehiculoMarca('');
+    setVehiculoError(false);
+    setObsCreacion('');
     setDireccionEvento('');
     setTituloEvento('');
     setEjecutivoSel('');
@@ -264,6 +292,12 @@ export default function SolicitudesClient({
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (selectedVehiculos.size === 0) {
+      setVehiculoError(true);
+      setFeedback({ type: 'error', message: 'Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.' });
+      return;
+    }
+    setVehiculoError(false);
     setIsSubmitting(true);
     try {
       const result = await createSolicitudAction({
@@ -275,6 +309,7 @@ export default function SolicitudesClient({
         direccion_evento: tipoSel === 'evento' ? direccionEvento : undefined,
         titulo_evento: tipoSel === 'evento' ? tituloEvento : undefined,
         ejecutivo_id: esJefeLocal && ejecutivoSel ? ejecutivoSel : undefined,
+        observacion: obsCreacion.trim() || undefined,
       });
       if (!result.success) {
         setFeedback({ type: 'error', message: result.error || 'Error al crear.' });
@@ -701,7 +736,7 @@ export default function SolicitudesClient({
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Nueva Solicitud de Traslado</h2>
                   <p className="text-xs text-neutral-500">
-                    {esJefeLocal && !ejecutivoSel
+                    {esJefeLocal
                       ? 'Se creará como Aprobada directamente'
                       : 'Queda Pendiente de Aprobación por el Jefe de Local'}
                   </p>
@@ -832,12 +867,47 @@ export default function SolicitudesClient({
 
               {/* Vehículos */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Reservar Vehículos (opcional)</label>
-                <div className="max-h-40 overflow-y-auto border border-neutral-300 rounded-xl divide-y divide-neutral-200">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Reservar Vehículos *</label>
+                  <span className={`text-[10px] font-semibold uppercase tracking-wider ${selectedVehiculos.size > 0 ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500'} px-2 py-0.5 rounded-lg`}>
+                    {selectedVehiculos.size} seleccionado{selectedVehiculos.size === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                    <input
+                      type="text"
+                      placeholder="Buscar por patente o chasis..."
+                      value={vehiculoSearch}
+                      onChange={(e) => setVehiculoSearch(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 bg-white border border-neutral-300 rounded-xl text-xs text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                    />
+                  </div>
+                  <select
+                    value={vehiculoMarca}
+                    onChange={(e) => setVehiculoMarca(e.target.value)}
+                    className="px-2.5 py-1.5 bg-white border border-neutral-300 rounded-xl text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  >
+                    <option value="">Todas las marcas</option>
+                    {marcasVehiculos.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={`max-h-44 overflow-y-auto border rounded-xl divide-y divide-neutral-200 ${vehiculoError && selectedVehiculos.size === 0 ? 'border-red-300 bg-red-50/30' : 'border-neutral-300'}`}>
                   {vehiculos.length === 0 ? (
-                    <p className="p-3 text-xs text-neutral-400 italic">No hay vehículos en el inventario.</p>
+                    <p className="p-3 text-xs text-neutral-400 italic">
+                      No hay vehículos en el inventario. Solicita a un administrador que incorpore vehículos.
+                    </p>
+                  ) : vehiculosFiltrados.length === 0 ? (
+                    <p className="p-3 text-xs text-neutral-400 italic">
+                      No hay vehículos que coincidan con la búsqueda.
+                    </p>
                   ) : (
-                    vehiculos.map((v) => (
+                    vehiculosFiltrados.map((v) => (
                       <label
                         key={v.id}
                         className={`flex items-center gap-2.5 px-3 py-2 text-sm ${
@@ -857,7 +927,7 @@ export default function SolicitudesClient({
                           className="accent-neutral-900"
                         />
                         <span className="font-mono font-bold text-neutral-900 text-xs">{v.patente}</span>
-                        <span className="text-xs text-neutral-500 truncate">{v.marca} {v.modelo} · {v.anio}</span>
+                        <span className="text-xs text-neutral-500 truncate">{v.chasis} · {v.marca} {v.modelo} · {v.anio}</span>
                         {v.reservado_en_activa && (
                           <span className="ml-auto text-[10px] font-semibold text-neutral-400 uppercase shrink-0">Ocupado</span>
                         )}
@@ -865,13 +935,31 @@ export default function SolicitudesClient({
                     ))
                   )}
                 </div>
+
+                {vehiculoError && selectedVehiculos.size === 0 && (
+                  <p className="text-xs text-red-600 font-medium flex items-center gap-1.5">
+                    <AlertCircle className="w-3.5 h-3.5" /> Selecciona al menos un vehículo para poder crear la solicitud.
+                  </p>
+                )}
               </div>
 
-              <div className={`p-3 border rounded-xl flex items-start gap-2.5 text-xs ${esJefeLocal && !ejecutivoSel ? 'bg-green-50 border-green-200 text-green-700' : 'bg-neutral-50 border-neutral-200 text-neutral-600'}`}>
-                {esJefeLocal && !ejecutivoSel ? (
+              {/* Observación al crear */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Observación (opcional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Comentarios o notas sobre la solicitud..."
+                  value={obsCreacion}
+                  onChange={(e) => setObsCreacion(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none"
+                />
+              </div>
+
+              <div className={`p-3 border rounded-xl flex items-start gap-2.5 text-xs ${esJefeLocal ? 'bg-green-50 border-green-200 text-green-700' : 'bg-neutral-50 border-neutral-200 text-neutral-600'}`}>
+                {esJefeLocal ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
-                    <span>La solicitud se creará como <strong>Aprobada</strong> directamente porque no asignas un ejecutivo.</span>
+                    <span>La solicitud se creará como <strong>Aprobada</strong> directamente porque la creas tú como Jefe de Local.</span>
                   </>
                 ) : (
                   <>
@@ -1009,7 +1097,7 @@ export default function SolicitudesClient({
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-neutral-900 font-mono">{v.patente}</p>
                             <p className="text-[11px] text-neutral-500 truncate">
-                              {v.marca} {v.modelo} · {v.anio}{v.color ? ` · ${v.color}` : ''}
+                              {v.chasis} · {v.marca} {v.modelo} · {v.anio}{v.color ? ` · ${v.color}` : ''}
                             </p>
                           </div>
                         </div>

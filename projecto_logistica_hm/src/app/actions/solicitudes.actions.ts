@@ -23,6 +23,7 @@ export interface CreateSolicitudData {
   direccion_evento?: string;
   titulo_evento?: string;
   ejecutivo_id?: string;
+  observacion?: string;
 }
 
 export async function createSolicitudAction(data: CreateSolicitudData) {
@@ -85,38 +86,43 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
       }
     }
 
+    const jefeLocalId = profile.rol === 'jefe_local' ? profile.id : null;
+    const estadoInicial = profile.rol === 'jefe_local' ? 'aprobada' : 'pendiente_aprobacion';
+
     const vehiculoIds = (data.vehiculo_ids || []).filter((v) => typeof v === 'string' && v.length > 0);
+
+    if (vehiculoIds.length === 0) {
+      return { success: false, error: 'Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.' };
+    }
 
     const result = await SolicitudesService.createSolicitud(
       {
         ejecutivo_id: ejecutivoId,
+        jefe_local_id: jefeLocalId,
+        estado: estadoInicial,
         sucursal,
         tipo_solicitud: data.tipo_solicitud,
         fecha_limite: fechaLimite,
         sucursal_destino: data.tipo_solicitud === 'venta' ? Number(data.sucursal_destino) : null,
         direccion_evento: data.tipo_solicitud === 'evento' ? data.direccion_evento?.trim() : null,
         titulo_evento: data.tipo_solicitud === 'evento' ? data.titulo_evento?.trim() : null,
+        observacion: data.observacion?.trim() || null,
       },
-      vehiculoIds
+      vehiculoIds,
+      profile.id
     );
 
     if (!result.success) {
       return { success: false, error: result.error || 'Error al crear la solicitud.' };
     }
 
-    const autoAprobada = profile.rol === 'jefe_local' && !ejecutivoId;
-    if (autoAprobada && result.solicitud) {
-      await SolicitudesService.aprobarSolicitud(result.solicitud.id, profile.id);
-    }
-
     revalidatePath('/solicitudes');
     return {
       success: true,
-      message: autoAprobada
-        ? 'Solicitud creada y aprobada automáticamente.'
-        : ejecutivoId
-          ? 'Solicitud creada. Pendiente de aprobación por el Jefe de Local.'
-          : 'Solicitud creada exitosamente.',
+      message:
+        profile.rol === 'jefe_local'
+          ? 'Solicitud creada y aprobada automáticamente.'
+          : 'Solicitud creada. Pendiente de aprobación por el Jefe de Local.',
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -210,7 +216,7 @@ export async function priorizarSolicitudAction(id: string) {
       return { success: false, error: 'Solo puedes priorizar solicitudes de tu propia sucursal.' };
     }
 
-    const result = await SolicitudesService.priorizarSolicitud(id);
+    const result = await SolicitudesService.priorizarSolicitud(id, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
@@ -242,7 +248,7 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
       return { success: false, error: 'No tienes permisos para cancelar esta solicitud.' };
     }
 
-    const result = await SolicitudesService.cancelarSolicitud(id, motivo);
+    const result = await SolicitudesService.cancelarSolicitud(id, motivo, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
@@ -288,7 +294,7 @@ export async function agregarVehiculoAction(solicitudId: string, vehiculoId: str
       return { success: false, error: 'No tienes permisos para gestionar vehículos.' };
     }
 
-    const result = await SolicitudesService.agregarVehiculo(solicitudId, vehiculoId);
+    const result = await SolicitudesService.agregarVehiculo(solicitudId, vehiculoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
@@ -307,7 +313,7 @@ export async function quitarVehiculoAction(solicitudVehiculoId: string) {
       return { success: false, error: 'No tienes permisos para gestionar vehículos.' };
     }
 
-    const result = await SolicitudesService.quitarVehiculo(solicitudVehiculoId);
+    const result = await SolicitudesService.quitarVehiculo(solicitudVehiculoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');

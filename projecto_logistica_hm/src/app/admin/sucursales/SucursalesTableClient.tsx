@@ -731,7 +731,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                                       {v.patente}
                                     </p>
                                     <p className="text-[11px] text-neutral-500 truncate">
-                                      {v.marca} {v.modelo} · {v.anio}
+                                      {v.chasis} · {v.marca} {v.modelo} · {v.anio}
                                       {v.color ? ` · ${v.color}` : ''}
                                     </p>
                                   </div>

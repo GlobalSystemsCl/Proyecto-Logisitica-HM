@@ -92,6 +92,8 @@ El resultado obtenido se traduce a `CREATE TABLE` en este documento. Nunca se pe
 # 5. Tablas del esquema
 
 > **Estado: `COMPLETADO` — volcado 1:1 cerrado el 2026-08-22** contra el catálogo real de PostgreSQL (vía tabla temporal `catalogo_auditoria`): tablas, columnas, tipos, largos, nullability, defaults, identity, constraints con acciones exactas, índices, RLS, políticas y triggers verificados al 100%.
+>
+> **Actualizaciones posteriores al volcado (2026-08-26)**: enum `estado_solicitud` ampliado (nuevos estados), `solicitud.ejecutivo_id` nullable, columnas `sucursal_destino`/`direccion_evento`/`titulo_evento`, trigger `tr_validate_solicitud_tipo`, y deshabilitación de triggers de notificación y auditoría (migraciones `20260826_solicitudes_v2*.sql`, `20260826_deshabilitar_notificaciones.sql`, `20260826_deshabilitar_auditoria_service_role.sql`).
 
 ## 5.0 Tipos ENUM
 
@@ -100,6 +102,9 @@ CREATE TYPE public.rol_usuario AS ENUM ('ejecutivo', 'jefe_local', 'logistica', 
 
 CREATE TYPE public.estado_solicitud AS ENUM (
     'pendiente',
+    'pendiente_aprobacion',
+    'aprobada',
+    'rechazada',
     'priorizada',
     'asignada',
     'calendarizada',
@@ -131,7 +136,7 @@ CREATE TYPE public.tipo_notificacion AS ENUM (
 Notas:
 
 * `disponibilidad`: indica si un vehículo que ya tuvo una solicitud puede volver a estar disponible para otra (`reservado` = no, `liberado` = sí).
-* El flujo real de estados **no incluye** `creada` ni `rechazada`. Un rechazo se representa con `cancelada` + `motivo_cancelacion`.
+* `pendiente_aprobacion`, `aprobada` y `rechazada` se agregaron el 2026-08-26 (migración `20260826_solicitudes_v2.sql`) para el flujo ejecutivo → jefe_local → logística. `rechazada` representa la aprobación denegada; `cancelada` + `motivo_cancelacion` es la cancelación posterior.
 
 ---
 
@@ -341,7 +346,7 @@ Solicitudes de traslado de vehículos entre sucursales, con flujo de estados y r
 ```sql
 CREATE TABLE public.solicitud (
     id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    ejecutivo_id             UUID NOT NULL REFERENCES public.usuario(id),
+    ejecutivo_id             UUID REFERENCES public.usuario(id),   -- nullable desde 2026-08-26 (jefe_local crea sin ejecutivo)
     jefe_local_id            UUID REFERENCES public.usuario(id),
     logistica_id             UUID REFERENCES public.usuario(id),
     estado                   public.estado_solicitud NOT NULL DEFAULT 'pendiente',
@@ -350,6 +355,9 @@ CREATE TABLE public.solicitud (
     tipo_solicitud           public.tipo_solicitud NOT NULL DEFAULT 'venta',  -- antes "tipo solicitud"; renombrada el 2026-08-22
     sucursal                 BIGINT REFERENCES public.sucursal(id)
                                  ON UPDATE CASCADE ON DELETE CASCADE,  -- sucursal origen
+    sucursal_destino         BIGINT REFERENCES public.sucursal(id),     -- sucursal destino (tipo venta)
+    direccion_evento         TEXT,                                      -- dirección del evento (tipo evento)
+    titulo_evento            TEXT,                                      -- título del evento (tipo evento)
     fecha_tentativa_despacho TIMESTAMPTZ,   -- fecha tentativa programada del despacho
     fecha_despacho           TIMESTAMPTZ,   -- fecha real de salida del vehículo desde logística
     motivo_cancelacion       TEXT,
@@ -362,8 +370,9 @@ Notas:
 
 * Las FKs a `usuario` no declaran acción (`NO ACTION` implícito): borrar un usuario con solicitudes asociadas fallará.
 * `ON DELETE CASCADE` en `sucursal`: borrar la sucursal origen elimina sus solicitudes.
-* No existe columna de sucursal destino ni fecha_entrega (deuda de diseño registrada).
-* El rechazo se representa con `cancelada` + `motivo_cancelacion`.
+* `ejecutivo_id` se hizo `NULLABLE` el 2026-08-26 (migración `20260826_solicitudes_v2.sql`): el jefe_local puede crear una solicitud sin asignar ejecutivo.
+* `sucursal_destino`, `direccion_evento` y `titulo_evento` se agregaron el 2026-08-26 (vía migración parcial aplicada directamente en Supabase; el trigger `validate_solicitud_tipo` las valida según `tipo_solicitud`).
+* `fecha_despacho` y `fecha_entrega` no existen aún (deuda de diseño registrada).
 
 ### Índices
 
@@ -375,6 +384,11 @@ CREATE UNIQUE INDEX solicitud_posicion_prioridad_key ON public.solicitud USING b
 ### Triggers
 
 ```sql
+-- Valida que tipo_solicitud traiga sus campos obligatorios
+CREATE TRIGGER tr_validate_solicitud_tipo
+    BEFORE INSERT OR UPDATE ON public.solicitud
+    FOR EACH ROW EXECUTE FUNCTION validate_solicitud_tipo();
+
 -- Audita cambios de estado (inserta en public.auditoria)
 CREATE TRIGGER trigger_cambio_estado_auditoria
     AFTER UPDATE OF estado ON public.solicitud
@@ -389,6 +403,11 @@ CREATE TRIGGER trigger_disponibilidad
 CREATE TRIGGER trigger_notificacion_solicitud
     AFTER INSERT OR UPDATE OF estado ON public.solicitud
     FOR EACH ROW EXECUTE FUNCTION notificar_solicitud();
+```
+
+> **trigger_cambio_estado_auditoria DESHABILITADO el 2026-08-26** (migración `20260826_deshabilitar_auditoria_service_role.sql`): la app escribe con el cliente service-role (`createAdminClient`), donde `auth.uid()` es NULL, y la función violaba `auditoria.usuario_id NOT NULL`, abortando aprobaciones/rechazos/priorizaciones/cancelaciones. La auditoría de estados ahora la registra `SolicitudesService.registrarAuditoria` con el usuario autenticado real. La función `cambio_estado_auditoria()` se conserva.
+>
+> **DESHABILITADO el 2026-08-26** (migración `20260826_deshabilitar_notificaciones.sql`): el módulo de notificaciones no está contemplado y el trigger violaba `notificacion.usuario_id NOT NULL` cuando el jefe_local de la sucursal aún no está asignado. La función `notificar_solicitud()` se conserva; solo se eliminó el trigger (reversible).
 ```
 
 ### Row Level Security
@@ -498,6 +517,11 @@ CREATE TRIGGER trigger_auditoria_update_disponibilidad
 CREATE TRIGGER trigger_notificacion_solicitud_vehiculo
     AFTER INSERT OR UPDATE OF disponibilidad ON public.solicitud_vehiculo
     FOR EACH ROW EXECUTE FUNCTION notificar_solicitud_vehiculo();
+```
+
+> **trigger_auditoria_insert_disponibilidad y trigger_auditoria_update_disponibilidad DESHABILITADOS el 2026-08-26** (migración `20260826_deshabilitar_auditoria_service_role.sql`): con el cliente service-role `auth.uid()` es NULL y la función violaba `auditoria.usuario_id NOT NULL`, abortando la reserva de vehículos al crear solicitudes (causa de "creada sin vehículos"). La asignación/liberación ahora se audita en la capa de servicios (`ASIGNACION_VEHICULO` / `CAMBIO_DISPONIBILIDAD_VEHICULO`). Las funciones se conservan.
+>
+> **DESHABILITADO el 2026-08-26** (migración `20260826_deshabilitar_notificaciones.sql`): violaba `notificacion.usuario_id NOT NULL` cuando la solicitud no tiene ejecutivo asignado (p. ej. creada por jefe_local). La función se conserva.
 ```
 
 ### Row Level Security
@@ -614,6 +638,9 @@ Solo el PK (`observacion_pkey`, btree en `id`).
 CREATE TRIGGER trigger_notificacion_observacion
     AFTER INSERT ON public.observacion
     FOR EACH ROW EXECUTE FUNCTION notificar_observacion();
+```
+
+> **DESHABILITADO el 2026-08-26** (migración `20260826_deshabilitar_notificaciones.sql`): violaba `notificacion.usuario_id NOT NULL` al no existir participantes asignados. La función se conserva.
 ```
 
 Nota: `updated_at` no tiene trigger propio en esta tabla; su default `now()` solo aplica al INSERT.
@@ -735,12 +762,13 @@ Todas verificadas contra catálogo el 2026-08-22. Cuerpos completos disponibles 
 | `handle_updated_at()` | `() → trigger` | invoker | Mantiene `updated_at = now()` (UTC) en UPDATE. Trigger: `usuario`. |
 | `handle_new_auth_user()` | `() → trigger` | `SECURITY DEFINER` | Sincroniza `auth.users` → `public.usuario`; fuerza rol administrador para `maic.hernandez.dev@gmail.com`; upsert por `id`. |
 | `rls_auto_enable()` | `() → event_trigger` | `SECURITY DEFINER` | Event trigger DDL: habilita RLS automáticamente en tablas nuevas del esquema `public`. Explica por qué todas las tablas tienen RLS activo. |
-| `cambio_estado_auditoria()` | `() → trigger` | `SECURITY DEFINER` | Audita transiciones de estado de `solicitud` en `auditoria` (acción `CAMBIO_ESTADO`). |
+| `validate_solicitud_tipo()` | `() → trigger` | invoker | Valida en INSERT/UPDATE que `tipo_solicitud` traiga sus campos obligatorios (venta → `sucursal_destino`; evento → `direccion_evento` y `titulo_evento`). Creada 2026-08-26. |
+| `cambio_estado_auditoria()` | `() → trigger` | `SECURITY DEFINER` | Audita transiciones de estado de `solicitud` en `auditoria` (acción `CAMBIO_ESTADO`). **Sin trigger desde 2026-08-26** (migración `20260826_deshabilitar_auditoria_service_role.sql`); la auditoría de estados la registra la capa de servicios. |
 | `disponibilidad()` | `() → trigger` | invoker | Al cancelarse una solicitud, libera (`liberado`) sus vehículos `reservado`. |
-| `auditoria_disponibilidad()` | `() → trigger` | `SECURITY DEFINER` | Audita asignación/cambio de disponibilidad en `solicitud_vehiculo` (`ASIGNACION_VEHICULO`, `CAMBIO_DISPONIBILIDAD_VEHICULO`). |
-| `notificar_solicitud()` | `() → trigger` | `SECURITY DEFINER` | Genera `notificacion`: nueva solicitud (al jefe_local) y cada transición de estado (al rol correspondiente). |
-| `notificar_observacion()` | `() → trigger` | `SECURITY DEFINER` | Notifica `NUEVA_OBSERVACION` a participantes de la solicitud, excepto al autor. |
-| `notificar_solicitud_vehiculo()` | `() → trigger` | `SECURITY DEFINER` | Notifica `VEHICULO_RESERVADO` / `VEHICULO_LIBERADO` al ejecutivo. |
+| `auditoria_disponibilidad()` | `() → trigger` | `SECURITY DEFINER` | Audita asignación/cambio de disponibilidad en `solicitud_vehiculo` (`ASIGNACION_VEHICULO`, `CAMBIO_DISPONIBILIDAD_VEHICULO`). **Sin trigger desde 2026-08-26** (migración `20260826_deshabilitar_auditoria_service_role.sql`); la auditoría de asignaciones la registra la capa de servicios. |
+| `notificar_solicitud()` | `() → trigger` | `SECURITY DEFINER` | Genera `notificacion`: nueva solicitud (al jefe_local) y cada transición de estado (al rol correspondiente). **Sin trigger desde 2026-08-26** (migración `20260826_deshabilitar_notificaciones.sql`); función conservada. |
+| `notificar_observacion()` | `() → trigger` | `SECURITY DEFINER` | Notifica `NUEVA_OBSERVACION` a participantes de la solicitud, excepto al autor. **Sin trigger desde 2026-08-26**. |
+| `notificar_solicitud_vehiculo()` | `() → trigger` | `SECURITY DEFINER` | Notifica `VEHICULO_RESERVADO` / `VEHICULO_LIBERADO` al ejecutivo. **Sin trigger desde 2026-08-26**. |
 
 > La función muerta `traspaso_auth_tabla_usuario()` fue eliminada el 2026-08-22 (migración `20260822_cleanup_funcion_muerta_y_defaults.sql`): no tenía trigger asociado e insertaba un rol inválido para el enum.
 
@@ -751,7 +779,7 @@ Todas verificadas contra catálogo el 2026-08-22. Cuerpos completos disponibles 
 1. Cascadas peligrosas: borrar `usuario` borra su `sucursal`; borrar `sucursal` borra sus solicitudes.
 2. FKs sin acción hacia `usuario.id` (solicitud, auditoria, observacion, solicitud_vehiculo.vehiculo_id): impiden borrar usuarios con historial (protege trazabilidad, pero conviene documentarlo como decisión).
 3. Timestamps `WITHOUT TIME ZONE` en la mayoría de tablas (solo fechas de despacho/límite/bloqueo usan `TIMESTAMPTZ`).
-4. Falta diseño: `vehiculo.creado_por`/FK sucursal; `solicitud.sucursal_destino`/`fecha_entrega`.
+4. Falta diseño: `vehiculo.creado_por`/FK sucursal; `solicitud.fecha_despacho`/`fecha_entrega` (la sucursal destino ya existe desde 2026-08-26).
 5. El filtro por sucursal del jefe_local en la política de `solicitud` depende de que `usuario.sucursal_id` esté poblado.
 
 > Resueltos el 2026-08-22: default anómalo en `sucursal.usuario_id` (eliminado), función muerta `traspaso_auth_tabla_usuario` (eliminada) y `usuario.sucursal_id` corregido de UUID a BIGINT + FK, vía migraciones `20260822_cleanup_funcion_muerta_y_defaults.sql` y `20260822_politicas_rls.sql`. También resuelto ese día el hallazgo crítico **deny-all**: las 7 tablas de negocio ya cuentan con políticas RLS por rol (helpers `usuario_activo()`/`tiene_rol()`); pendiente validar los permisos dentro de la app.

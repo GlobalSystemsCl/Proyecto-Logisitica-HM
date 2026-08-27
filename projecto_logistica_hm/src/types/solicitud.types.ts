@@ -32,12 +32,15 @@ export interface SolicitudLista {
 
 export interface CreateSolicitudInput {
   ejecutivo_id: string | null;
+  jefe_local_id?: string | null;
+  estado?: SolicitudLista['estado'];
   sucursal: number;
   tipo_solicitud: TipoSolicitud;
   fecha_limite?: string | null;
   sucursal_destino?: number | null;
   direccion_evento?: string | null;
   titulo_evento?: string | null;
+  observacion?: string | null;
 }
 
 export interface CreateSolicitudCompletaInput {
@@ -52,6 +55,7 @@ export interface CreateSolicitudCompletaInput {
 
 export interface VehiculoInventario {
   id: string;
+  chasis: string;
   patente: string;
   marca: string;
   modelo: string;

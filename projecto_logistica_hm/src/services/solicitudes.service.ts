@@ -49,6 +49,7 @@ interface SolicitudRawRow {
     id: string;
     disponibilidad: 'reservado' | 'liberado';
     vehiculo: {
+      chasis: string;
       patente: string;
       marca: string;
       modelo: string;
@@ -71,7 +72,7 @@ const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud
   ejecutivo:ejecutivo_id(nombre, apellido),
   jefe:jefe_local_id(nombre, apellido),
   logistica:logistica_id(nombre, apellido),
-  solicitud_vehiculo(id, disponibilidad, vehiculo(patente, marca, modelo, anio, color))`;
+  solicitud_vehiculo(id, disponibilidad, vehiculo(chasis, patente, marca, modelo, anio, color))`;
 
 function mapRow(row: SolicitudRawRow): SolicitudLista {
   return {
@@ -101,6 +102,7 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
         solicitud_vehiculo_id: sv.id,
         disponibilidad: sv.disponibilidad,
         patente: sv.vehiculo!.patente,
+        chasis: sv.vehiculo!.chasis,
         marca: sv.vehiculo!.marca,
         modelo: sv.vehiculo!.modelo,
         anio: sv.vehiculo!.anio,
@@ -157,7 +159,7 @@ export class SolicitudesService {
 
       const { data: vehiculos, error } = await admin
         .from('vehiculo')
-        .select('id, patente, marca, modelo, anio, color')
+        .select('id, chasis, patente, marca, modelo, anio, color')
         .order('patente', { ascending: true });
 
       if (error) {
@@ -225,19 +227,32 @@ export class SolicitudesService {
 
   static async createSolicitud(
     input: CreateSolicitudInput,
-    vehiculoIds: string[]
+    vehiculoIds: string[],
+    usuarioId: string
   ): Promise<{ success: boolean; solicitud?: SolicitudLista; error?: string }> {
     try {
       const admin = createAdminClient();
+
+      if (vehiculoIds.length === 0) {
+        return {
+          success: false,
+          error: 'Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.',
+        };
+      }
 
       const insertData: Record<string, unknown> = {
         sucursal: input.sucursal,
         tipo_solicitud: input.tipo_solicitud,
         fecha_limite: input.fecha_limite?.trim() || null,
+        estado: input.estado || 'pendiente_aprobacion',
       };
 
       if (input.ejecutivo_id) {
         insertData.ejecutivo_id = input.ejecutivo_id;
+      }
+
+      if (input.jefe_local_id) {
+        insertData.jefe_local_id = input.jefe_local_id;
       }
 
       if (input.tipo_solicitud === 'venta' && input.sucursal_destino) {
@@ -247,6 +262,27 @@ export class SolicitudesService {
       if (input.tipo_solicitud === 'evento') {
         insertData.direccion_evento = input.direccion_evento?.trim() || null;
         insertData.titulo_evento = input.titulo_evento?.trim() || null;
+      }
+
+      const { data: reservasActivas, error: reservasError } = await admin
+        .from('solicitud_vehiculo')
+        .select('vehiculo_id, solicitud!inner(estado)')
+        .in('vehiculo_id', vehiculoIds)
+        .eq('disponibilidad', 'reservado')
+        .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA]);
+
+      if (reservasError) {
+        return {
+          success: false,
+          error: `No se pudo verificar la disponibilidad de los vehículos: ${reservasError.message}`,
+        };
+      }
+
+      if (reservasActivas && reservasActivas.length > 0) {
+        return {
+          success: false,
+          error: 'Uno o más vehículos seleccionados ya están reservados en otra solicitud activa.',
+        };
       }
 
       const { data, error } = await admin
@@ -261,21 +297,39 @@ export class SolicitudesService {
 
       const solicitudId = (data as unknown as { id: string }).id;
 
-      if (vehiculoIds.length > 0) {
-        const { error: svError } = await admin.from('solicitud_vehiculo').insert(
-          vehiculoIds.map((vid) => ({
-            solicitud_id: solicitudId,
-            vehiculo_id: vid,
-            disponibilidad: 'reservado' as const,
-          }))
-        );
+      const { error: svError } = await admin.from('solicitud_vehiculo').insert(
+        vehiculoIds.map((vid) => ({
+          solicitud_id: solicitudId,
+          vehiculo_id: vid,
+          disponibilidad: 'reservado' as const,
+        }))
+      );
 
-        if (svError) {
-          return {
-            success: true,
-            solicitud: undefined,
-            error: `Solicitud creada pero falló la reserva de vehículos: ${svError.message}`,
-          };
+      if (svError) {
+        await admin.from('solicitud').delete().eq('id', solicitudId);
+        return {
+          success: false,
+          error: `No se pudo reservar los vehículos: ${svError.message}`,
+        };
+      }
+
+      for (const vid of vehiculoIds) {
+        await this.registrarAuditoria(usuarioId, 'solicitud_vehiculo', solicitudId, 'ASIGNACION_VEHICULO', null, {
+          solicitud_id: solicitudId,
+          vehiculo_id: vid,
+        });
+      }
+
+      const observacion = input.observacion?.trim();
+      if (observacion) {
+        const { error: obsError } = await admin.from('observacion').insert({
+          solicitud_id: solicitudId,
+          usuario_id: usuarioId,
+          observacion,
+        });
+
+        if (obsError) {
+          console.error('Error al guardar observación inicial:', obsError);
         }
       }
 
@@ -287,7 +341,10 @@ export class SolicitudesService {
     }
   }
 
-  static async priorizarSolicitud(id: string): Promise<{ success: boolean; posicion?: number; error?: string }> {
+  static async priorizarSolicitud(
+    id: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; posicion?: number; error?: string }> {
     try {
       const admin = createAdminClient();
 
@@ -314,6 +371,8 @@ export class SolicitudesService {
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(usuarioId, 'solicitud', id, 'CAMBIO_ESTADO', { estado: actual.estado }, { estado: 'priorizada', posicion_prioridad: siguiente });
       return { success: true, posicion: siguiente };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al priorizar';
@@ -321,7 +380,11 @@ export class SolicitudesService {
     }
   }
 
-  static async cancelarSolicitud(id: string, motivo: string): Promise<{ success: boolean; error?: string }> {
+  static async cancelarSolicitud(
+    id: string,
+    motivo: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
@@ -341,6 +404,8 @@ export class SolicitudesService {
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(usuarioId, 'solicitud', id, 'CAMBIO_ESTADO', { estado: actual.estado }, { estado: 'cancelada', motivo: motivo.trim() });
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al cancelar';
@@ -582,7 +647,8 @@ export class SolicitudesService {
 
   static async agregarVehiculo(
     solicitudId: string,
-    vehiculoId: string
+    vehiculoId: string,
+    usuarioId: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
@@ -605,13 +671,26 @@ export class SolicitudesService {
         return { success: false, error: 'Ese vehículo ya está reservado en otra solicitud activa.' };
       }
 
-      const { error } = await admin.from('solicitud_vehiculo').insert({
-        solicitud_id: solicitudId,
-        vehiculo_id: vehiculoId,
-        disponibilidad: 'reservado',
-      });
+      const { data, error } = await admin
+        .from('solicitud_vehiculo')
+        .insert({
+          solicitud_id: solicitudId,
+          vehiculo_id: vehiculoId,
+          disponibilidad: 'reservado',
+        })
+        .select('id')
+        .single();
 
       if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud_vehiculo',
+        (data as unknown as { id: string }).id,
+        'ASIGNACION_VEHICULO',
+        null,
+        { solicitud_id: solicitudId, vehiculo_id: vehiculoId }
+      );
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al reservar vehículo';
@@ -619,27 +698,48 @@ export class SolicitudesService {
     }
   }
 
-  static async quitarVehiculo(solicitudVehiculoId: string): Promise<{ success: boolean; error?: string }> {
+  static async quitarVehiculo(
+    solicitudVehiculoId: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
       const { data: sv } = await admin
         .from('solicitud_vehiculo')
-        .select('id, solicitud_id')
+        .select('id, solicitud_id, vehiculo_id')
         .eq('id', solicitudVehiculoId)
         .maybeSingle();
 
       if (!sv) return { success: false, error: 'Reserva no encontrada.' };
 
-      const solicitudId = (sv as unknown as { solicitud_id: string }).solicitud_id;
-      const actual = await this.getSolicitudById(solicitudId);
+      const svRow = sv as unknown as { solicitud_id: string; vehiculo_id: string };
+      const actual = await this.getSolicitudById(svRow.solicitud_id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
       if (!ESTADOS_PRE_DESPACHO.includes(actual.estado)) {
         return { success: false, error: 'Los vehículos solo se gestionan pre-despacho.' };
       }
 
+      const { count } = await admin
+        .from('solicitud_vehiculo')
+        .select('id', { count: 'exact', head: true })
+        .eq('solicitud_id', svRow.solicitud_id);
+
+      if (count !== null && count <= 1) {
+        return { success: false, error: 'Una solicitud debe tener al menos un vehículo asociado.' };
+      }
+
       const { error } = await admin.from('solicitud_vehiculo').delete().eq('id', solicitudVehiculoId);
       if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud_vehiculo',
+        solicitudVehiculoId,
+        'CAMBIO_DISPONIBILIDAD_VEHICULO',
+        { disponibilidad: 'reservado' },
+        { disponibilidad: 'liberado' }
+      );
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al liberar vehículo';

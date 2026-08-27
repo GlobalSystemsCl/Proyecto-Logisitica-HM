@@ -50,6 +50,7 @@ export interface VehiculoAsociado {
   solicitud_vehiculo_id: string;
   disponibilidad: DisponibilidadVehiculo;
   patente: string;
+  chasis: string;
   marca: string;
   modelo: string;
   anio: number;

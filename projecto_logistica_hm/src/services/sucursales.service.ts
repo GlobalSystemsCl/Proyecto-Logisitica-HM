@@ -25,6 +25,7 @@ interface SolicitudRawRow {
     disponibilidad: VehiculoAsociado['disponibilidad'];
     vehiculo: {
       patente: string;
+      chasis: string;
       marca: string;
       modelo: string;
       anio: number;
@@ -70,7 +71,7 @@ export class SucursalesService {
            ejecutivo:ejecutivo_id(nombre, apellido),
            jefe:jefe_local_id(nombre, apellido),
            logistica:logistica_id(nombre, apellido),
-           solicitud_vehiculo(id, disponibilidad, vehiculo(patente, marca, modelo, anio, color))`
+           solicitud_vehiculo(id, disponibilidad, vehiculo(chasis, patente, marca, modelo, anio, color))`
         )
         .order('fecha_creacion', { ascending: false });
 
@@ -100,6 +101,7 @@ export class SucursalesService {
             solicitud_vehiculo_id: sv.id,
             disponibilidad: sv.disponibilidad,
             patente: sv.vehiculo!.patente,
+            chasis: sv.vehiculo!.chasis,
             marca: sv.vehiculo!.marca,
             modelo: sv.vehiculo!.modelo,
             anio: sv.vehiculo!.anio,
