@@ -597,10 +597,19 @@ export class SolicitudesService {
 
   static async aprobarSolicitud(
     id: string,
-    userId: string
+    userId: string,
+    fecha: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
+
+      const fechaEntrega = fecha.trim();
+      if (!fechaEntrega) {
+        return { success: false, error: 'Debes indicar la fecha de entrega para aprobar la solicitud.' };
+      }
+      if (isNaN(Date.parse(fechaEntrega))) {
+        return { success: false, error: 'La fecha de entrega no es válida.' };
+      }
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
@@ -610,12 +619,12 @@ export class SolicitudesService {
 
       const { error } = await admin
         .from('solicitud')
-        .update({ estado: 'aprobada' })
+        .update({ estado: 'aprobada', fecha_limite: fechaEntrega })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
 
-      await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada' });
+      await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada', fecha_entrega: fechaEntrega });
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al aprobar';

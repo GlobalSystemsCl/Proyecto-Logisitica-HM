@@ -44,20 +44,17 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
     }
 
     const fechaLimite = data.fecha_limite?.trim() || null;
-    if (!fechaLimite) {
-      return { success: false, error: 'La fecha límite es obligatoria.' };
+    if (fechaLimite && isNaN(Date.parse(fechaLimite))) {
+      return { success: false, error: 'La fecha de entrega no es válida.' };
     }
-    if (isNaN(Date.parse(fechaLimite))) {
-      return { success: false, error: 'La fecha límite no es válida.' };
+    if (profile.rol !== 'ejecutivo' && !fechaLimite) {
+      return { success: false, error: 'Debes indicar la fecha de entrega para la solicitud.' };
     }
 
     if (data.tipo_solicitud === 'venta') {
       const destino = Number(data.sucursal_destino);
       if (!Number.isInteger(destino) || destino <= 0) {
         return { success: false, error: 'Debes seleccionar una sucursal destino.' };
-      }
-      if (destino === sucursal) {
-        return { success: false, error: 'La sucursal destino no puede ser igual a la origen.' };
       }
     }
 
@@ -130,7 +127,7 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
   }
 }
 
-export async function aprobarSolicitudAction(id: string) {
+export async function aprobarSolicitudAction(id: string, fecha: string) {
   try {
     const profile = await getProfileOrThrow();
 
@@ -150,7 +147,7 @@ export async function aprobarSolicitudAction(id: string) {
       }
     }
 
-    const result = await SolicitudesService.aprobarSolicitud(id, profile.id);
+    const result = await SolicitudesService.aprobarSolicitud(id, profile.id, fecha);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
