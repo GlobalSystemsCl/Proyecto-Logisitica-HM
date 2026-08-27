@@ -210,11 +210,70 @@ export async function priorizarSolicitudAction(id: string) {
       return { success: false, error: 'Solo puedes priorizar solicitudes de tu propia sucursal.' };
     }
 
-    const result = await SolicitudesService.priorizarSolicitud(id);
+    const result = await SolicitudesService.priorizarSolicitud(id, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function reordenarColaAction(sucursalId: number, orden: string[]) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
+      return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden reordenar la cola.' };
+    }
+
+    if (profile.rol === 'jefe_local') {
+      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
+        return { success: false, error: 'No tienes una sucursal asignada.' };
+      }
+      if (sucursalId !== profile.sucursal_id) {
+        return { success: false, error: 'Solo puedes reordenar la cola de tu propia sucursal.' };
+      }
+    }
+
+    const result = await SolicitudesService.reordenarCola(sucursalId, orden, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    return { success: true, message: 'Cola de prioridades actualizada.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function sacarDeColaAction(id: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
+      return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden sacar de la cola.' };
+    }
+
+    const solicitud = await SolicitudesService.getSolicitudById(id);
+    if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
+
+    if (profile.rol === 'jefe_local') {
+      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
+        return { success: false, error: 'No tienes una sucursal asignada.' };
+      }
+      if (solicitud.sucursal !== profile.sucursal_id) {
+        return { success: false, error: 'Solo puedes sacar de la cola solicitudes de tu propia sucursal.' };
+      }
+    }
+
+    const result = await SolicitudesService.sacarDeCola(id, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    return { success: true, message: 'Solicitud sacada de la cola de prioridades.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };
