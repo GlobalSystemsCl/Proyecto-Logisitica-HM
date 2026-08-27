@@ -130,6 +130,7 @@ export interface SolicitudMinima {
   ejecutivo_id: string | null;
   jefe_local_id: string | null;
   tipo_solicitud: SolicitudLista['tipo_solicitud'];
+  posicion_prioridad: number | null;
 }
 
 export class SolicitudesService {
@@ -196,7 +197,7 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('solicitud')
-        .select('id, estado, sucursal, ejecutivo_id, jefe_local_id, tipo_solicitud')
+        .select('id, estado, sucursal, ejecutivo_id, jefe_local_id, tipo_solicitud, posicion_prioridad')
         .eq('id', id)
         .maybeSingle();
 
@@ -341,10 +342,7 @@ export class SolicitudesService {
     }
   }
 
-  static async priorizarSolicitud(
-    id: string,
-    usuarioId: string
-  ): Promise<{ success: boolean; posicion?: number; error?: string }> {
+  static async priorizarSolicitud(id: string, userId: string): Promise<{ success: boolean; posicion?: number; error?: string }> {
     try {
       const admin = createAdminClient();
 
@@ -353,10 +351,14 @@ export class SolicitudesService {
       if (!['pendiente', 'aprobada'].includes(actual.estado)) {
         return { success: false, error: 'Solo las solicitudes Pendientes o Aprobadas pueden priorizarse.' };
       }
+      if (actual.sucursal === null || actual.sucursal === undefined) {
+        return { success: false, error: 'La solicitud no tiene una sucursal asignada.' };
+      }
 
       const { data: maxRow } = await admin
         .from('solicitud')
         .select('posicion_prioridad')
+        .eq('sucursal', actual.sucursal)
         .not('posicion_prioridad', 'is', null)
         .order('posicion_prioridad', { ascending: false })
         .limit(1);
@@ -372,7 +374,15 @@ export class SolicitudesService {
 
       if (error) return { success: false, error: error.message };
 
-      await this.registrarAuditoria(usuarioId, 'solicitud', id, 'CAMBIO_ESTADO', { estado: actual.estado }, { estado: 'priorizada', posicion_prioridad: siguiente });
+      await this.registrarAuditoria(
+        userId,
+        'solicitud',
+        id,
+        'priorizacion',
+        { estado: actual.estado, posicion_prioridad: actual.posicion_prioridad ?? null },
+        { estado: 'priorizada', posicion_prioridad: siguiente }
+      );
+
       return { success: true, posicion: siguiente };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al priorizar';
@@ -380,11 +390,159 @@ export class SolicitudesService {
     }
   }
 
-  static async cancelarSolicitud(
-    id: string,
-    motivo: string,
-    usuarioId: string
+  static async reordenarCola(
+    sucursalId: number,
+    orden: string[],
+    userId: string
   ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      if (!orden || orden.length === 0) {
+        return { success: false, error: 'El orden de la cola no puede estar vacío.' };
+      }
+
+      const idsUnicos = new Set(orden);
+      if (idsUnicos.size !== orden.length) {
+        return { success: false, error: 'El orden de la cola contiene elementos duplicados.' };
+      }
+
+      const { data: filas, error: selError } = await admin
+        .from('solicitud')
+        .select('id, estado')
+        .in('id', orden);
+
+      if (selError) return { success: false, error: selError.message };
+
+      if (!filas || filas.length !== orden.length) {
+        return { success: false, error: 'Algunas solicitudes del orden no existen.' };
+      }
+
+      const mapeo = new Map<string, string>((filas as Array<{ id: string; estado: string }>).map((f) => [f.id, f.estado]));
+      for (const id of orden) {
+        if (mapeo.get(id) !== 'priorizada') {
+          return { success: false, error: 'Solo solicitudes priorizadas pueden reordenarse en la cola.' };
+        }
+      }
+
+      const ant = await this.getColaPriorizada(sucursalId);
+
+      for (let i = 0; i < orden.length; i++) {
+        const { error } = await admin
+          .from('solicitud')
+          .update({ posicion_prioridad: -(i + 1) })
+          .eq('id', orden[i]);
+        if (error) return { success: false, error: error.message };
+      }
+
+      for (let i = 0; i < orden.length; i++) {
+        const { error } = await admin
+          .from('solicitud')
+          .update({ posicion_prioridad: i + 1 })
+          .eq('id', orden[i]);
+        if (error) return { success: false, error: error.message };
+      }
+
+      await this.registrarAuditoria(
+        userId,
+        'solicitud_cola',
+        `sucursal_${sucursalId}`,
+        'reorden_cola',
+        ant,
+        orden.map((id) => ({ id, posicion_prioridad: orden.indexOf(id) + 1 }))
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al reordenar la cola';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async sacarDeCola(
+    id: string,
+    userId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'priorizada') {
+        return { success: false, error: 'Solo las solicitudes priorizadas pueden salir de la cola.' };
+      }
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({ estado: 'aprobada', posicion_prioridad: null })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      const { data: resto } = await admin
+        .from('solicitud')
+        .select('id')
+        .eq('sucursal', actual.sucursal)
+        .eq('estado', 'priorizada')
+        .not('posicion_prioridad', 'is', null)
+        .order('posicion_prioridad', { ascending: true });
+
+      if (resto && resto.length > 0) {
+        for (let i = 0; i < (resto as Array<{ id: string }>).length; i++) {
+          const { error: uErr } = await admin
+            .from('solicitud')
+            .update({ posicion_prioridad: -(i + 1) })
+            .eq('id', (resto as Array<{ id: string }>)[i].id);
+          if (uErr) return { success: false, error: uErr.message };
+        }
+        for (let i = 0; i < (resto as Array<{ id: string }>).length; i++) {
+          const { error: uErr } = await admin
+            .from('solicitud')
+            .update({ posicion_prioridad: i + 1 })
+            .eq('id', (resto as Array<{ id: string }>)[i].id);
+          if (uErr) return { success: false, error: uErr.message };
+        }
+      }
+
+      await this.registrarAuditoria(
+        userId,
+        'solicitud',
+        id,
+        'sacar_cola',
+        { estado: 'priorizada', posicion_prioridad: actual.posicion_prioridad ?? null },
+        { estado: 'aprobada', posicion_prioridad: null }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al sacar de la cola';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async getColaPriorizada(sucursalId: number): Promise<Array<{ id: string; posicion_prioridad: number }>> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('solicitud')
+        .select('id, posicion_prioridad')
+        .eq('sucursal', sucursalId)
+        .eq('estado', 'priorizada')
+        .not('posicion_prioridad', 'is', null)
+        .order('posicion_prioridad', { ascending: true });
+
+      if (error || !data) return [];
+      return (data as unknown as Array<{ id: string; posicion_prioridad: number }>).map((r) => ({
+        id: r.id,
+        posicion_prioridad: r.posicion_prioridad,
+      }));
+    } catch (err) {
+      console.error('Error en getColaPriorizada:', err);
+      return [];
+    }
+  }
+
+  static async cancelarSolicitud(id: string, motivo: string): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
