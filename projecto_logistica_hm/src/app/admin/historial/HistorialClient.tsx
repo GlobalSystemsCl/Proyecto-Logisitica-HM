@@ -13,10 +13,12 @@ import {
   CheckCircle2,
   Car,
   AlertCircle,
+  Download,
 } from 'lucide-react';
 import { AuditoriaRegistro } from '@/types/auditoria.types';
 import { AuditoriaMetricas } from '@/services/auditoria.service';
 import { getAuditoriaAction } from '@/app/actions/auditoria.actions';
+import { utils, writeFile } from 'xlsx';
 
 const accionConfig: Record<string, { label: string; color: string }> = {
   CAMBIO_ESTADO: { label: 'Cambio de Estado', color: 'bg-neutral-900 text-white' },
@@ -153,6 +155,43 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
     }
   }
 
+  function exportarExcel() {
+    if (filteredRegistros.length === 0) return;
+
+    const data = filteredRegistros.map((reg) => {
+      const detalle = getDetalle(reg);
+      const accCfg = accionConfig[reg.accion] || { label: reg.accion };
+      const entCfg = entidadConfig[reg.entidad] || { label: reg.entidad };
+      return {
+        'Fecha Solicitud': formatFecha(reg.solicitud_fecha_creacion),
+        'Fecha Cambio': formatFechaHora(reg.created_at),
+        'Responsable': `${reg.usuario_nombre || ''} ${reg.usuario_apellido || ''}`.trim(),
+        'Chasis': reg.chasis || '',
+        'Patente': reg.patente || '',
+        'Entidad': entCfg.label,
+        'Acción': accCfg.label,
+        'Detalle': detalle.texto,
+      };
+    });
+
+    const ws = utils.json_to_sheet(data);
+
+    const headers = Object.keys(data[0]);
+    const range = utils.decode_range(ws['!ref'] || 'A1');
+    for (let col = range.s.c; col <= range.e.c; col++) {
+      const cell = ws[utils.encode_cell({ r: 0, c: col })];
+      if (cell) {
+        cell.s = { font: { bold: true } };
+      }
+    }
+
+    ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
+
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, 'Historial Auditoría');
+    writeFile(wb, 'historial_auditoria.xlsx');
+  }
+
   const tieneFiltros = filtrosEntidad || filtrosAccion || fechaDesde || fechaHasta;
 
   return (
@@ -263,9 +302,20 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
             />
           </div>
         </div>
-        <p className="text-xs text-neutral-500 font-medium">
-          {filteredRegistros.length} de {registros.length} registros
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-neutral-500 font-medium">
+            {filteredRegistros.length} de {registros.length} registros
+          </p>
+          <button
+            onClick={exportarExcel}
+            disabled={filteredRegistros.length === 0}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 active:bg-black rounded-xl disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            title="Exportar registros visibles a Excel"
+          >
+            <Download className="w-4 h-4" />
+            <span>Exportar Excel</span>
+          </button>
+        </div>
       </div>
 
       {/* Table */}
