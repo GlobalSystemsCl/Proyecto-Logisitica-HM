@@ -423,9 +423,6 @@ BEGIN
     IF NEW.sucursal_destino IS NULL THEN
       RAISE EXCEPTION 'Una solicitud de tipo venta debe tener sucursal destino.';
     END IF;
-    IF NEW.sucursal_destino = NEW.sucursal THEN
-      RAISE EXCEPTION 'La sucursal destino no puede ser igual a la sucursal origen.';
-    END IF;
   END IF;
 
   IF NEW.tipo_solicitud = 'evento' THEN

@@ -134,6 +134,28 @@ export interface SolicitudMinima {
 }
 
 export class SolicitudesService {
+  static async getJefeLocalDeSucursal(sucursalId: number): Promise<string | null> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('usuario')
+        .select('id')
+        .eq('rol', 'jefe_local')
+        .eq('sucursal_id', sucursalId)
+        .limit(1);
+
+      if (error) {
+        console.error('Error al consultar jefe de local de la sucursal:', error);
+        return null;
+      }
+
+      return (data && data.length > 0 ? (data[0] as { id: string }).id : null) ?? null;
+    } catch (err) {
+      console.error('Error en getJefeLocalDeSucursal:', err);
+      return null;
+    }
+  }
+
   static async getSolicitudes(): Promise<SolicitudLista[]> {
     try {
       const admin = createAdminClient();
@@ -597,10 +619,19 @@ export class SolicitudesService {
 
   static async aprobarSolicitud(
     id: string,
-    userId: string
+    userId: string,
+    fecha: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
+
+      const fechaEntrega = fecha.trim();
+      if (!fechaEntrega) {
+        return { success: false, error: 'Debes indicar la fecha de entrega para aprobar la solicitud.' };
+      }
+      if (isNaN(Date.parse(fechaEntrega))) {
+        return { success: false, error: 'La fecha de entrega no es válida.' };
+      }
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
@@ -610,12 +641,12 @@ export class SolicitudesService {
 
       const { error } = await admin
         .from('solicitud')
-        .update({ estado: 'aprobada' })
+        .update({ estado: 'aprobada', fecha_limite: fechaEntrega })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
 
-      await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada' });
+      await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada', fecha_entrega: fechaEntrega });
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al aprobar';

@@ -114,6 +114,8 @@ export default function SolicitudesClient({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [rejectTarget, setRejectTarget] = useState<SolicitudLista | null>(null);
   const [rejectMotivo, setRejectMotivo] = useState('');
+  const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
+  const [aprobacionFecha, setAprobacionFecha] = useState('');
 
   const [sucursalSel, setSucursalSel] = useState('');
   const [sucursalDestinoSel, setSucursalDestinoSel] = useState('');
@@ -144,9 +146,8 @@ export default function SolicitudesClient({
   const puedeCrear = esEjecutivo || esJefeLocal || esAdmin;
 
   const sucursalesParaDestino = useMemo(() => {
-    const origenId = Number(sucursalSel);
-    return sucursales.filter((s) => s.id !== origenId);
-  }, [sucursales, sucursalSel]);
+    return sucursales;
+  }, [sucursales]);
 
   const marcasVehiculos = useMemo(() => {
     const marcas = new Set<string>();
@@ -255,10 +256,10 @@ export default function SolicitudesClient({
   }, [feedback]);
 
   useEffect(() => {
-    if (esJefeLocal && viewer.sucursal_id) {
+    if ((esJefeLocal || esEjecutivo) && viewer.sucursal_id) {
       setSucursalSel(String(viewer.sucursal_id));
     }
-  }, [esJefeLocal, viewer.sucursal_id]);
+  }, [esJefeLocal, esEjecutivo, viewer.sucursal_id]);
 
   useEffect(() => {
     if (!esJefeLocal || !sucursalSel) {
@@ -276,7 +277,7 @@ export default function SolicitudesClient({
   }, [esJefeLocal, sucursalSel]);
 
   function resetCreateForm() {
-    setSucursalSel(esJefeLocal && viewer.sucursal_id ? String(viewer.sucursal_id) : '');
+    setSucursalSel((esJefeLocal || esEjecutivo) && viewer.sucursal_id ? String(viewer.sucursal_id) : '');
     setSucursalDestinoSel('');
     setTipoSel('venta');
     setFechaLimite('');
@@ -337,15 +338,27 @@ export default function SolicitudesClient({
     }
   }
 
-  async function handleAprobar(sol: SolicitudLista) {
+  function abrirAprobacion(sol: SolicitudLista) {
+    setAprobacionFecha('');
+    setApproveTarget(sol);
+  }
+
+  async function handleConfirmarAprobacion() {
+    if (!approveTarget) return;
+    const fecha = aprobacionFecha.trim();
+    if (!fecha) {
+      setFeedback({ type: 'error', message: 'Debes indicar la fecha de entrega para aprobar la solicitud.' });
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const result = await aprobarSolicitudAction(sol.id);
-      setFeedback(
-        result.success
-          ? { type: 'success', message: result.message || 'Aprobada.' }
-          : { type: 'error', message: result.error || 'Error.' }
-      );
+      const result = await aprobarSolicitudAction(approveTarget.id, fecha);
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'Error al aprobar.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Aprobada.' });
+        setApproveTarget(null);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -590,7 +603,7 @@ export default function SolicitudesClient({
                 <th className="py-3.5 px-4">Encargado</th>
                 <th className="py-3.5 px-4">Vehículos</th>
                 <th className="py-3.5 px-4">Creación</th>
-                <th className="py-3.5 px-4">Límite</th>
+                <th className="py-3.5 px-4">Entrega</th>
                 <th className="py-3.5 px-4 text-right">Acciones</th>
               </tr>
             </thead>
@@ -667,7 +680,7 @@ export default function SolicitudesClient({
                         </button>
                         {puedeAprobar(sol) && (
                           <button
-                            onClick={() => handleAprobar(sol)}
+                            onClick={() => abrirAprobacion(sol)}
                             disabled={isSubmitting}
                             title="Aprobar solicitud"
                             className="p-1.5 rounded-lg text-green-600 hover:text-green-700 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-40"
@@ -774,7 +787,7 @@ export default function SolicitudesClient({
               </div>
 
               {/* Tipo y Fecha */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className={esEjecutivo ? 'space-y-1.5' : 'grid grid-cols-2 gap-4'}>
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tipo *</label>
                   <select
@@ -786,16 +799,18 @@ export default function SolicitudesClient({
                     <option value="evento">Evento</option>
                   </select>
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha Límite *</label>
-                  <input
-                    type="date"
-                    required
-                    value={fechaLimite}
-                    onChange={(e) => setFechaLimite(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
+                {!esEjecutivo && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha de Entrega *</label>
+                    <input
+                      type="date"
+                      required
+                      value={fechaLimite}
+                      onChange={(e) => setFechaLimite(e.target.value)}
+                      className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Sucursal Destino (solo venta) */}
@@ -964,7 +979,7 @@ export default function SolicitudesClient({
                 ) : (
                   <>
                     <Clock className="w-4 h-4 shrink-0 mt-0.5 text-neutral-900" />
-                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local deberá aprobarla.</span>
+                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y definirá la fecha de entrega.</span>
                   </>
                 )}
               </div>
@@ -1051,7 +1066,7 @@ export default function SolicitudesClient({
                   <p className="text-neutral-900 font-medium">{formatFecha(detailTarget.fecha_tentativa_despacho)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Fecha Límite</p>
+                  <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Fecha de Entrega</p>
                   <p className="text-neutral-900 font-medium">{formatFecha(detailTarget.fecha_limite)}</p>
                 </div>
               </div>
@@ -1154,7 +1169,7 @@ export default function SolicitudesClient({
                 {puedeAprobar(detailTarget) && (
                   <>
                     <button
-                      onClick={() => handleAprobar(detailTarget)}
+                      onClick={() => abrirAprobacion(detailTarget)}
                       disabled={isSubmitting}
                       className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50 cursor-pointer"
                     >
@@ -1313,6 +1328,61 @@ export default function SolicitudesClient({
                   className="px-5 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? 'Rechazando...' : 'Confirmar Rechazo'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Aprobar con Fecha de Entrega */}
+      {approveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-green-50 border border-green-200 flex items-center justify-center text-green-600 shrink-0">
+                  <ThumbsUp className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-neutral-900">Aprobar Solicitud</h2>
+                  <p className="text-sm text-neutral-500 font-mono uppercase">
+                    #{approveTarget.id.slice(0, 8)} · {approveTarget.sucursal_nombre}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha de Entrega *</label>
+                <input
+                  type="date"
+                  required
+                  value={aprobacionFecha}
+                  onChange={(e) => setAprobacionFecha(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+                <p className="text-xs text-neutral-500 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  Selecciona la fecha en que se entregará el o los vehículos.
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setApproveTarget(null)}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer disabled:opacity-50"
+                >
+                  Volver
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmarAprobacion}
+                  disabled={isSubmitting || !aprobacionFecha.trim()}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? 'Aprobando...' : 'Confirmar Aprobación'}
                 </button>
               </div>
             </div>

@@ -464,6 +464,7 @@ Reglas del modelo de datos:
 * Cada tabla existente debe documentarse en estilo DDL, con su sentencia `CREATE TABLE` completa, **como si se estuviera creando el esquema**, incluyendo tipos, restricciones, llaves foráneas e índices.
 * No está permitido documentar las tablas mediante consultas `SELECT`, capturas del dashboard ni descripciones informales.
 * Cualquier cambio de esquema aplicado en Supabase debe reflejarse en `DATABASE_SCHEMA.md` dentro de la misma tarea.
+* El archivo `esquema-completo-sql.sql` (raíz del repo) es el espejo 1:1 del esquema VIVO de Supabase (enums, tablas, constraints, índices, funciones, triggers, RLS, comentarios con nombres exactos del servidor). Debe actualizarse en la misma tarea en que se aplique cualquier cambio de esquema. Para esto se usa la skill **`sincronizar-esquema-sql`** (`.opencode/skills/sincronizar-esquema-sql/SKILL.md`), que describe el procedimiento de extracción y actualización.
 
 No asumir nuevas entidades sin analizar primero el modelo existente.
 
@@ -558,6 +559,20 @@ src/app/documentation/
 └── auditoria_esquema_supabase.sql (script auxiliar de volcado/auditoría)
 ```
 
+Además, en la raíz del repo:
+
+```text
+esquema-completo-sql.sql        (espejo 1:1 del esquema VIVO de Supabase)
+.opencode/skills/sincronizar-esquema-sql/SKILL.md   (skill que mantiene ese espejo actualizado)
+```
+
+Y en `src/app/documentation/`:
+
+```text
+RequisitosModulos.md            (requisitos específicos por módulo, conexiones, flujos y cambios)
+.opencode/skills/requisitos-modulos/SKILL.md        (skill que mantiene ese documento actualizado)
+```
+
 ### BRAIN.md
 
 Contexto permanente del proyecto.
@@ -573,6 +588,14 @@ Plan de implementación y seguimiento de tareas.
 ### DATABASE_SCHEMA.md
 
 Espejo 1:1 del esquema de Supabase, documentado con sentencias `CREATE TABLE`.
+
+### esquema-completo-sql.sql
+
+Espejo completo y exacto del esquema VIVO de Supabase (extensión del esquema `DATABASE_SCHEMA.md`). Su mantenimiento está automatizado por la skill `sincronizar-esquema-sql`.
+
+### RequisitosModulos.md
+
+Documento único de requisitos específicos por módulo: qué hace, cómo funciona, a qué pertenece, con qué se conecta, estado real, historial de cambios y flujo de interacción entre módulos. Su mantenimiento está automatizado por la skill `requisitos-modulos`. Todo cambio de módulo, requisito o flujo se registra aquí en la misma tarea.
 
 ---
 
@@ -601,8 +624,9 @@ Para no desperdiciar contexto, los documentos se cargan según el tipo de tarea:
 | ------------------------------------ | ----------------------- | ---------------------------------------------------- |
 | Cualquier tarea                      | `BRAIN.md`              |                                                      |
 | Implementar una funcionalidad        | `IMPLEMENTATION_PLAN.md`| Módulo correspondiente en `PROJECT_STATUS.md`        |
+| Cambiar/agregar módulos o requisitos | `RequisitosModulos.md`  | Actualizar `ProjectStatus.md` y aplicar la skill `requisitos-modulos` |
 | Trabajar con datos o repositorios    | `DATABASE_SCHEMA.md`    |                                                      |
-| Modificar el esquema de Supabase     | `DATABASE_SCHEMA.md`    | `PROJECT_STATUS.md` para registrar el cambio         |
+| Modificar el esquema de Supabase     | `DATABASE_SCHEMA.md`    | `PROJECT_STATUS.md` para registrar el cambio; skill `sincronizar-esquema-sql` para mantener `esquema-completo-sql.sql` 1:1 |
 | Auditar o retomar el proyecto        | Los cuatro documentos   | Código real del repositorio                          |
 
 Reglas de esta tabla:

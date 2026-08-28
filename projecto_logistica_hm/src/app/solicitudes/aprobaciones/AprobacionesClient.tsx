@@ -59,6 +59,8 @@ export default function AprobacionesClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [rejectTarget, setRejectTarget] = useState<SolicitudLista | null>(null);
   const [rejectMotivo, setRejectMotivo] = useState('');
+  const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
+  const [aprobacionFecha, setAprobacionFecha] = useState('');
   const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(null);
 
   const esAdmin = viewer.rol === 'administrador';
@@ -80,15 +82,22 @@ export default function AprobacionesClient({
     return false;
   }
 
-  async function handleAprobar(sol: SolicitudLista) {
+  function abrirAprobacion(sol: SolicitudLista) {
+    setAprobacionFecha('');
+    setApproveTarget(sol);
+  }
+
+  async function handleConfirmarAprobacion() {
+    if (!approveTarget) return;
     setIsSubmitting(true);
     try {
-      const result = await aprobarSolicitudAction(sol.id);
-      setFeedback(
-        result.success
-          ? { type: 'success', message: result.message || 'Aprobada.' }
-          : { type: 'error', message: result.error || 'Error.' }
-      );
+      const result = await aprobarSolicitudAction(approveTarget.id, aprobacionFecha.trim());
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'Error al aprobar.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Aprobada.' });
+        setApproveTarget(null);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -198,7 +207,7 @@ export default function AprobacionesClient({
                   {puedoRechazar(sol) && (
                     <>
                       <button
-                        onClick={() => handleAprobar(sol)}
+                        onClick={() => abrirAprobacion(sol)}
                         disabled={isSubmitting}
                         className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
@@ -224,6 +233,51 @@ export default function AprobacionesClient({
           </div>
         )}
       </div>
+
+      {approveTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-neutral-900">Aprobar solicitud</h3>
+              <button
+                onClick={() => setApproveTarget(null)}
+                className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 cursor-pointer"
+                aria-label="Cerrar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-sm text-neutral-500 mb-4">
+              Aprobando la solicitud #{approveTarget.id.slice(0, 8)}. Indica la fecha de
+              entrega del o los vehículos.
+            </p>
+            <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
+              Fecha de Entrega *
+            </label>
+            <input
+              type="date"
+              value={aprobacionFecha}
+              onChange={(e) => setAprobacionFecha(e.target.value)}
+              className="w-full rounded-lg border border-neutral-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setApproveTarget(null)}
+                className="px-4 py-2 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100 cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmarAprobacion}
+                disabled={isSubmitting || !aprobacionFecha.trim()}
+                className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-green-700 cursor-pointer"
+              >
+                {isSubmitting ? 'Aprobando...' : 'Confirmar aprobación'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {rejectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
