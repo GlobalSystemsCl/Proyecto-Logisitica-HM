@@ -134,6 +134,28 @@ export interface SolicitudMinima {
 }
 
 export class SolicitudesService {
+  static async getJefeLocalDeSucursal(sucursalId: number): Promise<string | null> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('usuario')
+        .select('id')
+        .eq('rol', 'jefe_local')
+        .eq('sucursal_id', sucursalId)
+        .limit(1);
+
+      if (error) {
+        console.error('Error al consultar jefe de local de la sucursal:', error);
+        return null;
+      }
+
+      return (data && data.length > 0 ? (data[0] as { id: string }).id : null) ?? null;
+    } catch (err) {
+      console.error('Error en getJefeLocalDeSucursal:', err);
+      return null;
+    }
+  }
+
   static async getSolicitudes(): Promise<SolicitudLista[]> {
     try {
       const admin = createAdminClient();

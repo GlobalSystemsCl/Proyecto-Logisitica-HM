@@ -83,7 +83,20 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
       }
     }
 
-    const jefeLocalId = profile.rol === 'jefe_local' ? profile.id : null;
+    const jefeLocalId =
+      profile.rol === 'jefe_local'
+        ? profile.id
+        : profile.rol === 'ejecutivo'
+          ? await SolicitudesService.getJefeLocalDeSucursal(sucursal)
+          : null;
+
+    if (profile.rol === 'ejecutivo' && !jefeLocalId) {
+      return {
+        success: false,
+        error: 'No hay un jefe de local asignado a tu sucursal: no se puede crear la solicitud.',
+      };
+    }
+
     const estadoInicial = profile.rol === 'jefe_local' ? 'aprobada' : 'pendiente_aprobacion';
 
     const vehiculoIds = (data.vehiculo_ids || []).filter((v) => typeof v === 'string' && v.length > 0);

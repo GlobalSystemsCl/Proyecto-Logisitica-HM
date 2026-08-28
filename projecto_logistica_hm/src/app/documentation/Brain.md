@@ -566,6 +566,13 @@ esquema-completo-sql.sql        (espejo 1:1 del esquema VIVO de Supabase)
 .opencode/skills/sincronizar-esquema-sql/SKILL.md   (skill que mantiene ese espejo actualizado)
 ```
 
+Y en `src/app/documentation/`:
+
+```text
+RequisitosModulos.md            (requisitos específicos por módulo, conexiones, flujos y cambios)
+.opencode/skills/requisitos-modulos/SKILL.md        (skill que mantiene ese documento actualizado)
+```
+
 ### BRAIN.md
 
 Contexto permanente del proyecto.
@@ -585,6 +592,10 @@ Espejo 1:1 del esquema de Supabase, documentado con sentencias `CREATE TABLE`.
 ### esquema-completo-sql.sql
 
 Espejo completo y exacto del esquema VIVO de Supabase (extensión del esquema `DATABASE_SCHEMA.md`). Su mantenimiento está automatizado por la skill `sincronizar-esquema-sql`.
+
+### RequisitosModulos.md
+
+Documento único de requisitos específicos por módulo: qué hace, cómo funciona, a qué pertenece, con qué se conecta, estado real, historial de cambios y flujo de interacción entre módulos. Su mantenimiento está automatizado por la skill `requisitos-modulos`. Todo cambio de módulo, requisito o flujo se registra aquí en la misma tarea.
 
 ---
 
@@ -613,6 +624,7 @@ Para no desperdiciar contexto, los documentos se cargan según el tipo de tarea:
 | ------------------------------------ | ----------------------- | ---------------------------------------------------- |
 | Cualquier tarea                      | `BRAIN.md`              |                                                      |
 | Implementar una funcionalidad        | `IMPLEMENTATION_PLAN.md`| Módulo correspondiente en `PROJECT_STATUS.md`        |
+| Cambiar/agregar módulos o requisitos | `RequisitosModulos.md`  | Actualizar `ProjectStatus.md` y aplicar la skill `requisitos-modulos` |
 | Trabajar con datos o repositorios    | `DATABASE_SCHEMA.md`    |                                                      |
 | Modificar el esquema de Supabase     | `DATABASE_SCHEMA.md`    | `PROJECT_STATUS.md` para registrar el cambio; skill `sincronizar-esquema-sql` para mantener `esquema-completo-sql.sql` 1:1 |
 | Auditar o retomar el proyecto        | Los cuatro documentos   | Código real del repositorio                          |
