@@ -152,11 +152,13 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
   - `R-VEH.4` — Borrado permitido solo si no está reservado en solicitud activa.
   - `R-VEH.5` — Inventario muestra disponibilidad (reservado/en_disponible) según reservas activas.
   - `R-VEH.6` — Roles autorizados a incorporar vehículos: administrador, jefe_local, logística.
+  - `R-VEH.7` — Campo `precio` opcional (≥ 0) al crear y editar un vehículo; se muestra en el inventario.
 - **Con qué se conecta**: `vehiculo.service.ts`, `vehiculo.actions.ts`, `VehiculosTableClient.tsx`, tablas `vehiculo`, `solicitud_vehiculo`.
 - **Depende de**: reservas creadas por el Módulo Solicitudes.
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-08-28 | Nuevo campo opcional `precio` (numeric 14,2) en alta/edición e inventario de vehículos; migración `20260828_vehiculo_precio.sql` | Registrar el valor comercial de cada vehículo |
   | 2026-08-27 | Se registra en RequisitosModulos.md | Documentación de requisitos |
 
 ---
@@ -356,6 +358,7 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-08-28 | Vehículos | Campo opcional `precio` en alta/edición e inventario (`20260828_vehiculo_precio.sql`) | Registrar el valor comercial de cada vehículo |
 | 2026-08-27 | Solicitudes-Creación | Ejecutivo crea sin fecha; fecha la define jefe de local al crear o al aprobar | Requisito: solo el jefe de local pone la fecha |
 | 2026-08-27 | Solicitudes-Creación | Asignación automática de `jefe_local_id` (jefe de local de la sucursal del ejecutivo) | Responsabilidad/aprobación por sucursal |
 | 2026-08-27 | Solicitudes-Creación | Sucursal destino puede ser igual a la origen (trigger `validate_solicitud_tipo` simplificado, `20260827_solicitudes_v2_2.sql`) | Venta interna en el mismo local |

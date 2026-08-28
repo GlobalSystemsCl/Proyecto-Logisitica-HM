@@ -2,7 +2,7 @@
 -- ESQUEMA COMPLETO - Proyecto Logística H.M.
 -- Proyecto Supabase: yaqbccvlenouqmtqrlrq
 -- Base de datos    : db.yaqbccvlenouqmtqrlrq.supabase.co (us-east-2)
--- Fecha de extracción: 2026-08-27
+-- Fecha de extracción: 2026-08-28
 -- Método: Management API de Supabase (v1/projects/{ref}/database/query)
 -- con SQL real sobre catálogos del sistema (pg_catalog / information_schema).
 -- Este archivo refleja el esquema VIVO, incluidos nombres exactos de
@@ -132,6 +132,7 @@ CREATE TABLE public.vehiculo (
     modelo varchar(100) NOT NULL,
     anio integer NOT NULL,
     color varchar(50),
+    precio numeric(14,2),
     created_at timestamp DEFAULT now(),
     updated_at timestamp DEFAULT now(),
     vendido boolean DEFAULT false

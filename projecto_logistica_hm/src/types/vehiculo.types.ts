@@ -6,6 +6,7 @@ export interface Vehiculo {
   modelo: string;
   anio: number;
   color: string | null;
+  precio: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,6 +23,7 @@ export interface CreateVehiculoInput {
   modelo: string;
   anio: number;
   color?: string;
+  precio?: number | null;
 }
 
 export interface UpdateVehiculoInput {
@@ -31,4 +33,5 @@ export interface UpdateVehiculoInput {
   modelo?: string;
   anio?: number;
   color?: string | null;
+  precio?: number | null;
 }

@@ -37,6 +37,7 @@ export class VehiculoService {
           modelo: v.modelo as string,
           anio: v.anio as number,
           color: v.color as string | null,
+          precio: v.precio as number | null,
           created_at: v.created_at as string,
           updated_at: v.updated_at as string,
           estado_disponibilidad: reservaActiva ? 'reservado' : 'liberado',
@@ -171,6 +172,14 @@ export class VehiculoService {
         };
       }
 
+      // Validar precio (opcional)
+      if (input.precio !== undefined && input.precio !== null && input.precio < 0) {
+        return {
+          success: false,
+          error: 'El precio no puede ser un valor negativo.',
+        };
+      }
+
       // Insertar vehículo
       const newVehiculo = {
         chasis: cleanChasis,
@@ -179,6 +188,7 @@ export class VehiculoService {
         modelo: cleanModelo,
         anio: input.anio,
         color: input.color?.trim() || null,
+        precio: input.precio ?? null,
       };
 
       const { data, error } = await admin
@@ -272,6 +282,16 @@ export class VehiculoService {
       if (input.marca !== undefined) updateData.marca = input.marca.trim();
       if (input.modelo !== undefined) updateData.modelo = input.modelo.trim();
       if (input.color !== undefined) updateData.color = input.color?.trim() || null;
+
+      if (input.precio !== undefined) {
+        if (input.precio !== null && input.precio < 0) {
+          return {
+            success: false,
+            error: 'El precio no puede ser un valor negativo.',
+          };
+        }
+        updateData.precio = input.precio;
+      }
 
       if (input.anio !== undefined) {
         const currentYear = new Date().getFullYear();

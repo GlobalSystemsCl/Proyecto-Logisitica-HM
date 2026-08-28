@@ -290,6 +290,7 @@ CREATE TABLE public.vehiculo (
     modelo     VARCHAR(100) NOT NULL,
     anio       INTEGER NOT NULL,
     color      VARCHAR(50),
+    precio     NUMERIC(14,2),
     created_at TIMESTAMP(6) WITHOUT TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP(6) WITHOUT TIME ZONE DEFAULT now()
 );
