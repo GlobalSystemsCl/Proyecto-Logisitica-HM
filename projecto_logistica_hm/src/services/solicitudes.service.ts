@@ -481,6 +481,77 @@ export class SolicitudesService {
     }
   }
 
+  static async priorizarEnPosicion(
+    id: string,
+    posicion: number,
+    userId: string
+  ): Promise<{ success: boolean; posicion?: number; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      if (!Number.isInteger(posicion) || posicion < 1) {
+        return { success: false, error: 'La posición debe ser un entero mayor o igual a 1.' };
+      }
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (!['pendiente', 'aprobada'].includes(actual.estado)) {
+        return { success: false, error: 'Solo las solicitudes Pendientes o Aprobadas pueden priorizarse.' };
+      }
+      if (actual.sucursal === null || actual.sucursal === undefined) {
+        return { success: false, error: 'La solicitud no tiene una sucursal asignada.' };
+      }
+
+      // Cola actual de la sucursal, ordenada por posicion (1..N)
+      const cola = await this.getColaPriorizada(actual.sucursal);
+
+      if (posicion > cola.length + 1) {
+        return { success: false, error: `La posición máxima válida es ${cola.length + 1}.` };
+      }
+
+      // Insertar el nuevo id en la posicion solicitada y reescribir la cola completa
+      const nuevoOrden = cola.map((c) => c.id);
+      nuevoOrden.splice(posicion - 1, 0, id);
+
+      // Fase 1: posiciones negativas temporales para evitar el conflicto
+      // UNIQUE (sucursal, posicion_prioridad); el nuevo item entra como priorizada
+      for (let i = 0; i < nuevoOrden.length; i++) {
+        const esNuevo = nuevoOrden[i] === id;
+        const { error } = await admin
+          .from('solicitud')
+          .update({
+            posicion_prioridad: -(i + 1),
+            ...(esNuevo ? { estado: 'priorizada' as const } : {}),
+          })
+          .eq('id', nuevoOrden[i]);
+        if (error) return { success: false, error: error.message };
+      }
+
+      // Fase 2: posiciones definitivas (1..N)
+      for (let i = 0; i < nuevoOrden.length; i++) {
+        const { error } = await admin
+          .from('solicitud')
+          .update({ posicion_prioridad: i + 1 })
+          .eq('id', nuevoOrden[i]);
+        if (error) return { success: false, error: error.message };
+      }
+
+      await this.registrarAuditoria(
+        userId,
+        'solicitud',
+        id,
+        'priorizacion',
+        { estado: actual.estado, posicion_prioridad: actual.posicion_prioridad ?? null },
+        { estado: 'priorizada', posicion_prioridad: posicion }
+      );
+
+      return { success: true, posicion };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al priorizar en posición';
+      return { success: false, error: msg };
+    }
+  }
+
   static async sacarDeCola(
     id: string,
     userId: string

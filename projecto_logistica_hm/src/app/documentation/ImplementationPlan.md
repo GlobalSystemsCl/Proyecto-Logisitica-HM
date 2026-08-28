@@ -185,6 +185,7 @@ Primera versión operativa del módulo `/solicitudes`: creación de solicitudes 
 * [x] Implementar página `/solicitudes` (guard usuario activo, header corporativo con escudo) y cliente `SolicitudesClient.tsx`: visibilidad por rol (admin/logística todo; ejecutivo lo suyo; jefe_local su sucursal), métricas, filtros, tabla con cola de prioridad, modal creación (multi-reserva solo admin), detalle con gestión de vehículos, modales cancelar/eliminar.
 * [x] Activar tile "Gestión de Solicitudes" en el dashboard (todos los roles).
 * [x] Validación estática: `tsc --noEmit` y ESLint sin errores/warnings (2026-08-25).
+* [x] Priorización por drag & drop en `/solicitudes/prioridades` (2026-08-28): arrastrar desde "Por Priorizar" inserta en la posición elegida vía `SolicitudesService.priorizarEnPosicion` + `priorizarEnPosicionAction`; se elimina el botón "Priorizar" de ese panel; sacar de cola también arrastrando fuera. Pendiente validación funcional del usuario.
 * [ ] Validación funcional por el usuario en la app.
 * [ ] Migración RLS futura: ampliar `solicitud_delete_admin` para creador/jefe_local pre-despacho (la app hoy valida en Server Actions porque los servicios usan `createAdminClient()`).
 

@@ -237,19 +237,21 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 ## 8. Módulo: Solicitudes — Priorización y Cola por sucursal
 
 - **Estado**: `implementado`
-- **Qué hace**: el jefe de local (o administrador) prioriza solicitudes `pendiente`/`aprobada`, las ordena en una **cola por sucursal** y puede sacarlas de la cola.
-- **Cómo funciona**: `priorizarSolicitud` → `priorizada` + `posicion_prioridad` = máx+1 **por sucursal**. `reordenarCola` reordena la cola (solo estados `priorizada`) y `sacarDeCola` vuelve a `aprobada` (recompacta la cola). Todo auditado.
+- **Qué hace**: el jefe de local (o administrador) prioriza solicitudes `pendiente`/`aprobada` **arrastrándolas desde "Por Priorizar" hacia la cola en la posición deseada**, las ordena en una **cola por sucursal** y puede sacarlas de la cola.
+- **Cómo funciona**: `priorizarEnPosicion` inserta la solicitud en la posición exacta donde se suelta (`priorizada` + reescritura de la cola con técnica de dos fases para respetar `UNIQUE(sucursal, posicion_prioridad)`); si la cola está vacía o el destino es de otra sucursal, usa `priorizarSolicitud` (máx+1). `reordenarCola` reordena la cola (solo estados `priorizada`) y `sacarDeCola` vuelve a `aprobada` (recompacta la cola; también se activa arrastrando un ítem fuera de la cola). Todo auditado.
 - **Requisitos específicos**:
   - `R-SOL-PRI.1` — Priorizar desde `pendiente`/`aprobada` a `priorizada`.
   - `R-SOL-PRI.2` — La posición de prioridad es por sucursal.
   - `R-SOL-PRI.3` — Reordenar cola solo sobre solicitudes `priorizada`.
   - `R-SOL-PRI.4` — Sacar de cola regresa a `aprobada` sin posición.
   - `R-SOL-PRI.5` — Solo jefe_local de la sucursal o administrador.
-- **Con qué se conecta**: `solicitudes.service.ts` (priorizar/reordenar/sacar), acciones `priorizarSolicitudAction`, `reordenarColaAction`, `sacarDeColaAction`, `PrioridadesClient.tsx`, tabla `solicitud`.
+  - `R-SOL-PRI.6` — Priorización por drag & drop (`@dnd-kit`): arrastrar desde "Por Priorizar" inserta en la posición de destino (sin botón manual); con `DragOverlay`, zonas droppables para cola vacía y panel vacío, y resaltado del ítem destino. La posición se calcula dentro de la subsecuencia de la misma sucursal (soporta la vista mixta del administrador).
+- **Con qué se conecta**: `solicitudes.service.ts` (priorizar/priorizarEnPosicion/reordenar/sacar), acciones `priorizarSolicitudAction`, `priorizarEnPosicionAction`, `reordenarColaAction`, `sacarDeColaAction`, `PrioridadesClient.tsx`, tabla `solicitud`.
 - **Depende de**: Módulo Aprobación.
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-08-28 | Priorización por drag & drop: se elimina el botón "Priorizar", nuevo `priorizarEnPosicion`/`priorizarEnPosicionAction` e inserción en posición específica | El usuario pedía elegir la posición al priorizar, no entrar automáticamente al final |
   | 2026-08-27 | Se registra en RequisitosModulos.md | Documentación de requisitos |
   | 2026-08-26 | Creación del módulo de priorización (commit `48d80cb`) | Flujo de priorización del jefe de local |
 
@@ -358,6 +360,7 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-08-28 | Solicitudes-Priorización | Drag & drop para priorizar: se elimina el botón "Priorizar"; arrastrar desde "Por Priorizar" inserta en la posición elegida (`priorizarEnPosicion`) | Elegir la posición al priorizar en vez de entrar siempre al final |
 | 2026-08-28 | Vehículos | Campo opcional `precio` en alta/edición e inventario (`20260828_vehiculo_precio.sql`) | Registrar el valor comercial de cada vehículo |
 | 2026-08-27 | Solicitudes-Creación | Ejecutivo crea sin fecha; fecha la define jefe de local al crear o al aprobar | Requisito: solo el jefe de local pone la fecha |
 | 2026-08-27 | Solicitudes-Creación | Asignación automática de `jefe_local_id` (jefe de local de la sucursal del ejecutivo) | Responsabilidad/aprobación por sucursal |

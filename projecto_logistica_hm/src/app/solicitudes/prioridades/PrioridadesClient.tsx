@@ -3,11 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
+  DragOverlay,
   closestCenter,
   PointerSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
+  useDroppable,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -22,12 +24,13 @@ import {
   X,
   Car,
   Clock,
-  ArrowUpRight,
   ListOrdered,
   Inbox,
+  GripVertical,
 } from 'lucide-react';
 import {
   priorizarSolicitudAction,
+  priorizarEnPosicionAction,
   reordenarColaAction,
   sacarDeColaAction,
 } from '@/app/actions/solicitudes.actions';
@@ -61,6 +64,10 @@ const tipoLabel: Record<TipoSolicitud, string> = {
   evento: 'Evento',
 };
 
+// IDs de zonas droppables auxiliares
+const ZONA_COLA_VACIA = 'zona-cola-vacia';
+const ZONA_POR_PRIORIZAR = 'zona-por-priorizar';
+
 export default function PrioridadesClient({
   solicitudes,
   viewer,
@@ -71,6 +78,9 @@ export default function PrioridadesClient({
 
   // Estado local del orden de la cola (para reordenamiento optimista con debounce)
   const [orden, setOrden] = useState<string[]>([]);
+  // Elemento siendo arrastrado y destino actual (para feedback visual)
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [overId, setOverId] = useState<string | null>(null);
 
   const esAdmin = viewer.rol === 'administrador';
   const esJefeLocal = viewer.rol === 'jefe_local';
@@ -103,6 +113,8 @@ export default function PrioridadesClient({
     }
     return lista;
   }, [solicitudes, sucursalQueVale]);
+
+  const porIdsSet = useMemo(() => new Set(porPriorizar.map((s) => s.id)), [porPriorizar]);
 
   // Sincronizar el orden local cuando cambia la cola desde el servidor
   useEffect(() => {
@@ -146,28 +158,91 @@ export default function PrioridadesClient({
     }, 500);
   }
 
-  function handleDragEnd(event: { active: { id: string | number }; over: { id: string | number } | null }) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const aId = String(active.id);
-    const oId = String(over.id);
-    setOrden((prev) => {
-      const oldIndex = prev.indexOf(aId);
-      const newIndex = prev.indexOf(oId);
-      if (oldIndex === -1 || newIndex === -1) return prev;
-      const nuevo = arrayMove(prev, oldIndex, newIndex);
-      programarReorden(nuevo);
-      return nuevo;
-    });
+  function handleDragStart(event: { active: { id: string | number } }) {
+    setActiveId(String(event.active.id));
   }
 
-  async function handlePriorizar(sol: SolicitudLista) {
+  function handleDragOver(event: { over: { id: string | number } | null }) {
+    setOverId(event.over ? String(event.over.id) : null);
+  }
+
+  function handleDragCancel() {
+    setActiveId(null);
+    setOverId(null);
+  }
+
+  function handleDragEnd(event: { active: { id: string | number }; over: { id: string | number } | null }) {
+    setActiveId(null);
+    setOverId(null);
+    const { active, over } = event;
+    if (!over) return;
+    const aId = String(active.id);
+    const oId = String(over.id);
+    if (aId === oId) return;
+
+    const enCola = orden.includes(aId);
+    const enPor = porIdsSet.has(aId);
+    if (!enCola && !enPor) return;
+
+    const sobreCola = orden.includes(oId) || oId === ZONA_COLA_VACIA;
+    const sobrePor = porIdsSet.has(oId) || oId === ZONA_POR_PRIORIZAR;
+
+    // Reordenar dentro de la cola
+    if (enCola && orden.includes(oId)) {
+      setOrden((prev) => {
+        const oldIndex = prev.indexOf(aId);
+        const newIndex = prev.indexOf(oId);
+        if (oldIndex === -1 || newIndex === -1) return prev;
+        const nuevo = arrayMove(prev, oldIndex, newIndex);
+        programarReorden(nuevo);
+        return nuevo;
+      });
+      return;
+    }
+
+    // Soltar un ítem de la cola fuera de ella = sacarla de la cola
+    if (enCola && sobrePor) {
+      const sol = dataPorId.get(aId);
+      if (sol) void handleSacarDeCola(sol);
+      return;
+    }
+
+    // Soltar un ítem "Por Priorizar" sobre la cola = priorizar en esa posición
+    if (enPor && sobreCola) {
+      const sol = dataPorId.get(aId);
+      if (sol) void handlePriorizarEnPosicion(sol, oId);
+      return;
+    }
+
+    // Arrastre dentro de "Por Priorizar": sin efecto
+  }
+
+  // Prioriza `sol` insertándola en la cola antes del ítem `overIdTarget`
+  // (o al final de su sucursal si la cola está vacía o el destino pertenece a otra sucursal).
+  async function handlePriorizarEnPosicion(sol: SolicitudLista, overIdTarget: string) {
     setIsSubmitting(true);
     try {
-      const result = await priorizarSolicitudAction(sol.id);
+      let posicion: number | null = null;
+      if (orden.includes(overIdTarget)) {
+        const overSol = dataPorId.get(overIdTarget);
+        if (overSol && overSol.sucursal === sol.sucursal) {
+          // Cantidad de ítems de la misma sucursal que preceden al destino
+          // (soporta la cola mixta por sucursal que ve el administrador)
+          let antes = 0;
+          for (const qid of orden) {
+            if (qid === overIdTarget) break;
+            if (dataPorId.get(qid)?.sucursal === sol.sucursal) antes++;
+          }
+          posicion = antes + 1;
+        }
+      }
+      const result =
+        posicion !== null
+          ? await priorizarEnPosicionAction(sol.id, posicion)
+          : await priorizarSolicitudAction(sol.id);
       mostrarFeedback(
         result.success
-          ? `${result.message}`
+          ? result.message || 'Solicitud priorizada.'
           : result.error || 'Error al priorizar.',
         result.success ? 'success' : 'error'
       );
@@ -214,10 +289,19 @@ export default function PrioridadesClient({
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Prioridades</h1>
         <p className="text-sm text-neutral-500">
-          Organiza la cola de prioridades de tu sucursal. Arrastra para reordenar.
+          Arrastra una solicitud desde &quot;Por Priorizar&quot; hacia la cola para priorizarla en la posición donde la sueltes.
+          Arrastra dentro de la cola para reordenarla; arrastrala fuera de la cola para sacarla.
         </p>
       </div>
 
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
+      >
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Cola de prioridades */}
         <section className="lg:col-span-3 bg-white rounded-2xl border border-neutral-200 p-5">
@@ -230,25 +314,20 @@ export default function PrioridadesClient({
           </div>
 
           {orden.length === 0 ? (
-            <div className="p-10 text-center text-neutral-400 border border-dashed border-neutral-200 rounded-xl">
-              <Inbox className="w-8 h-8 mx-auto mb-2 text-neutral-300" />
-              <p>La cola está vacía.</p>
-              <p className="text-xs">Agrega solicitudes desde la lista lateral.</p>
-            </div>
+            <ZonaColaVacia activa={activeId !== null && porIdsSet.has(activeId)} />
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={orden} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {orden.map((id, idx) => {
-                    const sol = dataPorId.get(id);
-                    if (!sol) return null;
-                    return (
-                      <SortableItem key={id} id={id} pos={idx + 1} sol={sol} onSacar={handleSacarDeCola} isSubmitting={isSubmitting} />
-                    );
-                  })}
-                </div>
-              </SortableContext>
-            </DndContext>
+            <SortableContext items={orden} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {orden.map((id, idx) => {
+                  const sol = dataPorId.get(id);
+                  if (!sol) return null;
+                  const esDestino = overId === id && activeId !== null && porIdsSet.has(activeId);
+                  return (
+                    <SortableItem key={id} id={id} pos={idx + 1} sol={sol} onSacar={handleSacarDeCola} isSubmitting={isSubmitting} resaltado={esDestino} />
+                  );
+                })}
+              </div>
+            </SortableContext>
           )}
         </section>
 
@@ -263,46 +342,25 @@ export default function PrioridadesClient({
           </div>
 
           {porPriorizar.length === 0 ? (
-            <p className="text-sm text-neutral-400 text-center py-8">
-              No hay solicitudes aprobadas sin priorizar.
-            </p>
+            <ZonaPorPriorizarVacia />
           ) : (
-            <div className="space-y-2">
-              {porPriorizar.map((sol) => (
-                <div key={sol.id} className="p-3 rounded-xl border border-neutral-200 bg-neutral-50">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-50 text-green-700 border border-green-200">
-                      {tipoLabel[sol.tipo_solicitud]}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-sm font-medium text-neutral-900">
-                    {sol.sucursal_nombre || 'Sucursal'}
-                  </div>
-                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock className="w-3 h-3" /> {formatFecha(sol.fecha_limite)}
-                    </span>
-                    {sol.vehiculos.length > 0 && (
-                      <span className="inline-flex items-center gap-1">
-                        <Car className="w-3 h-3" /> {sol.vehiculos.length}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handlePriorizar(sol)}
-                    disabled={isSubmitting}
-                    className="mt-2 w-full px-3 py-1.5 rounded-lg bg-neutral-900 text-white text-xs font-medium hover:bg-neutral-700 disabled:opacity-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-1.5"
-                  >
-                    <ArrowUpRight className="w-3.5 h-3.5" />
-                    Priorizar
-                  </button>
-                </div>
-              ))}
-            </div>
+            <SortableContext items={porPriorizar.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {porPriorizar.map((sol) => (
+                  <PorPriorizarItem key={sol.id} sol={sol} />
+                ))}
+              </div>
+            </SortableContext>
           )}
         </section>
       </div>
+
+      <DragOverlay>
+        {activeId && dataPorId.has(activeId) ? (
+          <TarjetaArrastre sol={dataPorId.get(activeId)!} enCola={orden.includes(activeId)} />
+        ) : null}
+      </DragOverlay>
+      </DndContext>
     </div>
   );
 }
@@ -313,12 +371,14 @@ function SortableItem({
   sol,
   onSacar,
   isSubmitting,
+  resaltado,
 }: {
   id: string;
   pos: number;
   sol: SolicitudLista;
   onSacar: (sol: SolicitudLista) => void;
   isSubmitting: boolean;
+  resaltado?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
 
@@ -329,7 +389,11 @@ function SortableItem({
       {...attributes}
       {...listeners}
       className={`flex items-center gap-3 p-3 rounded-xl border bg-white cursor-grab active:cursor-grabbing ${
-        isDragging ? 'border-neutral-900 ring-2 ring-neutral-900 shadow-lg' : 'border-neutral-200 hover:border-neutral-300'
+        isDragging
+          ? 'border-neutral-900 ring-2 ring-neutral-900 shadow-lg opacity-60'
+          : resaltado
+            ? 'border-neutral-900 ring-2 ring-neutral-900/40'
+            : 'border-neutral-200 hover:border-neutral-300'
       }`}
     >
       <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-neutral-900 text-white text-sm font-bold">
@@ -369,6 +433,104 @@ function SortableItem({
       >
         <X className="w-4 h-4" />
       </button>
+    </div>
+  );
+}
+
+// Zona droppable cuando la cola está vacía: permite arrastrar la primera solicitud
+function ZonaColaVacia({ activa }: { activa: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: ZONA_COLA_VACIA });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`p-10 text-center border border-dashed rounded-xl transition-colors ${
+        isOver && activa
+          ? 'border-neutral-900 bg-neutral-50 text-neutral-700'
+          : 'border-neutral-200 text-neutral-400'
+      }`}
+    >
+      <Inbox className="w-8 h-8 mx-auto mb-2 text-neutral-300" />
+      <p>La cola está vacía.</p>
+      <p className="text-xs">Arrastra una solicitud desde &quot;Por Priorizar&quot; para priorizarla.</p>
+    </div>
+  );
+}
+
+// Zona droppable cuando no hay solicitudes por priorizar: permite "sacar de la cola" arrastrando
+function ZonaPorPriorizarVacia() {
+  const { setNodeRef, isOver } = useDroppable({ id: ZONA_POR_PRIORIZAR });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`p-6 text-center border border-dashed rounded-xl text-xs transition-colors ${
+        isOver
+          ? 'border-red-400 bg-red-50/40 text-red-600'
+          : 'border-neutral-200 text-neutral-400'
+      }`}
+    >
+      No hay solicitudes aprobadas sin priorizar.
+      <br />
+      Suelta aquí una solicitud de la cola para sacarla.
+    </div>
+  );
+}
+
+// Ítem arrastrable del panel "Por Priorizar" (reemplaza al antiguo botón "Priorizar")
+function PorPriorizarItem({ sol }: { sol: SolicitudLista }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sol.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Transform.toString(transform), transition }}
+      {...attributes}
+      {...listeners}
+      className={`p-3 rounded-xl border border-neutral-200 bg-neutral-50 cursor-grab active:cursor-grabbing hover:border-neutral-400 transition-colors ${
+        isDragging ? 'opacity-40 border-neutral-400' : ''
+      }`}
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <GripVertical className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+        <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
+        <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-50 text-green-700 border border-green-200">
+          {tipoLabel[sol.tipo_solicitud]}
+        </span>
+      </div>
+      <div className="mt-1 text-sm font-medium text-neutral-900">
+        {sol.sucursal_nombre || 'Sucursal'}
+      </div>
+      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500">
+        <span className="inline-flex items-center gap-1">
+          <Clock className="w-3 h-3" /> {formatFecha(sol.fecha_limite)}
+        </span>
+        {sol.vehiculos.length > 0 && (
+          <span className="inline-flex items-center gap-1">
+            <Car className="w-3 h-3" /> {sol.vehiculos.length}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Vista previa flotante del ítem mientras se arrastra (DragOverlay)
+function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-neutral-900 bg-white shadow-lg w-72">
+      {!enCola && (
+        <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg border-2 border-dashed border-neutral-400 text-neutral-400 text-sm font-bold">
+          +
+        </span>
+      )}
+      {enCola && <span className="w-8 h-8 shrink-0" />}
+      <div className="flex-1 min-w-0">
+        <div className="text-sm font-semibold text-neutral-900 truncate">
+          {sol.sucursal_nombre || 'Sucursal'}
+        </div>
+        <div className="text-xs text-neutral-500">
+          {enCola ? 'Mover dentro de la cola' : 'Soltar en la cola para priorizar'}
+        </div>
+      </div>
     </div>
   );
 }
