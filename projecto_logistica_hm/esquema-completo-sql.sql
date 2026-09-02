@@ -116,6 +116,7 @@ CREATE TABLE public.solicitud (
     sucursal bigint,
     fecha_tentativa_despacho timestamptz,
     fecha_despacho timestamptz,
+    fecha_entrega timestamptz,
     motivo_cancelacion text,
     posicion_prioridad bigint,
     fecha_limite timestamptz,
@@ -1022,6 +1023,7 @@ CREATE POLICY "vehiculo_update_gestores" ON public.vehiculo FOR UPDATE TO authen
 COMMENT ON COLUMN public.solicitud.sucursal IS 'Sucursal desde la que nace la solcitud';
 COMMENT ON COLUMN public.solicitud.fecha_tentativa_despacho IS 'Fecha tentativa en la que el despacho estaria programado';
 COMMENT ON COLUMN public.solicitud.fecha_despacho IS 'Fecha real de salida del vehiculo desde logistica';
+COMMENT ON COLUMN public.solicitud.fecha_entrega IS 'Fecha real de entrega del vehiculo en destino';
 COMMENT ON COLUMN public.solicitud.motivo_cancelacion IS 'Motivo de la cancelacion de una solicitud';
 COMMENT ON COLUMN public.solicitud.posicion_prioridad IS 'Numero que indica la prioridad de una solicitud dentro de la cola de su sucursal (1..N por sucursal, UNIQUE compuesto con sucursal)';
 COMMENT ON COLUMN public.solicitud_vehiculo.disponibilidad IS 'Indica si un vehiculo que ya tuvo una solicitud puede estar disponible para otra soliciutd si el estado es reservado entonces no si es liberado entonces si';

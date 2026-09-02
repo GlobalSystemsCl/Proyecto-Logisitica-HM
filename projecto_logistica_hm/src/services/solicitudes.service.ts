@@ -36,6 +36,8 @@ interface SolicitudRawRow {
   logistica_id: string | null;
   fecha_creacion: string | null;
   fecha_tentativa_despacho: string | null;
+  fecha_despacho: string | null;
+  fecha_entrega: string | null;
   fecha_limite: string | null;
   motivo_cancelacion: string | null;
   direccion_evento: string | null;
@@ -65,7 +67,7 @@ function persona(p: { nombre: string; apellido: string } | null): string | null 
 
 const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
   ejecutivo_id, jefe_local_id, logistica_id,
-  fecha_creacion, fecha_tentativa_despacho, fecha_limite, motivo_cancelacion,
+  fecha_creacion, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_limite, motivo_cancelacion,
   direccion_evento, titulo_evento,
   suc:sucursal!solicitud_sucursal_fkey(nombre),
   destino:sucursal!solicitud_sucursal_destino_fkey(nombre),
@@ -92,6 +94,8 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
     logistica_nombre: persona(row.logistica),
     fecha_creacion: row.fecha_creacion,
     fecha_tentativa_despacho: row.fecha_tentativa_despacho,
+    fecha_despacho: row.fecha_despacho,
+    fecha_entrega: row.fecha_entrega,
     fecha_limite: row.fecha_limite,
     motivo_cancelacion: row.motivo_cancelacion,
     direccion_evento: row.direccion_evento,
@@ -129,8 +133,12 @@ export interface SolicitudMinima {
   sucursal: number;
   ejecutivo_id: string | null;
   jefe_local_id: string | null;
+  logistica_id: string | null;
   tipo_solicitud: SolicitudLista['tipo_solicitud'];
   posicion_prioridad: number | null;
+  fecha_tentativa_despacho: string | null;
+  fecha_despacho: string | null;
+  fecha_entrega: string | null;
 }
 
 export class SolicitudesService {
@@ -1003,6 +1011,169 @@ export class SolicitudesService {
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al liberar vehículo';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async calendarizarSolicitud(
+    id: string,
+    fechaDespacho: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (!['priorizada', 'asignada'].includes(actual.estado)) {
+        return { success: false, error: 'Solo las solicitudes Priorizadas o Asignadas pueden calendarizarse.' };
+      }
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({
+          estado: 'calendarizada',
+          fecha_tentativa_despacho: fechaDespacho,
+          logistica_id: usuarioId,
+        })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'calendarizacion',
+        { estado: actual.estado, fecha_tentativa_despacho: actual.fecha_tentativa_despacho },
+        { estado: 'calendarizada', fecha_tentativa_despacho: fechaDespacho }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al calendarizar';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async descalendarizarSolicitud(
+    id: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'calendarizada') {
+        return { success: false, error: 'Solo las solicitudes Calendarizadas pueden volver a priorizadas.' };
+      }
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({
+          estado: 'priorizada',
+          fecha_tentativa_despacho: null,
+          logistica_id: null,
+        })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'descalendarizacion',
+        { estado: 'calendarizada', fecha_tentativa_despacho: actual.fecha_tentativa_despacho },
+        { estado: 'priorizada', fecha_tentativa_despacho: null }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al descalendarizar';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async despacharSolicitud(
+    id: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'calendarizada') {
+        return { success: false, error: 'Solo las solicitudes Calendarizadas pueden despacharse.' };
+      }
+
+      const ahora = new Date().toISOString();
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({
+          estado: 'en_transito',
+          fecha_despacho: ahora,
+        })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'despacho',
+        { estado: 'calendarizada', fecha_despacho: null },
+        { estado: 'en_transito', fecha_despacho: ahora }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al despachar';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async recibirSolicitud(
+    id: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'en_transito') {
+        return { success: false, error: 'Solo las solicitudes En Tránsito pueden recibirse.' };
+      }
+
+      const ahora = new Date().toISOString();
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({
+          estado: 'entregada',
+          fecha_entrega: ahora,
+        })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'entrega',
+        { estado: 'en_transito', fecha_entrega: null },
+        { estado: 'entregada', fecha_entrega: ahora }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al recibir';
       return { success: false, error: msg };
     }
   }

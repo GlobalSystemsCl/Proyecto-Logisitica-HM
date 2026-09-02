@@ -454,3 +454,87 @@ export async function getAuditoriaAction(solicitudId: string) {
 export async function getEjecutivosPorSucursalAction(sucursalId: number) {
   return SolicitudesService.getEjecutivosPorSucursal(sucursalId);
 }
+
+export async function calendarizarSolicitudAction(solicitudId: string, fechaDespacho: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'logistica' && profile.rol !== 'jefe_local') {
+      return { success: false, error: 'No tienes permisos para calendarizar solicitudes.' };
+    }
+
+    if (!fechaDespacho || isNaN(Date.parse(fechaDespacho))) {
+      return { success: false, error: 'La fecha de despacho no es válida.' };
+    }
+
+    const result = await SolicitudesService.calendarizarSolicitud(solicitudId, fechaDespacho, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/calendarizaciones');
+    return { success: true, message: 'Solicitud calendarizada exitosamente.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function descalendarizarSolicitudAction(solicitudId: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'logistica' && profile.rol !== 'jefe_local') {
+      return { success: false, error: 'No tienes permisos para descalendarizar solicitudes.' };
+    }
+
+    const result = await SolicitudesService.descalendarizarSolicitud(solicitudId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/calendarizaciones');
+    return { success: true, message: 'Solicitud devuelta a priorizada.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function despacharSolicitudAction(solicitudId: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
+      return { success: false, error: 'No tienes permisos para despachar solicitudes.' };
+    }
+
+    const result = await SolicitudesService.despacharSolicitud(solicitudId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/calendarizaciones');
+    return { success: true, message: 'Solicitud despachada y en tránsito.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function recibirSolicitudAction(solicitudId: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
+      return { success: false, error: 'No tienes permisos para recibir solicitudes.' };
+    }
+
+    const result = await SolicitudesService.recibirSolicitud(solicitudId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/calendarizaciones');
+    return { success: true, message: 'Solicitud recibida en destino.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}

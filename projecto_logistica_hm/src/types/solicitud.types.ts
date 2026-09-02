@@ -23,6 +23,8 @@ export interface SolicitudLista {
   logistica_nombre: string | null;
   fecha_creacion: string | null;
   fecha_tentativa_despacho: string | null;
+  fecha_despacho: string | null;
+  fecha_entrega: string | null;
   fecha_limite: string | null;
   motivo_cancelacion: string | null;
   direccion_evento: string | null;

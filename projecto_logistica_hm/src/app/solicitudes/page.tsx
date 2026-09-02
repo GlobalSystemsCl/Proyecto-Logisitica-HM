@@ -39,10 +39,11 @@ export default async function SolicitudesPage() {
             ? [
                 { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false },
                 { href: '/solicitudes/prioridades', label: 'Prioridades', active: false },
-                ...(profile.rol === 'jefe_local'
-                  ? [{ href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: false }]
-                  : []),
+                { href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: false },
               ]
+            : []),
+          ...(profile.rol === 'logistica'
+            ? [{ href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: false }]
             : []),
         ]}
       />

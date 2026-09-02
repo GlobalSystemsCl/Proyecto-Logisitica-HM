@@ -365,6 +365,12 @@ export default function PrioridadesClient({
   );
 }
 
+function getEncargadoNombre(sol: SolicitudLista): string | null {
+  if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
+  if (sol.jefe_local_id) return sol.jefe_local_nombre;
+  return null;
+}
+
 function SolicitudCard({
   id,
   sol,
@@ -395,9 +401,7 @@ function SolicitudCard({
           ? 'border-neutral-900 ring-2 ring-neutral-900 shadow-lg opacity-60'
           : resaltado
             ? 'border-neutral-900 ring-2 ring-neutral-900/40'
-            : variant === 'porPriorizar'
-              ? 'border-neutral-200 hover:border-neutral-400'
-              : 'border-neutral-200 hover:border-neutral-300'
+            : 'border-neutral-200 hover:border-neutral-300'
       }`}
     >
       <div className="flex items-start gap-3">
@@ -406,7 +410,7 @@ function SolicitudCard({
             {pos}
           </span>
         ) : (
-          <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg border border-dashed border-neutral-300 text-neutral-400">
+          <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-neutral-100 text-neutral-500">
             <GripVertical className="w-4 h-4" />
           </span>
         )}
@@ -437,9 +441,14 @@ function SolicitudCard({
             <p className="mt-1 text-xs text-neutral-400">Sin vehículos</p>
           )}
 
-          <div className="mt-2 flex items-center gap-1 text-xs text-neutral-500">
-            <Clock className="w-3 h-3" />
-            <span>Límite: {formatFecha(sol.fecha_limite)}</span>
+          <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+            <span className="inline-flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {formatFecha(sol.fecha_limite)}
+            </span>
+            {getEncargadoNombre(sol) && (
+              <span className="text-neutral-400">· {getEncargadoNombre(sol)}</span>
+            )}
           </div>
         </div>
 
@@ -504,7 +513,7 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
         {enCola ? (
           <span className="w-8 h-8 shrink-0" />
         ) : (
-          <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg border-2 border-dashed border-neutral-400 text-neutral-400">
+          <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-neutral-100 text-neutral-500">
             <GripVertical className="w-4 h-4" />
           </span>
         )}
@@ -527,8 +536,14 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
               ))}
             </div>
           )}
-          <div className="mt-1 text-[11px] text-neutral-400">
-            {enCola ? 'Mover dentro de la cola' : 'Soltar en la cola para priorizar'}
+          <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+            <span className="inline-flex items-center gap-1">
+              <Clock className="w-3 h-3" />
+              {formatFecha(sol.fecha_limite)}
+            </span>
+            {getEncargadoNombre(sol) && (
+              <span className="text-neutral-400">· {getEncargadoNombre(sol)}</span>
+            )}
           </div>
         </div>
       </div>

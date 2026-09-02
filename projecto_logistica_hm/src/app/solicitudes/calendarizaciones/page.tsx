@@ -17,7 +17,7 @@ export default async function CalendarizacionesPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
+  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador' && profile.rol !== 'logistica') {
     redirect('/solicitudes');
   }
 
@@ -32,8 +32,12 @@ export default async function CalendarizacionesPage() {
         rol={profile.rol}
         tabs={[
           { href: '/solicitudes', label: 'General', active: false },
-          { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false },
-          { href: '/solicitudes/prioridades', label: 'Prioridades', active: false },
+          ...(profile.rol === 'jefe_local' || profile.rol === 'administrador'
+            ? [
+                { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false },
+                { href: '/solicitudes/prioridades', label: 'Prioridades', active: false },
+              ]
+            : []),
           { href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: true },
         ]}
       />
