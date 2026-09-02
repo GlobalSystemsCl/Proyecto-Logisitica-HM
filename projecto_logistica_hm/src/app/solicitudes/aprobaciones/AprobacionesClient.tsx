@@ -124,11 +124,10 @@ export default function AprobacionesClient({
     <div className="space-y-6">
       {feedback && (
         <div
-          className={`flex items-center gap-3 p-4 rounded-xl border text-sm ${
-            feedback.type === 'success'
-              ? 'bg-green-50 text-green-800 border-green-200'
-              : 'bg-red-50 text-red-800 border-red-200'
-          }`}
+          className={`flex items-center gap-3 p-4 rounded-xl border text-sm ${feedback.type === 'success'
+            ? 'bg-green-50 text-green-800 border-green-200'
+            : 'bg-red-50 text-red-800 border-red-200'
+            }`}
         >
           {feedback.type === 'success' ? (
             <CheckCircle2 className="w-5 h-5 shrink-0" />
@@ -248,8 +247,7 @@ export default function AprobacionesClient({
               </button>
             </div>
             <p className="text-sm text-neutral-500 mb-4">
-              Aprobando la solicitud #{approveTarget.id.slice(0, 8)}. Indica la fecha de
-              entrega del o los vehículos.
+              Aprobando la solicitud #{approveTarget.id.slice(0, 8)}. Indica la fecha limite en la que el o los vehiculos debe ser entregado.
             </p>
             <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
               Fecha de Entrega *

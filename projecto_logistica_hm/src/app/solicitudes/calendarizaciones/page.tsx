@@ -2,11 +2,11 @@ import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
 import { redirect } from 'next/navigation';
 import SolicitudesHeader from '@/components/SolicitudesHeader';
-import PrioridadesClient from './PrioridadesClient';
+import CalendarizacionesClient from './CalendarizacionesClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function PrioridadesPage() {
+export default async function CalendarizacionesPage() {
   const profile = await AuthService.getCurrentUserProfile();
 
   if (!profile) {
@@ -33,15 +33,13 @@ export default async function PrioridadesPage() {
         tabs={[
           { href: '/solicitudes', label: 'General', active: false },
           { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false },
-          { href: '/solicitudes/prioridades', label: 'Prioridades', active: true },
-          ...(profile.rol === 'jefe_local'
-            ? [{ href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: false }]
-            : []),
+          { href: '/solicitudes/prioridades', label: 'Prioridades', active: false },
+          { href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: true },
         ]}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <PrioridadesClient
+        <CalendarizacionesClient
           solicitudes={solicitudes}
           viewer={{
             id: profile.id,

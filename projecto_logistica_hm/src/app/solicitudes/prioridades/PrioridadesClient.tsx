@@ -323,7 +323,7 @@ export default function PrioridadesClient({
                   if (!sol) return null;
                   const esDestino = overId === id && activeId !== null && porIdsSet.has(activeId);
                   return (
-                    <SortableItem key={id} id={id} pos={idx + 1} sol={sol} onSacar={handleSacarDeCola} isSubmitting={isSubmitting} resaltado={esDestino} />
+                    <SolicitudCard key={id} id={id} sol={sol} variant="cola" pos={idx + 1} onSacar={handleSacarDeCola} isSubmitting={isSubmitting} resaltado={esDestino} />
                   );
                 })}
               </div>
@@ -347,7 +347,7 @@ export default function PrioridadesClient({
             <SortableContext items={porPriorizar.map((s) => s.id)} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
                 {porPriorizar.map((sol) => (
-                  <PorPriorizarItem key={sol.id} sol={sol} />
+                  <SolicitudCard key={sol.id} id={sol.id} sol={sol} variant="porPriorizar" />
                 ))}
               </div>
             </SortableContext>
@@ -365,19 +365,21 @@ export default function PrioridadesClient({
   );
 }
 
-function SortableItem({
+function SolicitudCard({
   id,
-  pos,
   sol,
+  variant,
+  pos,
   onSacar,
   isSubmitting,
   resaltado,
 }: {
   id: string;
-  pos: number;
   sol: SolicitudLista;
-  onSacar: (sol: SolicitudLista) => void;
-  isSubmitting: boolean;
+  variant: 'cola' | 'porPriorizar';
+  pos?: number;
+  onSacar?: (sol: SolicitudLista) => void;
+  isSubmitting?: boolean;
   resaltado?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -388,51 +390,70 @@ function SortableItem({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
-      className={`flex items-center gap-3 p-3 rounded-xl border bg-white cursor-grab active:cursor-grabbing ${
+      className={`p-3 rounded-xl border bg-white cursor-grab active:cursor-grabbing transition-colors ${
         isDragging
           ? 'border-neutral-900 ring-2 ring-neutral-900 shadow-lg opacity-60'
           : resaltado
             ? 'border-neutral-900 ring-2 ring-neutral-900/40'
-            : 'border-neutral-200 hover:border-neutral-300'
+            : variant === 'porPriorizar'
+              ? 'border-neutral-200 hover:border-neutral-400'
+              : 'border-neutral-200 hover:border-neutral-300'
       }`}
     >
-      <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-neutral-900 text-white text-sm font-bold">
-        {pos}
-      </span>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-neutral-900 truncate">
-            {sol.sucursal_nombre || 'Sucursal'}
+      <div className="flex items-start gap-3">
+        {variant === 'cola' ? (
+          <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-neutral-900 text-white text-sm font-bold">
+            {pos}
           </span>
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
-            #{sol.id.slice(0, 6)}
+        ) : (
+          <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg border border-dashed border-neutral-300 text-neutral-400">
+            <GripVertical className="w-4 h-4" />
           </span>
-        </div>
-        <div className="text-xs text-neutral-500">
-          {tipoLabel[sol.tipo_solicitud]} · Límite: {formatFecha(sol.fecha_limite)}
-        </div>
-        {sol.vehiculos.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {sol.vehiculos.map((v) => (
-              <span
-                key={v.solicitud_vehiculo_id}
-                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-neutral-50 border border-neutral-200 text-[10px] text-neutral-600"
-              >
-                <Car className="w-2.5 h-2.5" />
-                {v.patente}
-              </span>
-            ))}
+        )}
+
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
+              {tipoLabel[sol.tipo_solicitud]}
+            </span>
           </div>
+
+          {sol.vehiculos.length > 0 ? (
+            <div className="mt-2 space-y-1.5">
+              {sol.vehiculos.map((v) => (
+                <div
+                  key={v.solicitud_vehiculo_id}
+                  className="flex items-center gap-2 text-xs"
+                >
+                  <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="font-semibold text-neutral-900">{v.patente}</span>
+                  <span className="text-neutral-400">·</span>
+                  <span className="text-neutral-500 font-mono text-[11px]">{v.chasis}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-1 text-xs text-neutral-400">Sin vehículos</p>
+          )}
+
+          <div className="mt-2 flex items-center gap-1 text-xs text-neutral-500">
+            <Clock className="w-3 h-3" />
+            <span>Límite: {formatFecha(sol.fecha_limite)}</span>
+          </div>
+        </div>
+
+        {variant === 'cola' && onSacar && (
+          <button
+            onClick={() => onSacar(sol)}
+            disabled={isSubmitting}
+            title="Sacar de la cola"
+            className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
+          </button>
         )}
       </div>
-      <button
-        onClick={() => onSacar(sol)}
-        disabled={isSubmitting}
-        title="Sacar de la cola"
-        className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
-      >
-        <X className="w-4 h-4" />
-      </button>
     </div>
   );
 }
@@ -475,60 +496,40 @@ function ZonaPorPriorizarVacia() {
   );
 }
 
-// Ítem arrastrable del panel "Por Priorizar" (reemplaza al antiguo botón "Priorizar")
-function PorPriorizarItem({ sol }: { sol: SolicitudLista }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sol.id });
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{ transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
-      className={`p-3 rounded-xl border border-neutral-200 bg-neutral-50 cursor-grab active:cursor-grabbing hover:border-neutral-400 transition-colors ${
-        isDragging ? 'opacity-40 border-neutral-400' : ''
-      }`}
-    >
-      <div className="flex items-center gap-2 flex-wrap">
-        <GripVertical className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
-        <span className="px-1.5 py-0.5 rounded text-[10px] bg-green-50 text-green-700 border border-green-200">
-          {tipoLabel[sol.tipo_solicitud]}
-        </span>
-      </div>
-      <div className="mt-1 text-sm font-medium text-neutral-900">
-        {sol.sucursal_nombre || 'Sucursal'}
-      </div>
-      <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-neutral-500">
-        <span className="inline-flex items-center gap-1">
-          <Clock className="w-3 h-3" /> {formatFecha(sol.fecha_limite)}
-        </span>
-        {sol.vehiculos.length > 0 && (
-          <span className="inline-flex items-center gap-1">
-            <Car className="w-3 h-3" /> {sol.vehiculos.length}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // Vista previa flotante del ítem mientras se arrastra (DragOverlay)
 function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean }) {
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl border-2 border-neutral-900 bg-white shadow-lg w-72">
-      {!enCola && (
-        <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg border-2 border-dashed border-neutral-400 text-neutral-400 text-sm font-bold">
-          +
-        </span>
-      )}
-      {enCola && <span className="w-8 h-8 shrink-0" />}
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-semibold text-neutral-900 truncate">
-          {sol.sucursal_nombre || 'Sucursal'}
-        </div>
-        <div className="text-xs text-neutral-500">
-          {enCola ? 'Mover dentro de la cola' : 'Soltar en la cola para priorizar'}
+    <div className="p-3 rounded-xl border-2 border-neutral-900 bg-white shadow-lg w-72">
+      <div className="flex items-start gap-3">
+        {enCola ? (
+          <span className="w-8 h-8 shrink-0" />
+        ) : (
+          <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg border-2 border-dashed border-neutral-400 text-neutral-400">
+            <GripVertical className="w-4 h-4" />
+          </span>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
+              {tipoLabel[sol.tipo_solicitud]}
+            </span>
+          </div>
+          {sol.vehiculos.length > 0 && (
+            <div className="mt-2 space-y-1">
+              {sol.vehiculos.map((v) => (
+                <div key={v.solicitud_vehiculo_id} className="flex items-center gap-2 text-xs">
+                  <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                  <span className="font-semibold text-neutral-900">{v.patente}</span>
+                  <span className="text-neutral-400">·</span>
+                  <span className="text-neutral-500 font-mono text-[11px]">{v.chasis}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="mt-1 text-[11px] text-neutral-400">
+            {enCola ? 'Mover dentro de la cola' : 'Soltar en la cola para priorizar'}
+          </div>
         </div>
       </div>
     </div>
