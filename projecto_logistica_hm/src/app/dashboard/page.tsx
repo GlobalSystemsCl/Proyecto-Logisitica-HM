@@ -214,22 +214,30 @@ export default async function DashboardPage() {
             )}
 
             {/* Logistics Management */}
-            <div className="bg-white border border-neutral-200 rounded-2xl p-6 flex flex-col justify-between opacity-85">
-              <div className="space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-400">
-                  <Truck className="w-6 h-6" />
+            {(profile.rol === 'logistica' || profile.rol === 'jefe_local' || profile.rol === 'administrador') && (
+              <Link
+                href="/logistica/calendarizaciones"
+                className="group bg-white border border-neutral-200 hover:border-neutral-900 rounded-2xl p-6 transition-all duration-200 hover:shadow-xl flex flex-col justify-between"
+              >
+                <div className="space-y-3">
+                  <div className="w-12 h-12 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white group-hover:scale-105 transition-transform">
+                    <Truck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-neutral-900 group-hover:text-neutral-600 transition-colors">
+                      Gestión Logística
+                    </h3>
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Calendarización de traslados, fecha tentativa, despacho y confirmación de entrega en destino.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-neutral-900">Gestión Logística</h3>
-                  <p className="text-xs text-neutral-500 mt-1">
-                    Calendarización de traslados, fecha tentativa, despacho y confirmación de entrega en destino.
-                  </p>
+                <div className="mt-6 flex items-center gap-1 text-xs font-semibold text-neutral-900 group-hover:text-neutral-600">
+                  <span>Gestionar traslados</span>
+                  <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                 </div>
-              </div>
-              <div className="mt-6 flex items-center gap-1.5 text-xs text-neutral-400 font-medium">
-                <span>Próximo módulo operativo</span>
-              </div>
-            </div>
+              </Link>
+            )}
 
             {/* Traceability & History */}
             {isAdmin && (

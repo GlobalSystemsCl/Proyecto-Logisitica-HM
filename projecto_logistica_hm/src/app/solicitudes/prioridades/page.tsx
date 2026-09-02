@@ -34,9 +34,6 @@ export default async function PrioridadesPage() {
           { href: '/solicitudes', label: 'General', active: false },
           { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false },
           { href: '/solicitudes/prioridades', label: 'Prioridades', active: true },
-          ...(profile.rol === 'jefe_local'
-            ? [{ href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: false }]
-            : []),
         ]}
       />
 

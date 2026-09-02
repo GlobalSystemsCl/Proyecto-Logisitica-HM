@@ -36,9 +36,6 @@ export default async function AprobacionesPage() {
           ...(profile.rol === 'jefe_local' || profile.rol === 'administrador'
             ? [{ href: '/solicitudes/prioridades', label: 'Prioridades', active: false }]
             : []),
-          ...(profile.rol === 'jefe_local'
-            ? [{ href: '/solicitudes/calendarizaciones', label: 'Calendarizaciones', active: false }]
-            : []),
         ]}
       />
 
