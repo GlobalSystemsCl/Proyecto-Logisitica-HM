@@ -85,8 +85,8 @@ CREATE TABLE public.usuario (
     apellido varchar(100) NOT NULL,
     email varchar(255) NOT NULL,
     rol public.rol_usuario NOT NULL,
-    created_at timestamp DEFAULT now(),
-    updated_at timestamp DEFAULT now(),
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now(),
     activo boolean DEFAULT true,
     requiere_cambio_clave boolean DEFAULT false,
     intentos_fallidos integer DEFAULT 0,
@@ -110,8 +110,8 @@ CREATE TABLE public.solicitud (
     jefe_local_id uuid,
     logistica_id uuid,
     estado public.estado_solicitud NOT NULL DEFAULT 'pendiente'::estado_solicitud,
-    fecha_creacion timestamp DEFAULT now(),
-    fecha_actualizacion timestamp DEFAULT now(),
+    fecha_creacion timestamptz DEFAULT now(),
+    fecha_actualizacion timestamptz DEFAULT now(),
     tipo_solicitud public.tipo_solicitud NOT NULL DEFAULT 'venta'::tipo_solicitud,
     sucursal bigint,
     fecha_tentativa_despacho timestamptz,
@@ -134,8 +134,8 @@ CREATE TABLE public.vehiculo (
     anio integer NOT NULL,
     color varchar(50),
     precio numeric(14,2),
-    created_at timestamp DEFAULT now(),
-    updated_at timestamp DEFAULT now(),
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now(),
     vendido boolean DEFAULT false
 );
 
@@ -143,7 +143,7 @@ CREATE TABLE public.solicitud_vehiculo (
     id uuid NOT NULL DEFAULT gen_random_uuid(),
     solicitud_id uuid NOT NULL,
     vehiculo_id uuid NOT NULL,
-    created_at timestamp DEFAULT now(),
+    created_at timestamptz DEFAULT now(),
     disponibilidad public.disponibilidad NOT NULL DEFAULT 'reservado'::disponibilidad
 );
 
@@ -155,7 +155,7 @@ CREATE TABLE public.auditoria (
     accion varchar NOT NULL,
     valor_anterior jsonb,
     valor_nuevo jsonb,
-    created_at timestamp DEFAULT now()
+    created_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE public.observacion (
@@ -163,8 +163,8 @@ CREATE TABLE public.observacion (
     solicitud_id uuid NOT NULL,
     usuario_id uuid NOT NULL,
     observacion text NOT NULL,
-    created_at timestamp DEFAULT now(),
-    updated_at timestamp DEFAULT now()
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
 );
 
 CREATE TABLE public.notificacion (
@@ -178,7 +178,7 @@ CREATE TABLE public.notificacion (
     entidad varchar(50) NOT NULL,
     entidad_id uuid NOT NULL,
     ruta text,
-    created_at timestamp DEFAULT now()
+    created_at timestamptz DEFAULT now()
 );
 
 -- ============================================================================
