@@ -173,11 +173,16 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
   - `R-SUC.2` — Nombre único; slots válidos.
   - `R-SUC.3` — Vincula encargado (jefe_local) a una sucursal.
   - `R-SUC.4` — No se puede eliminar una sucursal con usuarios asignados.
+  - `R-SUC.5` — Validación de slots: la sucursal destino debe tener slots disponibles para la cantidad de vehículos de la solicitud.
+  - `R-SUC.6` — Los slots se ocupan al crear la solicitud (estado `pendiente_aprobacion` o `aprobada`).
+  - `R-SUC.7` — Al rechazar o cancelar una solicitud, se liberan automáticamente los slots ocupados.
+  - `R-SUC.8` — El frontend muestra slots disponibles al seleccionar sucursal destino.
 - **Con qué se conecta**: `sucursales.service.ts`, `sucursales.actions.ts`, `SucursalesTableClient.tsx`, tablas `sucursal`, `usuario`, `solicitud`.
 - **Depende de**: Módulo Usuarios (encargado), Módulo Solicitudes (origen/destino).
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-02 | Se agrega validación de slots: triggers para validar, incrementar y decrementar `slots_ocupados` | Evitar sobreasignación de vehículos a sucursales |
   | 2026-08-27 | Se registra en RequisitosModulos.md | Documentación de requisitos |
 
 ---
@@ -200,6 +205,8 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
   - `R-SOL-CRE.5` — Jefe_local/admin deben indicar fecha de entrega al crear; jefe_local crea el estado `aprobada`.
   - `R-SOL-CRE.6` — Reserva de vehículos transaccional (rollback si falla).
   - `R-SOL-CRE.7` — La sucursal destino puede coincidir con la origen.
+  - `R-SOL-CRE.8` — Al crear una solicitud de venta, se valida que la sucursal destino tenga slots disponibles para la cantidad de vehículos seleccionados.
+  - `R-SOL-CRE.9` — El frontend muestra los slots disponibles al seleccionar la sucursal destino y advierte si se exceden.
 - **Con qué se conecta**: `solicitudes.service.ts` (`createSolicitud`), `createSolicitudAction`, `SolicitudesClient.tsx`, tablas `solicitud`, `solicitud_vehiculo`, `observacion`, `auditoria`, `usuario`.
 - **Depende de**: Módulo Vehículos (inventario/disponibilidad), Módulo Sucursales, Módulo Aprobación (si es ejecutivo).
 - **Historial**:
@@ -210,6 +217,7 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
   | 2026-08-27 | Se permite sucursal destino = origen | Venta interna en el mismo local |
   | 2026-08-27 | Se elimina validación de destino ≠ origen en trigger BD (`20260827_solicitudes_v2_2.sql`) | Alinearse con venta interna |
   | 2026-08-26 | `createSolicitud` setea `estado` y `jefe_local_id`; se elimina auto-aprobado roto; se agrega validación de reservas activas y auditoría | Esquema V2 de solicitudes |
+  | 2026-09-02 | Se agrega validación de slots disponibles en sucursal destino (trigger BD + service + frontend) | Evitar que solicitudes excedan capacidad de slots de la sucursal destino |
 
 ---
 
@@ -358,6 +366,7 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-09-02 | Solicitudes/Sucursales | Validación de slots: triggers BD para validar, incrementar y decrementar `slots_ocupados`; frontend muestra slots disponibles; service valida antes de crear | Evitar sobreasignación de vehículos a sucursales |
 | 2026-08-28 | Vehículos | Campo opcional `precio` en alta/edición e inventario (`20260828_vehiculo_precio.sql`) | Registrar el valor comercial de cada vehículo |
 | 2026-08-27 | Solicitudes-Creación | Ejecutivo crea sin fecha; fecha la define jefe de local al crear o al aprobar | Requisito: solo el jefe de local pone la fecha |
 | 2026-08-27 | Solicitudes-Creación | Asignación automática de `jefe_local_id` (jefe de local de la sucursal del ejecutivo) | Responsabilidad/aprobación por sucursal |

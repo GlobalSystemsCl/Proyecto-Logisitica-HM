@@ -954,6 +954,138 @@ END;
 $function$
 
 -- ============================================================================
+-- FUNCIONES DE VALIDACION DE SLOTS POR SUCURSAL
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.fn_obtener_slots_disponibles(p_sucursal_id bigint)
+RETURNS integer AS $$
+DECLARE
+  v_slots integer;
+  v_ocupados integer;
+BEGIN
+  SELECT slots, slots_ocupados INTO v_slots, v_ocupados
+  FROM public.sucursal WHERE id = p_sucursal_id;
+
+  IF NOT FOUND THEN
+    RETURN -1;
+  END IF;
+
+  RETURN GREATEST(v_slots - v_ocupados, 0);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+CREATE OR REPLACE FUNCTION public.fn_validar_slots_solicitud_vehiculo()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_sucursal_destino bigint;
+  v_cantidad_vehiculos integer;
+  v_slots_disponibles integer;
+  v_tipo_solicitud tipo_solicitud;
+BEGIN
+  SELECT sucursal_destino, tipo_solicitud INTO v_sucursal_destino, v_tipo_solicitud
+  FROM public.solicitud WHERE id = NEW.solicitud_id;
+
+  IF v_tipo_solicitud = 'evento' THEN
+    RETURN NEW;
+  END IF;
+
+  IF v_sucursal_destino IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT COUNT(*) INTO v_cantidad_vehiculos
+  FROM public.solicitud_vehiculo
+  WHERE solicitud_id = NEW.solicitud_id;
+
+  v_cantidad_vehiculos := v_cantidad_vehiculos + 1;
+
+  v_slots_disponibles := public.fn_obtener_slots_disponibles(v_sucursal_destino);
+
+  IF v_cantidad_vehiculos > v_slots_disponibles THEN
+    RAISE EXCEPTION 'No hay slots disponibles en la sucursal destino. Slots disponibles: %, vehiculos solicitados: %',
+      v_slots_disponibles, v_cantidad_vehiculos;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.fn_incrementar_slots_ocupados()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_sucursal_destino bigint;
+  v_tipo_solicitud tipo_solicitud;
+BEGIN
+  SELECT sucursal_destino, tipo_solicitud INTO v_sucursal_destino, v_tipo_solicitud
+  FROM public.solicitud WHERE id = NEW.solicitud_id;
+
+  IF v_tipo_solicitud = 'evento' OR v_sucursal_destino IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  UPDATE public.sucursal
+  SET slots_ocupados = slots_ocupados + 1
+  WHERE id = v_sucursal_destino;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.fn_decrementar_slots_ocupados()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_sucursal_destino bigint;
+  v_tipo_solicitud tipo_solicitud;
+BEGIN
+  SELECT sucursal_destino, tipo_solicitud INTO v_sucursal_destino, v_tipo_solicitud
+  FROM public.solicitud WHERE id = OLD.solicitud_id;
+
+  IF v_tipo_solicitud = 'evento' OR v_sucursal_destino IS NULL THEN
+    RETURN OLD;
+  END IF;
+
+  UPDATE public.sucursal
+  SET slots_ocupados = GREATEST(slots_ocupados - 1, 0)
+  WHERE id = v_sucursal_destino;
+
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION public.fn_liberar_slots_rechazo_cancelacion()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_cantidad_vehiculos integer;
+BEGIN
+  IF NEW.estado NOT IN ('rechazada', 'cancelada') THEN
+    RETURN NEW;
+  END IF;
+
+  IF OLD.estado = NEW.estado THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT COUNT(*) INTO v_cantidad_vehiculos
+  FROM public.solicitud_vehiculo
+  WHERE solicitud_id = NEW.id
+  AND disponibilidad = 'reservado';
+
+  IF v_cantidad_vehiculos > 0 AND NEW.sucursal_destino IS NOT NULL THEN
+    UPDATE public.sucursal
+    SET slots_ocupados = GREATEST(slots_ocupados - v_cantidad_vehiculos, 0)
+    WHERE id = NEW.sucursal_destino;
+
+    UPDATE public.solicitud_vehiculo
+    SET disponibilidad = 'liberado'
+    WHERE solicitud_id = NEW.id
+    AND disponibilidad = 'reservado';
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================================
 -- 6. TRIGGERS ACTIVOS EN EL SERVIDOR
 -- ============================================================================
 
@@ -968,6 +1100,18 @@ CREATE TRIGGER trigger_disponibilidad AFTER UPDATE OF estado ON public.solicitud
 
 DROP TRIGGER IF EXISTS tr_usuario_updated_at ON public.usuario;
 CREATE TRIGGER tr_usuario_updated_at BEFORE UPDATE ON public.usuario FOR EACH ROW EXECUTE FUNCTION handle_updated_at();
+
+DROP TRIGGER IF EXISTS tr_validar_slots_solicitud_vehiculo ON public.solicitud_vehiculo;
+CREATE TRIGGER tr_validar_slots_solicitud_vehiculo BEFORE INSERT ON public.solicitud_vehiculo FOR EACH ROW EXECUTE FUNCTION fn_validar_slots_solicitud_vehiculo();
+
+DROP TRIGGER IF EXISTS tr_incrementar_slots_ocupados ON public.solicitud_vehiculo;
+CREATE TRIGGER tr_incrementar_slots_ocupados AFTER INSERT ON public.solicitud_vehiculo FOR EACH ROW EXECUTE FUNCTION fn_incrementar_slots_ocupados();
+
+DROP TRIGGER IF EXISTS tr_decrementar_slots_ocupados ON public.solicitud_vehiculo;
+CREATE TRIGGER tr_decrementar_slots_ocupados AFTER DELETE ON public.solicitud_vehiculo FOR EACH ROW EXECUTE FUNCTION fn_decrementar_slots_ocupados();
+
+DROP TRIGGER IF EXISTS tr_liberar_slots_rechazo_cancelacion ON public.solicitud;
+CREATE TRIGGER tr_liberar_slots_rechazo_cancelacion AFTER UPDATE ON public.solicitud FOR EACH ROW EXECUTE FUNCTION fn_liberar_slots_rechazo_cancelacion();
 
 -- Event trigger ensure_rls: habilita RLS automáticamente en tablas creadas en public.
 -- CREATE EVENT TRIGGER ensure_rls ON ddl_command_end EXECUTE FUNCTION public.rls_auto_enable();

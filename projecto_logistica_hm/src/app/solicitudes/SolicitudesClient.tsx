@@ -149,6 +149,18 @@ export default function SolicitudesClient({
     return sucursales;
   }, [sucursales]);
 
+  const sucursalDestinoInfo = useMemo(() => {
+    if (!sucursalDestinoSel) return null;
+    const suc = sucursales.find((s) => String(s.id) === sucursalDestinoSel);
+    if (!suc) return null;
+    const disponibles = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
+    return {
+      ...suc,
+      disponibles: Math.max(disponibles, 0),
+      excedido: selectedVehiculos.size > disponibles,
+    };
+  }, [sucursalDestinoSel, sucursales, selectedVehiculos.size]);
+
   const marcasVehiculos = useMemo(() => {
     const marcas = new Set<string>();
     vehiculos.forEach((v) => { if (v.marca) marcas.add(v.marca); });
@@ -296,6 +308,10 @@ export default function SolicitudesClient({
     if (selectedVehiculos.size === 0) {
       setVehiculoError(true);
       setFeedback({ type: 'error', message: 'Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.' });
+      return;
+    }
+    if (tipoSel === 'venta' && sucursalDestinoInfo?.excedido) {
+      setFeedback({ type: 'error', message: `No hay slots suficientes en la sucursal destino. Disponibles: ${sucursalDestinoInfo.disponibles}, seleccionados: ${selectedVehiculos.size}.` });
       return;
     }
     setVehiculoError(false);
@@ -824,10 +840,31 @@ export default function SolicitudesClient({
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   >
                     <option value="">Selecciona destino...</option>
-                    {sucursalesParaDestino.map((suc) => (
-                      <option key={suc.id} value={String(suc.id)}>{suc.nombre}</option>
-                    ))}
+                    {sucursalesParaDestino.map((suc) => {
+                      const disp = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
+                      return (
+                        <option key={suc.id} value={String(suc.id)}>
+                          {suc.nombre} — {Math.max(disp, 0)} slots disponibles
+                        </option>
+                      );
+                    })}
                   </select>
+                  {sucursalDestinoInfo && (
+                    <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
+                      sucursalDestinoInfo.excedido
+                        ? 'bg-red-50 text-red-700 border border-red-200'
+                        : 'bg-neutral-50 text-neutral-600 border border-neutral-200'
+                    }`}>
+                      <span className="font-medium">
+                        Disponibles: {sucursalDestinoInfo.disponibles} / {sucursalDestinoInfo.slots ?? 0}
+                      </span>
+                      {sucursalDestinoInfo.excedido && (
+                        <span className="text-red-600 font-semibold">
+                          — Excede en {selectedVehiculos.size - sucursalDestinoInfo.disponibles} slot{selectedVehiculos.size - sucursalDestinoInfo.disponibles !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

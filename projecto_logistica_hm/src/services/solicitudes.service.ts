@@ -308,6 +308,24 @@ export class SolicitudesService {
         };
       }
 
+      if (input.tipo_solicitud === 'venta' && input.sucursal_destino) {
+        const { data: sucursal, error: sucError } = await admin
+          .from('sucursal')
+          .select('slots, slots_ocupados')
+          .eq('id', input.sucursal_destino)
+          .single();
+
+        if (!sucError && sucursal) {
+          const slotsDisponibles = Math.max((sucursal.slots ?? 0) - (sucursal.slots_ocupados ?? 0), 0);
+          if (vehiculoIds.length > slotsDisponibles) {
+            return {
+              success: false,
+              error: `No hay slots disponibles en la sucursal destino. Disponibles: ${slotsDisponibles}, solicitados: ${vehiculoIds.length}.`,
+            };
+          }
+        }
+      }
+
       const { data, error } = await admin
         .from('solicitud')
         .insert(insertData)
