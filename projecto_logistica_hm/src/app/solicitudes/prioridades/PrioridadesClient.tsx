@@ -35,6 +35,7 @@ import {
   sacarDeColaAction,
 } from '@/app/actions/solicitudes.actions';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
+import { formatFecha } from '@/lib/fechas';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -52,11 +53,6 @@ interface ViewerInfo {
 interface PrioridadesClientProps {
   solicitudes: SolicitudLista[];
   viewer: ViewerInfo;
-}
-
-function formatFecha(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CL');
 }
 
 const tipoLabel: Record<TipoSolicitud, string> = {

@@ -16,6 +16,7 @@ import {
   rechazarSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
+import { formatFecha } from '@/lib/fechas';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -33,11 +34,6 @@ interface ViewerInfo {
 interface AprobacionesClientProps {
   solicitudes: SolicitudLista[];
   viewer: ViewerInfo;
-}
-
-function formatFecha(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CL');
 }
 
 function getEncargadoNombre(sol: SolicitudLista): string | null {

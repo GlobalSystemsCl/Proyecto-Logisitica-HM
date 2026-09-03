@@ -24,6 +24,7 @@ import {
   Sucursal,
   SucursalSolicitudItem,
 } from '@/types/sucursal.types';
+import { formatFecha } from '@/lib/fechas';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -52,11 +53,6 @@ interface FeedbackState {
 interface SucursalesTableClientProps {
   sucursales: Sucursal[];
   solicitudes: SucursalSolicitudItem[];
-}
-
-function formatFecha(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CL');
 }
 
 export default function SucursalesTableClient({ sucursales, solicitudes }: SucursalesTableClientProps) {
