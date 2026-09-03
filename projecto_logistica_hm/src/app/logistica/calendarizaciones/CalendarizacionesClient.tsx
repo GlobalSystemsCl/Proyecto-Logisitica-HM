@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useMemo, useCallback, DragEvent } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
+import { formatFecha, formatFechaLarga } from '@/lib/fechas';
 
 interface Props {
   solicitudes: SolicitudLista[];
@@ -28,6 +29,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
   const [loading, setLoading] = useState<string | null>(null);
   const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(null);
   const [, setRefreshKey] = useState(0);
+  const [advertencia, setAdvertencia] = useState<{ id: string; fecha: string } | null>(null);
 
   const puedeCalendarizar = viewer.rol === 'logistica';
   const puedeDespachar = viewer.rol === 'administrador' || viewer.rol === 'logistica';
@@ -125,6 +127,16 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     setDropTarget(null);
     const id = e.dataTransfer.getData('text/plain');
     if (!id) return;
+    const solicitud = solicitudesCalendarizables.find((s) => s.id === id);
+    if (!solicitud) return;
+    if (solicitud.fecha_limite && Date.parse(fecha) > Date.parse(solicitud.fecha_limite.slice(0, 10))) {
+      setAdvertencia({ id, fecha });
+      return;
+    }
+    await ejecutarCalendarizar(id, fecha);
+  }, [solicitudesCalendarizables]);
+
+  const ejecutarCalendarizar = async (id: string, fecha: string) => {
     setLoading(id);
     try {
       const result = await calendarizarSolicitudAction(id, fecha);
@@ -133,7 +145,19 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
       setLoading(null);
       setRefreshKey((k) => k + 1);
     }
-  }, []);
+  };
+
+  const confirmarAdvertencia = async () => {
+    if (!advertencia) return;
+    const { id, fecha } = advertencia;
+    setAdvertencia(null);
+    await ejecutarCalendarizar(id, fecha);
+  };
+
+  const cancelarAdvertencia = () => {
+    setAdvertencia(null);
+    setDraggedId(null);
+  };
 
   const handleDescalendarizar = useCallback(async (id: string) => {
     setLoading(id);
@@ -253,6 +277,12 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                           {s.vehiculos.length > 0 && (
                             <p className="text-[10px] text-neutral-400 mt-0.5 truncate">{s.vehiculos.map((v) => v.patente).join(', ')}</p>
                           )}
+                          {s.fecha_limite && (
+                            <p className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[10px] font-semibold">
+                              <Clock className="w-3 h-3" />
+                              Límite: {formatFecha(s.fecha_limite)}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -327,7 +357,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
           <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-neutral-50">
             <div>
               <h3 className="font-bold text-neutral-900">
-                Traslados del {new Date(diaSeleccionado + 'T12:00:00').toLocaleDateString('es-CL', { day: 'numeric', month: 'long', year: 'numeric' })}
+                Traslados del {formatFechaLarga(diaSeleccionado + 'T12:00:00Z')}
               </h3>
               <p className="text-xs text-neutral-500 mt-0.5">
                 {solicitudesDelDiaSeleccionado.length} traslado{solicitudesDelDiaSeleccionado.length !== 1 ? 's' : ''} programado{solicitudesDelDiaSeleccionado.length !== 1 ? 's' : ''}
@@ -354,18 +384,18 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                     <div className="flex items-center gap-4 text-xs text-neutral-500">
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        Tentativa: {s.fecha_tentativa_despacho ? new Date(s.fecha_tentativa_despacho).toLocaleDateString('es-CL') : 'Sin fecha'}
+                        Tentativa: {s.fecha_tentativa_despacho ? formatFecha(s.fecha_tentativa_despacho) : 'Sin fecha'}
                       </span>
                       {s.fecha_despacho && (
                         <span className="flex items-center gap-1">
                           <PackageSearch className="w-3 h-3" />
-                          Despacho: {new Date(s.fecha_despacho).toLocaleDateString('es-CL')}
+                          Despacho: {formatFecha(s.fecha_despacho)}
                         </span>
                       )}
                       {s.fecha_entrega && (
                         <span className="flex items-center gap-1">
                           <PackageCheck className="w-3 h-3" />
-                          Entrega: {new Date(s.fecha_entrega).toLocaleDateString('es-CL')}
+                          Entrega: {formatFecha(s.fecha_entrega)}
                         </span>
                       )}
                     </div>
@@ -411,6 +441,61 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
           </div>
         </div>
       )}
+
+      {/* Modal de advertencia: fecha fuera del límite */}
+      {advertencia && (() => {
+        const sol = solicitudesCalendarizables.find((s) => s.id === advertencia.id);
+        return (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-xl">
+              <div className="p-5 border-b border-neutral-200 bg-red-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                    <CalendarClock className="w-5 h-5 text-red-700" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-neutral-900">Fecha fuera del límite</h3>
+                    <p className="text-xs text-neutral-500">Estás programando el traslado después de la fecha límite de entrega</p>
+                  </div>
+                </div>
+              </div>
+              <div className="p-5 space-y-3">
+                {sol && (
+                  <div className="text-sm">
+                    <p className="text-neutral-900 font-semibold">{sol.sucursal_nombre} → {sol.sucursal_destino_nombre}</p>
+                    <p className="text-neutral-500 text-xs mt-1">Vehículos: {sol.vehiculos.map((v) => v.patente).join(', ') || '—'}</p>
+                  </div>
+                )}
+                <div className="flex gap-3 text-sm">
+                  <div className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-3">
+                    <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Fecha programada</p>
+                    <p className="font-bold text-neutral-900 mt-0.5">{formatFechaLarga(advertencia.fecha + 'T12:00:00Z')}</p>
+                  </div>
+                  <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-3">
+                    <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">Fecha límite</p>
+                    <p className="font-bold text-red-700 mt-0.5">{sol?.fecha_limite ? formatFechaLarga(sol.fecha_limite) : '—'}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-neutral-500">Si confirmas, la solicitud quedará calendarizada en esa fecha aunque supere la fecha límite.</p>
+              </div>
+              <div className="p-5 border-t border-neutral-200 flex flex-col sm:flex-row gap-2 sm:justify-end">
+                <button
+                  onClick={cancelarAdvertencia}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-white border border-neutral-300 hover:bg-neutral-50 text-sm font-semibold text-neutral-700 rounded-xl transition-colors cursor-pointer"
+                >
+                  No, volver a calendarizar
+                </button>
+                <button
+                  onClick={confirmarAdvertencia}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Sí, calendarizar igual
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

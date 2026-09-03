@@ -46,6 +46,7 @@ import {
   AuditoriaEntry,
 } from '@/types/solicitud.types';
 import { Sucursal } from '@/types/sucursal.types';
+import { formatFecha } from '@/lib/fechas';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -86,11 +87,6 @@ interface SolicitudesClientProps {
   sucursales: Sucursal[];
   vehiculos: VehiculoInventario[];
   viewer: ViewerInfo;
-}
-
-function formatFecha(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CL');
 }
 
 function getEncargadoNombre(sol: SolicitudLista): string | null {
