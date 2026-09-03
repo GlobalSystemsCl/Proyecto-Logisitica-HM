@@ -175,7 +175,7 @@ Implementar el módulo administrativo de sucursales: CRUD completo por parte del
 
 ### Objetivo
 
-Primera versión operativa del módulo `/solicitudes`: creación de solicitudes de traslado por Ejecutivo/Administrador, cola de priorización por Jefe de Local de la sucursal origen, reserva y liberación de vehículos (gestión exclusiva del Administrador en esta versión), cancelación con motivo obligatorio y eliminación restringida según la regla aprobada en Fase 2. Los estados posteriores a priorizada (asignada → calendarizada → en_transito → entregada → finalizada) quedan para la fase de Logística.
+Primera versión operativa del módulo `/solicitudes`: creación de solicitudes de traslado por Ejecutivo/Administrador, cola de priorización por Jefe de Local de la sucursal origen, reserva y liberación de vehículos (gestión exclusiva del Administrador en esta versión), cancelación con motivo obligatorio y eliminación restringida según la regla aprobada en Fase 2. Estados logísticos implementados: calendarizar, despachar, recibir, finalizar.
 
 ### Tareas
 
@@ -186,6 +186,9 @@ Primera versión operativa del módulo `/solicitudes`: creación de solicitudes 
 * [x] Activar tile "Gestión de Solicitudes" en el dashboard (todos los roles).
 * [x] Validación estática: `tsc --noEmit` y ESLint sin errores/warnings (2026-08-25).
 * [x] Priorización por drag & drop en `/solicitudes/prioridades` (2026-08-28): arrastrar desde "Por Priorizar" inserta en la posición elegida vía `SolicitudesService.priorizarEnPosicion` + `priorizarEnPosicionAction`; se elimina el botón "Priorizar" de ese panel; sacar de cola también arrastrando fuera. Pendiente validación funcional del usuario.
+* [x] Flujo logístico (2026-09-03): calendarizar, despachar, recibir y finalizar con UI en `/logistica/calendarizaciones` y botones "Recibir"/"Finalizar" en `/solicitudes`. Server actions y service con auditoría.
+* [x] Fix revalidate path: `/solicitudes/calendarizaciones` → `/logistica/calendarizaciones` (4 acciones en `solicitudes.actions.ts`).
+* [ ] Estado `asignada` (R-LOG.1): el estado existe en el enum pero no hay transición que lo produzca; `logistica_id` se fija implícitamente al calendarizar.
 * [ ] Validación funcional por el usuario en la app.
 * [ ] Migración RLS futura: ampliar `solicitud_delete_admin` para creador/jefe_local pre-despacho (la app hoy valida en Server Actions porque los servicios usan `createAdminClient()`).
 

@@ -47,9 +47,9 @@ Debe existir un flujo funcional completo y validado.
 | Base de datos (Supabase) | `COMPLETADO`        |     100% | Alta      | Volcado 1:1 cerrado contra catálogo real (2026-08-22) |
 | Autenticación y usuarios | `COMPLETADO`         |     100% | Alta      | Sistema y Brevo implementados |
 | Vehículos                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar CRUD e integración    |
-| Solicitudes              | `EN_PROGRESO`        |      80% | Alta      | v1 implementada (2026-08-25): crear/priorizar/cancelar/eliminar + reserva de vehículos; pendiente validación del usuario y fase Logística |
+| Solicitudes              | `EN_PROGRESO`        |      90% | Alta      | Crear/priorizar/cancelar/eliminar + reserva de vehículos + flujo logístico (calendarizar/despachar/recibir/finalizar) |
 | Sucursales               | `COMPLETADO`         |     100% | Alta      | Módulo admin validado por el usuario (2026-08-25); deuda de diseño `sucursal_destino` registrada en Fase 2 |
-| Logística                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar flujo de traslado     |
+| Logística                | `PENDIENTE_REVISION` |      80% | Alta      | Calendarizaciones, despacho, recepción y finalización implementados; pendiente `asignada` (R-LOG.1) y validación funcional |
 | Historial / trazabilidad | `PENDIENTE_REVISION` |       0% | Media     | Existen tablas auditoria/observacion/notificacion por auditar |
 | Permisos / roles         | `PENDIENTE_REVISION` |       0% | Alta      | Políticas RLS aplicadas por rol (2026-08-22); validar autorización en la app |
 | Identidad visual / UI    | `COMPLETADO`         |     100% | Media     | Rediseño monocromo corporativo + escudo aplicados a auth, dashboard y admin (2026-08-25); resto de módulos al crearlos |
@@ -275,10 +275,10 @@ No existen `creada` ni `rechazada`: una solicitud nace directamente en `pendient
 
 ### Pendientes
 
-* Validación funcional del usuario en `/solicitudes`.
-* Estados post-priorizada (asignada → calendarizada → en_transito → entregada → finalizada): fase Logística.
-* Migración RLS para ampliar `solicitud_delete_admin` (creador/jefe_local pre-despacho); hoy se valida en Server Actions vía `createAdminClient()`.
-* Deuda de diseño: `solicitud.sucursal_destino`/`fecha_entrega`; vehículos sin FK a sucursal ni `creado_por`.
+* Validación funcional por el usuario en `/solicitudes`.
+* Estado `asignada` (R-LOG.1): no hay transición que lo produzca; `logistica_id` se fija implícitamente al calendarizar.
+* Migración RLS futura: ampliar `solicitud_delete_admin` para creador/jefe_local pre-despacho (la app hoy valida en Server Actions porque los servicios usan `createAdminClient()`).
+* Deuda de diseño: `vehiculo.creado_por`/FK a sucursal.
 
 ---
 
@@ -286,23 +286,30 @@ No existen `creada` ni `rechazada`: una solicitud nace directamente en `pendient
 
 **Estado:** `PENDIENTE_REVISION`
 
-**Progreso:** 0% inicial
+**Progreso:** 80%
 
-Debe revisarse:
+### Implementado (2026-09-03)
 
-* Recepción de solicitudes.
-* Destino.
-* Disponibilidad de estacionamiento.
-* Fecha estimada.
-* Fecha máxima.
-* Ubicación.
-* Despacho.
-* Entrega.
-* Finalización.
+* Ruta `/logistica/calendarizaciones` con `CalendarizacionesClient.tsx`: vista de calendario de solicitudes `priorizada`/`calendarizada`/`en_transito`/`entregada`/`finalizada`.
+* Calendarizar: drag & drop a fecha → `calendarizada`, guarda `fecha_tentativa_despacho` y `logistica_id`. Roles: jefe_local, logistica, admin.
+* Descalendarizar: vuelve a `priorizada`, limpia `fecha_tentativa_despacho` y `logistica_id`. Roles: jefe_local, logistica, admin.
+* Despachar: `calendarizada` → `en_transito`, guarda `fecha_despacho`. Roles: logistica, admin.
+* Recibir: `en_transito` → `entregada`, guarda `fecha_entrega`. Roles: jefe_local, admin. Botón también en `/solicitudes`.
+* Finalizar: `entregada` → `finalizada`. Roles: jefe_local, admin. Botón también en `/solicitudes`.
+* Server actions: `calendarizarSolicitudAction`, `descalendarizarSolicitudAction`, `despacharSolicitudAction`, `recibirSolicitudAction`, `finalizarSolicitudAction`.
+* Service: `calendarizarSolicitud`, `descalendarizarSolicitud`, `despacharSolicitud`, `recibirSolicitud`, `finalizarSolicitud` (auditados).
+* Fix: revalidate path corregido de `/solicitudes/calendarizaciones` a `/logistica/calendarizaciones` (4 acciones).
+* Tile "Gestión Logística" activo en dashboard para logistica/jefe_local/admin.
+
+### Pendientes
+
+* Estado `asignada` (R-LOG.1): no hay transición que lo produzca.
+* Validación funcional por el usuario.
+* Notificaciones (UI): triggers desactivados, sin servicio ni componente.
 
 ---
 
-## 5.6 Historial y trazabilidad
+## 5.7 Historial y trazabilidad
 
 **Estado:** `PENDIENTE_REVISION`
 

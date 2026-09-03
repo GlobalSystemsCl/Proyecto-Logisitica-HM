@@ -185,28 +185,29 @@ La información histórica debe conservarse incluso cuando un usuario posteriorm
 El flujo general actualmente definido es:
 
 ```text
-PENDIENTE
-   ↓
+PENDIENTE_APROBACION (ejecutivo crea)
+   ↓ aprueba jefe_local
+APROBADA
+   ↓ prioriza jefe_local
 PRIORIZADA
-   ↓
-ASIGNADA
-   ↓
+   ↓ calendariza jefe_local/logística
 CALENDARIZADA
-   ↓
+   ↓ despacha logística
 EN_TRANSITO
-   ↓
+   ↓ recibe jefe_local
 ENTREGADA
-   ↓
+   ↓ finaliza jefe_local
 FINALIZADA
 ```
 
 Estados adicionales:
 
 ```text
-CANCELADA
+RECHAZADA  (jefe_local rechaza solicitud pendiente_aprobacion)
+CANCELADA  (desde pre-despacho, con motivo)
 ```
 
-> Los valores corresponden exactamente al enum `estado_solicitud` de la base de datos (`DATABASE_SCHEMA.md`, sección 5.0). No existen `CREADA` ni `RECHAZADA` en el modelo actual: una solicitud se registra directamente como `pendiente`, y un rechazo se representa con `cancelada` + `motivo_cancelacion`.
+> Los valores corresponden exactamente al enum `estado_solicitud` de la base de datos (`DATABASE_SCHEMA.md`, sección 5.0). No existe `CREADA` en el modelo actual: una solicitud nace como `pendiente_aprobacion` (ejecutivo) o `aprobada` (jefe_local). `RECHAZADA` se usa cuando el jefe_local rechaza una solicitud pendiente.
 
 ---
 
@@ -214,21 +215,27 @@ CANCELADA
 
 Los estados se representan en la base de datos mediante el enum `public.estado_solicitud`.
 
-## PENDIENTE
+## PENDIENTE_APROBACION
 
-La solicitud fue registrada en el sistema y espera priorización. Es el estado inicial del flujo.
+La solicitud fue creada por un ejecutivo y espera aprobación del jefe_local. Estado inicial cuando el ejecutivo crea la solicitud.
+
+---
+
+## APROBADA
+
+La solicitud fue aprobada por el jefe_local (o creada directamente por él con fecha de entrega).
 
 ---
 
 ## PRIORIZADA
 
-La solicitud fue priorizada por el Jefe de Local.
+La solicitud fue priorizada por el Jefe de Local y está en la cola de prioridad de su sucursal.
 
 ---
 
 ## ASIGNADA
 
-La solicitud pasó al área de Logística para su gestión.
+Estado definido en el enum pero sin transición implementada actualmente. `logistica_id` se fija implícitamente al calendarizar.
 
 ---
 
@@ -240,13 +247,13 @@ La solicitud tiene una fecha tentativa definida para el traslado.
 
 ## EN_TRANSITO
 
-El vehículo se encuentra en tránsito hacia la sucursal destino (antes referido conceptualmente como "despachada"; el valor real del enum es `en_transito`).
+El vehículo se encuentra en tránsito hacia la sucursal destino.
 
 ---
 
 ## ENTREGADA
 
-El vehículo llegó a la sucursal destino.
+El vehículo llegó a la sucursal destino y fue recibido por el jefe_local.
 
 ---
 
@@ -255,6 +262,12 @@ El vehículo llegó a la sucursal destino.
 El Jefe de Local de destino confirmó y finalizó formalmente la entrega del vehículo.
 
 Este es el último estado exitoso del flujo.
+
+---
+
+## RECHAZADA
+
+La solicitud fue rechazada por el jefe_local. Se registra con motivo.
 
 ---
 
@@ -291,7 +304,9 @@ Reglas actualmente conocidas:
 * La entrega debe ser confirmada por la sucursal destino.
 * La entrega debe finalizarse formalmente después de ser marcada como entregada.
 * Los datos de los vehículos deben validarse antes de guardarse.
-* Los estados de las solicitudes se representan mediante el enum `estado_solicitud` de la base de datos (`pendiente`, `priorizada`, `asignada`, `calendarizada`, `en_transito`, `entregada`, `finalizada`, `cancelada`). La documentación se adapta al esquema real, no al revés.
+* Los estados de las solicitudes se representan mediante el enum `estado_solicitud` de la base de datos (`pendiente_aprobacion`, `aprobada`, `rechazada`, `pendiente`, `priorizada`, `asignada`, `calendarizada`, `en_transito`, `entregada`, `finalizada`, `cancelada`). La documentación se adapta al esquema real, no al revés.
+* El flujo principal es: `pendiente_aprobacion` → `aprobada` → `priorizada` → `calendarizada` → `en_transito` → `entregada` → `finalizada`. El estado `asignada` existe en el enum pero no se produce actualmente.
+* Calendarizar asigna `logistica_id` y `fecha_tentativa_despacho`. Despachar registra `fecha_despacho`. Recibir registra `fecha_entrega`. Finalizar es el cierre formal.
 * Durante el MVP no se utilizará una API externa de vehículos.
 * No se debe implementar lógica de integración, sincronización o cache relacionada con una API externa de vehículos.
 

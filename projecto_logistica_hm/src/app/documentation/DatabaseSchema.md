@@ -373,7 +373,7 @@ Notas:
 * `ON DELETE CASCADE` en `sucursal`: borrar la sucursal origen elimina sus solicitudes.
 * `ejecutivo_id` se hizo `NULLABLE` el 2026-08-26 (migración `20260826_solicitudes_v2.sql`): el jefe_local puede crear una solicitud sin asignar ejecutivo.
 * `sucursal_destino`, `direccion_evento` y `titulo_evento` se agregaron el 2026-08-26 (vía migración parcial aplicada directamente en Supabase; el trigger `validate_solicitud_tipo` las valida según `tipo_solicitud`).
-* `fecha_despacho` y `fecha_entrega` no existen aún (deuda de diseño registrada).
+* `fecha_despacho` y `fecha_entrega` se agregaron en el esquema original y son usadas por los servicios de logística (`despacharSolicitud`, `recibirSolicitud`).
 
 ### Índices
 
@@ -780,7 +780,7 @@ Todas verificadas contra catálogo el 2026-08-22. Cuerpos completos disponibles 
 1. Cascadas peligrosas: borrar `usuario` borra su `sucursal`; borrar `sucursal` borra sus solicitudes.
 2. FKs sin acción hacia `usuario.id` (solicitud, auditoria, observacion, solicitud_vehiculo.vehiculo_id): impiden borrar usuarios con historial (protege trazabilidad, pero conviene documentarlo como decisión).
 3. Timestamps `WITHOUT TIME ZONE` en la mayoría de tablas (solo fechas de despacho/límite/bloqueo usan `TIMESTAMPTZ`).
-4. Falta diseño: `vehiculo.creado_por`/FK sucursal; `solicitud.fecha_despacho`/`fecha_entrega` (la sucursal destino ya existe desde 2026-08-26).
+4. Falta diseño: `vehiculo.creado_por`/FK sucursal. `solicitud.fecha_despacho`/`fecha_entrega` ya existen y se usan (resuelto 2026-09-03).
 5. El filtro por sucursal del jefe_local en la política de `solicitud` depende de que `usuario.sucursal_id` esté poblado.
 
 > Resueltos el 2026-08-22: default anómalo en `sucursal.usuario_id` (eliminado), función muerta `traspaso_auth_tabla_usuario` (eliminada) y `usuario.sucursal_id` corregido de UUID a BIGINT + FK, vía migraciones `20260822_cleanup_funcion_muerta_y_defaults.sql` y `20260822_politicas_rls.sql`. También resuelto ese día el hallazgo crítico **deny-all**: las 7 tablas de negocio ya cuentan con políticas RLS por rol (helpers `usuario_activo()`/`tiene_rol()`); pendiente validar los permisos dentro de la app.

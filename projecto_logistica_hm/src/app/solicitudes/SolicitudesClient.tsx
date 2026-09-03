@@ -19,6 +19,7 @@ import {
   Clock,
   ChevronDown,
   ChevronUp,
+  PackageCheck,
 } from 'lucide-react';
 import {
   createSolicitudAction,
@@ -33,6 +34,8 @@ import {
   getObservacionesAction,
   getAuditoriaAction,
   getEjecutivosPorSucursalAction,
+  recibirSolicitudAction,
+  finalizarSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import {
   EstadoSolicitud,
@@ -225,6 +228,20 @@ export default function SolicitudesClient({
     return false;
   }
 
+  function puedeRecibir(sol: SolicitudLista): boolean {
+    if (sol.estado !== 'en_transito') return false;
+    if (esAdmin) return true;
+    if (esJefeLocal) return viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id;
+    return false;
+  }
+
+  function puedeFinalizar(sol: SolicitudLista): boolean {
+    if (sol.estado !== 'entregada') return false;
+    if (esAdmin) return true;
+    if (esJefeLocal) return viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id;
+    return false;
+  }
+
   const vehiculosDisponiblesParaAgregar = vehiculos.filter((v) => !v.reservado_en_activa);
 
   useEffect(() => {
@@ -409,6 +426,34 @@ export default function SolicitudesClient({
       } else {
         setFeedback({ type: 'success', message: result.message || 'Eliminada.' });
         setDeleteTarget(null);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleRecibir(sol: SolicitudLista) {
+    setIsSubmitting(true);
+    try {
+      const result = await recibirSolicitudAction(sol.id);
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'Error al marcar como recibida.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Solicitud marcada como recibida.' });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleFinalizar(sol: SolicitudLista) {
+    setIsSubmitting(true);
+    try {
+      const result = await finalizarSolicitudAction(sol.id);
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'Error al finalizar.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Solicitud finalizada.' });
       }
     } finally {
       setIsSubmitting(false);
@@ -726,6 +771,26 @@ export default function SolicitudesClient({
                               </button>
                             )}
                           </>
+                        )}
+                        {puedeRecibir(sol) && (
+                          <button
+                            onClick={() => handleRecibir(sol)}
+                            disabled={isSubmitting}
+                            title="Marcar como recibido"
+                            className="p-1.5 rounded-lg text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer disabled:opacity-40"
+                          >
+                            <PackageCheck className="w-4 h-4" />
+                          </button>
+                        )}
+                        {puedeFinalizar(sol) && (
+                          <button
+                            onClick={() => handleFinalizar(sol)}
+                            disabled={isSubmitting}
+                            title="Finalizar solicitud"
+                            className="p-1.5 rounded-lg text-green-700 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-40"
+                          >
+                            <CheckCircle2 className="w-4 h-4" />
+                          </button>
                         )}
                       </td>
                     </tr>
@@ -1206,6 +1271,24 @@ export default function SolicitudesClient({
                     className="inline-flex items-center gap-1.5 px-4 py-2 bg-white border border-neutral-300 hover:border-red-600 hover:text-red-600 text-sm font-semibold text-neutral-700 rounded-xl cursor-pointer transition-colors"
                   >
                     <Trash2 className="w-4 h-4" /> Eliminar
+                  </button>
+                )}
+                {puedeRecibir(detailTarget) && (
+                  <button
+                    onClick={() => handleRecibir(detailTarget)}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50 cursor-pointer"
+                  >
+                    <PackageCheck className="w-4 h-4" /> Recibir
+                  </button>
+                )}
+                {puedeFinalizar(detailTarget) && (
+                  <button
+                    onClick={() => handleFinalizar(detailTarget)}
+                    disabled={isSubmitting}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl disabled:opacity-50 cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" /> Finalizar
                   </button>
                 )}
               </div>

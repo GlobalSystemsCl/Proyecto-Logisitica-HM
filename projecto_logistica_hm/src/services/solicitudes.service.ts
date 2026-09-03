@@ -1177,4 +1177,40 @@ export class SolicitudesService {
       return { success: false, error: msg };
     }
   }
+
+  static async finalizarSolicitud(
+    id: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'entregada') {
+        return { success: false, error: 'Solo las solicitudes Entregadas pueden finalizarse.' };
+      }
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({ estado: 'finalizada' })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'finalizacion',
+        { estado: 'entregada' },
+        { estado: 'finalizada' }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al finalizar';
+      return { success: false, error: msg };
+    }
+  }
 }

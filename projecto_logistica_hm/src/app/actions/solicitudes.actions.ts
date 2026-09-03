@@ -471,7 +471,7 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/calendarizaciones');
+    revalidatePath('/logistica/calendarizaciones');
     return { success: true, message: 'Solicitud calendarizada exitosamente.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -491,7 +491,7 @@ export async function descalendarizarSolicitudAction(solicitudId: string) {
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/calendarizaciones');
+    revalidatePath('/logistica/calendarizaciones');
     return { success: true, message: 'Solicitud devuelta a priorizada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -511,7 +511,7 @@ export async function despacharSolicitudAction(solicitudId: string) {
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/calendarizaciones');
+    revalidatePath('/logistica/calendarizaciones');
     return { success: true, message: 'Solicitud despachada y en tránsito.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -531,8 +531,28 @@ export async function recibirSolicitudAction(solicitudId: string) {
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/calendarizaciones');
+    revalidatePath('/logistica/calendarizaciones');
     return { success: true, message: 'Solicitud recibida en destino.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+export async function finalizarSolicitudAction(solicitudId: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
+      return { success: false, error: 'No tienes permisos para finalizar solicitudes.' };
+    }
+
+    const result = await SolicitudesService.finalizarSolicitud(solicitudId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/logistica/calendarizaciones');
+    return { success: true, message: 'Solicitud finalizada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };

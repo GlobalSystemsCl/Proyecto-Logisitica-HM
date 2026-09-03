@@ -42,7 +42,7 @@
 | `administrador` | Todo el sistema: usuarios, vehículos, sucursales, historial, solicitudes, aprobaciones y priorización. |
 | `ejecutivo` | Crea solicitudes en **su sucursal**; ve y da seguimiento; no asigna fecha de entrega. |
 | `jefe_local` | Crea solicitudes (con fecha) en su sucursal; **aprueba/rechaza** las de su sucursal; prioriza y ordena la cola; gestiona vehículos. |
-| `logistica` | Gestiona vehículos; puede agregar/quitar vehículos de solicitudes pre-despacho y cancelarlas. Módulo operativo de traslados pendiente. |
+| `logistica` | Gestiona calendarizaciones, despachos y traslados; puede calendarizar, despachar y cancelar solicitudes. |
 
 ### 1.2 Mapa de rutas por módulo
 
@@ -56,6 +56,7 @@
 | Usuarios | `/admin/usuarios` | `administrador` |
 | Sucursales | `/admin/sucursales` | `administrador` |
 | Historial/Auditoría | `/admin/historial` | `administrador` |
+| Logística | `/logistica/calendarizaciones` | `jefe_local`, `logistica`, `administrador` |
 | Dashboard | `/dashboard` | autenticados |
 
 ### 1.3 Flujo principal de interacción entre módulos
@@ -70,10 +71,9 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
       Aprobaciones (jefe_local): aprueba ───(fecha de entrega)───► aprobada
                                   |_rechaza ──────────────────────► rechazada
                                  ▼
-      Priorización: priorizada + cola por sucursal (reordenar / sacar de cola)
-                                 ▼
-      (PENDIENTE) Logística: asignada → calendarizada → en_transito
-                          → entregada → finalizada
+       Priorización: priorizada + cola por sucursal (reordenar / sacar de cola)
+                                  ▼
+       Logística: calendarizada → en_transito → entregada → finalizada
                                  ▼
       Auditoría/Historial: registra cada acción (cambios de estado,
                            asignación/liberación de vehículos, priorización)
@@ -89,11 +89,11 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 | `aprobada` | Creación por `jefe_local` (automático) o aprobación con fecha | jefe_local/admin |
 | `rechazada` | Rechazo con motivo (≥5 caracteres) | jefe_local/admin |
 | `priorizada` | Priorizar (desde `pendiente`/`aprobada`) | jefe_local/admin |
-| `asignada` | Sin transición implementada | — |
-| `calendarizada` | Sin transición implementada | — |
-| `en_transito` | Sin transición implementada | — |
-| `entregada` | Sin transición implementada | — |
-| `finalizada` | Sin transición implementada | — |
+| `asignada` | No se produce (el estado existe en el enum pero no hay transición que lo genere; `logistica_id` se fija al calendarizar) | — |
+| `calendarizada` | Calendarizar desde `priorizada`/`asignada` | jefe_local/logistica/admin |
+| `en_transito` | Despachar desde `calendarizada` | logistica/admin |
+| `entregada` | Recibir desde `en_transito` | jefe_local/admin |
+| `finalizada` | Finalizar desde `entregada` | jefe_local/admin |
 | `cancelada` | Cancelación con motivo (pre-despacho: `pendiente_aprobacion`, `aprobada`, `pendiente`, `priorizada`) | admin/jefe_local/ejecutivo/logistica |
 
 ---
@@ -257,23 +257,25 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 
 ---
 
-## 9. Módulo: Logística Operativa **— PENDIENTE**
+## 9. Módulo: Logística Operativa — `parcial`
 
-- **Estado**: `pendiente`
-- **Qué hace (previsto)**: asignación de solicitudes a logística, calendarización de traslados, despacho (en tránsito), confirmación de entrega en destino y finalización formal.
-- **Cómo funciona hoy**: **no implementado**. Los estados `asignada`, `calendarizada`, `en_transito`, `entregada`, `finalizada` existen en BD/enum pero **no tienen servicio ni acción ni UI**. El dashboard lo muestra como "Próximo módulo operativo".
-- **Requisitos específicos (propuestos)**:
-  - `R-LOG.1` — Asignación de solicitud a logística (`asignada`).
-  - `R-LOG.2` — Calendarización con fecha tentativa (`calendarizada`).
-  - `R-LOG.3` — Despacho / en tránsito (`en_transito`).
-  - `R-LOG.4` — Confirmación de entrega en destino (`entregada`).
-  - `R-LOG.5` — Finalización formal (`finalizada`).
-  - `R-LOG.6` — Libera los vehículos al completar/cancelar.
-- **Con qué se conectará**: `SolicitudesService`, `solicitudes.actions.ts`, UI de logística, tablas `solicitud`, `notificacion` (cuando se reactive).
-- **Depende de**: Módulo Solicitudes (estados), Módulo Notificaciones (reactivación).
+- **Estado**: `parcial`
+- **Qué hace**: calendarización de traslados con fecha tentativa, despacho (en tránsito), confirmación de entrega en destino y finalización formal. Ruta: `/logistica/calendarizaciones`.
+- **Cómo funciona**: `CalendarizacionesClient.tsx` muestra solicitudes `priorizada`/`calendarizada`/`en_transito`/`entregada`/`finalizada` en vista de calendario. Jefe_local/logística pueden **calendarizar** (arrastrar a fecha → `calendarizada`, guarda `fecha_tentativa_despacho` y `logistica_id`). Logística/admin pueden **descalendarizar** (vuelve a `priorizada`). Logística/admin pueden **despachar** (`calendarizada` → `en_transito`, guarda `fecha_despacho`). Jefe_local/admin pueden **recibir** (`en_transito` → `entregada`, guarda `fecha_entrega`). Jefe_local/admin pueden **finalizar** (`entregada` → `finalizada`). Todos los pasos registran auditoría. Botones "Recibir" y "Finalizar" también disponibles en `/solicitudes` (vista general).
+- **Requisitos específicos**:
+  - `R-LOG.2` — Calendarización con fecha tentativa (`calendarizada`). **Implementado**.
+  - `R-LOG.3` — Despacho / en tránsito (`en_transito`). **Implementado**.
+  - `R-LOG.4` — Confirmación de entrega en destino (`entregada`). **Implementado**.
+  - `R-LOG.5` — Finalización formal (`finalizada`). **Implementado**.
+  - `R-LOG.6` — Libera los vehículos al completar/cancelar. Implementado vía trigger `disponibilidad()` (al cancelar).
+  - `R-LOG.1` — Asignación explícita de solicitud a logística (`asignada`). **Pendiente**: el estado `asignada` existe en el enum y `calendarizarSolicitud` lo acepta como FROM, pero no hay transición que lo produzca. Actualmente `logistica_id` se fija implícitamente al calendarizar.
+- **Con qué se conecta**: `solicitudes.service.ts` (`calendarizarSolicitud`, `descalendarizarSolicitud`, `despacharSolicitud`, `recibirSolicitud`, `finalizarSolicitud`), `solicitudes.actions.ts` (acciones homónimas), `CalendarizacionesClient.tsx`, `SolicitudesClient.tsx` (botones Recibir/Finalizar), tablas `solicitud`, `notificacion` (sin UI aún).
+- **Depende de**: Módulo Solicitudes (estados previos).
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-03 | Implementado: calendarizar, despachar, recibir, finalizar con UI en `/logistica/calendarizaciones` y botones en `/solicitudes` | Completar flujo logístico del MVP |
+  | 2026-09-03 | Fix: revalidate path corregido de `/solicitudes/calendarizaciones` a `/logistica/calendarizaciones` | Path incorrecto impedía refresco de UI |
   | 2026-08-27 | Se documenta como pendiente | Módulo fuera del alcance actual del MVP |
 
 ---
@@ -321,7 +323,7 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 ## 12. Módulo: Dashboard
 
 - **Estado**: `implementado`
-- **Qué hace**: vista de inicio con acceso a los módulos según rol, métricas de solicitudes y tarjeta "Próximo módulo operativo" (logística).
+- **Qué hace**: vista de inicio con acceso a los módulos según rol, métricas de solicitudes y tile "Gestión Logística" activo (acceso a `/logistica/calendarizaciones` para logística/jefe_local/admin).
 - **Cómo funciona**: página server con tarjetas según rol; fuerza el cambio de clave si `requiere_cambio_clave`. Consume métricas de `AuditoriaService` y lecturas de `SolicitudesService`.
 - **Requisitos específicos**:
   - `R-DASH.1` — Acceso a módulos según rol.
@@ -360,6 +362,8 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-09-03 | Logística Operativa | Implementado flujo completo: calendarizar, despachar, recibir, finalizar con UI en `/logistica/calendarizaciones` y botones en `/solicitudes` | Completar flujo logístico del MVP |
+| 2026-09-03 | Logística Operativa | Fix: revalidate path `/solicitudes/calendarizaciones` → `/logistica/calendarizaciones` en 4 server actions | Path incorrecto impedía refresco de UI |
 | 2026-08-28 | Solicitudes-Priorización | Drag & drop para priorizar: se elimina el botón "Priorizar"; arrastrar desde "Por Priorizar" inserta en la posición elegida (`priorizarEnPosicion`) | Elegir la posición al priorizar en vez de entrar siempre al final |
 | 2026-08-28 | Vehículos | Campo opcional `precio` en alta/edición e inventario (`20260828_vehiculo_precio.sql`) | Registrar el valor comercial de cada vehículo |
 | 2026-08-27 | Solicitudes-Creación | Ejecutivo crea sin fecha; fecha la define jefe de local al crear o al aprobar | Requisito: solo el jefe de local pone la fecha |
