@@ -45,46 +45,46 @@ export class EmailService {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>Credenciales de Acceso - H.Motores</title>
         </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; margin: 0; padding: 30px 15px; color: #f8fafc;">
-          <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #1e293b; border-radius: 16px; border: 1px solid #334155; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 30px 15px; color: #171717;">
+          <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e5e5e5; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
             <!-- Header con banner corporativo -->
             <tr>
-              <td style="background: linear-gradient(135deg, #1e40af 0%, #3b82f6 100%); padding: 35px 30px; text-align: center;">
+              <td style="background: linear-gradient(135deg, #171717 0%, #404040 100%); padding: 35px 30px; text-align: center;">
                 <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">H.Motores</h1>
-                <p style="color: #dbeafe; margin: 6px 0 0 0; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Sistema de Gestión y Logística de Vehículos</p>
+                <p style="color: #a3a3a3; margin: 6px 0 0 0; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Sistema de Gestión y Logística de Vehículos</p>
               </td>
             </tr>
 
             <!-- Contenido principal -->
             <tr>
               <td style="padding: 35px 30px;">
-                <h2 style="color: #f8fafc; font-size: 20px; font-weight: 700; margin: 0 0 12px 0;">¡Hola, ${params.recipientName}!</h2>
-                <p style="color: #94a3b8; font-size: 14px; line-height: 1.6; margin: 0 0 25px 0;">
+                <h2 style="color: #171717; font-size: 20px; font-weight: 700; margin: 0 0 12px 0;">¡Hola, ${params.recipientName}!</h2>
+                <p style="color: #525252; font-size: 14px; line-height: 1.6; margin: 0 0 25px 0;">
                   Se ha creado tu cuenta corporativa para acceder a la plataforma interna de gestión y traslado de vehículos de H.Motores.
                 </p>
 
                 <!-- Tarjeta de Credenciales -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #0f172a; border-radius: 12px; border: 1px solid #334155; margin-bottom: 25px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fafafa; border-radius: 12px; border: 1px solid #e5e5e5; margin-bottom: 25px;">
                   <tr>
                     <td style="padding: 20px;">
                       <table width="100%" cellpadding="0" cellspacing="0">
                         <tr>
-                          <td style="padding: 6px 0; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 600;">Correo Electrónico:</td>
+                          <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Correo Electrónico:</td>
                         </tr>
                         <tr>
-                          <td style="padding: 0 0 14px 0; color: #38bdf8; font-size: 15px; font-weight: 700; font-family: monospace;">${params.toEmail}</td>
+                          <td style="padding: 0 0 14px 0; color: #2563eb; font-size: 15px; font-weight: 700; font-family: monospace;">${params.toEmail}</td>
                         </tr>
                         <tr>
-                          <td style="padding: 6px 0; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 600;">Rol Asignado:</td>
+                          <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Rol Asignado:</td>
                         </tr>
                         <tr>
-                          <td style="padding: 0 0 14px 0; color: #c084fc; font-size: 14px; font-weight: 600;">${rolFormat}</td>
+                          <td style="padding: 0 0 14px 0; color: #7c3aed; font-size: 14px; font-weight: 600;">${rolFormat}</td>
                         </tr>
                         <tr>
-                          <td style="padding: 6px 0; color: #64748b; font-size: 12px; text-transform: uppercase; font-weight: 600;">Contraseña Provisoria de Acceso:</td>
+                          <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Contraseña Provisoria de Acceso:</td>
                         </tr>
                         <tr>
-                          <td style="padding: 0 0 4px 0; color: #f59e0b; font-size: 20px; font-weight: 800; letter-spacing: 2px; font-family: monospace;">${params.tempPassword}</td>
+                          <td style="padding: 0 0 4px 0; color: #d97706; font-size: 20px; font-weight: 800; letter-spacing: 2px; font-family: monospace;">${params.tempPassword}</td>
                         </tr>
                       </table>
                     </td>
@@ -92,11 +92,11 @@ export class EmailService {
                 </table>
 
                 <!-- Nota de seguridad importante -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1e1b4b; border-radius: 10px; border: 1px solid #4338ca; margin-bottom: 30px;">
+                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fefce8; border-radius: 10px; border: 1px solid #fde68a; margin-bottom: 30px;">
                   <tr>
                     <td style="padding: 14px 16px;">
-                      <p style="margin: 0; color: #a5b4fc; font-size: 12px; line-height: 1.5;">
-                        🔒 <strong>Primer Ingreso Obligatorio:</strong> Al ingresar con esta contraseña provisoria, el sistema te solicitará inmediatamente que definas tu propia <strong>contraseña personal definitiva</strong> para mayor seguridad.
+                      <p style="margin: 0; color: #92400e; font-size: 12px; line-height: 1.5;">
+                        <strong>Primer Ingreso Obligatorio:</strong> Al ingresar con esta contraseña provisoria, el sistema te solicitará inmediatamente que definas tu propia <strong>contraseña personal definitiva</strong> para mayor seguridad.
                       </p>
                     </td>
                   </tr>
@@ -106,24 +106,24 @@ export class EmailService {
                 <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
                   <tr>
                     <td align="center">
-                      <a href="${appUrl}" target="_blank" style="display: inline-block; background-color: #2563eb; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);">
+                      <a href="${appUrl}" target="_blank" style="display: inline-block; background-color: #171717; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 10px; box-shadow: 0 4px 12px rgba(23, 23, 23, 0.3);">
                         Ingresar a la Plataforma &rarr;
                       </a>
                     </td>
                   </tr>
                 </table>
 
-                <p style="color: #64748b; font-size: 12px; line-height: 1.5; text-align: center; margin: 0;">
+                <p style="color: #737373; font-size: 12px; line-height: 1.5; text-align: center; margin: 0;">
                   Si el botón no funciona, puedes copiar y pegar el siguiente enlace en tu navegador:<br>
-                  <a href="${appUrl}" style="color: #60a5fa; word-break: break-all;">${appUrl}</a>
+                  <a href="${appUrl}" style="color: #2563eb; word-break: break-all;">${appUrl}</a>
                 </p>
               </td>
             </tr>
 
             <!-- Footer -->
             <tr>
-              <td style="background-color: #0f172a; padding: 20px 30px; border-top: 1px solid #334155; text-align: center;">
-                <p style="color: #64748b; font-size: 11px; margin: 0;">
+              <td style="background-color: #fafafa; padding: 20px 30px; border-top: 1px solid #e5e5e5; text-align: center;">
+                <p style="color: #737373; font-size: 11px; margin: 0;">
                   Este es un correo automático enviado por el Sistema de Logística H.Motores.<br>
                   Por seguridad, no compartas tus credenciales con terceros.
                 </p>
