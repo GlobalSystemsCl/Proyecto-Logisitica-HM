@@ -367,7 +367,7 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
   - La columna `telefono` (`varchar(30)`) se agregó con la migración `20260905_perfil_usuario_telefono.sql`.
   - `getUsuarioDetalleAction(usuarioId)` → `UsersService.getUsuarioDetalleById` devuelve el detalle completo (con nombre de sucursal vía join) para la tarjeta de contacto y los popups.
   - El detalle de solicitud resuelve el responsable con prioridad `logistica_id` → `jefe_local_id` → `ejecutivo_id` y lo muestra en la tarjeta "Contacto responsable" (pestaña Historial).
-  - `UsuarioInfoModal`/`UsuarioNombreBoton` (`src/components/usuario-info-modal.tsx`) son componentes client reutilizables: el nombre del usuario en el timeline de historial y en observaciones se renderiza como botón que abre el popup con rol, sucursal, teléfono, correo y fecha de ingreso.
+  - `UsuarioInfoModal`/`UsuarioNombreBoton` (`src/components/usuario-info-modal.tsx`) son componentes client reutilizables: cualquier nombre de usuario del sistema se renderiza como botón (subrayado punteado) que abre el popup con rol, sucursal, teléfono, correo y fecha de ingreso. Se aplica en: tabla de solicitudes (encargado), detalle de solicitud (creado por, responsable actual, encargado, jefe de local, logística, contacto responsable, historial de cambios y observaciones), prioridades, aprobaciones, sucursales (encargado y personas asociadas a solicitudes), historial de auditoría y gestión de usuarios.
   - Acceso al perfil desde los headers del sistema (nombre cliqueable + botón `UserRound` hacia `/perfil`).
 - **Requisitos específicos**:
   - `R-PERF.1` — El usuario autenticado ve su perfil con nombre, apellido, correo, rol, sucursal, teléfono y estado de cuenta.
@@ -375,13 +375,14 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
   - `R-PERF.3` — El teléfono es opcional y se limita a 30 caracteres.
   - `R-PERF.4` — El perfil es accesible desde los headers del sistema hacia `/perfil`.
   - `R-PERF.5` — El detalle de solicitud muestra "Contacto responsable" con nombre, rol, sucursal, teléfono y correo del responsable.
-  - `R-PERF.6` — Al hacer clic en un nombre de usuario en historial/observaciones se abre un popup con sus datos de contacto.
+  - `R-PERF.6` — En todo lugar donde el sistema muestra un nombre de usuario o encargado (tablas, detalle, historial, observaciones, prioridades, aprobaciones, sucursales, usuarios, calendario logístico) el nombre es un botón que abre un popup con los datos de contacto del usuario, para respuesta ante urgencias en cualquier fase del traslado.
   - `R-PERF.7` — Los datos se traen con `getUsuarioDetalleAction` (solo usuarios autenticados y activos).
-- **Con qué se conecta**: `perfil/page.tsx`, `perfil/PerfilClient.tsx`, `auth.actions.ts` (`updateProfileAction`), `auth.service.ts` (`updateProfile`), `users.service.ts` (`getUsuarioDetalleById`), `solicitudes.actions.ts` (`getUsuarioDetalleAction`), `usuario-info-modal.tsx`, `SolicitudesClient.tsx`, tablas `usuario`, `sucursal`.
+- **Con qué se conecta**: `perfil/page.tsx`, `perfil/PerfilClient.tsx`, `auth.actions.ts` (`updateProfileAction`), `auth.service.ts` (`updateProfile`), `users.service.ts` (`getUsuarioDetalleById`), `solicitudes.actions.ts` (`getUsuarioDetalleAction`), `usuario-info-modal.tsx`, `SolicitudesClient.tsx`, `PrioridadesClient.tsx`, `AprobacionesClient.tsx`, `HistorialClient.tsx`, `SucursalesTableClient.tsx`, `UsersTableClient.tsx`, `sucursales.service.ts` (ids de personas por solicitud), tablas `usuario`, `sucursal`.
 - **Depende de**: Módulo Autenticación (sesión), Módulo Solicitudes (detalle).
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-05 | Mejoras: rediseño UI del perfil (se elimina la franja negra superior; hero con iniciales, datos de contacto en resumen y secciones con iconos), y nombres de usuario cliqueables en TODOS los puntos del sistema que indican un usuario/encargado (tabla de solicitudes, detalle con creador/responsable/encargado/jefe_local/logística, historial de cambios, observaciones, prioridades, aprobaciones, sucursales —encargado y personas de solicitudes—, historial de auditoría y gestión de usuarios) vía `UsuarioNombreBoton` | Acceso ágil a datos de contacto ante urgencias en cualquier fase del traslado; perfil más pulido |
   | 2026-09-05 | Creación del módulo: página `/perfil`, edición de nombre/apellido/teléfono, tarjeta "Contacto responsable" enriquecida y popups de usuario en historial/observaciones; columna `telefono` (`20260905_perfil_usuario_telefono.sql`) | Necesidad de contacto accesible (rol, sucursal, teléfono, correo) del responsable y de los usuarios que intervienen |
 
 ---
@@ -392,6 +393,7 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-09-05 | Perfil de Usuario | Rediseño UI del perfil (sin franja negra; hero con iniciales y resumen de contacto) y nombres de usuario cliqueables (popup de datos) en todos los puntos del sistema que indican un usuario/encargado: tabla y detalle de solicitudes, historial de cambios, observaciones, prioridades, aprobaciones, sucursales (encargado + personas de solicitudes), historial de auditoría y gestión de usuarios | Acceso ágil a datos de contacto ante urgencias en cualquier fase del traslado; perfil más pulido |
 | 2026-09-05 | Perfil de Usuario | Nuevo módulo: página `/perfil`, edición de nombre/apellido/teléfono, columna `telefono`, tarjeta "Contacto responsable" del detalle de solicitud con rol/sucursal/teléfono/correo y popups de datos de usuario en historial/observaciones | Necesidad de contacto accesible del responsable y de los usuarios que intervienen en las solicitudes |
 | 2026-09-03 | Logística Operativa | Implementado flujo completo: calendarizar, despachar, recibir, finalizar con UI en `/logistica/calendarizaciones` y botones en `/solicitudes` | Completar flujo logístico del MVP |
 | 2026-09-03 | Logística Operativa | Fix: revalidate path `/solicitudes/calendarizaciones` → `/logistica/calendarizaciones` en 4 server actions | Path incorrecto impedía refresco de UI |

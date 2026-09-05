@@ -70,5 +70,8 @@ export interface SucursalSolicitudItem {
   ejecutivo: string;
   jefe_local: string | null;
   logistica: string | null;
+  ejecutivo_id: string | null;
+  jefe_local_id: string | null;
+  logistica_id: string | null;
   vehiculos: VehiculoAsociado[];
 }

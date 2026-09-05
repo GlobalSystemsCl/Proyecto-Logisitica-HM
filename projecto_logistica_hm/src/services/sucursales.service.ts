@@ -17,9 +17,9 @@ interface SolicitudRawRow {
   fecha_tentativa_despacho: string | null;
   fecha_limite: string | null;
   motivo_cancelacion: string | null;
-  ejecutivo: { nombre: string; apellido: string } | null;
-  jefe: { nombre: string; apellido: string } | null;
-  logistica: { nombre: string; apellido: string } | null;
+  ejecutivo: { id: string; nombre: string; apellido: string } | null;
+  jefe: { id: string; nombre: string; apellido: string } | null;
+  logistica: { id: string; nombre: string; apellido: string } | null;
   solicitud_vehiculo: Array<{
     id: string;
     disponibilidad: VehiculoAsociado['disponibilidad'];
@@ -68,9 +68,9 @@ export class SucursalesService {
         .select(
           `id, sucursal, estado, tipo_solicitud, posicion_prioridad,
            fecha_creacion, fecha_tentativa_despacho, fecha_limite, motivo_cancelacion,
-           ejecutivo:ejecutivo_id(nombre, apellido),
-           jefe:jefe_local_id(nombre, apellido),
-           logistica:logistica_id(nombre, apellido),
+           ejecutivo:ejecutivo_id(id, nombre, apellido),
+           jefe:jefe_local_id(id, nombre, apellido),
+           logistica:logistica_id(id, nombre, apellido),
            solicitud_vehiculo(id, disponibilidad, vehiculo(chasis, patente, marca, modelo, anio, color))`
         )
         .order('fecha_creacion', { ascending: false });
@@ -95,6 +95,9 @@ export class SucursalesService {
         ejecutivo: formatPersona(row.ejecutivo) || 'Sin responsable',
         jefe_local: formatPersona(row.jefe),
         logistica: formatPersona(row.logistica),
+        ejecutivo_id: row.ejecutivo?.id ?? null,
+        jefe_local_id: row.jefe?.id ?? null,
+        logistica_id: row.logistica?.id ?? null,
         vehiculos: (row.solicitud_vehiculo || [])
           .filter((sv) => sv.vehiculo)
           .map((sv) => ({

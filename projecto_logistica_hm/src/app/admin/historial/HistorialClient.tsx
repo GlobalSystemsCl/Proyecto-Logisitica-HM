@@ -18,6 +18,7 @@ import {
 import { AuditoriaRegistro } from '@/types/auditoria.types';
 import { AuditoriaMetricas } from '@/services/auditoria.service';
 import { getAuditoriaAction } from '@/app/actions/auditoria.actions';
+import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { utils, writeFile } from 'xlsx';
 
 const accionConfig: Record<string, { label: string; color: string }> = {
@@ -366,7 +367,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
                             {(reg.usuario_apellido || '').charAt(0)}
                           </div>
                           <span className="text-neutral-900 font-medium text-xs">
-                            {reg.usuario_nombre} {reg.usuario_apellido}
+                            <UsuarioNombreBoton usuarioId={reg.usuario_id} nombre={`${reg.usuario_nombre || ''} ${reg.usuario_apellido || ''}`.trim() || null} muted />
                           </span>
                         </div>
                       </td>
@@ -521,7 +522,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
                 <div>
                   <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Responsable</p>
                   <p className="text-sm text-neutral-900 font-medium">
-                    {detailRegistro.usuario_nombre} {detailRegistro.usuario_apellido}
+                    <UsuarioNombreBoton usuarioId={detailRegistro.usuario_id} nombre={`${detailRegistro.usuario_nombre || ''} ${detailRegistro.usuario_apellido || ''}`.trim() || null} muted />
                   </p>
                 </div>
                 <div>

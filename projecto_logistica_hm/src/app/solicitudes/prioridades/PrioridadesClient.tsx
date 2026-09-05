@@ -36,6 +36,7 @@ import {
 } from '@/app/actions/solicitudes.actions';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
 import { formatFecha } from '@/lib/fechas';
+import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -361,6 +362,10 @@ export default function PrioridadesClient({
   );
 }
 
+function getEncargadoId(sol: SolicitudLista): string | null {
+  return sol.ejecutivo_id || sol.jefe_local_id || null;
+}
+
 function getEncargadoNombre(sol: SolicitudLista): string | null {
   if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
   if (sol.jefe_local_id) return sol.jefe_local_nombre;
@@ -443,7 +448,7 @@ function SolicitudCard({
               {formatFecha(sol.fecha_limite)}
             </span>
             {getEncargadoNombre(sol) && (
-              <span className="text-neutral-400">· {getEncargadoNombre(sol)}</span>
+              <span className="text-neutral-400">· <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted /></span>
             )}
           </div>
         </div>
@@ -538,7 +543,7 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
               {formatFecha(sol.fecha_limite)}
             </span>
             {getEncargadoNombre(sol) && (
-              <span className="text-neutral-400">· {getEncargadoNombre(sol)}</span>
+              <span className="text-neutral-400">· <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted /></span>
             )}
           </div>
         </div>

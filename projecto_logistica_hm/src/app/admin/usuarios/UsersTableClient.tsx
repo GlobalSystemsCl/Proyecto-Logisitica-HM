@@ -3,6 +3,7 @@
 import { useState, useEffect, useTransition } from 'react';
 import { UserProfile, UserRole } from '@/types/auth.types';
 import { Sucursal } from '@/types/sucursal.types';
+import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { createUserAction, updateUserAction, toggleUserStatusAction, resetUserPasswordAction } from '@/app/actions/users.actions';
 import {
   Users,
@@ -457,7 +458,7 @@ export default function UsersTableClient({ users, sucursales, currentAdminEmail,
                           </div>
                           <div>
                             <p className="font-semibold text-neutral-900">
-                              {user.nombre} {user.apellido}
+                              <UsuarioNombreBoton usuarioId={user.id} nombre={`${user.nombre} ${user.apellido}`} muted />
                             </p>
                             {isMainAdmin && (
                               <span className="text-[10px] text-neutral-500 font-medium">

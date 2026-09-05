@@ -99,6 +99,10 @@ interface SolicitudesClientProps {
   viewer: ViewerInfo;
 }
 
+function getEncargadoId(sol: SolicitudLista): string | null {
+  return sol.ejecutivo_id || sol.jefe_local_id || null;
+}
+
 function getEncargadoNombre(sol: SolicitudLista): string | null {
   if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
   if (sol.jefe_local_id) return sol.jefe_local_nombre;
@@ -795,7 +799,11 @@ export default function SolicitudesClient({
                       </td>
 
                       <td className="py-3.5 px-4 text-xs text-neutral-600">
-                        {getEncargadoNombre(sol) || '—'}
+                        {getEncargadoNombre(sol) ? (
+                          <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted />
+                        ) : (
+                          '—'
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4">
@@ -1273,7 +1281,12 @@ export default function SolicitudesClient({
               </div>
               <p className="text-sm text-neutral-500">
                 {detailTarget.tipo_solicitud === 'evento' ? 'Evento' : 'Traslado entre locales'} · Creada el {formatFecha(detailTarget.fecha_creacion)}
-                {detailTarget.ejecutivo_nombre && ` por ${detailTarget.ejecutivo_nombre}`}
+                {detailTarget.ejecutivo_nombre && (
+                  <>
+                    {' por '}
+                    <UsuarioNombreBoton usuarioId={detailTarget.ejecutivo_id} nombre={detailTarget.ejecutivo_nombre} muted />
+                  </>
+                )}
               </p>
             </div>
 
@@ -1353,9 +1366,13 @@ export default function SolicitudesClient({
                     <User className="w-5 h-5 text-neutral-600" />
                   </div>
                   <div>
-                    <p className="text-[11px] text-neutral-400 font-medium">Responsable actual</p>
+                    <p className="text-xs text-neutral-400 font-medium">Responsable actual</p>
                     <p className="text-sm font-bold text-neutral-900">
-                      {detailTarget.logistica_nombre || detailTarget.jefe_local_nombre || detailTarget.ejecutivo_nombre || '—'}
+                      {detailTarget.logistica_nombre || detailTarget.jefe_local_nombre || detailTarget.ejecutivo_nombre ? (
+                        <UsuarioNombreBoton usuarioId={getResponsableId(detailTarget)} nombre={getResponsableNombre(detailTarget)} />
+                      ) : (
+                        '—'
+                      )}
                     </p>
                     <p className="text-[11px] text-neutral-500">
                       {detailTarget.logistica_nombre ? 'Logística' : detailTarget.jefe_local_nombre ? 'Jefe de Local' : detailTarget.ejecutivo_nombre ? 'Ejecutivo' : ''}
@@ -1423,15 +1440,33 @@ export default function SolicitudesClient({
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
                       <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado</p>
-                      <p className="text-sm text-neutral-900 font-medium">{getEncargadoNombre(detailTarget) || <span className="text-neutral-400 italic">Sin asignar</span>}</p>
+                      <p className="text-sm text-neutral-900 font-medium">
+                        {getEncargadoNombre(detailTarget) ? (
+                          <UsuarioNombreBoton usuarioId={getEncargadoId(detailTarget)} nombre={getEncargadoNombre(detailTarget)} />
+                        ) : (
+                          <span className="text-neutral-400 italic">Sin asignar</span>
+                        )}
+                      </p>
                     </div>
                     <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
                       <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Jefe de Local</p>
-                      <p className="text-sm text-neutral-900 font-medium">{detailTarget.jefe_local_nombre || <span className="text-neutral-400 italic">Sin asignar</span>}</p>
+                      <p className="text-sm text-neutral-900 font-medium">
+                        {detailTarget.jefe_local_nombre ? (
+                          <UsuarioNombreBoton usuarioId={detailTarget.jefe_local_id} nombre={detailTarget.jefe_local_nombre} />
+                        ) : (
+                          <span className="text-neutral-400 italic">Sin asignar</span>
+                        )}
+                      </p>
                     </div>
                     <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
                       <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Logística</p>
-                      <p className="text-sm text-neutral-900 font-medium">{detailTarget.logistica_nombre || <span className="text-neutral-400 italic">Sin asignar</span>}</p>
+                      <p className="text-sm text-neutral-900 font-medium">
+                        {detailTarget.logistica_nombre ? (
+                          <UsuarioNombreBoton usuarioId={detailTarget.logistica_id} nombre={detailTarget.logistica_nombre} />
+                        ) : (
+                          <span className="text-neutral-400 italic">Sin asignar</span>
+                        )}
+                      </p>
                     </div>
                   </div>
 
@@ -1607,9 +1642,12 @@ export default function SolicitudesClient({
                             </div>
                             <div className="min-w-0">
                               <p className="text-sm font-bold text-neutral-900 break-words">
-                                {responsableDetalle
-                                  ? `${responsableDetalle.nombre} ${responsableDetalle.apellido}`.trim()
-                                  : getResponsableNombre(detailTarget)}
+                                <UsuarioNombreBoton
+                                  usuarioId={getResponsableId(detailTarget)}
+                                  nombre={responsableDetalle
+                                    ? `${responsableDetalle.nombre} ${responsableDetalle.apellido}`.trim()
+                                    : getResponsableNombre(detailTarget)}
+                                />
                               </p>
                               <p className="text-xs text-neutral-500">
                                 {responsableDetalle

@@ -25,6 +25,7 @@ import {
   SucursalSolicitudItem,
 } from '@/types/sucursal.types';
 import { formatFecha } from '@/lib/fechas';
+import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -321,7 +322,11 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                               {sucursal.encargado.apellido.charAt(0)}
                             </div>
                             <span className="text-neutral-900 font-medium text-xs">
-                              {sucursal.encargado.nombre} {sucursal.encargado.apellido}
+                              <UsuarioNombreBoton
+                                usuarioId={sucursal.usuario_id || sucursal.encargado.id}
+                                nombre={`${sucursal.encargado.nombre} ${sucursal.encargado.apellido}`}
+                                muted
+                              />
                             </span>
                           </div>
                         ) : (
@@ -597,9 +602,18 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                   <h2 className="text-lg font-bold text-neutral-900">{detailSucursal.nombre}</h2>
                   <p className="text-xs text-neutral-500">
                     {detailSucursal.direccion || 'Sin dirección registrada'} ·{' '}
-                    {detailSucursal.encargado
-                      ? `Encargado: ${detailSucursal.encargado.nombre} ${detailSucursal.encargado.apellido}`
-                      : 'Sin encargado asignado'}{' '}
+                    {detailSucursal.encargado ? (
+                      <>
+                        Encargado:{' '}
+                        <UsuarioNombreBoton
+                          usuarioId={detailSucursal.usuario_id || detailSucursal.encargado.id}
+                          nombre={`${detailSucursal.encargado.nombre} ${detailSucursal.encargado.apellido}`}
+                          muted
+                        />
+                      </>
+                    ) : (
+                      'Sin encargado asignado'
+                    )}{' '}
                     ·{' '}
                     {detailSucursal.slots !== null && detailSucursal.slots !== undefined
                       ? `${detailSucursal.slots_ocupados || 0}/${detailSucursal.slots} espacios`
@@ -679,14 +693,24 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                           <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
                             Ejecutivo
                           </p>
-                          <p className="text-neutral-900 font-medium">{sol.ejecutivo}</p>
+                          <p className="text-neutral-900 font-medium">
+                            {sol.ejecutivo_id ? (
+                              <UsuarioNombreBoton usuarioId={sol.ejecutivo_id} nombre={sol.ejecutivo} muted />
+                            ) : (
+                              sol.ejecutivo
+                            )}
+                          </p>
                         </div>
                         <div>
                           <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
                             Jefe de Local
                           </p>
                           <p className="text-neutral-900 font-medium">
-                            {sol.jefe_local || <span className="text-neutral-400 italic">Sin asignar</span>}
+                            {sol.jefe_local_id ? (
+                              <UsuarioNombreBoton usuarioId={sol.jefe_local_id} nombre={sol.jefe_local} muted />
+                            ) : (
+                              <span className="text-neutral-400 italic">Sin asignar</span>
+                            )}
                           </p>
                         </div>
                         <div>
@@ -694,7 +718,11 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                             Logística
                           </p>
                           <p className="text-neutral-900 font-medium">
-                            {sol.logistica || <span className="text-neutral-400 italic">Sin asignar</span>}
+                            {sol.logistica_id ? (
+                              <UsuarioNombreBoton usuarioId={sol.logistica_id} nombre={sol.logistica} muted />
+                            ) : (
+                              <span className="text-neutral-400 italic">Sin asignar</span>
+                            )}
                           </p>
                         </div>
                       </div>
