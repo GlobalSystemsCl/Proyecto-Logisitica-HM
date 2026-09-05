@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Mail,
   Phone,
@@ -50,7 +51,7 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
 
   const nombre = data ? `${data.nombre} ${data.apellido}`.trim() : nombreFallback || 'Usuario';
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
       <div
         className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
@@ -154,7 +155,8 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
