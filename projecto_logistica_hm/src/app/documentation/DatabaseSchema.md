@@ -158,12 +158,15 @@ CREATE TABLE public.usuario (
     intentos_fallidos     INTEGER DEFAULT 0,
     bloqueado_hasta       TIMESTAMPTZ,
     sucursal_id           BIGINT REFERENCES public.sucursal(id),
+    telefono              VARCHAR(30),
     created_at            TIMESTAMP(6) WITHOUT TIME ZONE DEFAULT now(),
     updated_at            TIMESTAMP(6) WITHOUT TIME ZONE DEFAULT now()
 );
 ```
 
 Nota: `sucursal_id` era UUID y **sin** FK; se corrigió el 2026-08-22 a BIGINT + FK (`usuario_sucursal_fkey`) vía migración `20260822_politicas_rls.sql` (todos los valores eran NULL, no hubo pérdida de datos).
+
+Nota: la columna `telefono` se agregó el 2026-09-05 vía migración `20260905_perfil_usuario_telefono.sql` para el módulo de Perfil de Usuario.
 
 ### Índices
 

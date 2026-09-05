@@ -57,6 +57,7 @@
 | Sucursales | `/admin/sucursales` | `administrador` |
 | Historial/Auditoría | `/admin/historial` | `administrador` |
 | Logística | `/logistica/calendarizaciones` | `jefe_local`, `logistica`, `administrador` |
+| Perfil | `/perfil` | autenticados |
 | Dashboard | `/dashboard` | autenticados |
 
 ### 1.3 Flujo principal de interacción entre módulos
@@ -205,6 +206,7 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-05 | Detalle de solicitud: la tarjeta "Contacto responsable" muestra nombre, rol, sucursal, teléfono y correo; los nombres en historial/observaciones abren un popup con los datos del usuario (`getUsuarioDetalleAction`, `usuario-info-modal.tsx`) | Acceso rápido al contacto de responsables y usuarios que intervienen |
   | 2026-08-27 | El ejecutivo ya no ve el campo de fecha; el jefe_local la define al crear o al aprobar | Que la fecha la fije solo el jefe de local |
   | 2026-08-27 | Se asigna `jefe_local_id` automáticamente al crear (jefe de local de la sucursal del ejecutivo) | Aprobación/responsabilidad por sucursal |
   | 2026-08-27 | Se permite sucursal destino = origen | Venta interna en el mismo local |
@@ -356,12 +358,41 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 
 ---
 
-## 14. Registro global de cambios
+## 14. Módulo: Perfil de Usuario
+
+- **Estado**: `implementado`
+- **Qué hace**: vista personal `/perfil` con los datos del usuario autenticado: nombre, apellido, teléfono de contacto (editables) y correo, rol, sucursal, estado de cuenta y fecha de ingreso (solo lectura). Además, reutiliza esos datos en todo el sistema: tarjeta "Contacto responsable" enriquecida en el detalle de solicitud (nombre, rol, sucursal, teléfono y correo) y popups de datos de usuario al hacer clic en un nombre dentro del historial de cambios y observaciones.
+- **Cómo funciona**:
+  - `PerfilClient.tsx` (client) usa `updateProfileAction` (server action `useActionState`) → `AuthService.updateProfile` actualiza solo `nombre`, `apellido` y `telefono` del propio usuario vía client admin; el correo, rol y sucursal NO son editables desde el perfil.
+  - La columna `telefono` (`varchar(30)`) se agregó con la migración `20260905_perfil_usuario_telefono.sql`.
+  - `getUsuarioDetalleAction(usuarioId)` → `UsersService.getUsuarioDetalleById` devuelve el detalle completo (con nombre de sucursal vía join) para la tarjeta de contacto y los popups.
+  - El detalle de solicitud resuelve el responsable con prioridad `logistica_id` → `jefe_local_id` → `ejecutivo_id` y lo muestra en la tarjeta "Contacto responsable" (pestaña Historial).
+  - `UsuarioInfoModal`/`UsuarioNombreBoton` (`src/components/usuario-info-modal.tsx`) son componentes client reutilizables: el nombre del usuario en el timeline de historial y en observaciones se renderiza como botón que abre el popup con rol, sucursal, teléfono, correo y fecha de ingreso.
+  - Acceso al perfil desde los headers del sistema (nombre cliqueable + botón `UserRound` hacia `/perfil`).
+- **Requisitos específicos**:
+  - `R-PERF.1` — El usuario autenticado ve su perfil con nombre, apellido, correo, rol, sucursal, teléfono y estado de cuenta.
+  - `R-PERF.2` — El usuario edita su nombre, apellido y teléfono; correo, rol y sucursal son solo lectura.
+  - `R-PERF.3` — El teléfono es opcional y se limita a 30 caracteres.
+  - `R-PERF.4` — El perfil es accesible desde los headers del sistema hacia `/perfil`.
+  - `R-PERF.5` — El detalle de solicitud muestra "Contacto responsable" con nombre, rol, sucursal, teléfono y correo del responsable.
+  - `R-PERF.6` — Al hacer clic en un nombre de usuario en historial/observaciones se abre un popup con sus datos de contacto.
+  - `R-PERF.7` — Los datos se traen con `getUsuarioDetalleAction` (solo usuarios autenticados y activos).
+- **Con qué se conecta**: `perfil/page.tsx`, `perfil/PerfilClient.tsx`, `auth.actions.ts` (`updateProfileAction`), `auth.service.ts` (`updateProfile`), `users.service.ts` (`getUsuarioDetalleById`), `solicitudes.actions.ts` (`getUsuarioDetalleAction`), `usuario-info-modal.tsx`, `SolicitudesClient.tsx`, tablas `usuario`, `sucursal`.
+- **Depende de**: Módulo Autenticación (sesión), Módulo Solicitudes (detalle).
+- **Historial**:
+  | Fecha | Cambio | Motivo |
+  |---|---|---|
+  | 2026-09-05 | Creación del módulo: página `/perfil`, edición de nombre/apellido/teléfono, tarjeta "Contacto responsable" enriquecida y popups de usuario en historial/observaciones; columna `telefono` (`20260905_perfil_usuario_telefono.sql`) | Necesidad de contacto accesible (rol, sucursal, teléfono, correo) del responsable y de los usuarios que intervienen |
+
+---
+
+## 15. Registro global de cambios
 
 Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-09-05 | Perfil de Usuario | Nuevo módulo: página `/perfil`, edición de nombre/apellido/teléfono, columna `telefono`, tarjeta "Contacto responsable" del detalle de solicitud con rol/sucursal/teléfono/correo y popups de datos de usuario en historial/observaciones | Necesidad de contacto accesible del responsable y de los usuarios que intervienen en las solicitudes |
 | 2026-09-03 | Logística Operativa | Implementado flujo completo: calendarizar, despachar, recibir, finalizar con UI en `/logistica/calendarizaciones` y botones en `/solicitudes` | Completar flujo logístico del MVP |
 | 2026-09-03 | Logística Operativa | Fix: revalidate path `/solicitudes/calendarizaciones` → `/logistica/calendarizaciones` en 4 server actions | Path incorrecto impedía refresco de UI |
 | 2026-08-28 | Solicitudes-Priorización | Drag & drop para priorizar: se elimina el botón "Priorizar"; arrastrar desde "Por Priorizar" inserta en la posición elegida (`priorizarEnPosicion`) | Elegir la posición al priorizar en vez de entrar siempre al final |
@@ -377,7 +408,7 @@ Orden: más reciente primero.
 
 ---
 
-## 15. Referencias
+## 16. Referencias
 
 - `Brain.md` — contexto permanente del proyecto.
 - `ProjectStatus.md` — estado real del proyecto.

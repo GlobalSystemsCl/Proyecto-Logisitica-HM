@@ -1,28 +1,28 @@
-﻿import { AuthService } from '@/services/auth.service';
-import { UsersService } from '@/services/users.service';
+import { AuthService } from '@/services/auth.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { redirect } from 'next/navigation';
-import UsersTableClient from './UsersTableClient';
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, LogOut, UserRound } from 'lucide-react';
+import { ArrowLeft, LogOut } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
+import { ROL_LABEL } from '@/types/auth.types';
+import PerfilClient from './PerfilClient';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminUsuariosPage() {
+export default async function PerfilPage() {
   const profile = await AuthService.getCurrentUserProfile();
 
   if (!profile) {
     redirect('/login');
   }
 
-  if (profile.rol !== 'administrador' || !profile.activo) {
+  if (!profile.activo) {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const users = await UsersService.getUsers();
   const sucursales = await SucursalesService.getSucursales();
+  const sucursal = sucursales.find((s) => s.id === profile.sucursal_id) ?? null;
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
@@ -48,32 +48,21 @@ export default async function AdminUsuariosPage() {
               <div>
                 <span className="font-bold text-neutral-900 tracking-tight">H.Motores</span>
                 <span className="text-xs text-neutral-500 block -mt-1 font-mono">
-                  Módulo de Administración
+                  Mi Perfil
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/perfil"
-              className="hidden sm:block text-right group"
-              title="Ver mi perfil"
-            >
-              <p className="text-xs font-semibold text-neutral-900 group-hover:text-neutral-600 transition-colors">
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:block text-right">
+              <p className="text-xs font-semibold text-neutral-900">
                 {profile.nombre} {profile.apellido}
               </p>
-              <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider group-hover:text-neutral-700 transition-colors">
-                {profile.rol}
+              <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">
+                {ROL_LABEL[profile.rol]}
               </p>
-            </Link>
-            <Link
-              href="/perfil"
-              className="p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
-              title="Mi Perfil"
-            >
-              <UserRound className="w-5 h-5" />
-            </Link>
+            </div>
             <form action={logoutAction}>
               <button
                 type="submit"
@@ -88,12 +77,20 @@ export default async function AdminUsuariosPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <UsersTableClient
-          users={users}
-          sucursales={sucursales}
-          currentAdminEmail={profile.email}
-          currentAdminId={profile.id}
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <PerfilClient
+          profile={{
+            id: profile.id,
+            email: profile.email,
+            nombre: profile.nombre,
+            apellido: profile.apellido,
+            rol: profile.rol,
+            telefono: profile.telefono ?? null,
+            sucursal_id: profile.sucursal_id ?? null,
+            sucursal_nombre: sucursal?.nombre ?? null,
+            activo: profile.activo,
+            created_at: profile.created_at,
+          }}
         />
       </main>
     </div>

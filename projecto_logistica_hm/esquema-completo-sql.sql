@@ -2,7 +2,7 @@
 -- ESQUEMA COMPLETO - Proyecto Logística H.M.
 -- Proyecto Supabase: yaqbccvlenouqmtqrlrq
 -- Base de datos    : db.yaqbccvlenouqmtqrlrq.supabase.co (us-east-2)
--- Fecha de extracción: 2026-08-28
+-- Fecha de extracción: 2026-09-05
 -- Método: Management API de Supabase (v1/projects/{ref}/database/query)
 -- con SQL real sobre catálogos del sistema (pg_catalog / information_schema).
 -- Este archivo refleja el esquema VIVO, incluidos nombres exactos de
@@ -91,7 +91,8 @@ CREATE TABLE public.usuario (
     requiere_cambio_clave boolean DEFAULT false,
     intentos_fallidos integer DEFAULT 0,
     bloqueado_hasta timestamptz,
-    sucursal_id bigint
+    sucursal_id bigint,
+    telefono varchar(30)
 );
 
 CREATE TABLE public.sucursal (

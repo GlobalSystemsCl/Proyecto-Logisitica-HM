@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, LogOut } from 'lucide-react';
+import { ArrowLeft, LogOut, UserRound } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
 
 interface SolicitudesHeaderProps {
@@ -44,21 +44,36 @@ export default function SolicitudesHeader({
           </div>
         </div>
 
-        <div className="hidden sm:block text-right">
-          <p className="text-xs font-semibold text-neutral-900">
-            {nombre} {apellido}
-          </p>
-          <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">{rol}</p>
-        </div>
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            className="p-2 rounded-xl text-neutral-500 hover:text-red-600 hover:bg-neutral-100 transition-colors cursor-pointer"
-            title="Cerrar Sesión"
+        <div className="flex items-center gap-2">
+          <Link
+            href="/perfil"
+            className="hidden sm:block text-right group"
+            title="Ver mi perfil"
           >
-            <LogOut className="w-5 h-5" />
-          </button>
-        </form>
+            <p className="text-xs font-semibold text-neutral-900 group-hover:text-neutral-600 transition-colors">
+              {nombre} {apellido}
+            </p>
+            <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider group-hover:text-neutral-700 transition-colors">
+              {rol}
+            </p>
+          </Link>
+          <Link
+            href="/perfil"
+            className="p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+            title="Mi Perfil"
+          >
+            <UserRound className="w-5 h-5" />
+          </Link>
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="p-2 rounded-xl text-neutral-500 hover:text-red-600 hover:bg-neutral-100 transition-colors cursor-pointer"
+              title="Cerrar Sesión"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+          </form>
+        </div>
       </div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3 border-t border-neutral-100">
         <div className="bg-neutral-900 rounded-lg p-1.5 flex gap-1 overflow-x-auto">

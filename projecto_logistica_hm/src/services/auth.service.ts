@@ -4,6 +4,57 @@ import { UserProfile } from '@/types/auth.types';
 
 export class AuthService {
   /**
+   * Actualiza los datos editables del perfil del usuario autenticado
+   * (nombre, apellido, teléfono). El rol, sucursal y correo no son editables desde el perfil.
+   */
+  static async updateProfile(
+    data: { nombre: string; apellido: string; telefono?: string | null }
+  ): Promise<{ success: boolean; error?: string; profile?: UserProfile }> {
+    try {
+      const supabase = await createClient();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError || !user) {
+        return { success: false, error: 'Sesión no válida. Inicia sesión nuevamente.' };
+      }
+
+      const nombre = data.nombre?.trim();
+      const apellido = data.apellido?.trim();
+
+      if (!nombre || !apellido) {
+        return { success: false, error: 'El nombre y el apellido son obligatorios.' };
+      }
+
+      const telefono = data.telefono?.trim() || null;
+
+      const admin = createAdminClient();
+      const { data: updated, error: updateError } = await admin
+        .from('usuario')
+        .update({
+          nombre,
+          apellido,
+          telefono,
+        })
+        .eq('id', user.id)
+        .select()
+        .single();
+
+      if (updateError) {
+        return { success: false, error: updateError.message };
+      }
+
+      return { success: true, profile: updated as UserProfile };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al actualizar el perfil.';
+      console.error('Error en updateProfile:', err);
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
    * Obtiene el perfil del usuario autenticado actualmente
    */
   static async getCurrentUserProfile(): Promise<UserProfile | null> {

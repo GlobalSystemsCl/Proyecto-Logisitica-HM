@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { CreateUserInput, UpdateUserInput, UserProfile } from '@/types/auth.types';
+import { CreateUserInput, UpdateUserInput, UserProfile, UsuarioDetalle } from '@/types/auth.types';
 import { EmailService } from '@/services/email.service';
 
 export class UsersService {
@@ -281,6 +281,7 @@ export class UsersService {
       if (input.activo !== undefined) updateData.activo = input.activo;
       if (input.requiere_cambio_clave !== undefined) updateData.requiere_cambio_clave = input.requiere_cambio_clave;
       if (input.sucursal_id !== undefined) updateData.sucursal_id = input.sucursal_id;
+      if (input.telefono !== undefined) updateData.telefono = input.telefono?.trim() || null;
 
       const { data, error } = await admin
         .from('usuario')
@@ -305,6 +306,57 @@ export class UsersService {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al actualizar usuario';
       return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Obtiene el detalle completo de un usuario (con sucursal) para tarjetas de
+   * contacto y popups de datos de usuario en historial/observaciones.
+   */
+  static async getUsuarioDetalleById(userId: string): Promise<UsuarioDetalle | null> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('usuario')
+        .select('id, email, nombre, apellido, rol, activo, telefono, sucursal_id, created_at, sucursal:sucursal_id(nombre)')
+        .eq('id', userId)
+        .single();
+
+      if (error || !data) {
+        console.error('Error en getUsuarioDetalleById:', error);
+        return null;
+      }
+
+      const row = data as unknown as {
+        id: string;
+        email: string;
+        nombre: string;
+        apellido: string;
+        rol: UserProfile['rol'];
+        activo: boolean;
+        telefono: string | null;
+        sucursal_id: number | null;
+        created_at: string;
+        sucursal: { nombre: string | null } | Array<{ nombre: string | null }> | null;
+      };
+
+      const sucursalRaw = Array.isArray(row.sucursal) ? row.sucursal[0] : row.sucursal;
+
+      return {
+        id: row.id,
+        email: row.email,
+        nombre: row.nombre,
+        apellido: row.apellido,
+        rol: row.rol,
+        activo: row.activo,
+        telefono: row.telefono ?? null,
+        sucursal_id: row.sucursal_id ?? null,
+        sucursal_nombre: sucursalRaw?.nombre ?? null,
+        created_at: row.created_at,
+      };
+    } catch (err) {
+      console.error('Error en getUsuarioDetalleById:', err);
+      return null;
     }
   }
 }

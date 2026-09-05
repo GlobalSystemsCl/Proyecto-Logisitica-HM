@@ -23,6 +23,10 @@ import {
   ArrowLeft,
   MapPin,
   User,
+  Mail,
+  Phone,
+  Building2,
+  Loader2,
 } from 'lucide-react';
 import {
   createSolicitudAction,
@@ -37,6 +41,7 @@ import {
   getObservacionesAction,
   getAuditoriaAction,
   getEjecutivosPorSucursalAction,
+  getUsuarioDetalleAction,
   recibirSolicitudAction,
   finalizarSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
@@ -49,7 +54,9 @@ import {
   AuditoriaEntry,
 } from '@/types/solicitud.types';
 import { Sucursal } from '@/types/sucursal.types';
+import { ROL_LABEL, UsuarioDetalle } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
+import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -95,6 +102,24 @@ interface SolicitudesClientProps {
 function getEncargadoNombre(sol: SolicitudLista): string | null {
   if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
   if (sol.jefe_local_id) return sol.jefe_local_nombre;
+  return null;
+}
+
+function getResponsableId(sol: SolicitudLista): string | null {
+  if (sol.logistica_id) return sol.logistica_id;
+  if (sol.jefe_local_id) return sol.jefe_local_id;
+  if (sol.ejecutivo_id) return sol.ejecutivo_id;
+  return null;
+}
+
+function getResponsableNombre(sol: SolicitudLista): string | null {
+  return sol.logistica_nombre || sol.jefe_local_nombre || sol.ejecutivo_nombre || null;
+}
+
+function getResponsableRol(sol: SolicitudLista): string | null {
+  if (sol.logistica_id) return 'Logística';
+  if (sol.jefe_local_id) return 'Jefe de Local';
+  if (sol.ejecutivo_id) return 'Ejecutivo';
   return null;
 }
 
@@ -203,6 +228,7 @@ export default function SolicitudesClient({
   const [obsText, setObsText] = useState('');
   const [observaciones, setObservaciones] = useState<ObservacionEntry[]>([]);
   const [auditoria, setAuditoria] = useState<AuditoriaEntry[]>([]);
+  const [responsableDetalle, setResponsableDetalle] = useState<UsuarioDetalle | null>(null);
   const [showHistorial, setShowHistorial] = useState(false);
   const [detailTab, setDetailTab] = useState<'info' | 'historial' | 'obs' | 'docs'>('info');
   const [showAcciones, setShowAcciones] = useState(false);
@@ -313,6 +339,7 @@ export default function SolicitudesClient({
     if (!detailTarget) {
       setObservaciones([]);
       setAuditoria([]);
+      setResponsableDetalle(null);
       setShowHistorial(false);
       setDetailTab('info');
       setShowAcciones(false);
@@ -320,13 +347,16 @@ export default function SolicitudesClient({
     }
     let cancelled = false;
     async function load() {
-      const [obs, audit] = await Promise.all([
+      const responsableId = getResponsableId(detailTarget!);
+      const [obs, audit, detalleResp] = await Promise.all([
         getObservacionesAction(detailTarget!.id),
         getAuditoriaAction(detailTarget!.id),
+        responsableId ? getUsuarioDetalleAction(responsableId) : Promise.resolve(null),
       ]);
       if (!cancelled) {
         setObservaciones(obs);
         setAuditoria(audit);
+        setResponsableDetalle(detalleResp);
       }
     }
     load();
@@ -1502,7 +1532,11 @@ export default function SolicitudesClient({
                                   <span className={`text-sm font-bold ${tl.textClass}`}>{tl.label}</span>
                                 </div>
                                 <p className="text-sm text-neutral-700">
-                                  {a.usuario_nombre || 'Sistema'}
+                                  <UsuarioNombreBoton
+                                    usuarioId={a.usuario_id}
+                                    nombre={a.usuario_nombre}
+                                    muted={false}
+                                  />
                                   {getUserRoleFromSolicitud(a.usuario_id, detailTarget) && (
                                     <span className="text-neutral-400"> ({getUserRoleFromSolicitud(a.usuario_id, detailTarget)})</span>
                                   )}
@@ -1553,20 +1587,57 @@ export default function SolicitudesClient({
 
                     {/* Contacto responsable card */}
                     <div className="border border-neutral-200 rounded-xl p-5 space-y-4">
-                      <h3 className="text-sm font-bold text-neutral-900">Contacto responsable</h3>
-                      <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 rounded-full bg-neutral-200 flex items-center justify-center shrink-0">
-                          <User className="w-6 h-6 text-neutral-500" />
+                      <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
+                        <User className="w-4 h-4 text-neutral-500" />
+                        Contacto responsable
+                      </h3>
+
+                      {!responsableDetalle && getResponsableId(detailTarget) && (
+                        <p className="text-xs text-neutral-400 flex items-center gap-1.5">
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          Cargando contacto...
+                        </p>
+                      )}
+
+                      {responsableDetalle || getResponsableNombre(detailTarget) ? (
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-neutral-200 flex items-center justify-center shrink-0">
+                              <User className="w-6 h-6 text-neutral-500" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-sm font-bold text-neutral-900 break-words">
+                                {responsableDetalle
+                                  ? `${responsableDetalle.nombre} ${responsableDetalle.apellido}`.trim()
+                                  : getResponsableNombre(detailTarget)}
+                              </p>
+                              <p className="text-xs text-neutral-500">
+                                {responsableDetalle
+                                  ? ROL_LABEL[responsableDetalle.rol]
+                                  : getResponsableRol(detailTarget) || ''}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-2 text-xs border-t border-neutral-100 pt-3">
+                            <p className="flex items-center gap-2 text-neutral-600">
+                              <Building2 className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                              <span className="truncate">
+                                {responsableDetalle?.sucursal_nombre || (responsableDetalle?.sucursal_id ? `#${responsableDetalle.sucursal_id}` : '—')}
+                              </span>
+                            </p>
+                            <p className="flex items-center gap-2 text-neutral-600">
+                              <Phone className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                              <span className="truncate">{responsableDetalle?.telefono || '—'}</span>
+                            </p>
+                            <p className="flex items-center gap-2 text-neutral-600">
+                              <Mail className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                              <span className="truncate">{responsableDetalle?.email || '—'}</span>
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-bold text-neutral-900">
-                            {detailTarget.logistica_nombre || detailTarget.jefe_local_nombre || detailTarget.ejecutivo_nombre || '—'}
-                          </p>
-                          <p className="text-xs text-neutral-500">
-                            {detailTarget.logistica_nombre ? 'Coordinador de Logística' : detailTarget.jefe_local_nombre ? 'Jefe de Local' : detailTarget.ejecutivo_nombre ? 'Ejecutivo' : ''}
-                          </p>
-                        </div>
-                      </div>
+                      ) : (
+                        <p className="text-sm text-neutral-400 italic">Sin responsable asignado.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1581,7 +1652,13 @@ export default function SolicitudesClient({
                         <div key={obs.id} className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3">
                           <p className="text-sm text-neutral-900">{obs.observacion}</p>
                           <p className="text-xs text-neutral-400 mt-1.5">
-                            {obs.usuario_nombre || 'Anónimo'} · {formatFecha(obs.created_at)}
+                            <UsuarioNombreBoton
+                              usuarioId={obs.usuario_id}
+                              nombre={obs.usuario_nombre}
+                              muted
+                            />
+                            {' · '}
+                            {formatFecha(obs.created_at)}
                           </p>
                         </div>
                       ))}

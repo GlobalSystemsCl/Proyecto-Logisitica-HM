@@ -3,7 +3,7 @@ import { AuditoriaService } from '@/services/auditoria.service';
 import { redirect } from 'next/navigation';
 import HistorialClient from './HistorialClient';
 import Link from 'next/link';
-import { History, ArrowLeft, LogOut } from 'lucide-react';
+import { History, ArrowLeft, LogOut, UserRound } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
 
 export const dynamic = 'force-dynamic';
@@ -50,15 +50,26 @@ export default async function AdminHistorialPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:block text-right">
-              <p className="text-xs font-semibold text-neutral-900">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/perfil"
+              className="hidden sm:block text-right group"
+              title="Ver mi perfil"
+            >
+              <p className="text-xs font-semibold text-neutral-900 group-hover:text-neutral-600 transition-colors">
                 {profile.nombre} {profile.apellido}
               </p>
-              <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider">
+              <p className="text-[10px] text-neutral-500 uppercase font-mono tracking-wider group-hover:text-neutral-700 transition-colors">
                 {profile.rol}
               </p>
-            </div>
+            </Link>
+            <Link
+              href="/perfil"
+              className="p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+              title="Mi Perfil"
+            >
+              <UserRound className="w-5 h-5" />
+            </Link>
             <form action={logoutAction}>
               <button
                 type="submit"

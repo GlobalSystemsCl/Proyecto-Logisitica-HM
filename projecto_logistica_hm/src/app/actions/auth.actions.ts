@@ -2,6 +2,45 @@
 
 import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
+
+export interface UpdateProfileState {
+  success?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export async function updateProfileAction(
+  prevState: UpdateProfileState,
+  formData: FormData
+): Promise<UpdateProfileState> {
+  const nombre = formData.get('nombre') as string;
+  const apellido = formData.get('apellido') as string;
+  const telefono = formData.get('telefono') as string;
+
+  if (!nombre?.trim() || !apellido?.trim()) {
+    return { success: false, error: 'El nombre y el apellido son obligatorios.' };
+  }
+
+  if (telefono && telefono.trim().length > 30) {
+    return { success: false, error: 'El teléfono no puede superar los 30 caracteres.' };
+  }
+
+  const result = await AuthService.updateProfile({
+    nombre,
+    apellido,
+    telefono,
+  });
+
+  if (!result.success) {
+    return { success: false, error: result.error || 'No se pudo actualizar el perfil.' };
+  }
+
+  revalidatePath('/perfil');
+  revalidatePath('/dashboard');
+  revalidatePath('/solicitudes');
+  return { success: true, message: 'Perfil actualizado correctamente.' };
+}
 
 export async function loginAction(prevState: unknown, formData: FormData) {
   const email = formData.get('email') as string;

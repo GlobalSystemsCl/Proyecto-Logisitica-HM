@@ -2,7 +2,8 @@
 
 import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
-import { UserProfile } from '@/types/auth.types';
+import { UsersService } from '@/services/users.service';
+import { UserProfile, UsuarioDetalle } from '@/types/auth.types';
 import { TipoSolicitud } from '@/types/solicitud.types';
 import { revalidatePath } from 'next/cache';
 
@@ -449,6 +450,22 @@ export async function getObservacionesAction(solicitudId: string) {
 
 export async function getAuditoriaAction(solicitudId: string) {
   return SolicitudesService.getAuditoria(solicitudId);
+}
+
+/**
+ * Devuelve el detalle de contacto de un usuario (nombre, rol, sucursal,
+ * teléfono y correo) para tarjetas y popups de datos de usuario.
+ */
+export async function getUsuarioDetalleAction(usuarioId: string): Promise<UsuarioDetalle | null> {
+  try {
+    await getProfileOrThrow();
+    if (!usuarioId) return null;
+    return await UsersService.getUsuarioDetalleById(usuarioId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error al obtener datos del usuario';
+    console.error('Error en getUsuarioDetalleAction:', msg);
+    return null;
+  }
 }
 
 export async function getEjecutivosPorSucursalAction(sucursalId: number) {

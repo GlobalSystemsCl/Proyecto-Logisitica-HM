@@ -49,6 +49,7 @@ Debe existir un flujo funcional completo y validado.
 | Vehículos                | `PENDIENTE_REVISION` |       0% | Alta      | Revisar CRUD e integración    |
 | Solicitudes              | `EN_PROGRESO`        |      90% | Alta      | Crear/priorizar/cancelar/eliminar + reserva de vehículos + flujo logístico (calendarizar/despachar/recibir/finalizar) |
 | Sucursales               | `COMPLETADO`         |     100% | Alta      | Módulo admin validado por el usuario (2026-08-25); deuda de diseño `sucursal_destino` registrada en Fase 2 |
+| Perfil de Usuario        | `IMPLEMENTADO`       |     100% | Alta      | `/perfil`, edición nombre/apellido/teléfono, contacto responsable enriquecido y popups de usuario; pendiente aplicar migración `telefono` y validación funcional |
 | Logística                | `PENDIENTE_REVISION` |      80% | Alta      | Calendarizaciones, despacho, recepción y finalización implementados; pendiente `asignada` (R-LOG.1) y validación funcional |
 | Historial / trazabilidad | `PENDIENTE_REVISION` |       0% | Media     | Existen tablas auditoria/observacion/notificacion por auditar |
 | Permisos / roles         | `PENDIENTE_REVISION` |       0% | Alta      | Políticas RLS aplicadas por rol (2026-08-22); validar autorización en la app |
@@ -327,6 +328,41 @@ Debe revisarse:
 
 ---
 
+## 5.8 Perfil de Usuario
+
+**Estado:** `IMPLEMENTADO`
+
+**Progreso:** 100%
+
+### Implementado (2026-09-05)
+
+* Página `/perfil` accesible para cualquier usuario autenticado y activo: hero con avatar, nombre, apellido, rol y estado de cuenta.
+* Sección "Datos de la cuenta" (solo lectura): correo, sucursal, rol y fecha de ingreso; fuente de verdad `getUsuarioDetalleById` (join a `sucursal`).
+* Formulario de edición (nombre, apellido, teléfono) con `updateProfileAction` (`useActionState`), revalidación de `/perfil`, `/dashboard` y `/solicitudes`, y mensajes de éxito/error.
+* Columna `telefono` (`varchar(30)`) en `usuario` vía migración `20260905_perfil_usuario_telefono.sql`; esquema reflejado en `esquema-completo-sql.sql` y `DatabaseSchema.md`.
+* Tarjeta "Contacto responsable" del detalle de solicitud (pestaña Historial) enriquecida: nombre, rol, sucursal, teléfono y correo, resuelta con prioridad `logistica_id` → `jefe_local_id` → `ejecutivo_id` vía `getUsuarioDetalleAction`.
+* Popups de usuario (`UsuarioInfoModal`/`UsuarioNombreBoton`) al hacer clic en nombres del historial de cambios y de las observaciones.
+* Navegación al perfil desde los headers: `SolicitudesHeader`, dashboard (con botón "Mi Perfil"), `/logistica/calendarizaciones`, `/admin/usuarios`, `/admin/vehiculos`, `/admin/sucursales`, `/admin/historial`.
+
+### Archivos relacionados
+
+* `src/types/auth.types.ts` (tipos `UsuarioDetalle`, `ROL_LABEL`, `nombreCompletoUsuario`, `telefono`)
+* `src/services/auth.service.ts` (`updateProfile`), `src/services/users.service.ts` (`getUsuarioDetalleById`)
+* `src/app/actions/auth.actions.ts` (`updateProfileAction`), `src/app/actions/solicitudes.actions.ts` (`getUsuarioDetalleAction`)
+* `src/app/perfil/page.tsx`, `src/app/perfil/PerfilClient.tsx`
+* `src/components/usuario-info-modal.tsx`
+* `src/app/solicitudes/SolicitudesClient.tsx`
+* `src/components/SolicitudesHeader.tsx`, `src/app/dashboard/page.tsx`, `src/app/admin/*/page.tsx`, `src/app/logistica/calendarizaciones/page.tsx`
+* Migración: `supabase/migrations/20260905_perfil_usuario_telefono.sql`
+
+### Pendientes
+
+* Aplicar la migración `20260905_perfil_usuario_telefono.sql` en el SQL Editor de Supabase (columna `telefono` aún no existe en el servidor).
+* Validación funcional por el usuario (edición de perfil, tarjeta de contacto y popups).
+* Los usuarios existentes tendrán `telefono = NULL` hasta que actualicen su perfil (la UI lo muestra como "Sin registrar"/"—").
+
+---
+
 # 6. Registro de funcionalidades incompletas
 
 Esta sección debe utilizarse para evitar que trabajo iniciado quede olvidado.
@@ -353,6 +389,7 @@ Cada vez que una implementación quede incompleta debe registrarse aquí.
 | Integración del escudo real (`public/images.png`) vía `next/image` + `mix-blend-multiply` en login, top bar del dashboard y header del módulo admin | UI / Frontend | 2026-08-25 | `COMPLETADO` | Sí — compilación y lint limpios |
 | Módulo Gestión de Sucursales (`/admin/sucursales`): CRUD admin, capacidad con ajuste manual, detalle de solicitudes por sucursal con responsables y vehículos, eliminación protegida, tile activo en dashboard | Sucursales | 2026-08-25 | `COMPLETADO` | Sí — `tsc --noEmit` y ESLint sin errores; validación funcional del usuario confirmada (2026-08-25) tras resolver bug de entorno (HMR WebSocket roto por caché `.next` + `.env.local` duplicado) |
 | Gestión de Solicitudes v1 (`/solicitudes`): crear (ejecutivo/admin), cola de priorización (jefe_local/admin), cancelación con motivo, eliminación según regla pre-despacho, reserva/liberación de vehículos solo admin, visibilidad por rol, tile activo en dashboard | Solicitudes | 2026-08-25 | `IMPLEMENTADO` | Sí — `tsc --noEmit` y ESLint sin errores/warnings; validación funcional pendiente del usuario |
+| Perfil de Usuario (`/perfil`): página personal con edición de nombre/apellido/teléfono, tarjeta "Contacto responsable" del detalle de solicitud con rol/sucursal/teléfono/correo y popups de datos de usuario en historial/observaciones; columna `telefono` (`varchar(30)`) | Perfil de Usuario / Solicitudes | 2026-09-05 | `IMPLEMENTADO` | Sí — `tsc --noEmit` y ESLint sin errores; migración `20260905_perfil_usuario_telefono.sql` pendiente de aplicar en Supabase y validación funcional pendiente |
 
 Una funcionalidad solamente puede pasar a `COMPLETADO` cuando haya sido validada.
 
