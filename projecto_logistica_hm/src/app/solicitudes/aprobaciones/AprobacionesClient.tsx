@@ -218,7 +218,7 @@ export default function AprobacionesClient({
                       <button
                         onClick={() => abrirAprobacion(sol)}
                         disabled={isSubmitting}
-                        className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium hover:bg-green-700 disabled:opacity-50 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-semibold hover:bg-neutral-700 disabled:opacity-50 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
                         <ThumbsUp className="w-4 h-4" />
                         Aprobar
@@ -229,7 +229,7 @@ export default function AprobacionesClient({
                           setRejectTarget(sol);
                         }}
                         disabled={isSubmitting}
-                        className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                        className="px-4 py-2 rounded-xl border border-neutral-300 text-neutral-700 text-sm font-semibold hover:border-red-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-50 transition-colors cursor-pointer inline-flex items-center gap-1.5"
                       >
                         <ThumbsDown className="w-4 h-4" />
                         Rechazar
@@ -278,7 +278,7 @@ export default function AprobacionesClient({
               <button
                 onClick={handleConfirmarAprobacion}
                 disabled={isSubmitting || !aprobacionFecha.trim()}
-                className="px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-green-700 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-semibold disabled:opacity-50 hover:bg-neutral-700 cursor-pointer"
               >
                 {isSubmitting ? 'Aprobando...' : 'Confirmar aprobación'}
               </button>
@@ -321,7 +321,7 @@ export default function AprobacionesClient({
               <button
                 onClick={handleConfirmarRechazo}
                 disabled={isSubmitting || rejectMotivo.trim().length < 5}
-                className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium disabled:opacity-50 hover:bg-red-700 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-red-600 text-white text-sm font-semibold disabled:opacity-50 hover:bg-red-700 cursor-pointer"
               >
                 Confirmar rechazo
               </button>
