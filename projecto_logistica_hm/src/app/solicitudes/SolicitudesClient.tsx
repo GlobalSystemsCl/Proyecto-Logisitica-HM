@@ -226,6 +226,7 @@ export default function SolicitudesClient({
   const [vehiculoMarca, setVehiculoMarca] = useState('');
   const [vehiculoError, setVehiculoError] = useState(false);
   const [obsCreacion, setObsCreacion] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const [motivo, setMotivo] = useState('');
   const [nuevoVehiculoId, setNuevoVehiculoId] = useState('');
@@ -246,6 +247,18 @@ export default function SolicitudesClient({
   const sucursalesParaDestino = useMemo(() => {
     return sucursales;
   }, [sucursales]);
+
+  const sucursalDestinoInfo = useMemo(() => {
+    if (!sucursalDestinoSel) return null;
+    const suc = sucursales.find((s) => String(s.id) === sucursalDestinoSel);
+    if (!suc) return null;
+    const disponibles = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
+    return {
+      ...suc,
+      disponibles: Math.max(disponibles, 0),
+      excedido: selectedVehiculos.size > disponibles,
+    };
+  }, [sucursalDestinoSel, sucursales, selectedVehiculos.size]);
 
   const marcasVehiculos = useMemo(() => {
     const marcas = new Set<string>();
@@ -403,6 +416,7 @@ export default function SolicitudesClient({
     setVehiculoSearch('');
     setVehiculoMarca('');
     setVehiculoError(false);
+    setCreateError(null);
     setObsCreacion('');
     setDireccionEvento('');
     setTituloEvento('');
@@ -413,10 +427,15 @@ export default function SolicitudesClient({
     e.preventDefault();
     if (selectedVehiculos.size === 0) {
       setVehiculoError(true);
-      setFeedback({ type: 'error', message: 'Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.' });
+      setCreateError('Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.');
+      return;
+    }
+    if (tipoSel === 'venta' && sucursalDestinoInfo?.excedido) {
+      setCreateError(`No hay slots suficientes en la sucursal destino. Disponibles: ${sucursalDestinoInfo.disponibles}, seleccionados: ${selectedVehiculos.size}.`);
       return;
     }
     setVehiculoError(false);
+    setCreateError(null);
     setIsSubmitting(true);
     try {
       const result = await createSolicitudAction({
@@ -431,7 +450,7 @@ export default function SolicitudesClient({
         observacion: obsCreacion.trim() || undefined,
       });
       if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'Error al crear.' });
+        setCreateError(result.error || 'Error al crear.');
       } else {
         setFeedback({ type: 'success', message: result.message || 'Solicitud creada.' });
         setIsCreateOpen(false);
@@ -990,14 +1009,35 @@ export default function SolicitudesClient({
                   <select
                     required
                     value={sucursalDestinoSel}
-                    onChange={(e) => setSucursalDestinoSel(e.target.value)}
+                    onChange={(e) => { setSucursalDestinoSel(e.target.value); if (createError) setCreateError(null); }}
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   >
                     <option value="">Selecciona destino...</option>
-                    {sucursalesParaDestino.map((suc) => (
-                      <option key={suc.id} value={String(suc.id)}>{suc.nombre}</option>
-                    ))}
+                    {sucursalesParaDestino.map((suc) => {
+                      const disp = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
+                      return (
+                        <option key={suc.id} value={String(suc.id)}>
+                          {suc.nombre} — {Math.max(disp, 0)} slots disponibles
+                        </option>
+                      );
+                    })}
                   </select>
+                  {sucursalDestinoInfo && (
+                    <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
+                      sucursalDestinoInfo.excedido
+                        ? 'bg-red-50 text-red-700 border border-red-200'
+                        : 'bg-neutral-50 text-neutral-600 border border-neutral-200'
+                    }`}>
+                      <span className="font-medium">
+                        Disponibles: {sucursalDestinoInfo.disponibles} / {sucursalDestinoInfo.slots ?? 0}
+                      </span>
+                      {sucursalDestinoInfo.excedido && (
+                        <span className="text-red-600 font-semibold">
+                          — Excede en {selectedVehiculos.size - sucursalDestinoInfo.disponibles} slot{selectedVehiculos.size - sucursalDestinoInfo.disponibles !== 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1108,6 +1148,7 @@ export default function SolicitudesClient({
                             if (e.target.checked) next.add(v.id);
                             else next.delete(v.id);
                             setSelectedVehiculos(next);
+                            if (createError) setCreateError(null);
                           }}
                           className="accent-neutral-900"
                         />
@@ -1155,12 +1196,18 @@ export default function SolicitudesClient({
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
+                {createError && (
+                  <div className="flex-1 flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>{createError}</span>
+                  </div>
+                )}
                 <button type="button" onClick={() => setIsCreateOpen(false)} className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer">
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !!createError}
                   className="px-5 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 active:bg-black rounded-xl disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? 'Creando...' : 'Crear Solicitud'}
