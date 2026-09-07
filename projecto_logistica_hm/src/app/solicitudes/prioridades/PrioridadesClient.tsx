@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -115,26 +115,28 @@ export default function PrioridadesClient({
 
   const porIdsSet = useMemo(() => new Set(porIds), [porIds]);
 
-  // Sincronizar el estado local cuando cambian la cola o "Por Priorizar" desde el servidor
-  useEffect(() => {
-    const cIds = cola.map((s) => s.id);
-    const pIds = porPriorizar.map((s) => s.id);
-    if (pendingOps === 0) {
-      if (JSON.stringify(orden) !== JSON.stringify(cIds) && !timerRef.current) {
-        setOrden(cIds);
-      }
-      if (JSON.stringify(porIds) !== JSON.stringify(pIds)) {
-        setPorIds(pIds);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cola, porPriorizar, pendingOps]);
-
   const dataPorId = useMemo(() => {
     const map = new Map<string, SolicitudLista>();
     solicitudes.forEach((s) => map.set(s.id, s));
     return map;
   }, [solicitudes]);
+
+  // Sincronizar el estado local cuando cambian la cola o "Por Priorizar" desde el servidor.
+  // Se hace durante el render (no en un efecto) para evitar renders en cascada.
+  const [lastSync, setLastSync] = useState<{ c: string; p: string }>({ c: '', p: '' });
+
+  if (pendingOps === 0) {
+    const cStr = cola.map((s) => s.id).join('|');
+    const pStr = porPriorizar.map((s) => s.id).join('|');
+    if (lastSync.c !== cStr && !timerRef.current) {
+      setLastSync((prev) => ({ ...prev, c: cStr }));
+      setOrden(cola.map((s) => s.id));
+    }
+    if (lastSync.p !== pStr) {
+      setLastSync((prev) => ({ ...prev, p: pStr }));
+      setPorIds(porPriorizar.map((s) => s.id));
+    }
+  }
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -208,65 +210,111 @@ export default function PrioridadesClient({
     // Soltar un ítem de la cola fuera de ella = sacarla de la cola
     if (enCola && sobrePor) {
       const sol = dataPorId.get(aId);
-      if (sol) void handleSacarDeCola(sol);
+      if (sol) sacarDeColaOptimista(sol);
       return;
     }
 
     // Soltar un ítem "Por Priorizar" sobre la cola = priorizar en esa posición
     if (enPor && sobreCola) {
       const sol = dataPorId.get(aId);
-      if (sol) void handlePriorizarEnPosicion(sol, oId);
+      if (sol) priorizarOptimista(sol, oId);
       return;
     }
 
     // Arrastre dentro de "Por Priorizar": sin efecto
   }
 
-  // Prioriza `sol` insertándola en la cola antes del ítem `overIdTarget`
-  // (o al final de su sucursal si la cola está vacía o el destino pertenece a otra sucursal).
-  async function handlePriorizarEnPosicion(sol: SolicitudLista, overIdTarget: string) {
-    setIsSubmitting(true);
-    try {
-      let posicion: number | null = null;
-      if (orden.includes(overIdTarget)) {
-        const overSol = dataPorId.get(overIdTarget);
-        if (overSol && overSol.sucursal === sol.sucursal) {
-          // Cantidad de ítems de la misma sucursal que preceden al destino
-          // (soporta la cola mixta por sucursal que ve el administrador)
-          let antes = 0;
-          for (const qid of orden) {
-            if (qid === overIdTarget) break;
-            if (dataPorId.get(qid)?.sucursal === sol.sucursal) antes++;
-          }
-          posicion = antes + 1;
-        }
-      }
-      const result =
-        posicion !== null
-          ? await priorizarEnPosicionAction(sol.id, posicion)
-          : await priorizarSolicitudAction(sol.id);
-      mostrarFeedback(
-        result.success
-          ? result.message || 'Solicitud priorizada.'
-          : result.error || 'Error al priorizar.',
-        result.success ? 'success' : 'error'
-      );
-    } finally {
-      setIsSubmitting(false);
+  // Cantidad de ítems de la misma sucursal que preceden al destino
+  // (soporta la cola mixta por sucursal que ve el administrador).
+  function itemsAntesEnSucursal(aId: string, sucursal: number): number {
+    let antes = 0;
+    for (const qid of orden) {
+      if (qid === aId) break;
+      if (dataPorId.get(qid)?.sucursal === sucursal) antes++;
     }
+    return antes;
   }
 
-  async function handleSacarDeCola(sol: SolicitudLista) {
-    setIsSubmitting(true);
-    try {
-      const result = await sacarDeColaAction(sol.id);
-      mostrarFeedback(
-        result.success ? result.message || 'Sacada de la cola.' : result.error || 'Error.',
-        result.success ? 'success' : 'error'
-      );
-    } finally {
-      setIsSubmitting(false);
+  // Índice en la cola local donde insertar `sol` al soltarla sobre `overIdTarget`
+  // (delante del bloque de su sucursal o, si no aplica, al final de la cola).
+  function indiceInsercion(sol: SolicitudLista, overIdTarget: string | null): number {
+    if (overIdTarget && orden.includes(overIdTarget)) {
+      const overSol = dataPorId.get(overIdTarget);
+      if (overSol && overSol.sucursal === sol.sucursal) {
+        return orden.indexOf(overIdTarget);
+      }
     }
+    let idx = orden.length;
+    for (let i = orden.length - 1; i >= 0; i--) {
+      const q = dataPorId.get(orden[i]);
+      if (q && q.sucursal === sol.sucursal) {
+        idx = i + 1;
+        break;
+      }
+    }
+    return idx;
+  }
+
+  // Prioriza `sol` de forma optimista (se mueve al instante) y persiste en segundo plano.
+  // Si el servidor falla, revierte el movimiento.
+  function priorizarOptimista(sol: SolicitudLista, overIdTarget: string | null) {
+    const snapOrden = orden;
+    const snapPor = porIds;
+
+    let posicion: number | null = null;
+    if (overIdTarget && orden.includes(overIdTarget)) {
+      const overSol = dataPorId.get(overIdTarget);
+      if (overSol && overSol.sucursal === sol.sucursal) {
+        posicion = itemsAntesEnSucursal(overIdTarget, sol.sucursal) + 1;
+      }
+    }
+
+    const nuevoOrden = [...orden];
+    nuevoOrden.splice(indiceInsercion(sol, overIdTarget), 0, sol.id);
+    setOrden(nuevoOrden);
+    setPorIds((prev) => prev.filter((id) => id !== sol.id));
+    setPendingOps((p) => p + 1);
+
+    const guardar =
+      posicion !== null
+        ? priorizarEnPosicionAction(sol.id, posicion)
+        : priorizarSolicitudAction(sol.id);
+    guardar
+      .then((result) => {
+        if (!result.success) {
+          setOrden(snapOrden);
+          setPorIds(snapPor);
+          mostrarFeedback(result.error || 'Error al priorizar.', 'error');
+        } else {
+          mostrarFeedback(
+            result.message || 'Solicitud priorizada.',
+            'success'
+          );
+        }
+      })
+      .finally(() => setPendingOps((p) => Math.max(0, p - 1)));
+  }
+
+  // Saca `sol` de la cola de forma optimista y persiste en segundo plano.
+  function sacarDeColaOptimista(sol: SolicitudLista) {
+    const snapOrden = orden;
+    const snapPor = porIds;
+
+    setOrden((prev) => prev.filter((id) => id !== sol.id));
+    setPorIds((prev) => (prev.includes(sol.id) ? prev : [...prev, sol.id]));
+    setPendingOps((p) => p + 1);
+
+    sacarDeColaAction(sol.id)
+      .then((result) => {
+        if (!result.success) {
+          setOrden(snapOrden);
+          setPorIds(snapPor);
+          mostrarFeedback(result.error || 'Error al sacar de la cola.', 'error');
+        } else {
+          mostrarFeedback(result.message || 'Sacada de la cola.', 'success');
+        }
+      })
+      .finally(() => setPendingOps((p) => Math.max(0, p - 1)));
   }
 
   return (
@@ -328,7 +376,7 @@ export default function PrioridadesClient({
                   if (!sol) return null;
                   const esDestino = overId === id && activeId !== null && porIdsSet.has(activeId);
                   return (
-                    <SolicitudCard key={id} id={id} sol={sol} variant="cola" pos={idx + 1} onSacar={handleSacarDeCola} isSubmitting={isSubmitting} resaltado={esDestino} />
+                    <SolicitudCard key={id} id={id} sol={sol} variant="cola" pos={idx + 1} onSacar={sacarDeColaOptimista} resaltado={esDestino} />
                   );
                 })}
               </div>
@@ -342,18 +390,22 @@ export default function PrioridadesClient({
             <Inbox className="w-5 h-5 text-neutral-700" />
             <h2 className="font-semibold text-neutral-900">Por Priorizar</h2>
             <span className="ml-auto px-2.5 py-0.5 rounded-full bg-neutral-100 text-xs text-neutral-600">
-              {porPriorizar.length}
+              {porIds.length}
             </span>
           </div>
 
-          {porPriorizar.length === 0 ? (
+          {porIds.length === 0 ? (
             <ZonaPorPriorizarVacia />
           ) : (
-            <SortableContext items={porPriorizar.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={porIds} strategy={verticalListSortingStrategy}>
               <div className="space-y-2">
-                {porPriorizar.map((sol) => (
-                  <SolicitudCard key={sol.id} id={sol.id} sol={sol} variant="porPriorizar" />
-                ))}
+                {porIds.map((id) => {
+                  const sol = dataPorId.get(id);
+                  if (!sol) return null;
+                  return (
+                    <SolicitudCard key={sol.id} id={sol.id} sol={sol} variant="porPriorizar" />
+                  );
+                })}
               </div>
             </SortableContext>
           )}
@@ -386,7 +438,6 @@ function SolicitudCard({
   variant,
   pos,
   onSacar,
-  isSubmitting,
   resaltado,
 }: {
   id: string;
@@ -394,7 +445,6 @@ function SolicitudCard({
   variant: 'cola' | 'porPriorizar';
   pos?: number;
   onSacar?: (sol: SolicitudLista) => void;
-  isSubmitting?: boolean;
   resaltado?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -464,7 +514,6 @@ function SolicitudCard({
         {variant === 'cola' && onSacar && (
           <button
             onClick={() => onSacar(sol)}
-            disabled={isSubmitting}
             title="Sacar de la cola"
             className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
           >

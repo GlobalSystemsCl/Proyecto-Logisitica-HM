@@ -15,7 +15,8 @@ import {
   aprobarSolicitudAction,
   rechazarSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
-import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
+import { SolicitudLista, EstadoSolicitud, TipoSolicitud, VehiculoInventario } from '@/types/solicitud.types';
+import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -32,8 +33,16 @@ interface ViewerInfo {
 
 interface AprobacionesClientProps {
   solicitudes: SolicitudLista[];
+  vehiculos: VehiculoInventario[];
   viewer: ViewerInfo;
 }
+
+const PRE_DESPACHO: EstadoSolicitud[] = [
+  'pendiente_aprobacion',
+  'aprobada',
+  'pendiente',
+  'priorizada',
+];
 
 function formatFecha(iso: string | null): string {
   if (!iso) return '—';
@@ -53,6 +62,7 @@ const tipoLabel: Record<TipoSolicitud, string> = {
 
 export default function AprobacionesClient({
   solicitudes,
+  vehiculos,
   viewer,
 }: AprobacionesClientProps) {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
@@ -73,7 +83,7 @@ export default function AprobacionesClient({
       lista = lista.filter((s) => s.sucursal === viewer.sucursal_id);
     }
     return lista;
-  }, [solicitudes, esJefeLocal, esAdmin, viewer.sucursal_id]);
+  }, [solicitudes, esJefeLocal, viewer.sucursal_id]);
 
   function puedoRechazar(sol: SolicitudLista): boolean {
     if (esAdmin) return true;
@@ -321,69 +331,37 @@ export default function AprobacionesClient({
       )}
 
       {detailTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg shadow-xl">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-bold text-neutral-900">
-                Solicitud #{detailTarget.id.slice(0, 8)}
-              </h3>
-              <button
-                onClick={() => setDetailTarget(null)}
-                className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 cursor-pointer"
-                aria-label="Cerrar"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="space-y-2 text-sm">
-              <DetailRow label="Sucursal" value={detailTarget.sucursal_nombre || '—'} />
-              <DetailRow label="Tipo" value={tipoLabel[detailTarget.tipo_solicitud]} />
-              <DetailRow label="Fecha creación" value={formatFecha(detailTarget.fecha_creacion)} />
-              <DetailRow label="Fecha límite" value={formatFecha(detailTarget.fecha_limite)} />
-              <DetailRow label="Encargado" value={getEncargadoNombre(detailTarget) || '—'} />
-              {detailTarget.tipo_solicitud === 'venta' && (
-                <DetailRow
-                  label="Sucursal destino"
-                  value={detailTarget.sucursal_destino_nombre || '—'}
-                />
-              )}
-              {detailTarget.tipo_solicitud === 'evento' && (
-                <>
-                  <DetailRow label="Título evento" value={detailTarget.titulo_evento || '—'} />
-                  <DetailRow label="Dirección" value={detailTarget.direccion_evento || '—'} />
-                </>
-              )}
-              <div>
-                <p className="text-xs text-neutral-500 font-medium mb-1">Vehículos</p>
-                {detailTarget.vehiculos.length === 0 ? (
-                  <p className="text-neutral-400">Sin vehículos asociados</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {detailTarget.vehiculos.map((v) => (
-                      <span
-                        key={v.solicitud_vehiculo_id}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-50 border border-neutral-200 text-xs text-neutral-700"
-                      >
-                        <Car className="w-3 h-3" />
-                        {v.patente}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
+        <SolicitudDetalleModal
+          solicitud={detailTarget}
+          vehiculosInventario={vehiculos}
+          onClose={() => setDetailTarget(null)}
+          onMensaje={(tipo, mensaje) => setFeedback({ type: tipo, message: mensaje })}
+          onAprobar={(sol) => {
+            setDetailTarget(null);
+            abrirAprobacion(sol);
+          }}
+          onRechazar={(sol) => {
+            setRejectMotivo('');
+            setDetailTarget(null);
+            setRejectTarget(sol);
+          }}
+          onPriorizar={() => {}}
+          onCancelar={() => {}}
+          onEliminar={() => {}}
+          onRecibir={() => {}}
+          onFinalizar={() => {}}
+          puedeAprobar={puedoRechazar(detailTarget)}
+          puedeRechazar={puedoRechazar(detailTarget)}
+          puedePriorizar={false}
+          puedeCancelar={false}
+          puedeEliminar={false}
+          puedeRecibir={false}
+          puedeFinalizar={false}
+          puedeGestionarVehiculos={
+            PRE_DESPACHO.includes(detailTarget.estado) && puedoRechazar(detailTarget)
+          }
+        />
       )}
-    </div>
-  );
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex gap-2">
-      <span className="w-32 shrink-0 text-neutral-500">{label}</span>
-      <span className="font-medium text-neutral-900">{value}</span>
     </div>
   );
 }
