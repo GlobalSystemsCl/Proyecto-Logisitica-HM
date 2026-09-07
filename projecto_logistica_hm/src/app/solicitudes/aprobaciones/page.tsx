@@ -21,7 +21,10 @@ export default async function AprobacionesPage() {
     redirect('/solicitudes');
   }
 
-  const solicitudes = await SolicitudesService.getSolicitudes();
+  const [solicitudes, vehiculos] = await Promise.all([
+    SolicitudesService.getSolicitudes(),
+    SolicitudesService.getVehiculosInventario(),
+  ]);
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
@@ -42,6 +45,7 @@ export default async function AprobacionesPage() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <AprobacionesClient
           solicitudes={solicitudes}
+          vehiculos={vehiculos}
           viewer={{
             id: profile.id,
             nombre: profile.nombre,

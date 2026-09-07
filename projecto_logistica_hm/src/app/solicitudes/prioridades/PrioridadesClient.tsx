@@ -70,11 +70,13 @@ export default function PrioridadesClient({
   viewer,
 }: PrioridadesClientProps) {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Estado local del orden de la cola (para reordenamiento optimista con debounce)
+  const [pendingOps, setPendingOps] = useState(0);
+
+  // Estado local: orden de la cola y lista "Por Priorizar" (para DnD optimista)
   const [orden, setOrden] = useState<string[]>([]);
+  const [porIds, setPorIds] = useState<string[]>([]);
   // Elemento siendo arrastrado y destino actual (para feedback visual)
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -111,16 +113,22 @@ export default function PrioridadesClient({
     return lista;
   }, [solicitudes, sucursalQueVale]);
 
-  const porIdsSet = useMemo(() => new Set(porPriorizar.map((s) => s.id)), [porPriorizar]);
+  const porIdsSet = useMemo(() => new Set(porIds), [porIds]);
 
-  // Sincronizar el orden local cuando cambia la cola desde el servidor
+  // Sincronizar el estado local cuando cambian la cola o "Por Priorizar" desde el servidor
   useEffect(() => {
-    const ids = cola.map((s) => s.id);
-    if (JSON.stringify(orden) !== JSON.stringify(ids) && !timerRef.current) {
-      setOrden(ids);
+    const cIds = cola.map((s) => s.id);
+    const pIds = porPriorizar.map((s) => s.id);
+    if (pendingOps === 0) {
+      if (JSON.stringify(orden) !== JSON.stringify(cIds) && !timerRef.current) {
+        setOrden(cIds);
+      }
+      if (JSON.stringify(porIds) !== JSON.stringify(pIds)) {
+        setPorIds(pIds);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cola]);
+  }, [cola, porPriorizar, pendingOps]);
 
   const dataPorId = useMemo(() => {
     const map = new Map<string, SolicitudLista>();

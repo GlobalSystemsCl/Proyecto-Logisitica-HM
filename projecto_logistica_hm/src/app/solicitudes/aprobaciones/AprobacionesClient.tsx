@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import {
   CheckCircle2,
   AlertCircle,
@@ -16,8 +16,6 @@ import {
   rechazarSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
-import { formatFecha } from '@/lib/fechas';
-import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -37,8 +35,9 @@ interface AprobacionesClientProps {
   viewer: ViewerInfo;
 }
 
-function getEncargadoId(sol: SolicitudLista): string | null {
-  return sol.ejecutivo_id || sol.jefe_local_id || null;
+function formatFecha(iso: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('es-CL');
 }
 
 function getEncargadoNombre(sol: SolicitudLista): string | null {
@@ -178,7 +177,7 @@ export default function AprobacionesClient({
                       <span>Límite: {formatFecha(sol.fecha_limite)}</span>
                     )}
                     {getEncargadoNombre(sol) && (
-                      <span>Encargado: <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted /></span>
+                      <span>Encargado: {getEncargadoNombre(sol)}</span>
                     )}
                   </div>
                   {sol.vehiculos.length > 0 && (
@@ -251,7 +250,7 @@ export default function AprobacionesClient({
               Aprobando la solicitud #{approveTarget.id.slice(0, 8)}. Indica la fecha limite en la que el o los vehiculos debe ser entregado.
             </p>
             <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
-              Fecha de Entrega *
+              Fecha limite de Entrega *
             </label>
             <input
               type="date"
@@ -341,7 +340,7 @@ export default function AprobacionesClient({
               <DetailRow label="Tipo" value={tipoLabel[detailTarget.tipo_solicitud]} />
               <DetailRow label="Fecha creación" value={formatFecha(detailTarget.fecha_creacion)} />
               <DetailRow label="Fecha límite" value={formatFecha(detailTarget.fecha_limite)} />
-              <DetailRow label="Encargado" value={getEncargadoNombre(detailTarget) ? <UsuarioNombreBoton usuarioId={getEncargadoId(detailTarget)} nombre={getEncargadoNombre(detailTarget)} muted /> : '—'} />
+              <DetailRow label="Encargado" value={getEncargadoNombre(detailTarget) || '—'} />
               {detailTarget.tipo_solicitud === 'venta' && (
                 <DetailRow
                   label="Sucursal destino"
@@ -380,7 +379,7 @@ export default function AprobacionesClient({
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
       <span className="w-32 shrink-0 text-neutral-500">{label}</span>
