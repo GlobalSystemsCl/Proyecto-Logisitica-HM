@@ -33,7 +33,7 @@ export default async function AdminVehiculosPage() {
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
       {/* Top Navbar */}
       <header className="border-b border-neutral-200 bg-white backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-8 lg:px-12 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link
               href="/dashboard"
@@ -89,7 +89,7 @@ export default async function AdminVehiculosPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8">
         <VehiculosTableClient
           vehiculos={vehiculos}
           marcas={marcas}

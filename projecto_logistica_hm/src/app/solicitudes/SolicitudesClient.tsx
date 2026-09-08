@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -39,13 +39,13 @@ import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
-  pendiente_aprobacion: { label: 'Pendiente AprobaciÃ³n', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   aprobada: { label: 'Aprobada', color: 'bg-green-50 text-green-700 border-green-200' },
   pendiente: { label: 'Pendiente', color: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   priorizada: { label: 'Priorizada', color: 'bg-neutral-200 text-neutral-900 border-neutral-200' },
   asignada: { label: 'Asignada', color: 'bg-white text-neutral-900 border-neutral-400' },
   calendarizada: { label: 'Calendarizada', color: 'bg-white text-neutral-900 border-neutral-900 border-2' },
-  en_transito: { label: 'En TrÃ¡nsito', color: 'bg-neutral-700 text-white border-neutral-700' },
+  en_transito: { label: 'En Tránsito', color: 'bg-neutral-700 text-white border-neutral-700' },
   entregada: { label: 'Entregada', color: 'bg-neutral-900 text-white border-neutral-900' },
   finalizada: { label: 'Finalizada', color: 'bg-black text-white border-black ring-2 ring-neutral-300' },
   cancelada: { label: 'Cancelada', color: 'bg-red-50 text-red-700 border-red-200' },
@@ -276,7 +276,7 @@ export default function SolicitudesClient({
     e.preventDefault();
     if (selectedVehiculos.size === 0) {
       setVehiculoError(true);
-      setFeedback({ type: 'error', message: 'Debes seleccionar al menos un vehÃ­culo: una solicitud no puede existir sin vehÃ­culos.' });
+      setFeedback({ type: 'error', message: 'Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.' });
       return;
     }
     setVehiculoError(false);
@@ -431,10 +431,10 @@ export default function SolicitudesClient({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900 flex items-center gap-2">
             <FileText className="w-7 h-7 text-neutral-900" />
-            <span>GestiÃ³n de Solicitudes</span>
+            <span>Gestión de Solicitudes</span>
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Flujo de traslado de vehÃ­culos entre sucursales de H.Motores
+            Flujo de traslado de vehículos entre sucursales de H.Motores
           </p>
         </div>
 
@@ -472,7 +472,7 @@ export default function SolicitudesClient({
 
         <div className="bg-neutral-900 border border-neutral-900 rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Pendientes AprobaciÃ³n</p>
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Pendientes Aprobación</p>
             <p className="text-3xl font-bold text-white mt-1">{pendientesAprobacion}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-white">
@@ -563,8 +563,8 @@ export default function SolicitudesClient({
                 <th className="py-3.5 px-4">Destino</th>
                 <th className="py-3.5 px-4">Estado</th>
                 <th className="py-3.5 px-4">Encargado</th>
-                <th className="py-3.5 px-4">VehÃ­culos</th>
-                <th className="py-3.5 px-4">CreaciÃ³n</th>
+                <th className="py-3.5 px-4">Vehículos</th>
+                <th className="py-3.5 px-4">Creación</th>
                 <th className="py-3.5 px-4">Entrega</th>
                 <th className="py-3.5 px-4 text-right">Ver</th>
               </tr>
@@ -581,7 +581,7 @@ export default function SolicitudesClient({
                   const estado = estadoConfig[sol.estado];
                   const destino = sol.tipo_solicitud === 'venta'
                     ? (sol.sucursal_destino_nombre || `#${sol.sucursal_destino}`)
-                    : (sol.direccion_evento || 'â€”');
+                    : (sol.direccion_evento || '—');
                   return (
                     <tr key={sol.id} className="hover:bg-neutral-50 transition-colors">
                       <td className="py-3.5 px-4">
@@ -618,7 +618,7 @@ export default function SolicitudesClient({
                         {getEncargadoNombre(sol) ? (
                           <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted />
                         ) : (
-                          'â€”'
+                          '—'
                         )}
                       </td>
 
@@ -667,8 +667,8 @@ export default function SolicitudesClient({
                   <h2 className="text-lg font-bold text-neutral-900">Nueva Solicitud de Traslado</h2>
                   <p className="text-xs text-neutral-500">
                     {esJefeLocal
-                      ? 'Se crearÃ¡ como Aprobada directamente'
-                      : 'Queda Pendiente de AprobaciÃ³n por el Jefe de Local'}
+                      ? 'Se creará como Aprobada directamente'
+                      : 'Queda Pendiente de Aprobación por el Jefe de Local'}
                   </p>
                 </div>
               </div>
@@ -752,7 +752,7 @@ export default function SolicitudesClient({
               {tipoSel === 'evento' && (
                 <>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">TÃ­tulo del Evento *</label>
+                    <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Título del Evento *</label>
                     <input
                       type="text"
                       required
@@ -764,12 +764,12 @@ export default function SolicitudesClient({
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">DirecciÃ³n del Evento *</label>
+                    <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Dirección del Evento *</label>
                     <input
                       type="text"
                       required
                       minLength={3}
-                      placeholder="DirecciÃ³n..."
+                      placeholder="Dirección..."
                       value={direccionEvento}
                       onChange={(e) => setDireccionEvento(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
@@ -789,7 +789,7 @@ export default function SolicitudesClient({
                     onChange={(e) => setEjecutivoSel(e.target.value)}
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   >
-                    <option value="">Sin ejecutivo â€” Yo me encargo</option>
+                    <option value="">Sin ejecutivo — Yo me encargo</option>
                     {ejecutivosDisponibles.map((ej) => (
                       <option key={ej.id} value={ej.id}>{ej.nombre} {ej.apellido}</option>
                     ))}
@@ -797,10 +797,10 @@ export default function SolicitudesClient({
                 </div>
               )}
 
-              {/* VehÃ­culos */}
+              {/* Vehículos */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Reservar VehÃ­culos *</label>
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Reservar Vehículos *</label>
                   <span className={`text-[10px] font-semibold uppercase tracking-wider ${selectedVehiculos.size > 0 ? 'bg-neutral-900 text-white' : 'bg-neutral-100 text-neutral-500'} px-2 py-0.5 rounded-lg`}>
                     {selectedVehiculos.size} seleccionado{selectedVehiculos.size === 1 ? '' : 's'}
                   </span>
@@ -832,11 +832,11 @@ export default function SolicitudesClient({
                 <div className={`max-h-44 overflow-y-auto border rounded-xl divide-y divide-neutral-200 ${vehiculoError && selectedVehiculos.size === 0 ? 'border-red-300 bg-red-50/30' : 'border-neutral-300'}`}>
                   {vehiculos.length === 0 ? (
                     <p className="p-3 text-xs text-neutral-400 italic">
-                      No hay vehÃ­culos en el inventario. Solicita a un administrador que incorpore vehÃ­culos.
+                      No hay vehículos en el inventario. Solicita a un administrador que incorpore vehículos.
                     </p>
                   ) : vehiculosFiltrados.length === 0 ? (
                     <p className="p-3 text-xs text-neutral-400 italic">
-                      No hay vehÃ­culos que coincidan con la bÃºsqueda.
+                      No hay vehículos que coincidan con la búsqueda.
                     </p>
                   ) : (
                     vehiculosFiltrados.map((v) => (
@@ -859,7 +859,7 @@ export default function SolicitudesClient({
                           className="accent-neutral-900"
                         />
                         <span className="font-mono font-bold text-neutral-900 text-xs">{v.patente}</span>
-                        <span className="text-xs text-neutral-500 truncate">{v.chasis} Â· {v.marca} {v.modelo} Â· {v.anio}</span>
+                        <span className="text-xs text-neutral-500 truncate">{v.chasis} · {v.marca} {v.modelo} · {v.anio}</span>
                         {v.reservado_en_activa && (
                           <span className="ml-auto text-[10px] font-semibold text-neutral-400 uppercase shrink-0">Ocupado</span>
                         )}
@@ -870,14 +870,14 @@ export default function SolicitudesClient({
 
                 {vehiculoError && selectedVehiculos.size === 0 && (
                   <p className="text-xs text-red-600 font-medium flex items-center gap-1.5">
-                    <AlertCircle className="w-3.5 h-3.5" /> Selecciona al menos un vehÃ­culo para poder crear la solicitud.
+                    <AlertCircle className="w-3.5 h-3.5" /> Selecciona al menos un vehículo para poder crear la solicitud.
                   </p>
                 )}
               </div>
 
-              {/* ObservaciÃ³n al crear */}
+              {/* Observación al crear */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">ObservaciÃ³n (opcional)</label>
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Observación (opcional)</label>
                 <textarea
                   rows={2}
                   placeholder="Comentarios o notas sobre la solicitud..."
@@ -891,12 +891,12 @@ export default function SolicitudesClient({
                 {esJefeLocal ? (
                   <>
                     <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-green-600" />
-                    <span>La solicitud se crearÃ¡ como <strong>Aprobada</strong> directamente porque la creas tÃº como Jefe de Local.</span>
+                    <span>La solicitud se creará como <strong>Aprobada</strong> directamente porque la creas tú como Jefe de Local.</span>
                   </>
                 ) : (
                   <>
                     <Clock className="w-4 h-4 shrink-0 mt-0.5 text-neutral-900" />
-                    <span>La solicitud quedarÃ¡ como <strong>Pendiente de AprobaciÃ³n</strong>. El Jefe de Local la aprobarÃ¡ y definirÃ¡ la fecha de entrega.</span>
+                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y definirá la fecha de entrega.</span>
                   </>
                 )}
               </div>
@@ -967,7 +967,7 @@ export default function SolicitudesClient({
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Rechazar Solicitud</h2>
                   <p className="text-sm text-neutral-500 font-mono uppercase">
-                    #{rejectTarget.id.slice(0, 8)} Â· {rejectTarget.sucursal_nombre}
+                    #{rejectTarget.id.slice(0, 8)} · {rejectTarget.sucursal_nombre}
                   </p>
                 </div>
               </div>
@@ -978,7 +978,7 @@ export default function SolicitudesClient({
                   required
                   rows={3}
                   minLength={5}
-                  placeholder="Explica el motivo del rechazo (mÃ­nimo 5 caracteres)..."
+                  placeholder="Explica el motivo del rechazo (mínimo 5 caracteres)..."
                   value={rejectMotivo}
                   onChange={(e) => setRejectMotivo(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none"
@@ -1020,7 +1020,7 @@ export default function SolicitudesClient({
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Aprobar Solicitud</h2>
                   <p className="text-sm text-neutral-500 font-mono uppercase">
-                    #{approveTarget.id.slice(0, 8)} Â· {approveTarget.sucursal_nombre}
+                    #{approveTarget.id.slice(0, 8)} · {approveTarget.sucursal_nombre}
                   </p>
                 </div>
               </div>
@@ -1036,7 +1036,7 @@ export default function SolicitudesClient({
                 />
                 <p className="text-xs text-neutral-500 flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
-                  Selecciona la fecha en que se entregarÃ¡ el o los vehÃ­culos.
+                  Selecciona la fecha en que se entregará el o los vehículos.
                 </p>
               </div>
 
@@ -1055,7 +1055,7 @@ export default function SolicitudesClient({
                   disabled={isSubmitting || !aprobacionFecha.trim()}
                   className="px-5 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? 'Aprobando...' : 'Confirmar AprobaciÃ³n'}
+                  {isSubmitting ? 'Aprobando...' : 'Confirmar Aprobación'}
                 </button>
               </div>
             </div>
@@ -1075,18 +1075,18 @@ export default function SolicitudesClient({
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Cancelar Solicitud</h2>
                   <p className="text-sm text-neutral-500 font-mono uppercase">
-                    #{cancelTarget.id.slice(0, 8)} Â· {cancelTarget.sucursal_nombre}
+                    #{cancelTarget.id.slice(0, 8)} · {cancelTarget.sucursal_nombre}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Motivo de CancelaciÃ³n *</label>
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Motivo de Cancelación *</label>
                 <textarea
                   required
                   rows={3}
                   minLength={5}
-                  placeholder="Explica brevemente el motivo (mÃ­nimo 5 caracteres)..."
+                  placeholder="Explica brevemente el motivo (mínimo 5 caracteres)..."
                   value={motivo}
                   onChange={(e) => setMotivo(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none"
@@ -1108,7 +1108,7 @@ export default function SolicitudesClient({
                   disabled={isSubmitting || motivo.trim().length < 5}
                   className="px-5 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 rounded-xl disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? 'Cancelando...' : 'Confirmar CancelaciÃ³n'}
+                  {isSubmitting ? 'Cancelando...' : 'Confirmar Cancelación'}
                 </button>
               </div>
             </div>
@@ -1128,7 +1128,7 @@ export default function SolicitudesClient({
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Eliminar Solicitud</h2>
                   <p className="text-sm text-neutral-500">
-                    Â¿Confirmas eliminar definitivamente{' '}
+                    ¿Confirmas eliminar definitivamente{' '}
                     <strong className="text-neutral-900 font-mono uppercase">#{deleteTarget.id.slice(0, 8)}</strong>?
                   </p>
                 </div>
@@ -1137,7 +1137,7 @@ export default function SolicitudesClient({
               {deleteTarget.vehiculos.length > 0 && (
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Se liberarÃ¡n las {deleteTarget.vehiculos.length} reserva(s) de vehÃ­culos asociadas.</span>
+                  <span>Se liberarán las {deleteTarget.vehiculos.length} reserva(s) de vehículos asociadas.</span>
                 </div>
               )}
 

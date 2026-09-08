@@ -1,4 +1,4 @@
-﻿import { AuthService } from '@/services/auth.service';
+import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -40,7 +40,7 @@ export default async function DashboardPage() {
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
       {/* Top Navbar */}
       <header className="border-b border-neutral-200 bg-white/90 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        <div className="w-full px-4 sm:px-8 lg:px-12 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image
               src="/images.png"
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8 space-y-8">
         {/* Welcome Banner */}
         <div className="relative overflow-hidden bg-neutral-900 border border-neutral-900 text-white rounded-3xl p-8 shadow-xl">
           <div className="relative z-10 space-y-2">

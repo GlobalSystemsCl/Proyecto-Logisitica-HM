@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DndContext,
   DragOverlay,
@@ -74,9 +75,19 @@ export default function PrioridadesClient({
 
   const [pendingOps, setPendingOps] = useState(0);
 
-  // Estado local: orden de la cola y lista "Por Priorizar" (para DnD optimista)
-  const [orden, setOrden] = useState<string[]>([]);
-  const [porIds, setPorIds] = useState<string[]>([]);
+  // Espejo del estado local para leerlo desde operaciones encoladas.
+  const listasRef = useRef<{ orden: string[]; por: string[] }>({ orden: [], por: [] });
+  // Serializa las operaciones de persistencia para no chocar contra la clave única
+  // (sucursal, posicion_prioridad) ni contra transiciones de estado inválidas.
+  const chainRef = useRef<Promise<void>>(Promise.resolve());
+  const lastSyncRef = useRef<{ c: string; p: string }>({ c: '', p: '' });
+  const router = useRouter();
+
+  function encolarOperacion(ejecutar: () => Promise<void>) {
+    chainRef.current = chainRef.current.then(ejecutar).catch((err) => {
+      console.error('Operación de cola fallida:', err);
+    });
+  }
   // Elemento siendo arrastrado y destino actual (para feedback visual)
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
@@ -113,6 +124,17 @@ export default function PrioridadesClient({
     return lista;
   }, [solicitudes, sucursalQueVale]);
 
+  // Estado local: orden de la cola y lista "Por Priorizar" (para DnD optimista).
+  // Se inicializan desde los props para que SSR y cliente coincidan y no haya flash.
+  const [orden, setOrden] = useState<string[]>(() => cola.map((s) => s.id));
+  const [porIds, setPorIds] = useState<string[]>(() => porPriorizar.map((s) => s.id));
+
+  function setListas(ordenNuevo: string[], porNuevo: string[]) {
+    listasRef.current = { orden: ordenNuevo, por: porNuevo };
+    setOrden(ordenNuevo);
+    setPorIds(porNuevo);
+  }
+
   const porIdsSet = useMemo(() => new Set(porIds), [porIds]);
 
   const dataPorId = useMemo(() => {
@@ -122,21 +144,20 @@ export default function PrioridadesClient({
   }, [solicitudes]);
 
   // Sincronizar el estado local cuando cambian la cola o "Por Priorizar" desde el servidor.
-  // Se hace durante el render (no en un efecto) para evitar renders en cascada.
-  const [lastSync, setLastSync] = useState<{ c: string; p: string }>({ c: '', p: '' });
-
-  if (pendingOps === 0) {
+  useEffect(() => {
+    if (pendingOps > 0) return;
     const cStr = cola.map((s) => s.id).join('|');
     const pStr = porPriorizar.map((s) => s.id).join('|');
-    if (lastSync.c !== cStr && !timerRef.current) {
-      setLastSync((prev) => ({ ...prev, c: cStr }));
-      setOrden(cola.map((s) => s.id));
-    }
-    if (lastSync.p !== pStr) {
-      setLastSync((prev) => ({ ...prev, p: pStr }));
-      setPorIds(porPriorizar.map((s) => s.id));
-    }
-  }
+    const cChanged = lastSyncRef.current.c !== cStr && !timerRef.current;
+    const pChanged = lastSyncRef.current.p !== pStr;
+    if (!cChanged && !pChanged) return;
+
+    lastSyncRef.current = { c: cStr, p: pStr };
+    setListas(
+      cChanged ? cola.map((s) => s.id) : listasRef.current.orden,
+      pChanged ? porPriorizar.map((s) => s.id) : listasRef.current.por
+    );
+  }, [cola, porPriorizar, pendingOps]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -148,20 +169,22 @@ export default function PrioridadesClient({
   }
 
   function programarReorden(nuevoOrden: string[]) {
-    setOrden(nuevoOrden);
+    setListas(nuevoOrden, listasRef.current.por);
     if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(async () => {
+    timerRef.current = setTimeout(() => {
       timerRef.current = null;
-      const suc = sucursalQueVale;
-      if (suc === null) {
-        mostrarFeedback('Los administradores deben elegir una sucursal para reordenar.', 'error');
-        return;
-      }
-      const result = await reordenarColaAction(suc, nuevoOrden);
-      mostrarFeedback(
-        result.success ? 'Cola de prioridades actualizada.' : result.error || 'Error al reordenar.',
-        result.success ? 'success' : 'error'
-      );
+      encolarOperacion(async () => {
+        const suc = sucursalQueVale;
+        if (suc === null) {
+          mostrarFeedback('Los administradores deben elegir una sucursal para reordenar.', 'error');
+          return;
+        }
+        const result = await reordenarColaAction(suc, nuevoOrden);
+        mostrarFeedback(
+          result.success ? 'Cola de prioridades actualizada.' : result.error || 'Error al reordenar.',
+          result.success ? 'success' : 'error'
+        );
+      });
     }, 500);
   }
 
@@ -196,14 +219,11 @@ export default function PrioridadesClient({
 
     // Reordenar dentro de la cola
     if (enCola && orden.includes(oId)) {
-      setOrden((prev) => {
-        const oldIndex = prev.indexOf(aId);
-        const newIndex = prev.indexOf(oId);
-        if (oldIndex === -1 || newIndex === -1) return prev;
-        const nuevo = arrayMove(prev, oldIndex, newIndex);
-        programarReorden(nuevo);
-        return nuevo;
-      });
+      const prevOrden = listasRef.current.orden;
+      const oldIndex = prevOrden.indexOf(aId);
+      const newIndex = prevOrden.indexOf(oId);
+      if (oldIndex === -1 || newIndex === -1) return;
+      programarReorden(arrayMove(prevOrden, oldIndex, newIndex));
       return;
     }
 
@@ -228,7 +248,7 @@ export default function PrioridadesClient({
   // (soporta la cola mixta por sucursal que ve el administrador).
   function itemsAntesEnSucursal(aId: string, sucursal: number): number {
     let antes = 0;
-    for (const qid of orden) {
+    for (const qid of listasRef.current.orden) {
       if (qid === aId) break;
       if (dataPorId.get(qid)?.sucursal === sucursal) antes++;
     }
@@ -238,15 +258,16 @@ export default function PrioridadesClient({
   // Índice en la cola local donde insertar `sol` al soltarla sobre `overIdTarget`
   // (delante del bloque de su sucursal o, si no aplica, al final de la cola).
   function indiceInsercion(sol: SolicitudLista, overIdTarget: string | null): number {
-    if (overIdTarget && orden.includes(overIdTarget)) {
+    const colaActual = listasRef.current.orden;
+    if (overIdTarget && colaActual.includes(overIdTarget)) {
       const overSol = dataPorId.get(overIdTarget);
       if (overSol && overSol.sucursal === sol.sucursal) {
-        return orden.indexOf(overIdTarget);
+        return colaActual.indexOf(overIdTarget);
       }
     }
-    let idx = orden.length;
-    for (let i = orden.length - 1; i >= 0; i--) {
-      const q = dataPorId.get(orden[i]);
+    let idx = colaActual.length;
+    for (let i = colaActual.length - 1; i >= 0; i--) {
+      const q = dataPorId.get(colaActual[i]);
       if (q && q.sucursal === sol.sucursal) {
         idx = i + 1;
         break;
@@ -256,65 +277,64 @@ export default function PrioridadesClient({
   }
 
   // Prioriza `sol` de forma optimista (se mueve al instante) y persiste en segundo plano.
-  // Si el servidor falla, revierte el movimiento.
+  // Las operaciones se encolan en serie para evitar choques contra la clave única
+  // (sucursal, posicion_prioridad) y transiciones de estado inválidas.
   function priorizarOptimista(sol: SolicitudLista, overIdTarget: string | null) {
-    const snapOrden = orden;
-    const snapPor = porIds;
+    const snapOrden = listasRef.current.orden;
+    const snapPor = listasRef.current.por;
 
-    let posicion: number | null = null;
-    if (overIdTarget && orden.includes(overIdTarget)) {
-      const overSol = dataPorId.get(overIdTarget);
-      if (overSol && overSol.sucursal === sol.sucursal) {
-        posicion = itemsAntesEnSucursal(overIdTarget, sol.sucursal) + 1;
-      }
-    }
-
-    const nuevoOrden = [...orden];
+    const nuevoOrden = [...snapOrden];
     nuevoOrden.splice(indiceInsercion(sol, overIdTarget), 0, sol.id);
-    setOrden(nuevoOrden);
-    setPorIds((prev) => prev.filter((id) => id !== sol.id));
+    setListas(nuevoOrden, snapPor.filter((id) => id !== sol.id));
     setPendingOps((p) => p + 1);
 
-    const guardar =
-      posicion !== null
-        ? priorizarEnPosicionAction(sol.id, posicion)
-        : priorizarSolicitudAction(sol.id);
-    guardar
-      .then((result) => {
-        if (!result.success) {
-          setOrden(snapOrden);
-          setPorIds(snapPor);
-          mostrarFeedback(result.error || 'Error al priorizar.', 'error');
-        } else {
-          mostrarFeedback(
-            result.message || 'Solicitud priorizada.',
-            'success'
-          );
+    encolarOperacion(async () => {
+      // Recalcular la posición al ejecutar, contra el estado local ya optimista,
+      // para que sea coherente con las operaciones previas ya persistidas.
+      let posicion: number | null = null;
+      if (overIdTarget && listasRef.current.orden.includes(overIdTarget)) {
+        const overSol = dataPorId.get(overIdTarget);
+        if (overSol && overSol.sucursal === sol.sucursal) {
+          posicion = itemsAntesEnSucursal(overIdTarget, sol.sucursal) + 1;
         }
-      })
-      .finally(() => setPendingOps((p) => Math.max(0, p - 1)));
+      }
+      const result =
+        posicion !== null
+          ? await priorizarEnPosicionAction(sol.id, posicion)
+          : await priorizarSolicitudAction(sol.id);
+      if (!result.success) {
+        setListas(snapOrden, snapPor);
+        mostrarFeedback(result.error || 'Error al priorizar.', 'error');
+        router.refresh();
+      } else {
+        mostrarFeedback(result.message || 'Solicitud priorizada.', 'success');
+      }
+      setPendingOps((p) => Math.max(0, p - 1));
+    });
   }
 
   // Saca `sol` de la cola de forma optimista y persiste en segundo plano.
   function sacarDeColaOptimista(sol: SolicitudLista) {
-    const snapOrden = orden;
-    const snapPor = porIds;
+    const snapOrden = listasRef.current.orden;
+    const snapPor = listasRef.current.por;
 
-    setOrden((prev) => prev.filter((id) => id !== sol.id));
-    setPorIds((prev) => (prev.includes(sol.id) ? prev : [...prev, sol.id]));
+    setListas(
+      snapOrden.filter((id) => id !== sol.id),
+      snapPor.includes(sol.id) ? snapPor : [...snapPor, sol.id]
+    );
     setPendingOps((p) => p + 1);
 
-    sacarDeColaAction(sol.id)
-      .then((result) => {
-        if (!result.success) {
-          setOrden(snapOrden);
-          setPorIds(snapPor);
-          mostrarFeedback(result.error || 'Error al sacar de la cola.', 'error');
-        } else {
-          mostrarFeedback(result.message || 'Sacada de la cola.', 'success');
-        }
-      })
-      .finally(() => setPendingOps((p) => Math.max(0, p - 1)));
+    encolarOperacion(async () => {
+      const result = await sacarDeColaAction(sol.id);
+      if (!result.success) {
+        setListas(snapOrden, snapPor);
+        mostrarFeedback(result.error || 'Error al sacar de la cola.', 'error');
+        router.refresh();
+      } else {
+        mostrarFeedback(result.message || 'Sacada de la cola.', 'success');
+      }
+      setPendingOps((p) => Math.max(0, p - 1));
+    });
   }
 
   return (

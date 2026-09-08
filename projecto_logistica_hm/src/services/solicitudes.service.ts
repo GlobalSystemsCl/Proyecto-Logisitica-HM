@@ -385,17 +385,30 @@ export class SolicitudesService {
         return { success: false, error: 'La solicitud no tiene una sucursal asignada.' };
       }
 
-      const { data: maxRow } = await admin
+      const { data: filas } = await admin
         .from('solicitud')
-        .select('posicion_prioridad')
+        .select('id, posicion_prioridad')
         .eq('sucursal', actual.sucursal)
         .not('posicion_prioridad', 'is', null)
-        .order('posicion_prioridad', { ascending: false })
-        .limit(1);
+        .order('posicion_prioridad', { ascending: true });
 
-      const siguiente =
-        ((maxRow?.[0] as unknown as { posicion_prioridad: number | null } | undefined)
-          ?.posicion_prioridad ?? 0) + 1;
+      const items = (filas as unknown as Array<{ id: string; posicion_prioridad: number | null }> | null) ?? [];
+      const hayNegativos = items.some((i) => (i.posicion_prioridad ?? 0) < 0);
+
+      let siguiente: number;
+      if (hayNegativos) {
+        // Sanear la cola: reescribir 1..N sin dejar posiciones negativas
+        const ids = items.map((i) => i.id);
+        const sanear = await SolicitudesService.reescribirCola(
+          admin,
+          ids,
+          ids.map((id2, i) => ({ id: id2, pos: i + 1 }))
+        );
+        if (sanear) return { success: false, error: sanear };
+        siguiente = items.length + 1;
+      } else {
+        siguiente = (items[items.length - 1]?.posicion_prioridad ?? 0) + 1;
+      }
 
       const { error } = await admin
         .from('solicitud')
@@ -457,21 +470,12 @@ export class SolicitudesService {
 
       const ant = await this.getColaPriorizada(sucursalId);
 
-      for (let i = 0; i < orden.length; i++) {
-        const { error } = await admin
-          .from('solicitud')
-          .update({ posicion_prioridad: -(i + 1) })
-          .eq('id', orden[i]);
-        if (error) return { success: false, error: error.message };
-      }
-
-      for (let i = 0; i < orden.length; i++) {
-        const { error } = await admin
-          .from('solicitud')
-          .update({ posicion_prioridad: i + 1 })
-          .eq('id', orden[i]);
-        if (error) return { success: false, error: error.message };
-      }
+      const err = await SolicitudesService.reescribirCola(
+        admin,
+        orden,
+        orden.map((id2, i) => ({ id: id2, pos: i + 1 }))
+      );
+      if (err) return { success: false, error: err };
 
       await this.registrarAuditoria(
         userId,
@@ -521,28 +525,19 @@ export class SolicitudesService {
       const nuevoOrden = cola.map((c) => c.id);
       nuevoOrden.splice(posicion - 1, 0, id);
 
-      // Fase 1: posiciones negativas temporales para evitar el conflicto
-      // UNIQUE (sucursal, posicion_prioridad); el nuevo item entra como priorizada
-      for (let i = 0; i < nuevoOrden.length; i++) {
-        const esNuevo = nuevoOrden[i] === id;
-        const { error } = await admin
-          .from('solicitud')
-          .update({
-            posicion_prioridad: -(i + 1),
-            ...(esNuevo ? { estado: 'priorizada' as const } : {}),
-          })
-          .eq('id', nuevoOrden[i]);
-        if (error) return { success: false, error: error.message };
-      }
+      // Marcar el nuevo item como priorizada (la posición la asigna la reescritura)
+      const { error: eEstado } = await admin
+        .from('solicitud')
+        .update({ estado: 'priorizada' })
+        .eq('id', id);
+      if (eEstado) return { success: false, error: eEstado.message };
 
-      // Fase 2: posiciones definitivas (1..N)
-      for (let i = 0; i < nuevoOrden.length; i++) {
-        const { error } = await admin
-          .from('solicitud')
-          .update({ posicion_prioridad: i + 1 })
-          .eq('id', nuevoOrden[i]);
-        if (error) return { success: false, error: error.message };
-      }
+      const errReesc = await SolicitudesService.reescribirCola(
+        admin,
+        nuevoOrden,
+        nuevoOrden.map((id2, i) => ({ id: id2, pos: i + 1 }))
+      );
+      if (errReesc) return { success: false, error: errReesc };
 
       await this.registrarAuditoria(
         userId,
@@ -580,30 +575,8 @@ export class SolicitudesService {
 
       if (error) return { success: false, error: error.message };
 
-      const { data: resto } = await admin
-        .from('solicitud')
-        .select('id')
-        .eq('sucursal', actual.sucursal)
-        .eq('estado', 'priorizada')
-        .not('posicion_prioridad', 'is', null)
-        .order('posicion_prioridad', { ascending: true });
-
-      if (resto && resto.length > 0) {
-        for (let i = 0; i < (resto as Array<{ id: string }>).length; i++) {
-          const { error: uErr } = await admin
-            .from('solicitud')
-            .update({ posicion_prioridad: -(i + 1) })
-            .eq('id', (resto as Array<{ id: string }>)[i].id);
-          if (uErr) return { success: false, error: uErr.message };
-        }
-        for (let i = 0; i < (resto as Array<{ id: string }>).length; i++) {
-          const { error: uErr } = await admin
-            .from('solicitud')
-            .update({ posicion_prioridad: i + 1 })
-            .eq('id', (resto as Array<{ id: string }>)[i].id);
-          if (uErr) return { success: false, error: uErr.message };
-        }
-      }
+      const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+      if (errReesc) return { success: false, error: errReesc };
 
       await this.registrarAuditoria(
         userId,
@@ -643,6 +616,41 @@ export class SolicitudesService {
     }
   }
 
+  // Reescribe una cola completa en posiciones 1..N sin usar posiciones negativas:
+  // primero deja todo en NULL (los NULL no chocan con la UNIQUE) y luego asigna.
+  // Si una llamada se corta a la mitad quedan NULL (reparables) y nunca -1/-2.
+  private static async reescribirCola(
+    admin: ReturnType<typeof createAdminClient>,
+    ids: string[],
+    posiciones: Array<{ id: string; pos: number }>
+  ): Promise<string | null> {
+    const { error: eNull } = await admin
+      .from('solicitud')
+      .update({ posicion_prioridad: null })
+      .in('id', ids);
+    if (eNull) return eNull.message;
+
+    for (const p of posiciones) {
+      const { error: ePos } = await admin
+        .from('solicitud')
+        .update({ posicion_prioridad: p.pos })
+        .eq('id', p.id);
+      if (ePos) return ePos.message;
+    }
+    return null;
+  }
+
+  // Lee la cola actual de la sucursal y la compacta a posiciones 1..N.
+  private static async renumerarColaSucursal(
+    admin: ReturnType<typeof createAdminClient>,
+    sucursalId: number
+  ): Promise<string | null> {
+    const cola = await SolicitudesService.getColaPriorizada(sucursalId);
+    if (cola.length === 0) return null;
+    const ids = cola.map((c) => c.id);
+    return SolicitudesService.reescribirCola(admin, ids, ids.map((id2, i) => ({ id: id2, pos: i + 1 })));
+  }
+
   static async cancelarSolicitud(id: string, motivo: string, userId: string): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
@@ -659,10 +667,15 @@ export class SolicitudesService {
 
       const { error } = await admin
         .from('solicitud')
-        .update({ estado: 'cancelada', motivo_cancelacion: motivo.trim() })
+        .update({ estado: 'cancelada', motivo_cancelacion: motivo.trim(), posicion_prioridad: null })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
+
+      if (actual.posicion_prioridad !== null) {
+        const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+        if (errReesc) return { success: false, error: errReesc };
+      }
 
       await this.registrarAuditoria(userId, 'solicitud', id, 'CAMBIO_ESTADO', { estado: actual.estado }, { estado: 'cancelada', motivo: motivo.trim() });
       return { success: true };
@@ -689,6 +702,12 @@ export class SolicitudesService {
 
       const { error } = await admin.from('solicitud').delete().eq('id', id);
       if (error) return { success: false, error: error.message };
+
+      if (actual.posicion_prioridad !== null) {
+        const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+        if (errReesc) return { success: false, error: errReesc };
+      }
+
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar';
@@ -1035,18 +1054,28 @@ export class SolicitudesService {
           estado: 'calendarizada',
           fecha_tentativa_despacho: fechaDespacho,
           logistica_id: usuarioId,
+          // Al calendarizar sale de la cola: libera el slot de prioridad
+          posicion_prioridad: null,
         })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
+
+      // Compactar la cola restante (1..N) al liberarse el slot
+      const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+      if (errReesc) return { success: false, error: errReesc };
 
       await this.registrarAuditoria(
         usuarioId,
         'solicitud',
         id,
         'calendarizacion',
-        { estado: actual.estado, fecha_tentativa_despacho: actual.fecha_tentativa_despacho },
-        { estado: 'calendarizada', fecha_tentativa_despacho: fechaDespacho }
+        {
+          estado: actual.estado,
+          fecha_tentativa_despacho: actual.fecha_tentativa_despacho,
+          posicion_prioridad: actual.posicion_prioridad ?? null,
+        },
+        { estado: 'calendarizada', fecha_tentativa_despacho: fechaDespacho, posicion_prioridad: null }
       );
 
       return { success: true };
@@ -1069,10 +1098,15 @@ export class SolicitudesService {
         return { success: false, error: 'Solo las solicitudes Calendarizadas pueden volver a priorizadas.' };
       }
 
+      // Vuelve a la cola: reinsertar al final con una posición libre
+      const cola = await this.getColaPriorizada(actual.sucursal);
+      const siguiente = (cola[cola.length - 1]?.posicion_prioridad ?? 0) + 1;
+
       const { error } = await admin
         .from('solicitud')
         .update({
           estado: 'priorizada',
+          posicion_prioridad: siguiente,
           fecha_tentativa_despacho: null,
           logistica_id: null,
         })
@@ -1086,7 +1120,7 @@ export class SolicitudesService {
         id,
         'descalendarizacion',
         { estado: 'calendarizada', fecha_tentativa_despacho: actual.fecha_tentativa_despacho },
-        { estado: 'priorizada', fecha_tentativa_despacho: null }
+        { estado: 'priorizada', posicion_prioridad: siguiente, fecha_tentativa_despacho: null }
       );
 
       return { success: true };
@@ -1116,10 +1150,16 @@ export class SolicitudesService {
         .update({
           estado: 'en_transito',
           fecha_despacho: ahora,
+          // Libera el slot de la cola: despachada ya no compite por prioridad
+          posicion_prioridad: null,
         })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
+
+      // Compactar la cola restante (1..N) al liberarse el slot
+      const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+      if (errReesc) return { success: false, error: errReesc };
 
       await this.registrarAuditoria(
         usuarioId,
@@ -1157,6 +1197,7 @@ export class SolicitudesService {
         .update({
           estado: 'entregada',
           fecha_entrega: ahora,
+          posicion_prioridad: null,
         })
         .eq('id', id);
 
@@ -1193,7 +1234,7 @@ export class SolicitudesService {
 
       const { error } = await admin
         .from('solicitud')
-        .update({ estado: 'finalizada' })
+        .update({ estado: 'finalizada', posicion_prioridad: null })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };

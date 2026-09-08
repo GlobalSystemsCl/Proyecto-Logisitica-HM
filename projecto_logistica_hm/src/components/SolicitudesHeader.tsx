@@ -20,7 +20,7 @@ export default function SolicitudesHeader({
 }: SolicitudesHeaderProps) {
   return (
     <header className="border-b border-neutral-200 bg-white backdrop-blur-md sticky top-0 z-30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div className="w-full px-4 sm:px-8 lg:px-12 h-16 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link
             href="/dashboard"
@@ -75,7 +75,7 @@ export default function SolicitudesHeader({
           </form>
         </div>
       </div>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3 border-t border-neutral-100">
+      <div className="w-full px-4 sm:px-8 lg:px-12 pb-3 border-t border-neutral-100">
         <div className="bg-neutral-900 rounded-lg p-1.5 flex gap-1 overflow-x-auto">
           {tabs.map((t) => (
             <Link

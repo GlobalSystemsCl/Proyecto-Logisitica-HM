@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useMemo, useCallback, DragEvent } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock } from 'lucide-react';
-import type { SolicitudLista } from '@/types/solicitud.types';
+import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car } from 'lucide-react';
+import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
 import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { formatFecha, formatFechaLarga } from '@/lib/fechas';
 
@@ -20,6 +20,11 @@ interface Props {
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
 const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const ESTADOS_CALENDARIZABLES = ['priorizada', 'asignada'];
+
+const tipoLabel: Record<TipoSolicitud, string> = {
+  venta: 'Venta',
+  evento: 'Evento',
+};
 
 export default function CalendarizacionesClient({ solicitudes, viewer }: Props) {
   const [mesActual, setMesActual] = useState(new Date().getMonth());
@@ -81,7 +86,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     for (let i = 1; i <= ultimoDia.getDate(); i++) {
       dias.push({ dia: i, mes: mesActual, año: añoActual, esMesActual: true });
     }
-    const remaining = 42 - dias.length;
+    const remaining = Math.ceil(dias.length / 7) * 7 - dias.length;
     for (let i = 1; i <= remaining; i++) {
       const fecha = new Date(añoActual, mesActual + 1, i);
       dias.push({ dia: fecha.getDate(), mes: fecha.getMonth(), año: fecha.getFullYear(), esMesActual: false });
@@ -122,20 +127,6 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
 
   const handleDragLeave = useCallback(() => { setDropTarget(null); }, []);
 
-  const handleDrop = useCallback(async (e: DragEvent<HTMLDivElement>, fecha: string) => {
-    e.preventDefault();
-    setDropTarget(null);
-    const id = e.dataTransfer.getData('text/plain');
-    if (!id) return;
-    const solicitud = solicitudesCalendarizables.find((s) => s.id === id);
-    if (!solicitud) return;
-    if (solicitud.fecha_limite && Date.parse(fecha) > Date.parse(solicitud.fecha_limite.slice(0, 10))) {
-      setAdvertencia({ id, fecha });
-      return;
-    }
-    await ejecutarCalendarizar(id, fecha);
-  }, [solicitudesCalendarizables]);
-
   const ejecutarCalendarizar = async (id: string, fecha: string) => {
     setLoading(id);
     try {
@@ -158,6 +149,20 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     setAdvertencia(null);
     setDraggedId(null);
   };
+
+  const handleDrop = useCallback(async (e: DragEvent<HTMLDivElement>, fecha: string) => {
+    e.preventDefault();
+    setDropTarget(null);
+    const id = e.dataTransfer.getData('text/plain');
+    if (!id) return;
+    const solicitud = solicitudesCalendarizables.find((s) => s.id === id);
+    if (!solicitud) return;
+    if (solicitud.fecha_limite && Date.parse(fecha) > Date.parse(solicitud.fecha_limite.slice(0, 10))) {
+      setAdvertencia({ id, fecha });
+      return;
+    }
+    await ejecutarCalendarizar(id, fecha);
+  }, [solicitudesCalendarizables]);
 
   const handleDescalendarizar = useCallback(async (id: string) => {
     setLoading(id);
@@ -257,31 +262,56 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                     <p className="text-xs text-neutral-500">No hay solicitudes para calendarizar</p>
                   </div>
                 ) : (
-                  solicitudesCalendarizables.map((s) => (
+                  solicitudesCalendarizables.map((s, idx) => (
                     <div
                       key={s.id}
                       draggable={loading !== s.id}
                       onDragStart={(e) => handleDragStart(e, s.id)}
                       onDragEnd={handleDragEnd}
-                      className={`p-2 border rounded-lg cursor-grab active:cursor-grabbing transition-all select-none ${
-                        draggedId === s.id ? 'border-blue-400 bg-blue-50 opacity-50 scale-95' : 'border-neutral-200 bg-white hover:border-neutral-400 hover:shadow-sm'
+                      className={`p-3 rounded-xl border bg-white cursor-grab active:cursor-grabbing transition-colors ${
+                        draggedId === s.id
+                          ? 'border-neutral-900 ring-2 ring-neutral-900 shadow-lg opacity-60'
+                          : 'border-neutral-200 hover:border-neutral-300'
                       } ${loading === s.id ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                      <div className="flex items-center gap-2">
-                        <GripVertical className="w-3 h-3 text-neutral-400 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-xs font-semibold text-neutral-900 truncate">{s.sucursal_nombre} → {s.sucursal_destino_nombre}</p>
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-800">
-                            {s.estado === 'priorizada' ? `Prioridad ${s.posicion_prioridad}` : s.estado}
-                          </span>
-                          {s.vehiculos.length > 0 && (
-                            <p className="text-[10px] text-neutral-400 mt-0.5 truncate">{s.vehiculos.map((v) => v.patente).join(', ')}</p>
+                      <div className="flex items-start gap-3">
+                        <span className="flex items-center justify-center w-8 h-8 shrink-0 rounded-lg bg-neutral-900 text-white text-sm font-bold">
+                          {s.estado === 'priorizada' && s.posicion_prioridad !== null ? s.posicion_prioridad : idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-neutral-900 truncate" title={`${s.sucursal_nombre} → ${s.sucursal_destino_nombre}`}>
+                            {s.sucursal_nombre} → {s.sucursal_destino_nombre}
+                          </p>
+                          <div className="mt-1 flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-[10px] text-neutral-500">#{s.id.slice(0, 8)}</span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
+                              {tipoLabel[s.tipo_solicitud]}
+                            </span>
+                            {s.estado === 'asignada' && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-sky-100 text-sky-800">Asignada</span>
+                            )}
+                          </div>
+                          {s.vehiculos.length > 0 ? (
+                            <div className="mt-2 space-y-1.5">
+                              {s.vehiculos.map((v) => (
+                                <div key={v.solicitud_vehiculo_id} className="flex items-center gap-2 text-xs">
+                                  <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                                  <span className="font-semibold text-neutral-900">{v.patente}</span>
+                                  <span className="text-neutral-400">·</span>
+                                  <span className="text-neutral-500 font-mono text-[11px]">{v.chasis}</span>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-1 text-xs text-neutral-400">Sin vehículos</p>
                           )}
                           {s.fecha_limite && (
-                            <p className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[10px] font-semibold">
-                              <Clock className="w-3 h-3" />
-                              Límite: {formatFecha(s.fecha_limite)}
-                            </p>
+                            <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
+                              <span className="inline-flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Límite: {formatFecha(s.fecha_limite)}
+                              </span>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -293,15 +323,23 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
           </div>
         )}
 
-        <div className={puedeCalendarizar ? 'lg:col-span-3' : 'lg:col-span-4'}>
-          <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+        <div className={puedeCalendarizar ? 'lg:col-span-3 lg:sticky lg:top-24 lg:self-start' : 'lg:col-span-4'}>
+          <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
             <div className="flex items-center justify-between p-4 border-b border-neutral-200">
-              <button onClick={mesAnterior} className="p-2 rounded-lg hover:bg-neutral-100 transition-colors">
-                <ChevronLeft className="w-5 h-5 text-neutral-600" />
+              <button
+                onClick={mesAnterior}
+                aria-label="Mes anterior"
+                className="p-2 rounded-xl border border-neutral-200 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
               </button>
               <h2 className="text-lg font-bold text-neutral-900">{MESES[mesActual]} {añoActual}</h2>
-              <button onClick={mesSiguiente} className="p-2 rounded-lg hover:bg-neutral-100 transition-colors">
-                <ChevronRight className="w-5 h-5 text-neutral-600" />
+              <button
+                onClick={mesSiguiente}
+                aria-label="Mes siguiente"
+                className="p-2 rounded-xl border border-neutral-200 text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900 transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-5 h-5" />
               </button>
             </div>
             <div className="grid grid-cols-7 border-b border-neutral-200">
@@ -326,7 +364,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                       onDrop: (e: DragEvent<HTMLDivElement>) => handleDrop(e, fechaStr),
                     } : {})}
                     onClick={() => tieneTraslados && setDiaSeleccionado(fechaStr)}
-                    className={`min-h-[80px] p-1.5 border-b border-r border-neutral-100 transition-colors ${
+                    className={`min-h-[72px] p-1.5 border-b border-r border-neutral-100 transition-colors ${
                       !d.esMesActual ? 'bg-neutral-50' : ''
                     } ${esDropTarget ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : ''} ${
                       esSeleccionado ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''
@@ -338,9 +376,12 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                       {d.dia}
                     </div>
                     {tieneTraslados && (
-                      <div className="flex items-center justify-center">
-                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-800">
-                          🚗 {trasladosDelDia.length}
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="min-w-[22px] px-1.5 py-0.5 rounded-full bg-neutral-900 text-white text-[10px] font-bold leading-none text-center">
+                          {trasladosDelDia.length}
+                        </span>
+                        <span className="max-w-full px-1 overflow-hidden text-[9px] text-neutral-500 uppercase tracking-wide truncate">
+                          traslados agendados
                         </span>
                       </div>
                     )}
@@ -363,7 +404,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                 {solicitudesDelDiaSeleccionado.length} traslado{solicitudesDelDiaSeleccionado.length !== 1 ? 's' : ''} programado{solicitudesDelDiaSeleccionado.length !== 1 ? 's' : ''}
               </p>
             </div>
-            <button onClick={() => setDiaSeleccionado(null)} className="p-2 rounded-lg hover:bg-neutral-200 transition-colors">
+            <button onClick={() => setDiaSeleccionado(null)} className="p-2 rounded-lg hover:bg-neutral-200 transition-colors cursor-pointer">
               <X className="w-4 h-4 text-neutral-500" />
             </button>
           </div>
@@ -408,7 +449,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                       <button
                         onClick={() => handleDespachar(s.id)}
                         disabled={loading === s.id}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         <PackageSearch className="w-3 h-3" />
                         Despachar
@@ -418,7 +459,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                       <button
                         onClick={() => handleRecibir(s.id)}
                         disabled={loading === s.id}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         <PackageCheck className="w-3 h-3" />
                         Recibido
@@ -428,7 +469,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                       <button
                         onClick={() => handleDescalendarizar(s.id)}
                         disabled={loading === s.id}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         <RotateCcw className="w-3 h-3" />
                         Descalendarizar
