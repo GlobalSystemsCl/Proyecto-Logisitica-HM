@@ -584,7 +584,7 @@ export default function SolicitudesClient({
                 <th className="py-3.5 px-4">Encargado</th>
                 <th className="py-3.5 px-4">Vehículos</th>
                 <th className="py-3.5 px-4">Creación</th>
-                <th className="py-3.5 px-4">Entrega</th>
+                <th className="py-3.5 px-4">Fecha límite entrega</th>
                 <th className="py-3.5 px-4 text-right">Ver</th>
               </tr>
             </thead>
