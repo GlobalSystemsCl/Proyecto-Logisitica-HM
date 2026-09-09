@@ -663,6 +663,14 @@ export class SolicitudesService {
     admin: ReturnType<typeof createAdminClient>,
     sucursalId: number
   ): Promise<string | null> {
+    const { error: eJunk } = await admin
+      .from('solicitud')
+      .update({ posicion_prioridad: null })
+      .eq('sucursal', sucursalId)
+      .neq('estado', 'priorizada')
+      .not('posicion_prioridad', 'is', null);
+    if (eJunk) return eJunk.message;
+
     const cola = await SolicitudesService.getColaPriorizada(sucursalId);
     if (cola.length === 0) return null;
     const ids = cola.map((c) => c.id);

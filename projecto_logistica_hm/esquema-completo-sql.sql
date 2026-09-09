@@ -182,6 +182,17 @@ CREATE TABLE public.notificacion (
     created_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE public.solicitud_documento (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    solicitud_id uuid NOT NULL,
+    nombre_archivo text NOT NULL,
+    tipo_mime text NOT NULL,
+    tamano_bytes bigint NOT NULL,
+    ruta_storage text NOT NULL,
+    subido_por uuid,
+    created_at timestamptz NOT NULL DEFAULT now()
+);
+
 -- ============================================================================
 -- 3. RESTRICCIONES (nombres exactos del servidor)
 -- ============================================================================
@@ -201,6 +212,10 @@ ALTER TABLE public.solicitud ADD CONSTRAINT solicitud_logistica_id_fkey FOREIGN 
 ALTER TABLE public.solicitud ADD CONSTRAINT solicitud_sucursal_fkey FOREIGN KEY (sucursal) REFERENCES sucursal(id) ON UPDATE CASCADE ON DELETE CASCADE;
 ALTER TABLE public.solicitud ADD CONSTRAINT solicitud_sucursal_destino_fkey FOREIGN KEY (sucursal_destino) REFERENCES sucursal(id);
 ALTER TABLE public.solicitud ADD CONSTRAINT solicitud_sucursal_posicion_prioridad_key UNIQUE (sucursal, posicion_prioridad);
+ALTER TABLE public.solicitud_documento ADD CONSTRAINT solicitud_documento_pkey PRIMARY KEY (id);
+ALTER TABLE public.solicitud_documento ADD CONSTRAINT solicitud_documento_ruta_storage_key UNIQUE (ruta_storage);
+ALTER TABLE public.solicitud_documento ADD CONSTRAINT solicitud_documento_solicitud_fk FOREIGN KEY (solicitud_id) REFERENCES solicitud(id) ON DELETE CASCADE;
+ALTER TABLE public.solicitud_documento ADD CONSTRAINT solicitud_documento_subido_por_fk FOREIGN KEY (subido_por) REFERENCES usuario(id);
 ALTER TABLE public.solicitud_vehiculo ADD CONSTRAINT solicitud_vehiculo_pkey PRIMARY KEY (id);
 ALTER TABLE public.solicitud_vehiculo ADD CONSTRAINT solicitud_vehiculo_solicitud_fk FOREIGN KEY (solicitud_id) REFERENCES solicitud(id) ON DELETE CASCADE;
 ALTER TABLE public.solicitud_vehiculo ADD CONSTRAINT solicitud_vehiculo_vehiculo_fk FOREIGN KEY (vehiculo_id) REFERENCES vehiculo(id);
@@ -219,6 +234,7 @@ ALTER TABLE public.vehiculo ADD CONSTRAINT vehiculo_patente_key UNIQUE (patente)
 -- 4. ÍNDICES (además de los generados por PK/UNIQUE)
 -- ============================================================================
 
+CREATE INDEX idx_solicitud_documento_solicitud_id ON public.solicitud_documento USING btree (solicitud_id);
 CREATE INDEX idx_solicitud_sucursal_destino ON public.solicitud USING btree (sucursal_destino);
 CREATE INDEX idx_usuario_activo ON public.usuario USING btree (activo);
 CREATE INDEX idx_usuario_email ON public.usuario USING btree (email);
@@ -1126,6 +1142,7 @@ ALTER TABLE public.auditoria ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notificacion ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.observacion ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solicitud ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.solicitud_documento ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solicitud_vehiculo ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.sucursal ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.usuario ENABLE ROW LEVEL SECURITY;

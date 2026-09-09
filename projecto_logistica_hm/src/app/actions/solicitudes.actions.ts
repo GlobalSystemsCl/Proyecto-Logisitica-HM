@@ -321,6 +321,7 @@ export async function sacarDeColaAction(id: string) {
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/prioridades');
     return { success: true, message: 'Solicitud sacada de la cola de prioridades.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -353,6 +354,7 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/prioridades');
     return { success: true, message: 'Solicitud cancelada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -380,6 +382,7 @@ export async function eliminarSolicitudAction(id: string) {
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/prioridades');
     return { success: true, message: 'Solicitud eliminada definitivamente.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';

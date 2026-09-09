@@ -17,6 +17,7 @@ WHERE estado <> 'priorizada'
 CREATE TEMP TABLE __renum AS
 SELECT
   id,
+  sucursal,
   row_number() OVER (
     PARTITION BY sucursal
     ORDER BY posicion_prioridad ASC, id ASC
@@ -31,19 +32,18 @@ FROM __renum r
 WHERE s.id = r.id
   AND s.posicion_prioridad IS DISTINCT FROM r.nuevo;
 
--- 3) Reinsertar al final las priorizadas que quedaron con posición NULL.
+-- 3) Reinsertar al final las priorizadas que quedaron con posición NULL:
+--    el tope por sucursal es el MAX de las ya renumeradas en el paso 2.
 WITH vacias AS (
   SELECT
     s.id,
     (
-      COALESCE(MAX(r.nuevo) FILTER (WHERE r.nuevo IS NOT NULL), 0)
+      (SELECT COALESCE(MAX(r.nuevo), 0) FROM __renum r WHERE r.sucursal = s.sucursal)
       + row_number() OVER (PARTITION BY s.sucursal ORDER BY s.fecha_creacion ASC, s.id ASC)
     )::int AS nuevo
   FROM solicitud s
-  LEFT JOIN __renum r ON r.id = s.id
   WHERE s.estado = 'priorizada'
     AND s.posicion_prioridad IS NULL
-  GROUP BY s.id, s.sucursal, s.fecha_creacion
 )
 UPDATE solicitud s2
 SET posicion_prioridad = v.nuevo

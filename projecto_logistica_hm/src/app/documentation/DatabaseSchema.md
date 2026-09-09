@@ -93,7 +93,8 @@ El resultado obtenido se traduce a `CREATE TABLE` en este documento. Nunca se pe
 
 > **Estado: `COMPLETADO` — volcado 1:1 cerrado el 2026-08-22** contra el catálogo real de PostgreSQL (vía tabla temporal `catalogo_auditoria`): tablas, columnas, tipos, largos, nullability, defaults, identity, constraints con acciones exactas, índices, RLS, políticas y triggers verificados al 100%.
 >
-> **Actualizaciones posteriores al volcado (2026-08-26)**: enum `estado_solicitud` ampliado (nuevos estados), `solicitud.ejecutivo_id` nullable, columnas `sucursal_destino`/`direccion_evento`/`titulo_evento`, trigger `tr_validate_solicitud_tipo`, y deshabilitación de triggers de notificación y auditoría (migraciones `20260826_solicitudes_v2*.sql`, `20260826_deshabilitar_notificaciones.sql`, `20260826_deshabilitar_auditoria_service_role.sql`).
+> **Actualizaciones posteriores al volcado (2026-08-26)**: enum `estado_solicitud` ampliado (nuevos estados), `solicitud.ejecutivo_id` nullable, columnas `sucursal_destino`/`direccion_evento`/`titulo_evento`, trigger `tr_validate_solicitud_tipo`, y deshabilitación de triggers de notificación y auditoría (migraciones `20260826_solicitudes_v2*.sql`, `20260826_deshabilitar_notificaciones.sql`, `20260826_deshabilitar_auditoria_service_role.sql`). Además, la unicidad de `posicion_prioridad` pasó de global a compuesta `UNIQUE (sucursal, posicion_prioridad)` (migración `20260826_cola_prioridad_por_sucursal.sql`).
+> **Actualizaciones posteriores al volcado (2026-09-09)**: nueva tabla `solicitud_documento` (sección 5.9) y bucket privado `solicitud-documentos` para adjuntar documentación a las solicitudes (migración `20260909_solicitud_documentos.sql`; RLS habilitado sin políticas, acceso vía service-role).
 
 ## 5.0 Tipos ENUM
 
@@ -365,7 +366,7 @@ CREATE TABLE public.solicitud (
     fecha_tentativa_despacho TIMESTAMPTZ,   -- fecha tentativa programada del despacho
     fecha_despacho           TIMESTAMPTZ,   -- fecha real de salida del vehículo desde logística
     motivo_cancelacion       TEXT,
-    posicion_prioridad       BIGINT UNIQUE, -- posición única en la cola de prioridad
+    posicion_prioridad       BIGINT,      -- posición en la cola de prioridad de su sucursal (1..N por sucursal)
     fecha_limite             TIMESTAMPTZ
 );
 ```
@@ -382,7 +383,7 @@ Notas:
 
 ```sql
 CREATE UNIQUE INDEX solicitud_pkey ON public.solicitud USING btree (id);
-CREATE UNIQUE INDEX solicitud_posicion_prioridad_key ON public.solicitud USING btree (posicion_prioridad);
+CREATE UNIQUE INDEX solicitud_sucursal_posicion_prioridad_key ON public.solicitud USING btree (sucursal, posicion_prioridad);
 ```
 
 ### Triggers
@@ -751,6 +752,44 @@ CREATE POLICY "notificacion_delete_destinatario"
 
 * `usuario_id` → `public.usuario(id)` (destinatario, `ON DELETE CASCADE`)
 * `emisor_id` → `public.usuario(id)` (emisor/evento, `ON DELETE CASCADE`)
+
+---
+
+## 5.9 Tabla: solicitud_documento
+
+Documentos adjuntos a una solicitud (facturas, remitos, fotos, etc.). Creada el **2026-09-09** (migración `20260909_solicitud_documentos.sql`). El binario vive en el bucket privado de Storage `solicitud-documentos` (10 MB por archivo); la tabla guarda el metadato y la ruta del objeto.
+
+### CREATE TABLE
+
+```sql
+CREATE TABLE public.solicitud_documento (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    solicitud_id   UUID NOT NULL REFERENCES public.solicitud(id) ON DELETE CASCADE,
+    nombre_archivo TEXT NOT NULL,       -- nombre original del archivo subido
+    tipo_mime      TEXT NOT NULL,       -- p.ej. 'application/pdf'
+    tamano_bytes   BIGINT NOT NULL,     -- tamaño del objeto en bytes
+    ruta_storage   TEXT NOT NULL UNIQUE, -- objeto en el bucket (ej. '<solicitud_id>/<uuid>-<nombre>')
+    subido_por     UUID REFERENCES public.usuario(id),  -- usuario que subió el documento
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+### Índices
+
+```sql
+CREATE UNIQUE INDEX solicitud_documento_pkey ON public.solicitud_documento USING btree (id);
+CREATE UNIQUE INDEX solicitud_documento_ruta_storage_key ON public.solicitud_documento USING btree (ruta_storage);
+CREATE INDEX idx_solicitud_documento_solicitud_id ON public.solicitud_documento USING btree (solicitud_id);
+```
+
+### Row Level Security
+
+RLS habilitado **sin políticas**: el acceso se hace exclusivamente con el cliente service-role (`createAdminClient`) desde las server actions, como el resto de las escrituras de la app.
+
+### Relaciones
+
+* `solicitud_id` → `public.solicitud(id)` (`ON DELETE CASCADE`: al eliminar la solicitud se eliminan sus documentos)
+* `subido_por` → `public.usuario(id)`
 
 ---
 
