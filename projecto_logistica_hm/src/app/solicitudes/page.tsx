@@ -19,6 +19,7 @@ export default async function SolicitudesPage() {
   }
 
   const esGestor = profile.rol === 'jefe_local' || profile.rol === 'administrador';
+  const esEjecutivo = profile.rol === 'ejecutivo';
 
   const [solicitudes, sucursales, vehiculos] = await Promise.all([
     SolicitudesService.getSolicitudes(),
@@ -35,7 +36,7 @@ export default async function SolicitudesPage() {
         rol={profile.rol}
         tabs={[
           { href: '/solicitudes', label: 'General', active: true },
-          ...(esGestor
+          ...(esGestor || esEjecutivo
             ? [
                 { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false },
                 { href: '/solicitudes/prioridades', label: 'Prioridades', active: false },

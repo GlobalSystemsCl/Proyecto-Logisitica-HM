@@ -17,7 +17,7 @@ export default async function AprobacionesPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
+  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador' && profile.rol !== 'ejecutivo') {
     redirect('/solicitudes');
   }
 
@@ -36,7 +36,7 @@ export default async function AprobacionesPage() {
         tabs={[
           { href: '/solicitudes', label: 'General', active: false },
           { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: true },
-          ...(profile.rol === 'jefe_local' || profile.rol === 'administrador'
+          ...(profile.rol === 'jefe_local' || profile.rol === 'administrador' || profile.rol === 'ejecutivo'
             ? [{ href: '/solicitudes/prioridades', label: 'Prioridades', active: false }]
             : []),
         ]}

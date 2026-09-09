@@ -17,7 +17,7 @@ export default async function PrioridadesPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
+  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador' && profile.rol !== 'ejecutivo') {
     redirect('/solicitudes');
   }
 
