@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Image from 'next/image';
 import { ArrowLeft, LogOut } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
 import { ROL_LABEL, UserRole } from '@/types/auth.types';
@@ -16,16 +17,29 @@ export default function TopNavbar({ nombre, apellido, rol, backHref }: TopNavbar
   return (
     <header className="border-b border-neutral-200 bg-white sticky top-0 z-30">
       <div className="w-full px-4 sm:px-8 lg:px-12 h-16 flex items-center justify-between gap-3 sm:gap-4">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           {backHref && (
             <Link
               href={backHref}
-              className="p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors"
+              className="p-2 rounded-xl text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors shrink-0"
               title="Volver"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
           )}
+          <Link href="/" className="flex items-center gap-2.5 shrink-0" title="H.Motores">
+            <Image
+              src="/images.png"
+              alt="Escudo H.Motores"
+              width={40}
+              height={40}
+              priority
+              className="h-9 w-auto mix-blend-multiply"
+            />
+            <span className="hidden lg:block text-lg font-bold tracking-tight text-neutral-900">
+              H.Motores
+            </span>
+          </Link>
         </div>
 
         <div className="flex items-center gap-3">
