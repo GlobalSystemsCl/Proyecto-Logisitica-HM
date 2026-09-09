@@ -8,6 +8,7 @@ import {
   DocumentoSolicitud,
 } from '@/types/solicitud.types';
 import { UserRole } from '@/types/auth.types';
+import { DisponibilidadVehiculo } from '@/types/sucursal.types';
 
 export const ESTADOS_ACTIVOS_RESERVA = [
   'pendiente_aprobacion',
@@ -66,7 +67,7 @@ interface SolicitudRawRow {
   logistica: { nombre: string; apellido: string } | null;
   solicitud_vehiculo: Array<{
     id: string;
-    disponibilidad: 'reservado' | 'liberado';
+    disponibilidad: DisponibilidadVehiculo;
     vehiculo: {
       chasis: string;
       patente: string;
@@ -148,6 +149,7 @@ export interface SolicitudMinima {
   id: string;
   estado: SolicitudLista['estado'];
   sucursal: number;
+  sucursal_destino: number | null;
   ejecutivo_id: string | null;
   jefe_local_id: string | null;
   logistica_id: string | null;
@@ -229,10 +231,25 @@ export class SolicitudesService {
         (reservas || []).map((r) => (r as unknown as { vehiculo_id: string }).vehiculo_id)
       );
 
-      return ((vehiculos || []) as VehiculoInventario[]).map((v) => ({
-        ...v,
-        reservado_en_activa: ocupados.has(v.id),
-      }));
+      const { data: vendidos, error: vendidosError } = await admin
+        .from('solicitud_vehiculo')
+        .select('vehiculo_id')
+        .eq('disponibilidad', 'vendido');
+
+      if (vendidosError) {
+        console.error('Error al consultar vehículos vendidos:', vendidosError);
+      }
+
+      const vendidoSet = new Set<string>(
+        (vendidos || []).map((r) => (r as unknown as { vehiculo_id: string }).vehiculo_id)
+      );
+
+      return ((vehiculos || []) as VehiculoInventario[])
+        .filter((v) => !vendidoSet.has(v.id))
+        .map((v) => ({
+          ...v,
+          reservado_en_activa: ocupados.has(v.id),
+        }));
     } catch (err) {
       console.error('Error en getVehiculosInventario:', err);
       return [];
@@ -244,7 +261,7 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('solicitud')
-        .select('id, estado, sucursal, ejecutivo_id, jefe_local_id, tipo_solicitud, posicion_prioridad')
+        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, tipo_solicitud, posicion_prioridad')
         .eq('id', id)
         .maybeSingle();
 
@@ -1151,6 +1168,31 @@ export class SolicitudesService {
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
       if (!ESTADOS_PRE_DESPACHO.includes(actual.estado)) {
         return { success: false, error: 'Los vehículos solo se gestionan pre-despacho.' };
+      }
+
+      if (actual.tipo_solicitud === 'venta' && actual.sucursal_destino) {
+        const { count } = await admin
+          .from('solicitud_vehiculo')
+          .select('id', { count: 'exact', head: true })
+          .eq('solicitud_id', solicitudId)
+          .eq('disponibilidad', 'reservado');
+
+        const vehiculosEnSolicitud = count ?? 0;
+        const { data: sucursal, error: sucError } = await admin
+          .from('sucursal')
+          .select('slots, slots_ocupados')
+          .eq('id', actual.sucursal_destino)
+          .single();
+
+        if (!sucError && sucursal) {
+          const slotsDisponibles = Math.max((sucursal.slots ?? 0) - (sucursal.slots_ocupados ?? 0), 0);
+          if (vehiculosEnSolicitud >= slotsDisponibles) {
+            return {
+              success: false,
+              error: `No hay slots disponibles en la sucursal destino. Disponibles: ${slotsDisponibles}.`,
+            };
+          }
+        }
       }
 
       const { data: reservaActiva } = await admin

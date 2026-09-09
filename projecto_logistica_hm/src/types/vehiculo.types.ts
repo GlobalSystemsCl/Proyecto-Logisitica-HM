@@ -7,13 +7,15 @@ export interface Vehiculo {
   anio: number;
   color: string | null;
   precio: number | null;
+  ubicacion: number | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface VehiculoConDisponibilidad extends Vehiculo {
-  estado_disponibilidad: 'reservado' | 'liberado';
+  estado_disponibilidad: 'reservado' | 'liberado' | 'vendido';
   solicitud_id: string | null;
+  ubicacion_nombre?: string | null;
 }
 
 export interface CreateVehiculoInput {
@@ -24,6 +26,7 @@ export interface CreateVehiculoInput {
   anio: number;
   color?: string;
   precio?: number | null;
+  ubicacion?: number | null;
 }
 
 export interface UpdateVehiculoInput {
@@ -34,4 +37,5 @@ export interface UpdateVehiculoInput {
   anio?: number;
   color?: string | null;
   precio?: number | null;
+  ubicacion?: number | null;
 }

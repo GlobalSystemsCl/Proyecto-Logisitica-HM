@@ -13,7 +13,7 @@ export type EstadoSolicitud =
 
 export type TipoSolicitud = 'evento' | 'venta';
 
-export type DisponibilidadVehiculo = 'reservado' | 'liberado';
+export type DisponibilidadVehiculo = 'reservado' | 'liberado' | 'vendido';
 
 export interface SucursalEncargado {
   id: string;
@@ -29,6 +29,7 @@ export interface Sucursal {
   direccion: string | null;
   slots: number | null;
   slots_ocupados: number | null;
+  slots_reservados: number | null;
   encargado?: SucursalEncargado | null;
 }
 
@@ -36,14 +37,12 @@ export interface CreateSucursalInput {
   nombre: string;
   direccion?: string | null;
   slots: number;
-  slots_ocupados: number;
 }
 
 export interface UpdateSucursalInput {
   nombre?: string;
   direccion?: string | null;
   slots?: number;
-  slots_ocupados?: number;
 }
 
 export interface VehiculoAsociado {

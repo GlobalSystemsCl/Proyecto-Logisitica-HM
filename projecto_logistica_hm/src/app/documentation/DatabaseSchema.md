@@ -94,7 +94,7 @@ El resultado obtenido se traduce a `CREATE TABLE` en este documento. Nunca se pe
 > **Estado: `COMPLETADO` — volcado 1:1 cerrado el 2026-08-22** contra el catálogo real de PostgreSQL (vía tabla temporal `catalogo_auditoria`): tablas, columnas, tipos, largos, nullability, defaults, identity, constraints con acciones exactas, índices, RLS, políticas y triggers verificados al 100%.
 >
 > **Actualizaciones posteriores al volcado (2026-08-26)**: enum `estado_solicitud` ampliado (nuevos estados), `solicitud.ejecutivo_id` nullable, columnas `sucursal_destino`/`direccion_evento`/`titulo_evento`, trigger `tr_validate_solicitud_tipo`, y deshabilitación de triggers de notificación y auditoría (migraciones `20260826_solicitudes_v2*.sql`, `20260826_deshabilitar_notificaciones.sql`, `20260826_deshabilitar_auditoria_service_role.sql`). Además, la unicidad de `posicion_prioridad` pasó de global a compuesta `UNIQUE (sucursal, posicion_prioridad)` (migración `20260826_cola_prioridad_por_sucursal.sql`).
-> **Actualizaciones posteriores al volcado (2026-09-09)**: nueva tabla `solicitud_documento` (sección 5.9) y bucket privado `solicitud-documentos` para adjuntar documentación a las solicitudes (migración `20260909_solicitud_documentos.sql`; RLS habilitado sin políticas, acceso vía service-role).
+> **Actualizaciones posteriores al volcado (2026-09-09)**: nueva tabla `solicitud_documento` (sección 5.9) y bucket privado `solicitud-documentos` para adjuntar documentación a las solicitudes (migración `20260909_solicitud_documentos.sql`; RLS habilitado sin políticas, acceso vía service-role). Además, columna `vehiculo.ubicacion` (`BIGINT REFERENCES sucursal(id)`, nula por defecto) que indica la sucursal desde la que parte el vehículo (migración `20260909_vehiculo_ubicacion.sql`).
 
 ## 5.0 Tipos ENUM
 
@@ -295,6 +295,7 @@ CREATE TABLE public.vehiculo (
     anio       INTEGER NOT NULL,
     color      VARCHAR(50),
     precio     NUMERIC(14,2),
+    ubicacion  BIGINT REFERENCES public.sucursal(id),   -- sucursal desde la que parte el vehículo
     created_at TIMESTAMP(6) WITHOUT TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP(6) WITHOUT TIME ZONE DEFAULT now()
 );
@@ -306,6 +307,7 @@ CREATE TABLE public.vehiculo (
 CREATE UNIQUE INDEX vehiculo_pkey ON public.vehiculo USING btree (id);
 CREATE UNIQUE INDEX vehiculo_chasis_key ON public.vehiculo USING btree (chasis);
 CREATE UNIQUE INDEX vehiculo_patente_key ON public.vehiculo USING btree (patente);
+CREATE INDEX idx_vehiculo_ubicacion ON public.vehiculo USING btree (ubicacion);
 ```
 
 ### Row Level Security

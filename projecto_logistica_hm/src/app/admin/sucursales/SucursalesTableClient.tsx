@@ -70,7 +70,6 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
   const [nombre, setNombre] = useState('');
   const [direccion, setDireccion] = useState('');
   const [slots, setSlots] = useState('');
-  const [slotsOcupados, setSlotsOcupados] = useState('0');
 
   const totalSucursales = sucursales.length;
   const capacidadTotal = useMemo(
@@ -79,6 +78,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
   );
   const estacionados = useMemo(
     () => sucursales.reduce((acc, s) => acc + (s.slots_ocupados || 0), 0),
+    [sucursales]
+  );
+  const reservados = useMemo(
+    () => sucursales.reduce((acc, s) => acc + (s.slots_reservados || 0), 0),
     [sucursales]
   );
 
@@ -107,7 +110,6 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
     setNombre('');
     setDireccion('');
     setSlots('');
-    setSlotsOcupados('0');
     setIsModalOpen(true);
   }
 
@@ -116,11 +118,6 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
     setNombre(sucursal.nombre || '');
     setDireccion(sucursal.direccion || '');
     setSlots(sucursal.slots !== null && sucursal.slots !== undefined ? String(sucursal.slots) : '');
-    setSlotsOcupados(
-      sucursal.slots_ocupados !== null && sucursal.slots_ocupados !== undefined
-        ? String(sucursal.slots_ocupados)
-        : '0'
-    );
     setIsModalOpen(true);
   }
 
@@ -128,7 +125,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const data = { nombre, direccion, slots, slots_ocupados: slotsOcupados };
+      const data = { nombre, direccion, slots };
       const result = editingSucursal
         ? await updateSucursalAction(editingSucursal.id, data)
         : await createSucursalAction(data);
@@ -212,10 +209,13 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
 
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Estacionados</p>
-            <p className="text-3xl font-bold text-neutral-400 mt-1">{estacionados}</p>
+            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Reservados + Ocupados</p>
+            <p className="text-3xl font-bold text-neutral-900 mt-1">{reservados + estacionados}</p>
+            <p className="text-xs text-neutral-400 mt-0.5">
+              {reservados} reservados · {estacionados} ocupados
+            </p>
           </div>
-          <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-400">
+          <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-500">
             <MapPin className="w-5 h-5" />
           </div>
         </div>
@@ -294,10 +294,12 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
               ) : (
                 filteredSucursales.map((sucursal) => {
                   const ocupados = sucursal.slots_ocupados || 0;
+                  const reservados = sucursal.slots_reservados || 0;
+                  const usoSlots = ocupados + reservados;
                   const total = sucursal.slots;
                   const pct =
-                    total && total > 0 ? Math.min(100, Math.round((ocupados / total) * 100)) : 0;
-                  const excede = total !== null && total !== undefined && ocupados > total;
+                    total && total > 0 ? Math.min(100, Math.round((usoSlots / total) * 100)) : 0;
+                  const excede = total !== null && total !== undefined && usoSlots > total;
                   const nSol = solicitudesPorSucursal.get(sucursal.id)?.length || 0;
 
                   return (
@@ -335,16 +337,21 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                       </td>
 
                       {/* Capacidad */}
-                      <td className="py-3.5 px-4 min-w-[140px]">
+                      <td className="py-3.5 px-4 min-w-[160px]">
                         {total === null || total === undefined ? (
                           <span className="text-xs text-neutral-400">Sin capacidad definida</span>
                         ) : (
                           <div className="space-y-1.5">
-                            <div className="flex items-baseline gap-1">
+                            <div className="flex items-center gap-2">
                               <span className={`text-sm font-bold ${excede ? 'text-red-600' : 'text-neutral-900'}`}>
-                                {ocupados}
+                                {usoSlots}
                               </span>
                               <span className="text-xs text-neutral-400">/ {total} espacios</span>
+                              {reservados > 0 && (
+                                <span className="text-[10px] font-semibold text-neutral-400">
+                                  · {reservados} reservados
+                                </span>
+                              )}
                             </div>
                             <div className="h-1.5 w-full bg-neutral-100 rounded-full overflow-hidden">
                               <div
@@ -352,6 +359,9 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                                 style={{ width: `${pct}%` }}
                               />
                             </div>
+                            <p className="text-[10px] text-neutral-400">
+                              {ocupados} estacionados · {reservados} reservados
+                            </p>
                           </div>
                         )}
                       </td>
@@ -481,27 +491,13 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   />
                 </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Espacios Ocupados
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min={0}
-                    step={1}
-                    value={slotsOcupados}
-                    onChange={(e) => setSlotsOcupados(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
               </div>
 
               <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl flex items-start gap-2.5 text-xs text-neutral-600">
                 <Car className="w-4 h-4 shrink-0 mt-0.5 text-neutral-900" />
                 <span>
-                  Los espacios ocupados se ajustan manualmente desde este módulo. Cuando exista el módulo de
-                  Vehículos, la ocupación se calculará automáticamente según los vehículos estacionados.
+                  Los espacios ocupados y reservados se calculan automáticamente según los vehículos estacionados
+                  y las solicitudes de envío en curso, y no se editan manualmente.
                 </span>
               </div>
 
@@ -616,7 +612,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                     )}{' '}
                     ·{' '}
                     {detailSucursal.slots !== null && detailSucursal.slots !== undefined
-                      ? `${detailSucursal.slots_ocupados || 0}/${detailSucursal.slots} espacios`
+                      ? `${(detailSucursal.slots_ocupados || 0) + (detailSucursal.slots_reservados || 0)}/${detailSucursal.slots} espacios · ${detailSucursal.slots_reservados || 0} reservados`
                       : 'capacidad no definida'}
                   </p>
                 </div>
@@ -763,6 +759,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes }: Sucur
                                 {v.disponibilidad === 'reservado' ? (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white shrink-0">
                                     Reservado
+                                  </span>
+                                ) : v.disponibilidad === 'vendido' ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-green-700 text-white shrink-0">
+                                    Vendido
                                   </span>
                                 ) : (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-500 border border-neutral-300 shrink-0">

@@ -137,7 +137,8 @@ CREATE TABLE public.vehiculo (
     precio numeric(14,2),
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
-    vendido boolean DEFAULT false
+    vendido boolean DEFAULT false,
+    ubicacion bigint
 );
 
 CREATE TABLE public.solicitud_vehiculo (
@@ -229,6 +230,7 @@ ALTER TABLE public.usuario ADD CONSTRAINT usuario_sucursal_fkey FOREIGN KEY (suc
 ALTER TABLE public.vehiculo ADD CONSTRAINT vehiculo_pkey PRIMARY KEY (id);
 ALTER TABLE public.vehiculo ADD CONSTRAINT vehiculo_chasis_key UNIQUE (chasis);
 ALTER TABLE public.vehiculo ADD CONSTRAINT vehiculo_patente_key UNIQUE (patente);
+ALTER TABLE public.vehiculo ADD CONSTRAINT vehiculo_ubicacion_fkey FOREIGN KEY (ubicacion) REFERENCES sucursal(id);
 
 -- ============================================================================
 -- 4. ÍNDICES (además de los generados por PK/UNIQUE)
@@ -239,6 +241,7 @@ CREATE INDEX idx_solicitud_sucursal_destino ON public.solicitud USING btree (suc
 CREATE INDEX idx_usuario_activo ON public.usuario USING btree (activo);
 CREATE INDEX idx_usuario_email ON public.usuario USING btree (email);
 CREATE INDEX idx_usuario_rol ON public.usuario USING btree (rol);
+CREATE INDEX idx_vehiculo_ubicacion ON public.vehiculo USING btree (ubicacion);
 
 -- ============================================================================
 -- 5. FUNCIONES (definiciones exactas pg_get_functiondef)
@@ -1189,3 +1192,4 @@ COMMENT ON COLUMN public.solicitud.fecha_entrega IS 'Fecha real de entrega del v
 COMMENT ON COLUMN public.solicitud.motivo_cancelacion IS 'Motivo de la cancelacion de una solicitud';
 COMMENT ON COLUMN public.solicitud.posicion_prioridad IS 'Numero que indica la prioridad de una solicitud dentro de la cola de su sucursal (1..N por sucursal, UNIQUE compuesto con sucursal)';
 COMMENT ON COLUMN public.solicitud_vehiculo.disponibilidad IS 'Indica si un vehiculo que ya tuvo una solicitud puede estar disponible para otra soliciutd si el estado es reservado entonces no si es liberado entonces si';
+COMMENT ON COLUMN public.vehiculo.ubicacion IS 'Sucursal desde la que parte el vehiculo';

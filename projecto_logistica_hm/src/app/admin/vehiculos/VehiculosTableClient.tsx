@@ -14,15 +14,17 @@ import {
   Trash2,
   Lock,
   Unlock,
+  Truck,
 } from 'lucide-react';
 
 interface Props {
   vehiculos: VehiculoConDisponibilidad[];
   marcas: string[];
+  sucursales: { id: number; nombre: string | null }[];
   userRole: string;
 }
 
-export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Props) {
+export default function VehiculosTableClient({ vehiculos, marcas, sucursales, userRole }: Props) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMarca, setSelectedMarca] = useState<string>('todas');
@@ -46,6 +48,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
   const [anio, setAnio] = useState<number>(new Date().getFullYear());
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
+  const [ubicacion, setUbicacion] = useState('');
 
   // Field-level validation errors
   const [errors, setErrors] = useState<{
@@ -55,7 +58,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
     modelo: string;
     anio: string;
     precio: string;
-  }>({ chasis: '', patente: '', marca: '', modelo: '', anio: '', precio: '' });
+    ubicacion: string;
+  }>({ chasis: '', patente: '', marca: '', modelo: '', anio: '', precio: '', ubicacion: '' });
 
   const currentYear = new Date().getFullYear();
 
@@ -101,6 +105,11 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
     return '';
   };
 
+  const validateUbicacion = (value: string): string => {
+    if (value === '') return 'Selecciona la sucursal de ubicación o "En viaje / Container".';
+    return '';
+  };
+
   const validateAll = (): boolean => {
     const newErrors = {
       chasis: validateChasis(chasis),
@@ -109,6 +118,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
       modelo: validateModelo(modelo),
       anio: validateAnio(anio),
       precio: validatePrecio(precio),
+      ubicacion: validateUbicacion(ubicacion),
     };
     setErrors(newErrors);
     return !Object.values(newErrors).some((e) => e !== '');
@@ -164,14 +174,16 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
     const matchesDisponibilidad =
       selectedDisponibilidad === 'todas' ||
       (selectedDisponibilidad === 'reservado' && v.estado_disponibilidad === 'reservado') ||
-      (selectedDisponibilidad === 'liberado' && v.estado_disponibilidad === 'liberado');
+      (selectedDisponibilidad === 'liberado' && v.estado_disponibilidad === 'liberado') ||
+      (selectedDisponibilidad === 'vendido' && v.estado_disponibilidad === 'vendido');
 
     return matchesSearch && matchesMarca && matchesDisponibilidad;
   });
 
   const totalVehiculos = vehiculos.length;
   const reservados = vehiculos.filter((v) => v.estado_disponibilidad === 'reservado').length;
-  const disponibles = totalVehiculos - reservados;
+  const vendidos = vehiculos.filter((v) => v.estado_disponibilidad === 'vendido').length;
+  const disponibles = totalVehiculos - reservados - vendidos;
 
   const resetForm = () => {
     setChasis('');
@@ -181,7 +193,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
     setAnio(new Date().getFullYear());
     setColor('');
     setPrecio('');
-    setErrors({ chasis: '', patente: '', marca: '', modelo: '', anio: '', precio: '' });
+    setUbicacion('');
+    setErrors({ chasis: '', patente: '', marca: '', modelo: '', anio: '', precio: '', ubicacion: '' });
     setAttemptedSubmit(false);
   };
 
@@ -197,6 +210,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
       modelo: validateModelo(modelo),
       anio: validateAnio(anio),
       precio: validatePrecio(precio),
+      ubicacion: validateUbicacion(ubicacion),
     };
     setErrors(newErrors);
     if (Object.values(newErrors).some((e) => e !== '')) return;
@@ -210,6 +224,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
         anio,
         color: color || undefined,
         precio: precio ? Number(precio) : null,
+        ubicacion: ubicacion === 'en_viaje' ? null : Number(ubicacion),
       });
 
       setIsCreateModalOpen(false);
@@ -238,6 +253,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
       modelo: validateModelo(modelo),
       anio: validateAnio(anio),
       precio: validatePrecio(precio),
+      ubicacion: validateUbicacion(ubicacion),
     };
     setErrors(newErrors);
     if (Object.values(newErrors).some((e) => e !== '')) return;
@@ -251,6 +267,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
         anio,
         color: color || undefined,
         precio: precio ? Number(precio) : null,
+        ubicacion: ubicacion === 'en_viaje' ? null : Number(ubicacion),
       });
 
       setIsEditModalOpen(false);
@@ -296,6 +313,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
     setAnio(vehiculo.anio);
     setColor(vehiculo.color || '');
     setPrecio(vehiculo.precio != null ? String(vehiculo.precio) : '');
+    setUbicacion(vehiculo.ubicacion != null ? String(vehiculo.ubicacion) : 'en_viaje');
     setIsEditModalOpen(true);
   };
 
@@ -433,6 +451,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
               <option value="todas">Todos</option>
               <option value="liberado">Disponibles</option>
               <option value="reservado">En Uso</option>
+              <option value="vendido">Vendidos</option>
             </select>
           </div>
         </div>
@@ -449,6 +468,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
                 <th className="py-3.5 px-4">Patente</th>
                 <th className="py-3.5 px-4">Precio</th>
                 <th className="py-3.5 px-4">Color</th>
+                <th className="py-3.5 px-4">Ubicación</th>
                 <th className="py-3.5 px-4">Estado</th>
                 <th className="py-3.5 px-4">Registro</th>
                 <th className="py-3.5 px-4 text-right">Acciones</th>
@@ -457,13 +477,14 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filteredVehiculos.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-neutral-400">
+                  <td colSpan={9} className="py-8 text-center text-neutral-400">
                     No se encontraron vehículos que coincidan con la búsqueda.
                   </td>
                 </tr>
               ) : (
                 filteredVehiculos.map((vehiculo) => {
                   const isReserved = vehiculo.estado_disponibilidad === 'reservado';
+                  const isSold = vehiculo.estado_disponibilidad === 'vendido';
 
                   return (
                     <tr
@@ -507,12 +528,34 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
                         {vehiculo.color || '—'}
                       </td>
 
+                      {/* Ubicación */}
+                      <td className="py-3.5 px-4 text-xs text-neutral-600">
+                        {isSold ? (
+                          <span className="text-neutral-400">—</span>
+                        ) : vehiculo.ubicacion != null ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-100 text-neutral-900 border border-neutral-200">
+                            <Car className="w-3 h-3" />
+                            {vehiculo.ubicacion_nombre || `Sucursal #${vehiculo.ubicacion}`}
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            <Truck className="w-3 h-3" />
+                            En viaje / Container
+                          </span>
+                        )}
+                      </td>
+
                       {/* Estado */}
                       <td className="py-3.5 px-4">
                         {isReserved ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
                             <Lock className="w-3 h-3" />
                             Reservado
+                          </span>
+                        ) : isSold ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white border border-neutral-900">
+                            <CheckCircle2 className="w-3 h-3" />
+                            Vendido
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-500 border border-neutral-200">
@@ -529,9 +572,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
 
                       {/* Acciones */}
                       <td className="py-3.5 px-4 text-right space-x-2">
-                        {isReserved ? (
+                        {isReserved || isSold ? (
                           <span
-                            title="No disponible: vehículo reservado en una solicitud"
+                            title={isReserved ? 'No disponible: vehículo reservado en una solicitud' : 'No disponible: vehículo ya vendido'}
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-neutral-400 bg-neutral-50 cursor-not-allowed"
                           >
                             <Lock className="w-3 h-3" />
@@ -763,6 +806,44 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   />
                 </div>
+              </div>
+
+              {/* Ubicación */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Ubicación *
+                  </label>
+                  <span className="text-[10px] text-neutral-400 font-medium normal-case">
+                    En viaje / container puede quedar sin asignar
+                  </span>
+                </div>
+                <select
+                  value={ubicacion}
+                  onChange={(e) => {
+                    setUbicacion(e.target.value);
+                    setErrors((p) => ({ ...p, ubicacion: validateUbicacion(e.target.value) }));
+                  }}
+                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 ${
+                    errors.ubicacion
+                      ? 'border-red-400 focus:ring-red-400'
+                      : 'border-neutral-300 focus:ring-neutral-900'
+                  }`}
+                >
+                  <option value="" disabled>Selecciona una opción...</option>
+                  <option value="en_viaje">En viaje / Container (sin asignar)</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.nombre || `Sucursal #${s.id}`}
+                    </option>
+                  ))}
+                </select>
+                {errors.ubicacion && (
+                  <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    {errors.ubicacion}
+                  </p>
+                )}
               </div>
 
               {/* Precio */}
@@ -1016,6 +1097,44 @@ export default function VehiculosTableClient({ vehiculos, marcas, userRole }: Pr
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   />
                 </div>
+              </div>
+
+              {/* Ubicación */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Ubicación *
+                  </label>
+                  <span className="text-[10px] text-neutral-400 font-medium normal-case">
+                    En viaje / container puede quedar sin asignar
+                  </span>
+                </div>
+                <select
+                  value={ubicacion}
+                  onChange={(e) => {
+                    setUbicacion(e.target.value);
+                    setErrors((p) => ({ ...p, ubicacion: validateUbicacion(e.target.value) }));
+                  }}
+                  className={`w-full px-3 py-2 bg-white border rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 ${
+                    errors.ubicacion
+                      ? 'border-red-400 focus:ring-red-400'
+                      : 'border-neutral-300 focus:ring-neutral-900'
+                  }`}
+                >
+                  <option value="" disabled>Selecciona una opción...</option>
+                  <option value="en_viaje">En viaje / Container (sin asignar)</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={String(s.id)}>
+                      {s.nombre || `Sucursal #${s.id}`}
+                    </option>
+                  ))}
+                </select>
+                {errors.ubicacion && (
+                  <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
+                    <AlertCircle className="w-3 h-3 shrink-0" />
+                    {errors.ubicacion}
+                  </p>
+                )}
               </div>
 
               {/* Precio */}

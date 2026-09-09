@@ -626,6 +626,8 @@ export default function SolicitudDetalleModal({
                         <div className="flex items-center gap-2 shrink-0">
                           {v.disponibilidad === 'reservado' ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white">Reservado</span>
+                          ) : v.disponibilidad === 'vendido' ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-green-700 text-white">Vendido</span>
                           ) : (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-500 border border-neutral-300">Liberado</span>
                           )}

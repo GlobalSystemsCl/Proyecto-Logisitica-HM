@@ -401,15 +401,12 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
-<<<<<<< HEAD
 | 2026-09-05 | Perfil de Usuario | Rediseño UI del perfil (sin franja negra; hero con iniciales y resumen de contacto) y nombres de usuario cliqueables (popup de datos) en todos los puntos del sistema que indican un usuario/encargado: tabla y detalle de solicitudes, historial de cambios, observaciones, prioridades, aprobaciones, sucursales (encargado + personas de solicitudes), historial de auditoría y gestión de usuarios | Acceso ágil a datos de contacto ante urgencias en cualquier fase del traslado; perfil más pulido |
 | 2026-09-05 | Perfil de Usuario | Nuevo módulo: página `/perfil`, edición de nombre/apellido/teléfono, columna `telefono`, tarjeta "Contacto responsable" del detalle de solicitud con rol/sucursal/teléfono/correo y popups de datos de usuario en historial/observaciones | Necesidad de contacto accesible del responsable y de los usuarios que intervienen en las solicitudes |
 | 2026-09-03 | Logística Operativa | Implementado flujo completo: calendarizar, despachar, recibir, finalizar con UI en `/logistica/calendarizaciones` y botones en `/solicitudes` | Completar flujo logístico del MVP |
 | 2026-09-03 | Logística Operativa | Fix: revalidate path `/solicitudes/calendarizaciones` → `/logistica/calendarizaciones` en 4 server actions | Path incorrecto impedía refresco de UI |
-| 2026-08-28 | Solicitudes-Priorización | Drag & drop para priorizar: se elimina el botón "Priorizar"; arrastrar desde "Por Priorizar" inserta en la posición elegida (`priorizarEnPosicion`) | Elegir la posición al priorizar en vez de entrar siempre al final |
-=======
 | 2026-09-02 | Solicitudes/Sucursales | Validación de slots: triggers BD para validar, incrementar y decrementar `slots_ocupados`; frontend muestra slots disponibles; service valida antes de crear | Evitar sobreasignación de vehículos a sucursales |
->>>>>>> origin/LOGISTICA
+| 2026-08-28 | Solicitudes-Priorización | Drag & drop para priorizar: se elimina el botón "Priorizar"; arrastrar desde "Por Priorizar" inserta en la posición elegida (`priorizarEnPosicion`) | Elegir la posición al priorizar en vez de entrar siempre al final |
 | 2026-08-28 | Vehículos | Campo opcional `precio` en alta/edición e inventario (`20260828_vehiculo_precio.sql`) | Registrar el valor comercial de cada vehículo |
 | 2026-08-27 | Solicitudes-Creación | Ejecutivo crea sin fecha; fecha la define jefe de local al crear o al aprobar | Requisito: solo el jefe de local pone la fecha |
 | 2026-08-27 | Solicitudes-Creación | Asignación automática de `jefe_local_id` (jefe de local de la sucursal del ejecutivo) | Responsabilidad/aprobación por sucursal |

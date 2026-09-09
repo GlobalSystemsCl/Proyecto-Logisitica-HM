@@ -22,7 +22,6 @@ export interface SucursalFormData {
   nombre: string;
   direccion?: string;
   slots: string;
-  slots_ocupados: string;
 }
 
 export async function createSucursalAction(data: SucursalFormData) {
@@ -35,21 +34,15 @@ export async function createSucursalAction(data: SucursalFormData) {
     }
 
     const slots = parseSlots(data.slots);
-    const ocupados = parseSlots(data.slots_ocupados || '0');
 
-    if (slots === null || ocupados === null) {
+    if (slots === null) {
       return { success: false, error: 'Los espacios deben ser números enteros mayores o iguales a 0.' };
-    }
-
-    if (ocupados > slots) {
-      return { success: false, error: 'Los espacios ocupados no pueden superar el total de espacios.' };
     }
 
     const result = await SucursalesService.createSucursal({
       nombre,
       direccion: data.direccion?.trim() || null,
       slots,
-      slots_ocupados: ocupados,
     });
 
     if (!result.success) {
@@ -74,21 +67,15 @@ export async function updateSucursalAction(id: number, data: SucursalFormData) {
     }
 
     const slots = parseSlots(data.slots);
-    const ocupados = parseSlots(data.slots_ocupados || '0');
 
-    if (slots === null || ocupados === null) {
+    if (slots === null) {
       return { success: false, error: 'Los espacios deben ser números enteros mayores o iguales a 0.' };
-    }
-
-    if (ocupados > slots) {
-      return { success: false, error: 'Los espacios ocupados no pueden superar el total de espacios.' };
     }
 
     const result = await SucursalesService.updateSucursal(id, {
       nombre,
       direccion: data.direccion?.trim() || null,
       slots,
-      slots_ocupados: ocupados,
     });
 
     if (!result.success) {

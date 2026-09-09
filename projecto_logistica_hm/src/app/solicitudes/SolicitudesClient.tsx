@@ -147,6 +147,7 @@ export default function SolicitudesClient({
     return {
       ...suc,
       disponibles: Math.max(disponibles, 0),
+      reservados: suc.slots_reservados || 0,
       excedido: selectedVehiculos.size > disponibles,
     };
   }, [sucursalDestinoSel, sucursales, selectedVehiculos.size]);
@@ -697,6 +698,11 @@ export default function SolicitudesClient({
                       <span className="font-medium">
                         Disponibles: {sucursalDestinoInfo.disponibles} / {sucursalDestinoInfo.slots ?? 0}
                       </span>
+                      {sucursalDestinoInfo.reservados > 0 && (
+                        <span className="text-neutral-500">
+                          · {sucursalDestinoInfo.reservados} reservad{sucursalDestinoInfo.reservados !== 1 ? 'os' : 'o'}
+                        </span>
+                      )}
                       {sucursalDestinoInfo.excedido && (
                         <span className="text-red-600 font-semibold">
                           — Excede en {selectedVehiculos.size - sucursalDestinoInfo.disponibles} slot{selectedVehiculos.size - sucursalDestinoInfo.disponibles !== 1 ? 's' : ''}

@@ -12,6 +12,7 @@ export class VehiculoService {
         .from('vehiculo')
         .select(`
           *,
+          sucursal!vehiculo_ubicacion_fkey(nombre),
           solicitud_vehiculo!solicitud_vehiculo_vehiculo_fk (
             id,
             solicitud_id,
@@ -28,6 +29,8 @@ export class VehiculoService {
       const vehiculos = (data || []).map((v: Record<string, unknown>) => {
         const sv = v.solicitud_vehiculo as Array<{ solicitud_id: string; disponibilidad: string }> | null;
         const reservaActiva = sv?.find((s) => s.disponibilidad === 'reservado');
+        const vendido = !reservaActiva && (sv?.some((s) => s.disponibilidad === 'vendido') || false);
+        const sucursalUbicacion = v.sucursal as { nombre?: string | null } | null;
 
         return {
           id: v.id as string,
@@ -38,9 +41,11 @@ export class VehiculoService {
           anio: v.anio as number,
           color: v.color as string | null,
           precio: v.precio as number | null,
+          ubicacion: v.ubicacion as number | null,
+          ubicacion_nombre: sucursalUbicacion?.nombre || null,
           created_at: v.created_at as string,
           updated_at: v.updated_at as string,
-          estado_disponibilidad: reservaActiva ? 'reservado' : 'liberado',
+          estado_disponibilidad: reservaActiva ? 'reservado' : vendido ? 'vendido' : 'liberado',
           solicitud_id: reservaActiva?.solicitud_id || null,
         } as VehiculoConDisponibilidad;
       });
@@ -79,28 +84,34 @@ export class VehiculoService {
   /**
    * Verifica la disponibilidad de un vehículo específico
    */
-  static async verificarDisponibilidad(id: string): Promise<{ reservado: boolean; solicitud_id?: string }> {
+  static async verificarDisponibilidad(id: string): Promise<{
+    reservado: boolean;
+    vendido: boolean;
+    solicitud_id?: string;
+  }> {
     try {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('solicitud_vehiculo')
         .select('solicitud_id, disponibilidad')
-        .eq('vehiculo_id', id)
-        .eq('disponibilidad', 'reservado')
-        .maybeSingle();
+        .eq('vehiculo_id', id);
 
       if (error) {
         console.error('Error al verificar disponibilidad:', error);
-        return { reservado: false };
+        return { reservado: false, vendido: false };
       }
 
+      const reservaActiva = (data || []).find((s) => s.disponibilidad === 'reservado');
+      const vendido = (data || []).some((s) => s.disponibilidad === 'vendido');
+
       return {
-        reservado: !!data,
-        solicitud_id: data?.solicitud_id,
+        reservado: !!reservaActiva,
+        vendido,
+        solicitud_id: reservaActiva?.solicitud_id,
       };
     } catch (err) {
       console.error('Error en verificarDisponibilidad:', err);
-      return { reservado: false };
+      return { reservado: false, vendido: false };
     }
   }
 
@@ -189,6 +200,7 @@ export class VehiculoService {
         anio: input.anio,
         color: input.color?.trim() || null,
         precio: input.precio ?? null,
+        ubicacion: input.ubicacion ?? null,
       };
 
       const { data, error } = await admin
@@ -232,6 +244,12 @@ export class VehiculoService {
         return {
           success: false,
           error: 'No se puede modificar un vehículo que se encuentra reservado en una solicitud activa.',
+        };
+      }
+      if (disponibilidad.vendido) {
+        return {
+          success: false,
+          error: 'No se puede modificar un vehículo que ya fue vendido.',
         };
       }
 
@@ -301,6 +319,10 @@ export class VehiculoService {
         updateData.anio = input.anio;
       }
 
+      if (input.ubicacion !== undefined) {
+        updateData.ubicacion = input.ubicacion ?? null;
+      }
+
       const { data, error } = await admin
         .from('vehiculo')
         .update(updateData)
@@ -336,6 +358,12 @@ export class VehiculoService {
         return {
           success: false,
           error: 'No se puede eliminar un vehículo que se encuentra reservado en una solicitud activa.',
+        };
+      }
+      if (disponibilidad.vendido) {
+        return {
+          success: false,
+          error: 'No se puede eliminar un vehículo que ya fue vendido.',
         };
       }
 

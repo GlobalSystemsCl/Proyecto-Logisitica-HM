@@ -143,7 +143,6 @@ export class SucursalesService {
           nombre: input.nombre.trim(),
           direccion: input.direccion?.trim() || null,
           slots: input.slots,
-          slots_ocupados: input.slots_ocupados,
         })
         .select()
         .single();
@@ -186,7 +185,6 @@ export class SucursalesService {
       if (input.nombre !== undefined) updateData.nombre = input.nombre.trim();
       if (input.direccion !== undefined) updateData.direccion = input.direccion?.trim() || null;
       if (input.slots !== undefined) updateData.slots = input.slots;
-      if (input.slots_ocupados !== undefined) updateData.slots_ocupados = input.slots_ocupados;
 
       const { data, error } = await admin
         .from('sucursal')

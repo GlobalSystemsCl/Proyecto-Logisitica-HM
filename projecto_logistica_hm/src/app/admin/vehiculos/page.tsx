@@ -1,5 +1,6 @@
 import { AuthService } from '@/services/auth.service';
 import { VehiculoService } from '@/services/vehiculo.service';
+import { SucursalesService } from '@/services/sucursales.service';
 import { redirect } from 'next/navigation';
 import VehiculosTableClient from './VehiculosTableClient';
 import TopNavbar from '@/components/TopNavbar';
@@ -22,9 +23,10 @@ export default async function AdminVehiculosPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const [vehiculos, marcas] = await Promise.all([
+  const [vehiculos, marcas, sucursales] = await Promise.all([
     VehiculoService.getVehiculos(),
     VehiculoService.getMarcas(),
+    SucursalesService.getSucursales(),
   ]);
 
   return (
@@ -42,6 +44,7 @@ export default async function AdminVehiculosPage() {
         <VehiculosTableClient
           vehiculos={vehiculos}
           marcas={marcas}
+          sucursales={sucursales}
           userRole={profile.rol}
         />
       </main>
