@@ -11,18 +11,12 @@ import {
   Eye,
   ArrowUp,
   Ban,
-  Car,
-  ThumbsUp,
-  ThumbsDown,
   Clock,
+  PackageCheck,
 } from 'lucide-react';
 import {
   createSolicitudAction,
-  priorizarSolicitudAction,
   cancelarSolicitudAction,
-  eliminarSolicitudAction,
-  aprobarSolicitudAction,
-  rechazarSolicitudAction,
   getEjecutivosPorSucursalAction,
   recibirSolicitudAction,
   finalizarSolicitudAction,
@@ -103,12 +97,6 @@ export default function SolicitudesClient({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(null);
   const [cancelTarget, setCancelTarget] = useState<SolicitudLista | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<SolicitudLista | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [rejectTarget, setRejectTarget] = useState<SolicitudLista | null>(null);
-  const [rejectMotivo, setRejectMotivo] = useState('');
-  const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
-  const [aprobacionFecha, setAprobacionFecha] = useState('');
 
   const [sucursalSel, setSucursalSel] = useState('');
   const [prevSucursalViewer, setPrevSucursalViewer] = useState<number | null>(viewer.sucursal_id);
@@ -223,22 +211,6 @@ export default function SolicitudesClient({
     return false;
   }
 
-  function puedePriorizar(sol: SolicitudLista): boolean {
-    if (sol.estado !== 'pendiente' && sol.estado !== 'aprobada') return false;
-    return esAdmin || (esJefeLocal && viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id);
-  }
-
-  function puedeEliminar(sol: SolicitudLista): boolean {
-    return PRE_DESPACHO.includes(sol.estado) && puedeGestionar(sol);
-  }
-
-  function puedeAprobar(sol: SolicitudLista): boolean {
-    if (sol.estado !== 'pendiente_aprobacion') return false;
-    if (esAdmin) return true;
-    if (esJefeLocal) return viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id;
-    return false;
-  }
-
   function puedeRecibir(sol: SolicitudLista): boolean {
     if (sol.estado !== 'en_transito') return false;
     if (esAdmin) return true;
@@ -324,63 +296,6 @@ export default function SolicitudesClient({
     }
   }
 
-  async function handlePriorizar(sol: SolicitudLista) {
-    setIsSubmitting(true);
-    try {
-      const result = await priorizarSolicitudAction(sol.id);
-      setFeedback(
-        result.success
-          ? { type: 'success', message: result.message || 'Priorizada.' }
-          : { type: 'error', message: result.error || 'Error.' }
-      );
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  function abrirAprobacion(sol: SolicitudLista) {
-    setAprobacionFecha('');
-    setApproveTarget(sol);
-  }
-
-  async function handleConfirmarAprobacion() {
-    if (!approveTarget) return;
-    const fecha = aprobacionFecha.trim();
-    if (!fecha) {
-      setFeedback({ type: 'error', message: 'Debes indicar la fecha de entrega para aprobar la solicitud.' });
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const result = await aprobarSolicitudAction(approveTarget.id, fecha);
-      if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'Error al aprobar.' });
-      } else {
-        setFeedback({ type: 'success', message: result.message || 'Aprobada.' });
-        setApproveTarget(null);
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleConfirmarRechazo() {
-    if (!rejectTarget) return;
-    setIsSubmitting(true);
-    try {
-      const result = await rechazarSolicitudAction(rejectTarget.id, rejectMotivo);
-      if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'Error al rechazar.' });
-      } else {
-        setFeedback({ type: 'success', message: result.message || 'Rechazada.' });
-        setRejectTarget(null);
-        setRejectMotivo('');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
   async function handleConfirmarCancelacion() {
     if (!cancelTarget) return;
     setIsSubmitting(true);
@@ -392,23 +307,6 @@ export default function SolicitudesClient({
         setFeedback({ type: 'success', message: result.message || 'Cancelada.' });
         setCancelTarget(null);
         setMotivo('');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleConfirmarEliminacion() {
-    if (!deleteTarget) return;
-    setIsSubmitting(true);
-    setDeleteError(null);
-    try {
-      const result = await eliminarSolicitudAction(deleteTarget.id);
-      if (!result.success) {
-        setDeleteError(result.error || 'No se pudo eliminar.');
-      } else {
-        setFeedback({ type: 'success', message: result.message || 'Eliminada.' });
-        setDeleteTarget(null);
       }
     } finally {
       setIsSubmitting(false);
@@ -582,16 +480,17 @@ export default function SolicitudesClient({
                 <th className="py-3.5 px-4">Destino</th>
                 <th className="py-3.5 px-4">Estado</th>
                 <th className="py-3.5 px-4">Encargado</th>
-                <th className="py-3.5 px-4">Vehículos</th>
+                <th className="py-3.5 px-4">Tipo</th>
                 <th className="py-3.5 px-4">Creación</th>
                 <th className="py-3.5 px-4">Fecha límite entrega</th>
+                <th className="py-3.5 px-4 text-right">Acciones</th>
                 <th className="py-3.5 px-4 text-right">Ver</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filtradas.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-neutral-400">
+                  <td colSpan={10} className="py-8 text-center text-neutral-400">
                     No hay solicitudes que coincidan con los filtros.
                   </td>
                 </tr>
@@ -642,18 +541,38 @@ export default function SolicitudesClient({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <button
-                          onClick={() => setDetailTarget(sol)}
-                          title="Ver solicitud"
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer"
-                        >
-                          <Car className="w-3.5 h-3.5" />
-                          {sol.vehiculos.length}
-                        </button>
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-neutral-50 text-neutral-700 border border-neutral-300">
+                          {sol.tipo_solicitud === 'evento' ? 'Evento' : 'Venta'}
+                        </span>
                       </td>
 
                       <td className="py-3.5 px-4 text-xs text-neutral-500">{formatFecha(sol.fecha_creacion)}</td>
                       <td className="py-3.5 px-4 text-xs text-neutral-500">{formatFecha(sol.fecha_limite)}</td>
+
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {puedeRecibir(sol) && (
+                            <button
+                              onClick={() => handleRecibir(sol)}
+                              disabled={isSubmitting}
+                              title="Marcar como recibida"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
+                            >
+                              <PackageCheck className="w-3.5 h-3.5" /> Recibir
+                            </button>
+                          )}
+                          {puedeFinalizar(sol) && (
+                            <button
+                              onClick={() => handleFinalizar(sol)}
+                              disabled={isSubmitting}
+                              title="Finalizar solicitud"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-40"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" /> Finalizar
+                            </button>
+                          )}
+                        </div>
+                      </td>
 
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <button
@@ -984,114 +903,6 @@ export default function SolicitudesClient({
         />
       )}
 
-      {/* Modal: Rechazar */}
-      {rejectTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
-                  <ThumbsDown className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-neutral-900">Rechazar Solicitud</h2>
-                  <p className="text-sm text-neutral-500 font-mono uppercase">
-                    #{rejectTarget.id.slice(0, 8)} · {rejectTarget.sucursal_nombre}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Motivo de Rechazo *</label>
-                <textarea
-                  required
-                  rows={3}
-                  minLength={5}
-                  placeholder="Explica el motivo del rechazo (mínimo 5 caracteres)..."
-                  value={rejectMotivo}
-                  onChange={(e) => setRejectMotivo(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setRejectTarget(null)}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer disabled:opacity-50"
-                >
-                  Volver
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmarRechazo}
-                  disabled={isSubmitting || rejectMotivo.trim().length < 5}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? 'Rechazando...' : 'Confirmar Rechazo'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Aprobar con Fecha de Entrega */}
-      {approveTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-green-50 border border-green-200 flex items-center justify-center text-green-600 shrink-0">
-                  <ThumbsUp className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-neutral-900">Aprobar Solicitud</h2>
-                  <p className="text-sm text-neutral-500 font-mono uppercase">
-                    #{approveTarget.id.slice(0, 8)} · {approveTarget.sucursal_nombre}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha de Entrega *</label>
-                <input
-                  type="date"
-                  required
-                  value={aprobacionFecha}
-                  onChange={(e) => setAprobacionFecha(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                />
-                <p className="text-xs text-neutral-500 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
-                  Selecciona la fecha en que se entregará el o los vehículos.
-                </p>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setApproveTarget(null)}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer disabled:opacity-50"
-                >
-                  Volver
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmarAprobacion}
-                  disabled={isSubmitting || !aprobacionFecha.trim()}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-xl disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? 'Aprobando...' : 'Confirmar Aprobación'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Modal: Cancelar con Motivo */}
       {cancelTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
@@ -1138,61 +949,6 @@ export default function SolicitudesClient({
                   className="px-5 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 rounded-xl disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? 'Cancelando...' : 'Confirmar Cancelación'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal: Eliminar */}
-      {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
-            <div className="p-6 space-y-4">
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
-                  <AlertCircle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-neutral-900">Eliminar Solicitud</h2>
-                  <p className="text-sm text-neutral-500">
-                    ¿Confirmas eliminar definitivamente{' '}
-                    <strong className="text-neutral-900 font-mono uppercase">#{deleteTarget.id.slice(0, 8)}</strong>?
-                  </p>
-                </div>
-              </div>
-
-              {deleteTarget.vehiculos.length > 0 && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>Se liberarán las {deleteTarget.vehiculos.length} reserva(s) de vehículos asociadas.</span>
-                </div>
-              )}
-
-              {deleteError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{deleteError}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={isSubmitting}
-                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer disabled:opacity-50"
-                >
-                  Volver
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmarEliminacion}
-                  disabled={isSubmitting}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50 cursor-pointer"
-                >
-                  {isSubmitting ? 'Eliminando...' : 'Eliminar Definitivamente'}
                 </button>
               </div>
             </div>
