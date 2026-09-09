@@ -1,9 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
-  ChevronDown,
   Car,
   MapPin,
   ArrowUp,
@@ -15,12 +14,10 @@ import {
   Plus,
   X,
   FileText,
-  ThumbsUp,
-  ThumbsDown,
   Ban,
   Trash2,
-  PackageCheck,
-  CheckCircle2,
+  Download,
+  UploadCloud,
 } from 'lucide-react';
 import {
   agregarVehiculoAction,
@@ -29,6 +26,10 @@ import {
   getObservacionesAction,
   getAuditoriaAction,
   getUsuarioDetalleAction,
+  getDocumentosSolicitudAction,
+  subirDocumentosSolicitudAction,
+  eliminarDocumentoSolicitudAction,
+  descargarDocumentoSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import {
   EstadoSolicitud,
@@ -36,9 +37,10 @@ import {
   VehiculoInventario,
   ObservacionEntry,
   AuditoriaEntry,
+  DocumentoSolicitud,
 } from '@/types/solicitud.types';
 import { VehiculoAsociado } from '@/types/sucursal.types';
-import { ROL_LABEL, UsuarioDetalle } from '@/types/auth.types';
+import { ROL_LABEL, UserRole, UsuarioDetalle } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 
@@ -62,6 +64,25 @@ const PRE_DESPACHO: EstadoSolicitud[] = [
   'pendiente',
   'priorizada',
 ];
+
+const ACEPTA_DOCUMENTOS = [
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+  'application/zip',
+].join(',');
+
+function formatTamano(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function getEncargadoId(sol: SolicitudLista): string | null {
   return sol.ejecutivo_id || sol.jefe_local_id || null;
@@ -108,6 +129,8 @@ function getTimelineInfo(accion: string): { label: string; dotClass: string; tex
     agregar_vehiculo: { label: 'Vehículo agregado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     quitar_vehiculo: { label: 'Vehículo retirado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     observacion: { label: 'Observación', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
+    subir_documento: { label: 'Documento subido', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
+    eliminar_documento: { label: 'Documento eliminado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
   };
   return map[accion] || { label: accion, dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' };
 }
@@ -143,6 +166,12 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
     }
     case 'rechazar':
       return 'Solicitud rechazada';
+    case 'subir_documento': {
+      const nombre = val?.nombre_archivo;
+      return nombre ? `Documento subido: ${String(nombre)}` : 'Documento subido';
+    }
+    case 'eliminar_documento':
+      return 'Documento eliminado';
     default:
       return null;
   }
@@ -160,21 +189,11 @@ interface SolicitudDetalleModalProps {
   vehiculosInventario: VehiculoInventario[];
   onClose: () => void;
   onMensaje: (tipo: 'success' | 'error', mensaje: string) => void;
-  onAprobar: (sol: SolicitudLista) => void;
-  onRechazar: (sol: SolicitudLista) => void;
-  onPriorizar: (sol: SolicitudLista) => void;
   onCancelar: (sol: SolicitudLista) => void;
-  onEliminar: (sol: SolicitudLista) => void;
-  onRecibir: (sol: SolicitudLista) => void;
-  onFinalizar: (sol: SolicitudLista) => void;
-  puedeAprobar: boolean;
-  puedeRechazar: boolean;
-  puedePriorizar: boolean;
   puedeCancelar: boolean;
-  puedeEliminar: boolean;
-  puedeRecibir: boolean;
-  puedeFinalizar: boolean;
   puedeGestionarVehiculos: boolean;
+  currentUserId: string;
+  currentUserRol: UserRole;
 }
 
 export default function SolicitudDetalleModal({
@@ -182,55 +201,48 @@ export default function SolicitudDetalleModal({
   vehiculosInventario,
   onClose,
   onMensaje,
-  onAprobar,
-  onRechazar,
-  onPriorizar,
   onCancelar,
-  onEliminar,
-  onRecibir,
-  onFinalizar,
-  puedeAprobar,
-  puedeRechazar,
-  puedePriorizar,
   puedeCancelar,
-  puedeEliminar,
-  puedeRecibir,
-  puedeFinalizar,
   puedeGestionarVehiculos,
+  currentUserId,
+  currentUserRol,
 }: SolicitudDetalleModalProps) {
   const [detailTab, setDetailTab] = useState<'info' | 'historial' | 'obs' | 'docs'>('info');
-  const [showAcciones, setShowAcciones] = useState(false);
   const [observaciones, setObservaciones] = useState<ObservacionEntry[]>([]);
   const [auditoria, setAuditoria] = useState<AuditoriaEntry[]>([]);
   const [responsableDetalle, setResponsableDetalle] = useState<UsuarioDetalle | null>(null);
+  const [documentos, setDocumentos] = useState<DocumentoSolicitud[]>([]);
   const [obsText, setObsText] = useState('');
   const [nuevoVehiculoId, setNuevoVehiculoId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vehiculosLocal, setVehiculosLocal] = useState<VehiculoAsociado[]>(solicitud.vehiculos);
+  const fileDocRef = useRef<HTMLInputElement | null>(null);
 
   const [prevSolicitudId, setPrevSolicitudId] = useState(solicitud.id);
   if (prevSolicitudId !== solicitud.id) {
     setPrevSolicitudId(solicitud.id);
     setVehiculosLocal(solicitud.vehiculos);
     setDetailTab('info');
-    setShowAcciones(false);
     setObsText('');
     setNuevoVehiculoId('');
+    setDocumentos([]);
   }
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       const responsableId = getResponsableId(solicitud);
-      const [obs, audit, detalleResp] = await Promise.all([
+      const [obs, audit, detalleResp, docs] = await Promise.all([
         getObservacionesAction(solicitud.id),
         getAuditoriaAction(solicitud.id),
         responsableId ? getUsuarioDetalleAction(responsableId) : Promise.resolve(null),
+        getDocumentosSolicitudAction(solicitud.id),
       ]);
       if (!cancelled) {
         setObservaciones(obs);
         setAuditoria(audit);
         setResponsableDetalle(detalleResp);
+        setDocumentos(docs);
       }
     }
     load();
@@ -308,6 +320,55 @@ export default function SolicitudDetalleModal({
     }
   }
 
+  function puedeEliminarDoc(doc: DocumentoSolicitud): boolean {
+    return currentUserRol === 'administrador' || currentUserRol === 'logistica' || doc.subido_por === currentUserId;
+  }
+
+  async function handleSubirDocs(files: FileList | null) {
+    if (!files || files.length === 0 || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      const fd = new FormData();
+      Array.from(files).forEach((f) => fd.append('archivos', f));
+      const result = await subirDocumentosSolicitudAction(solicitud.id, fd);
+      if (!result.success) {
+        onMensaje('error', result.error || 'Error al subir documentos.');
+      } else {
+        onMensaje('success', result.message || 'Documentos subidos.');
+        setDocumentos(await getDocumentosSolicitudAction(solicitud.id));
+      }
+    } finally {
+      setIsSubmitting(false);
+      if (fileDocRef.current) fileDocRef.current.value = '';
+    }
+  }
+
+  async function handleDescargarDoc(doc: DocumentoSolicitud) {
+    const result = await descargarDocumentoSolicitudAction(doc.id);
+    if (!result.success || !result.url) {
+      onMensaje('error', result.error || 'Error al descargar el documento.');
+      return;
+    }
+    window.open(result.url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handleEliminarDoc(doc: DocumentoSolicitud) {
+    if (isSubmitting) return;
+    if (!window.confirm(`¿Eliminar el documento "${doc.nombre_archivo}"? Esta acción no se puede deshacer.`)) return;
+    setIsSubmitting(true);
+    try {
+      const result = await eliminarDocumentoSolicitudAction(doc.id);
+      if (!result.success) {
+        onMensaje('error', result.error || 'Error al eliminar el documento.');
+      } else {
+        onMensaje('success', 'Documento eliminado.');
+        setDocumentos((prev) => prev.filter((d) => d.id !== doc.id));
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   const destino =
     solicitud.tipo_solicitud === 'venta'
       ? solicitud.sucursal_destino_nombre || `#${solicitud.sucursal_destino}`
@@ -330,85 +391,16 @@ export default function SolicitudDetalleModal({
             <p className="text-sm font-bold tracking-widest text-neutral-900 uppercase">
               Detalle de Solicitud
             </p>
-            {/* Actions dropdown */}
-            <div className="relative">
+            {/* Acciones */}
+            {puedeCancelar && (
               <button
-                onClick={() => setShowAcciones(!showAcciones)}
-                className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 rounded-xl text-sm font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50 transition-colors cursor-pointer"
+                onClick={() => onCancelar(solicitud)}
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-2 px-4 py-2 border border-neutral-300 rounded-xl text-sm font-medium text-neutral-700 hover:border-neutral-400 hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-40"
               >
-                Acciones
-                <ChevronDown className={`w-4 h-4 transition-transform ${showAcciones ? 'rotate-180' : ''}`} />
+                <Ban className="w-4 h-4" /> Cancelar
               </button>
-              {showAcciones && (
-                <>
-                  <div className="fixed inset-0 z-[1]" onClick={() => setShowAcciones(false)} />
-                  <div className="absolute right-0 mt-2 w-52 bg-white border border-neutral-200 rounded-xl shadow-xl z-[2] py-1 overflow-hidden">
-                    {puedeAprobar && (
-                      <button
-                        onClick={() => { setShowAcciones(false); onAprobar(solicitud); }}
-                        disabled={isSubmitting}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-40"
-                      >
-                        <ThumbsUp className="w-4 h-4" /> Aprobar
-                      </button>
-                    )}
-                    {puedeRechazar && (
-                      <button
-                        onClick={() => { setShowAcciones(false); onRechazar(solicitud); }}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                      >
-                        <ThumbsDown className="w-4 h-4" /> Rechazar
-                      </button>
-                    )}
-                    {puedePriorizar && (
-                      <button
-                        onClick={() => { setShowAcciones(false); onPriorizar(solicitud); }}
-                        disabled={isSubmitting}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-40"
-                      >
-                        <ArrowUp className="w-4 h-4" /> Priorizar
-                      </button>
-                    )}
-                    {puedeCancelar && (
-                      <>
-                        <button
-                          onClick={() => { setShowAcciones(false); onCancelar(solicitud); }}
-                          className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
-                        >
-                          <Ban className="w-4 h-4" /> Cancelar
-                        </button>
-                        {puedeEliminar && (
-                          <button
-                            onClick={() => { setShowAcciones(false); onEliminar(solicitud); }}
-                            className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="w-4 h-4" /> Eliminar
-                          </button>
-                        )}
-                      </>
-                    )}
-                    {puedeRecibir && (
-                      <button
-                        onClick={() => { setShowAcciones(false); onRecibir(solicitud); }}
-                        disabled={isSubmitting}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-40"
-                      >
-                        <PackageCheck className="w-4 h-4" /> Recibir
-                      </button>
-                    )}
-                    {puedeFinalizar && (
-                      <button
-                        onClick={() => { setShowAcciones(false); onFinalizar(solicitud); }}
-                        disabled={isSubmitting}
-                        className="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-40"
-                      >
-                        <CheckCircle2 className="w-4 h-4" /> Finalizar
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Title + badge */}
@@ -864,12 +856,80 @@ export default function SolicitudDetalleModal({
 
           {/* === DOCUMENTOS TAB === */}
           {detailTab === 'docs' && (
-            <div className="py-12 text-center">
-              <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-4">
-                <FileText className="w-8 h-8 text-neutral-300" />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-neutral-900">
+                  {documentos.length === 0
+                    ? 'Sin documentos adjuntos'
+                    : `${documentos.length} documento${documentos.length === 1 ? '' : 's'}`}
+                </p>
+                <input
+                  ref={fileDocRef}
+                  type="file"
+                  multiple
+                  accept={ACEPTA_DOCUMENTOS}
+                  className="hidden"
+                  onChange={(e) => handleSubirDocs(e.target.files)}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileDocRef.current?.click()}
+                  disabled={isSubmitting}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-semibold rounded-xl disabled:opacity-40 cursor-pointer"
+                >
+                  {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
+                  Subir documentos
+                </button>
               </div>
-              <p className="text-sm text-neutral-500 font-medium">Sin documentos adjuntos</p>
-              <p className="text-xs text-neutral-400 mt-1">Los documentos relacionados a esta solicitud aparecerán aquí.</p>
+
+              {documentos.length === 0 ? (
+                <div className="py-12 text-center">
+                  <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mx-auto mb-4">
+                    <FileText className="w-8 h-8 text-neutral-300" />
+                  </div>
+                  <p className="text-sm text-neutral-500 font-medium">Sin documentos adjuntos</p>
+                  <p className="text-xs text-neutral-400 mt-1">Los documentos relacionados a esta solicitud aparecerán aquí.</p>
+                </div>
+              ) : (
+                <ul className="space-y-2">
+                  {documentos.map((doc) => (
+                    <li key={doc.id} className="flex items-center gap-3 p-3 bg-neutral-50 border border-neutral-200 rounded-xl">
+                      <div className="w-10 h-10 rounded-lg bg-white border border-neutral-200 flex items-center justify-center shrink-0">
+                        <FileText className="w-5 h-5 text-neutral-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-neutral-900 truncate">{doc.nombre_archivo}</p>
+                        <p className="text-xs text-neutral-500 truncate">
+                          {formatTamano(doc.tamano_bytes)}
+                          {doc.subido_por_nombre ? ` · ${doc.subido_por_nombre}` : ''}
+                          {' · '}
+                          {formatFecha(doc.created_at)}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDescargarDoc(doc)}
+                        disabled={isSubmitting}
+                        title="Descargar"
+                        className="p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                      {puedeEliminarDoc(doc) && (
+                        <button
+                          type="button"
+                          onClick={() => handleEliminarDoc(doc)}
+                          disabled={isSubmitting}
+                          title="Eliminar"
+                          className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           )}
         </div>

@@ -578,3 +578,61 @@ export async function finalizarSolicitudAction(solicitudId: string) {
     return { success: false, error: msg };
   }
 }
+
+export async function subirDocumentosSolicitudAction(solicitudId: string, formData: FormData) {
+  try {
+    if (!solicitudId) return { success: false, error: 'Solicitud inválida.' };
+    const profile = await getProfileOrThrow();
+
+    const archivos = formData.getAll('archivos') as File[];
+    if (!archivos.length) return { success: false, error: 'No se seleccionaron archivos.' };
+
+    const preparados = await Promise.all(
+      archivos.map(async (f) => ({
+        nombre: f.name,
+        tipo: f.type,
+        tamano: f.size,
+        buffer: await f.arrayBuffer(),
+      }))
+    );
+
+    const result = await SolicitudesService.subirDocumentos(solicitudId, profile.id, preparados);
+    if (!result.success) return { success: false, error: result.error };
+
+    return { success: true, message: 'Documentos subidos correctamente.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado al subir documentos';
+    return { success: false, error: msg };
+  }
+}
+
+export async function getDocumentosSolicitudAction(solicitudId: string) {
+  try {
+    await getProfileOrThrow();
+    return await SolicitudesService.getDocumentos(solicitudId);
+  } catch {
+    return [];
+  }
+}
+
+export async function eliminarDocumentoSolicitudAction(documentoId: string) {
+  try {
+    if (!documentoId) return { success: false, error: 'Documento inválido.' };
+    const profile = await getProfileOrThrow();
+    return await SolicitudesService.eliminarDocumento(documentoId, profile.id, profile.rol);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar el documento';
+    return { success: false, error: msg };
+  }
+}
+
+export async function descargarDocumentoSolicitudAction(documentoId: string) {
+  try {
+    if (!documentoId) return { success: false, error: 'Documento inválido.' };
+    await getProfileOrThrow();
+    return await SolicitudesService.getURLDescarga(documentoId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado al generar la descarga';
+    return { success: false, error: msg };
+  }
+}

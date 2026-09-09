@@ -86,3 +86,15 @@ export interface AuditoriaEntry {
   valor_nuevo: unknown;
   created_at: string;
 }
+
+export interface DocumentoSolicitud {
+  id: string;
+  solicitud_id: string;
+  nombre_archivo: string;
+  tipo_mime: string;
+  tamano_bytes: number;
+  ruta_storage: string;
+  subido_por: string | null;
+  subido_por_nombre?: string | null;
+  created_at: string;
+}

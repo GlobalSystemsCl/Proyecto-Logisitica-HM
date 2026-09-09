@@ -336,30 +336,13 @@ export default function AprobacionesClient({
           vehiculosInventario={vehiculos}
           onClose={() => setDetailTarget(null)}
           onMensaje={(tipo, mensaje) => setFeedback({ type: tipo, message: mensaje })}
-          onAprobar={(sol) => {
-            setDetailTarget(null);
-            abrirAprobacion(sol);
-          }}
-          onRechazar={(sol) => {
-            setRejectMotivo('');
-            setDetailTarget(null);
-            setRejectTarget(sol);
-          }}
-          onPriorizar={() => {}}
           onCancelar={() => {}}
-          onEliminar={() => {}}
-          onRecibir={() => {}}
-          onFinalizar={() => {}}
-          puedeAprobar={puedoRechazar(detailTarget)}
-          puedeRechazar={puedoRechazar(detailTarget)}
-          puedePriorizar={false}
           puedeCancelar={false}
-          puedeEliminar={false}
-          puedeRecibir={false}
-          puedeFinalizar={false}
           puedeGestionarVehiculos={
             PRE_DESPACHO.includes(detailTarget.estado) && puedoRechazar(detailTarget)
           }
+          currentUserId={viewer.id}
+          currentUserRol={viewer.rol}
         />
       )}
     </div>

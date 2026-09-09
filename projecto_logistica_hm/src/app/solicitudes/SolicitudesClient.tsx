@@ -972,33 +972,15 @@ export default function SolicitudesClient({
           vehiculosInventario={vehiculos}
           onClose={() => setDetailTarget(null)}
           onMensaje={(tipo, mensaje) => setFeedback({ type: tipo, message: mensaje })}
-          onAprobar={(sol) => abrirAprobacion(sol)}
-          onRechazar={(sol) => {
-            setRejectMotivo('');
-            setDetailTarget(null);
-            setRejectTarget(sol);
-          }}
-          onPriorizar={(sol) => handlePriorizar(sol)}
           onCancelar={(sol) => {
             setMotivo('');
             setDetailTarget(null);
             setCancelTarget(sol);
           }}
-          onEliminar={(sol) => {
-            setDeleteError(null);
-            setDetailTarget(null);
-            setDeleteTarget(sol);
-          }}
-          onRecibir={(sol) => handleRecibir(sol)}
-          onFinalizar={(sol) => handleFinalizar(sol)}
-          puedeAprobar={puedeAprobar(detailTarget)}
-          puedeRechazar={puedeAprobar(detailTarget)}
-          puedePriorizar={puedePriorizar(detailTarget)}
           puedeCancelar={PRE_DESPACHO.includes(detailTarget.estado) && puedeGestionar(detailTarget)}
-          puedeEliminar={puedeEliminar(detailTarget)}
-          puedeRecibir={puedeRecibir(detailTarget)}
-          puedeFinalizar={puedeFinalizar(detailTarget)}
           puedeGestionarVehiculos={PRE_DESPACHO.includes(detailTarget.estado) && puedeGestionar(detailTarget)}
+          currentUserId={viewer.id}
+          currentUserRol={viewer.rol}
         />
       )}
 

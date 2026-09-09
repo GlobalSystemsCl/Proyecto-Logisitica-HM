@@ -5,7 +5,9 @@ import {
   VehiculoInventario,
   ObservacionEntry,
   AuditoriaEntry,
+  DocumentoSolicitud,
 } from '@/types/solicitud.types';
+import { UserRole } from '@/types/auth.types';
 
 export const ESTADOS_ACTIVOS_RESERVA = [
   'pendiente_aprobacion',
@@ -23,6 +25,21 @@ const ESTADOS_PRE_DESPACHO = [
   'pendiente',
   'priorizada',
 ];
+
+const BUCKET_DOCUMENTOS = 'solicitud-documentos';
+const MAX_TAMANO_DOCUMENTO = 10 * 1024 * 1024;
+const MIMES_DOCUMENTOS = new Set([
+  'application/pdf',
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+  'application/zip',
+]);
 
 interface SolicitudRawRow {
   id: string;
@@ -914,6 +931,170 @@ export class SolicitudesService {
     } catch (err) {
       console.error('Error en getAuditoria:', err);
       return [];
+    }
+  }
+
+  static async subirDocumentos(
+    solicitudId: string,
+    usuarioId: string,
+    archivos: Array<{ nombre: string; tipo: string; tamano: number; buffer: ArrayBuffer }>
+  ): Promise<{ success: boolean; subidos?: number; error?: string }> {
+    try {
+      if (!archivos.length) return { success: false, error: 'No se seleccionaron archivos.' };
+
+      const admin = createAdminClient();
+      const existe = await this.getSolicitudById(solicitudId);
+      if (!existe) return { success: false, error: 'La solicitud no existe.' };
+
+      for (const a of archivos) {
+        if (a.tamano <= 0) return { success: false, error: `El archivo "${a.nombre}" está vacío.` };
+        if (a.tamano > MAX_TAMANO_DOCUMENTO) {
+          return { success: false, error: `El archivo "${a.nombre}" supera el máximo de 10 MB.` };
+        }
+        if (!MIMES_DOCUMENTOS.has(a.tipo)) {
+          return { success: false, error: `El tipo del archivo "${a.nombre}" no está permitido.` };
+        }
+      }
+
+      const subidos: string[] = [];
+      try {
+        for (const a of archivos) {
+          const nombreLimpio = a.nombre.replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
+          const ruta = `${solicitudId}/${crypto.randomUUID()}-${nombreLimpio}`;
+
+          const { error: eSub } = await admin.storage.from(BUCKET_DOCUMENTOS).upload(ruta, a.buffer, {
+            contentType: a.tipo,
+            upsert: false,
+          });
+          if (eSub) throw new Error(eSub.message);
+          subidos.push(ruta);
+
+          const { error: eRow } = await admin.from('solicitud_documento').insert({
+            solicitud_id: solicitudId,
+            nombre_archivo: a.nombre.slice(0, 255),
+            tipo_mime: a.tipo,
+            tamano_bytes: a.tamano,
+            ruta_storage: ruta,
+            subido_por: usuarioId,
+          });
+          if (eRow) throw new Error(eRow.message);
+
+          await this.registrarAuditoria(usuarioId, 'solicitud', solicitudId, 'subir_documento', null, {
+            nombre_archivo: a.nombre,
+            ruta_storage: ruta,
+          });
+        }
+        return { success: true, subidos: subidos.length };
+      } catch (err) {
+        if (subidos.length) {
+          await admin.storage.from(BUCKET_DOCUMENTOS).remove(subidos);
+        }
+        const msg = err instanceof Error ? err.message : 'Error al subir los documentos';
+        return { success: false, error: msg };
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al subir documentos';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async getDocumentos(solicitudId: string): Promise<DocumentoSolicitud[]> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('solicitud_documento')
+        .select('id, solicitud_id, nombre_archivo, tipo_mime, tamano_bytes, ruta_storage, subido_por, created_at, usuario:subido_por(nombre, apellido)')
+        .eq('solicitud_id', solicitudId)
+        .order('created_at', { ascending: true });
+
+      if (error || !data) return [];
+
+      return (data as unknown as Array<{
+        id: string;
+        solicitud_id: string;
+        nombre_archivo: string;
+        tipo_mime: string;
+        tamano_bytes: number;
+        ruta_storage: string;
+        subido_por: string | null;
+        created_at: string;
+        usuario: { nombre: string; apellido: string } | null;
+      }>).map((row) => ({
+        id: row.id,
+        solicitud_id: row.solicitud_id,
+        nombre_archivo: row.nombre_archivo,
+        tipo_mime: row.tipo_mime,
+        tamano_bytes: row.tamano_bytes,
+        ruta_storage: row.ruta_storage,
+        subido_por: row.subido_por,
+        subido_por_nombre: persona(row.usuario),
+        created_at: row.created_at,
+      }));
+    } catch (err) {
+      console.error('Error en getDocumentos:', err);
+      return [];
+    }
+  }
+
+  static async eliminarDocumento(
+    documentoId: string,
+    usuarioId: string,
+    rol: UserRole
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+      const { data: doc, error: eDoc } = await admin
+        .from('solicitud_documento')
+        .select('id, solicitud_id, ruta_storage, nombre_archivo, subido_por')
+        .eq('id', documentoId)
+        .single();
+      if (eDoc || !doc) return { success: false, error: 'El documento no existe.' };
+
+      if (rol !== 'administrador' && rol !== 'logistica' && doc.subido_por !== usuarioId) {
+        return { success: false, error: 'No tienes permisos para eliminar este documento.' };
+      }
+
+      const { error: eRem } = await admin.storage.from(BUCKET_DOCUMENTOS).remove([doc.ruta_storage]);
+      if (eRem) return { success: false, error: eRem.message };
+
+      const { error: eDel } = await admin.from('solicitud_documento').delete().eq('id', documentoId);
+      if (eDel) return { success: false, error: eDel.message };
+
+      await this.registrarAuditoria(usuarioId, 'solicitud', doc.solicitud_id, 'eliminar_documento', {
+        id: doc.id,
+        nombre_archivo: doc.nombre_archivo,
+        ruta_storage: doc.ruta_storage,
+      }, null);
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar el documento';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async getURLDescarga(
+    documentoId: string
+  ): Promise<{ success: boolean; url?: string; error?: string }> {
+    try {
+      const admin = createAdminClient();
+      const { data: doc, error: eDoc } = await admin
+        .from('solicitud_documento')
+        .select('ruta_storage')
+        .eq('id', documentoId)
+        .single();
+      if (eDoc || !doc) return { success: false, error: 'El documento no existe.' };
+
+      const { data: sign, error: eSign } = await admin.storage
+        .from(BUCKET_DOCUMENTOS)
+        .createSignedUrl(doc.ruta_storage, 300);
+      if (eSign || !sign?.signedUrl) {
+        return { success: false, error: eSign?.message || 'No se pudo generar el enlace de descarga.' };
+      }
+
+      return { success: true, url: sign.signedUrl };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al generar la descarga';
+      return { success: false, error: msg };
     }
   }
 
