@@ -222,14 +222,14 @@ export default async function DashboardPage() {
             {(profile.rol === 'logistica' ||
               profile.rol === 'jefe_local' ||
               profile.rol === 'administrador') && (
-              <ModuleCard
-                href="/logistica/calendarizaciones"
-                icon={Truck}
-                title="Gestión Logística"
-                description="Calendarización de traslados, fecha tentativa, despacho y confirmación de entrega en destino."
-                cta="Gestionar traslados"
-              />
-            )}
+                <ModuleCard
+                  href="/logistica/calendarizaciones"
+                  icon={Truck}
+                  title="Gestión Logística"
+                  description="Calendarización de traslados, fecha tentativa, despacho y confirmación de entrega en destino."
+                  cta="Gestionar traslados"
+                />
+              )}
 
             {isAdmin && (
               <ModuleCard
