@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, LogOut, ChevronDown } from 'lucide-react';
+import { ArrowLeft, LogOut } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
 import { ROL_LABEL, UserRole } from '@/types/auth.types';
 
@@ -45,7 +45,6 @@ export default function TopNavbar({ nombre, apellido, rol, backHref }: TopNavbar
                 {ROL_LABEL[rol]}
               </p>
             </div>
-            <ChevronDown className="w-4 h-4 text-neutral-400 hidden sm:block group-hover:text-neutral-600 transition-colors" />
           </Link>
 
           <form action={logoutAction} className="hidden md:block">
