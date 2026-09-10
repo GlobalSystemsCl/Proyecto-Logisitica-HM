@@ -124,6 +124,7 @@ export default function SolicitudesClient({
 
   const [vehiculoSearch, setVehiculoSearch] = useState('');
   const [vehiculoMarca, setVehiculoMarca] = useState('');
+  const [vehiculoSucursal, setVehiculoSucursal] = useState<number | ''>('');
   const [vehiculoError, setVehiculoError] = useState(false);
   const [obsCreacion, setObsCreacion] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
@@ -153,16 +154,31 @@ export default function SolicitudesClient({
     };
   }, [sucursalDestinoSel, sucursales, selectedVehiculos.size]);
 
+  const sucursalesPorId = useMemo(() => {
+    const mapa = new Map<number, string | null>();
+    sucursales.forEach((s) => mapa.set(s.id, s.nombre));
+    return mapa;
+  }, [sucursales]);
+
   const marcasVehiculos = useMemo(() => {
     const marcas = new Set<string>();
     vehiculos.forEach((v) => { if (v.marca) marcas.add(v.marca); });
     return Array.from(marcas).sort((a, b) => a.localeCompare(b));
   }, [vehiculos]);
 
+  const sucursalesVehiculos = useMemo(() => {
+    const ids = new Set<number>();
+    vehiculos.forEach((v) => { if (v.ubicacion != null) ids.add(v.ubicacion); });
+    return Array.from(ids)
+      .map((id) => ({ id, nombre: sucursalesPorId.get(id) || `Sucursal #${id}` }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [vehiculos, sucursalesPorId]);
+
   const vehiculosFiltrados = useMemo(() => {
     const term = vehiculoSearch.trim().toLowerCase();
     return vehiculos.filter((v) => {
       if (vehiculoMarca && v.marca !== vehiculoMarca) return false;
+      if (vehiculoSucursal !== '' && v.ubicacion !== vehiculoSucursal) return false;
       if (term) {
         const patente = v.patente.toLowerCase().includes(term);
         const chasis = (v.chasis || '').toLowerCase().includes(term);
@@ -170,7 +186,7 @@ export default function SolicitudesClient({
       }
       return true;
     });
-  }, [vehiculos, vehiculoSearch, vehiculoMarca]);
+  }, [vehiculos, vehiculoSearch, vehiculoMarca, vehiculoSucursal]);
 
   const visibles = useMemo(() => {
     if (esAdmin || esLogistica) return solicitudes;
@@ -618,7 +634,7 @@ export default function SolicitudesClient({
       {/* Modal: Nueva Solicitud */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200 shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-neutral-900 flex items-center justify-center text-white">
@@ -794,8 +810,8 @@ export default function SolicitudesClient({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative flex-1 min-w-[160px]">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
                     <input
                       type="text"
@@ -805,6 +821,16 @@ export default function SolicitudesClient({
                       className="w-full pl-8 pr-3 py-1.5 bg-white border border-neutral-300 rounded-xl text-xs text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                     />
                   </div>
+                  <select
+                    value={vehiculoSucursal}
+                    onChange={(e) => setVehiculoSucursal(e.target.value === '' ? '' : Number(e.target.value))}
+                    className="px-2.5 py-1.5 bg-white border border-neutral-300 rounded-xl text-xs text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  >
+                    <option value="">Todas las sucursales</option>
+                    {sucursalesVehiculos.map((s) => (
+                      <option key={s.id} value={s.id}>{s.nombre}</option>
+                    ))}
+                  </select>
                   <select
                     value={vehiculoMarca}
                     onChange={(e) => setVehiculoMarca(e.target.value)}
@@ -849,8 +875,11 @@ export default function SolicitudesClient({
                         />
                         <span className="font-mono font-bold text-neutral-900 text-xs">{v.patente}</span>
                         <span className="text-xs text-neutral-500 truncate">{v.chasis} · {v.marca} {v.modelo} · {v.anio}</span>
+                        <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-neutral-50 border border-neutral-200 text-[10px] font-semibold text-neutral-600 shrink-0">
+                          {sucursalesPorId.get(v.ubicacion ?? -1) || 'Sin sucursal'}
+                        </span>
                         {v.reservado_en_activa && (
-                          <span className="ml-auto text-[10px] font-semibold text-neutral-400 uppercase shrink-0">Ocupado</span>
+                          <span className="text-[10px] font-semibold text-neutral-400 uppercase shrink-0">Ocupado</span>
                         )}
                       </label>
                     ))

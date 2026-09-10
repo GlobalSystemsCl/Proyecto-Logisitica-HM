@@ -240,7 +240,7 @@ export class SolicitudesService {
 
       const { data: vehiculos, error } = await admin
         .from('vehiculo')
-        .select('id, chasis, patente, marca, modelo, anio, color')
+        .select('id, chasis, patente, marca, modelo, anio, color, ubicacion')
         .order('patente', { ascending: true });
 
       if (error) {

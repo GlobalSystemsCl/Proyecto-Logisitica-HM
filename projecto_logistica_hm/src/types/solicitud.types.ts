@@ -63,6 +63,7 @@ export interface VehiculoInventario {
   modelo: string;
   anio: number;
   color: string | null;
+  ubicacion: number | null;
   reservado_en_activa: boolean;
 }
 
