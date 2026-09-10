@@ -1172,15 +1172,18 @@ export class SolicitudesService {
     }
   }
 
-  static async getEjecutivosPorSucursal(sucursalId: number): Promise<Array<{ id: string; nombre: string; apellido: string }>> {
+  static async getEjecutivosPorSucursal(sucursalId: number | null): Promise<Array<{ id: string; nombre: string; apellido: string }>> {
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
+      let query = admin
         .from('usuario')
         .select('id, nombre, apellido')
         .eq('rol', 'ejecutivo')
-        .eq('activo', true)
-        .eq('sucursal_id', sucursalId);
+        .eq('activo', true);
+      if (sucursalId !== null && sucursalId !== undefined) {
+        query = query.eq('sucursal_id', sucursalId);
+      }
+      const { data, error } = await query;
 
       if (error || !data) return [];
       return data as unknown as Array<{ id: string; nombre: string; apellido: string }>;

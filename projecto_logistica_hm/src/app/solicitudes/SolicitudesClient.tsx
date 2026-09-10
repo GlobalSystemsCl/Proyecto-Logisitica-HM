@@ -243,15 +243,15 @@ export default function SolicitudesClient({
   }, [feedback]);
 
   useEffect(() => {
-    if (!esJefeLocal || !sucursalSel) return;
+    if (!esJefeLocal) return;
     let cancelled = false;
     async function load() {
-      const data = await getEjecutivosPorSucursalAction(Number(sucursalSel));
+      const data = await getEjecutivosPorSucursalAction(null);
       if (!cancelled) setEjecutivosDisponibles(data);
     }
     load();
     return () => { cancelled = true; };
-  }, [esJefeLocal, sucursalSel]);
+  }, [esJefeLocal]);
 
   function resetCreateForm() {
     setSucursalSel((esJefeLocal || esEjecutivo) && viewer.sucursal_id ? String(viewer.sucursal_id) : '');
@@ -755,7 +755,7 @@ export default function SolicitudesClient({
               )}
 
               {/* Asignar ejecutivo (solo jefe_local) */}
-              {esJefeLocal && sucursalSel && (
+              {esJefeLocal && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                     Asignar a Ejecutivo (opcional)

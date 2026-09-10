@@ -482,7 +482,7 @@ export async function getUsuarioDetalleAction(usuarioId: string): Promise<Usuari
   }
 }
 
-export async function getEjecutivosPorSucursalAction(sucursalId: number) {
+export async function getEjecutivosPorSucursalAction(sucursalId: number | null) {
   return SolicitudesService.getEjecutivosPorSucursal(sucursalId);
 }
 
