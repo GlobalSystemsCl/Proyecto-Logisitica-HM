@@ -13,6 +13,7 @@ import {
   Ban,
   Clock,
   PackageCheck,
+  Flag,
 } from 'lucide-react';
 import {
   createSolicitudAction,
@@ -205,6 +206,7 @@ export default function SolicitudesClient({
 
   const pendientesAprobacion = visibles.filter((s) => s.estado === 'pendiente_aprobacion').length;
   const priorizadas = visibles.filter((s) => s.estado === 'priorizada').length;
+  const pendientesPorFinalizar = visibles.filter((s) => s.estado === 'entregada').length;
 
   function puedeGestionar(sol: SolicitudLista): boolean {
     if (esAdmin) return true;
@@ -387,7 +389,7 @@ export default function SolicitudesClient({
       )}
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Visibles</p>
@@ -415,6 +417,16 @@ export default function SolicitudesClient({
           </div>
           <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-400">
             <ArrowUp className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-emerald-600 border border-emerald-600 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-emerald-100 uppercase tracking-wider">Pendientes por Finalizar</p>
+            <p className="text-3xl font-bold text-white mt-1">{pendientesPorFinalizar}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center text-white">
+            <Flag className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -577,9 +589,9 @@ export default function SolicitudesClient({
                               onClick={() => handleFinalizar(sol)}
                               disabled={isSubmitting}
                               title="Finalizar solicitud"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-600 text-white hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-40"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-b from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-sm ring-1 ring-black/10 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98]"
                             >
-                              <CheckCircle2 className="w-3.5 h-3.5" /> Finalizar
+                              <Flag className="w-3.5 h-3.5" /> Finalizar
                             </button>
                           )}
                         </div>
