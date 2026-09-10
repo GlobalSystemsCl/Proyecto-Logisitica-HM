@@ -1334,6 +1334,13 @@ export class SolicitudesService {
         return { success: false, error: 'Solo las solicitudes Priorizadas o Asignadas pueden calendarizarse.' };
       }
 
+      // No se puede calendarizar en una fecha anterior a hoy
+      const hoy = new Date();
+      const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+      if (fechaDespacho.slice(0, 10) < hoyISO) {
+        return { success: false, error: 'No puedes programar el traslado en una fecha anterior a hoy.' };
+      }
+
       const { error } = await admin
         .from('solicitud')
         .update({
@@ -1459,6 +1466,46 @@ export class SolicitudesService {
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al despachar';
+      return { success: false, error: msg };
+    }
+  }
+
+  static async cancelarDespacharSolicitud(
+    id: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'en_transito') {
+        return { success: false, error: 'Solo las solicitudes En Tránsito pueden volver a Calendarizadas.' };
+      }
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({
+          estado: 'calendarizada',
+          fecha_despacho: null,
+          posicion_prioridad: null,
+        })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'despacho',
+        { estado: 'en_transito', fecha_despacho: actual.fecha_despacho },
+        { estado: 'calendarizada', fecha_despacho: null }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al cancelar el despacho';
       return { success: false, error: msg };
     }
   }

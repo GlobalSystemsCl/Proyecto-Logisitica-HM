@@ -110,9 +110,9 @@ export class AuditoriaService {
         .filter((r) => r.entidad === 'solicitud')
         .map((r) => r.entidad_id);
 
-      let svMap = new Map<string, SolicitudVehiculoRow>();
-      let solicitudMap = new Map<string, SolicitudRow>();
-      let vehiculoMap = new Map<string, VehiculoRow>();
+      const svMap = new Map<string, SolicitudVehiculoRow>();
+      const solicitudMap = new Map<string, SolicitudRow>();
+      const vehiculoMap = new Map<string, VehiculoRow>();
 
       // Queries paralelas
       const [svResult, solResult, vehResult] = await Promise.all([

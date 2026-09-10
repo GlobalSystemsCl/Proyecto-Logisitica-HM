@@ -82,6 +82,7 @@ export default function UsersTableClient({ users, sucursales, currentAdminEmail,
   const [editSucursalId, setEditSucursalId] = useState<number | null>(null);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsHydrated(true);
   }, []);
 
