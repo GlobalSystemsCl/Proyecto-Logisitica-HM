@@ -132,8 +132,6 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     return `${año}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
   };
 
-  const esFechaPasada = (fecha: string) => fecha < hoyISO();
-
   const handleDragStart = useCallback((e: DragEvent<HTMLDivElement>, id: string) => {
     setDraggedId(id);
     e.dataTransfer.setData('text/plain', id);
