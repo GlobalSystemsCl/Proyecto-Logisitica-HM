@@ -501,13 +501,6 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
       return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
     }
 
-    // No se puede calendarizar en una fecha anterior a hoy
-    const hoy = new Date();
-    const hoyISO = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
-    if (fechaDespacho.slice(0, 10) < hoyISO) {
-      return { success: false, error: 'No puedes programar el traslado en una fecha anterior a hoy.' };
-    }
-
     const result = await SolicitudesService.calendarizarSolicitud(solicitudId, fechaDespacho, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
