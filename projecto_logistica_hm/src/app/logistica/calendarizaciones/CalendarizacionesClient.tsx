@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, DragEvent } from 'react';
 import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car } from 'lucide-react';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
 import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
-import { formatFecha, formatFechaLarga } from '@/lib/fechas';
+import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
 
 interface Props {
   solicitudes: SolicitudLista[];
@@ -38,11 +38,19 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
 
   const puedeCalendarizar = viewer.rol === 'logistica';
   const puedeDespachar = viewer.rol === 'administrador' || viewer.rol === 'logistica';
-  const puedeRecibir = viewer.rol === 'administrador' || viewer.rol === 'jefe_local';
+  const esAdmin = viewer.rol === 'administrador';
+
+  const puedeRecibir = (s: SolicitudLista) => {
+    if (esAdmin) return true;
+    if (viewer.rol !== 'jefe_local' || viewer.sucursal_id === null || viewer.sucursal_id === undefined) return false;
+    return s.sucursal_destino !== null && s.sucursal_destino !== undefined
+      ? viewer.sucursal_id === s.sucursal_destino
+      : viewer.sucursal_id === s.sucursal;
+  };
 
   const solicitudesFiltradas = useMemo(() => {
     if (viewer.rol === 'jefe_local' && viewer.sucursal_id) {
-      return solicitudes.filter((s) => s.sucursal === viewer.sucursal_id);
+      return solicitudes.filter((s) => s.sucursal === viewer.sucursal_id || s.sucursal_destino === viewer.sucursal_id);
     }
     return solicitudes;
   }, [solicitudes, viewer]);
@@ -155,6 +163,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     setDropTarget(null);
     const id = e.dataTransfer.getData('text/plain');
     if (!id) return;
+    if (fecha < hoyISO()) return;
     const solicitud = solicitudesCalendarizables.find((s) => s.id === id);
     if (!solicitud) return;
     if (solicitud.fecha_limite && Date.parse(fecha) > Date.parse(solicitud.fecha_limite.slice(0, 10))) {
@@ -352,13 +361,14 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                 const fechaStr = formatearFecha(d.dia, d.mes, d.año);
                 const trasladosDelDia = solicitudesPorFecha[fechaStr] || [];
                 const esHoy = d.dia === new Date().getDate() && d.mes === new Date().getMonth() && d.año === new Date().getFullYear();
-                const esDropTarget = puedeCalendarizar && dropTarget === fechaStr;
+                const esPasado = fechaStr < hoyISO();
+                const esDropTarget = puedeCalendarizar && !esPasado && dropTarget === fechaStr;
                 const esSeleccionado = diaSeleccionado === fechaStr;
                 const tieneTraslados = trasladosDelDia.length > 0;
                 return (
                   <div
                     key={idx}
-                    {...(puedeCalendarizar ? {
+                    {...(!esPasado && puedeCalendarizar ? {
                       onDragOver: (e: DragEvent<HTMLDivElement>) => handleDragOver(e, fechaStr),
                       onDragLeave: handleDragLeave,
                       onDrop: (e: DragEvent<HTMLDivElement>) => handleDrop(e, fechaStr),
@@ -366,7 +376,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                     onClick={() => tieneTraslados && setDiaSeleccionado(fechaStr)}
                     className={`min-h-[72px] p-1.5 border-b border-r border-neutral-100 transition-colors ${
                       !d.esMesActual ? 'bg-neutral-50' : ''
-                    } ${esDropTarget ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : ''} ${
+                    } ${esPasado ? 'opacity-40 pointer-events-none' : ''} ${esDropTarget ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : ''} ${
                       esSeleccionado ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''
                     } ${tieneTraslados ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
                   >
@@ -455,7 +465,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                         Despachar
                       </button>
                     )}
-                    {puedeRecibir && s.estado === 'en_transito' && (
+                    {puedeRecibir(s) && s.estado === 'en_transito' && (
                       <button
                         onClick={() => handleRecibir(s.id)}
                         disabled={loading === s.id}

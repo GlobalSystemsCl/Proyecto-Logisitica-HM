@@ -28,7 +28,7 @@ import {
   VehiculoInventario,
 } from '@/types/solicitud.types';
 import { Sucursal } from '@/types/sucursal.types';
-import { formatFecha } from '@/lib/fechas';
+import { formatFecha, hoyISO } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 
@@ -176,7 +176,9 @@ export default function SolicitudesClient({
     if (esEjecutivo) return solicitudes.filter((s) => s.ejecutivo_id === viewer.id);
     if (esJefeLocal) {
       if (viewer.sucursal_id === null) return [];
-      return solicitudes.filter((s) => s.sucursal === viewer.sucursal_id);
+      return solicitudes.filter(
+        (s) => s.sucursal === viewer.sucursal_id || s.sucursal_destino === viewer.sucursal_id
+      );
     }
     return [];
   }, [solicitudes, viewer, esAdmin, esEjecutivo, esJefeLocal, esLogistica]);
@@ -212,17 +214,25 @@ export default function SolicitudesClient({
     return false;
   }
 
+  function enSucursalRecepcion(sol: SolicitudLista): boolean {
+    if (viewer.sucursal_id === null || viewer.sucursal_id === undefined) return false;
+    return sol.sucursal_destino !== null && sol.sucursal_destino !== undefined
+      ? viewer.sucursal_id === sol.sucursal_destino
+      : viewer.sucursal_id === sol.sucursal;
+  }
+
   function puedeRecibir(sol: SolicitudLista): boolean {
     if (sol.estado !== 'en_transito') return false;
     if (esAdmin) return true;
-    if (esJefeLocal) return viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id;
+    if (esJefeLocal) return enSucursalRecepcion(sol);
     return false;
   }
 
   function puedeFinalizar(sol: SolicitudLista): boolean {
     if (sol.estado !== 'entregada') return false;
     if (esAdmin) return true;
-    if (esJefeLocal) return viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id;
+    if (esJefeLocal) return enSucursalRecepcion(sol);
+    if (esEjecutivo) return sol.ejecutivo_id === viewer.id;
     return false;
   }
 
@@ -661,6 +671,7 @@ export default function SolicitudesClient({
                     <input
                       type="date"
                       required
+                      min={hoyISO()}
                       value={fechaLimite}
                       onChange={(e) => setFechaLimite(e.target.value)}
                       className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"

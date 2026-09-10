@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   CreateSolicitudInput,
   SolicitudLista,
@@ -9,6 +10,7 @@ import {
 } from '@/types/solicitud.types';
 import { UserRole } from '@/types/auth.types';
 import { DisponibilidadVehiculo } from '@/types/sucursal.types';
+import { esFechaAnteriorAHoy } from '@/lib/fechas';
 
 export const ESTADOS_ACTIVOS_RESERVA = [
   'pendiente_aprobacion',
@@ -161,6 +163,35 @@ export interface SolicitudMinima {
 }
 
 export class SolicitudesService {
+  static async getUsuarioRolSucursal(
+    admin: SupabaseClient,
+    usuarioId: string
+  ): Promise<{ rol: UserRole; sucursal_id: number | null } | null> {
+    try {
+      const { data, error } = await admin
+        .from('usuario')
+        .select('rol, sucursal_id')
+        .eq('id', usuarioId)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return data as unknown as { rol: UserRole; sucursal_id: number | null };
+    } catch (err) {
+      console.error('Error en getUsuarioRolSucursal:', err);
+      return null;
+    }
+  }
+
+  static usuarioEnSucursalRecepcion(
+    sucursalUsuario: number | null,
+    solicitud: SolicitudMinima
+  ): boolean {
+    if (sucursalUsuario === null) return false;
+    return solicitud.sucursal_destino !== null
+      ? sucursalUsuario === solicitud.sucursal_destino
+      : sucursalUsuario === solicitud.sucursal;
+  }
+
   static async getJefeLocalDeSucursal(sucursalId: number): Promise<string | null> {
     try {
       const admin = createAdminClient();
@@ -790,6 +821,9 @@ export class SolicitudesService {
       if (isNaN(Date.parse(fechaEntrega))) {
         return { success: false, error: 'La fecha de entrega no es válida.' };
       }
+      if (esFechaAnteriorAHoy(fechaEntrega)) {
+        return { success: false, error: 'La fecha de entrega no puede ser anterior al día de hoy.' };
+      }
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
@@ -1293,6 +1327,9 @@ export class SolicitudesService {
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (esFechaAnteriorAHoy(fechaDespacho)) {
+        return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
+      }
       if (!['priorizada', 'asignada'].includes(actual.estado)) {
         return { success: false, error: 'Solo las solicitudes Priorizadas o Asignadas pueden calendarizarse.' };
       }
@@ -1439,6 +1476,18 @@ export class SolicitudesService {
         return { success: false, error: 'Solo las solicitudes En Tránsito pueden recibirse.' };
       }
 
+      const usuario = await SolicitudesService.getUsuarioRolSucursal(admin, usuarioId);
+      if (!usuario) return { success: false, error: 'Usuario no encontrado.' };
+
+      if (usuario.rol !== 'administrador') {
+        if (usuario.rol !== 'jefe_local' || !SolicitudesService.usuarioEnSucursalRecepcion(usuario.sucursal_id, actual)) {
+          return {
+            success: false,
+            error: 'Solo el jefe de local de la sucursal destino puede recibir la solicitud.',
+          };
+        }
+      }
+
       const ahora = new Date().toISOString();
 
       const { error } = await admin
@@ -1479,6 +1528,22 @@ export class SolicitudesService {
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
       if (actual.estado !== 'entregada') {
         return { success: false, error: 'Solo las solicitudes Entregadas pueden finalizarse.' };
+      }
+
+      const usuario = await SolicitudesService.getUsuarioRolSucursal(admin, usuarioId);
+      if (!usuario) return { success: false, error: 'Usuario no encontrado.' };
+
+      if (usuario.rol !== 'administrador') {
+        const esJefeLocalDestino =
+          usuario.rol === 'jefe_local' && SolicitudesService.usuarioEnSucursalRecepcion(usuario.sucursal_id, actual);
+        const esEjecutivoCreador = usuario.rol === 'ejecutivo' && actual.ejecutivo_id === usuarioId;
+
+        if (!esJefeLocalDestino && !esEjecutivoCreador) {
+          return {
+            success: false,
+            error: 'Solo el jefe de local de la sucursal destino o el ejecutivo que creó la solicitud pueden finalizarla.',
+          };
+        }
       }
 
       const { error } = await admin

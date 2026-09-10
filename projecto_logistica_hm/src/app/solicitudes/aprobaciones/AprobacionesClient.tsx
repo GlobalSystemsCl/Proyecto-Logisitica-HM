@@ -17,6 +17,7 @@ import {
 } from '@/app/actions/solicitudes.actions';
 import { SolicitudLista, EstadoSolicitud, TipoSolicitud, VehiculoInventario } from '@/types/solicitud.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import { hoyISO } from '@/lib/fechas';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -264,6 +265,7 @@ export default function AprobacionesClient({
             </label>
             <input
               type="date"
+              min={hoyISO()}
               value={aprobacionFecha}
               onChange={(e) => setAprobacionFecha(e.target.value)}
               className="w-full rounded-lg border border-neutral-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"

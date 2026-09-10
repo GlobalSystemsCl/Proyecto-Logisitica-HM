@@ -5,6 +5,7 @@ import { SolicitudesService } from '@/services/solicitudes.service';
 import { UsersService } from '@/services/users.service';
 import { UserProfile, UsuarioDetalle } from '@/types/auth.types';
 import { TipoSolicitud } from '@/types/solicitud.types';
+import { esFechaAnteriorAHoy } from '@/lib/fechas';
 import { revalidatePath } from 'next/cache';
 
 async function getProfileOrThrow(): Promise<UserProfile> {
@@ -47,6 +48,9 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
     const fechaLimite = data.fecha_limite?.trim() || null;
     if (fechaLimite && isNaN(Date.parse(fechaLimite))) {
       return { success: false, error: 'La fecha de entrega no es válida.' };
+    }
+    if (fechaLimite && esFechaAnteriorAHoy(fechaLimite)) {
+      return { success: false, error: 'La fecha de entrega no puede ser anterior al día de hoy.' };
     }
     if (profile.rol !== 'ejecutivo' && !fechaLimite) {
       return { success: false, error: 'Debes indicar la fecha de entrega para la solicitud.' };
@@ -147,6 +151,13 @@ export async function aprobarSolicitudAction(id: string, fecha: string) {
 
     if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
       return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden aprobar.' };
+    }
+
+    if (!fecha || isNaN(Date.parse(fecha))) {
+      return { success: false, error: 'La fecha límite de entrega no es válida.' };
+    }
+    if (esFechaAnteriorAHoy(fecha)) {
+      return { success: false, error: 'La fecha límite de entrega no puede ser anterior al día de hoy.' };
     }
 
     const solicitud = await SolicitudesService.getSolicitudById(id);
@@ -486,6 +497,9 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
     if (!fechaDespacho || isNaN(Date.parse(fechaDespacho))) {
       return { success: false, error: 'La fecha de despacho no es válida.' };
     }
+    if (esFechaAnteriorAHoy(fechaDespacho)) {
+      return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
+    }
 
     const result = await SolicitudesService.calendarizarSolicitud(solicitudId, fechaDespacho, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -563,7 +577,7 @@ export async function finalizarSolicitudAction(solicitudId: string) {
   try {
     const profile = await getProfileOrThrow();
 
-    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
+    if (profile.rol === 'logistica') {
       return { success: false, error: 'No tienes permisos para finalizar solicitudes.' };
     }
 
