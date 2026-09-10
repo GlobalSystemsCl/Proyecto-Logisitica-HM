@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, DragEvent } from 'react';
 import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car } from 'lucide-react';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
-import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
+import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, cancelarDespachoSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { formatFecha, formatFechaLarga } from '@/lib/fechas';
 
 interface Props {
@@ -124,6 +124,13 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     return `${año}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
   };
 
+  const hoyISO = useMemo(() => {
+    const h = new Date();
+    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+  }, []);
+
+  const esFechaPasada = (fecha: string) => fecha < hoyISO;
+
   const handleDragStart = useCallback((e: DragEvent<HTMLDivElement>, id: string) => {
     setDraggedId(id);
     e.dataTransfer.setData('text/plain', id);
@@ -136,10 +143,11 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
   }, []);
 
   const handleDragOver = useCallback((e: DragEvent<HTMLDivElement>, fecha: string) => {
+    if (fecha < hoyISO) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDropTarget(fecha);
-  }, []);
+  }, [hoyISO]);
 
   const handleDragLeave = useCallback(() => { setDropTarget(null); }, []);
 
@@ -173,12 +181,16 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     if (!id) return;
     const solicitud = solicitudesCalendarizables.find((s) => s.id === id);
     if (!solicitud) return;
+    if (fecha < hoyISO) {
+      alert('No puedes programar el traslado en una fecha anterior a hoy.');
+      return;
+    }
     if (solicitud.fecha_limite && Date.parse(fecha) > Date.parse(solicitud.fecha_limite.slice(0, 10))) {
       setAdvertencia({ id, fecha });
       return;
     }
     await ejecutarCalendarizar(id, fecha);
-  }, [solicitudesCalendarizables]);
+  }, [solicitudesCalendarizables, hoyISO]);
 
   const handleDescalendarizar = useCallback(async (id: string) => {
     setLoading(id);
@@ -195,6 +207,17 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     setLoading(id);
     try {
       const result = await despacharSolicitudAction(id);
+      if (!result.success) alert(result.error);
+    } finally {
+      setLoading(null);
+      setRefreshKey((k) => k + 1);
+    }
+  }, []);
+
+  const handleCancelarDespacho = useCallback(async (id: string) => {
+    setLoading(id);
+    try {
+      const result = await cancelarDespachoSolicitudAction(id);
       if (!result.success) alert(result.error);
     } finally {
       setLoading(null);
@@ -383,13 +406,15 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                 const fechaStr = formatearFecha(d.dia, d.mes, d.año);
                 const trasladosDelDia = solicitudesPorFecha[fechaStr] || [];
                 const esHoy = d.dia === new Date().getDate() && d.mes === new Date().getMonth() && d.año === new Date().getFullYear();
+                const esFechaPasada = fechaStr < hoyISO;
                 const esDropTarget = puedeCalendarizar && dropTarget === fechaStr;
                 const esSeleccionado = diaSeleccionado === fechaStr;
                 const tieneTraslados = trasladosDelDia.length > 0;
+                const esDroppable = puedeCalendarizar && !esFechaPasada;
                 return (
                   <div
                     key={idx}
-                    {...(puedeCalendarizar ? {
+                    {...(esDroppable ? {
                       onDragOver: (e: DragEvent<HTMLDivElement>) => handleDragOver(e, fechaStr),
                       onDragLeave: handleDragLeave,
                       onDrop: (e: DragEvent<HTMLDivElement>) => handleDrop(e, fechaStr),
@@ -397,7 +422,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                     onClick={() => tieneTraslados && setDiaSeleccionado(fechaStr)}
                     className={`min-h-[72px] p-1.5 border-b border-r border-neutral-100 transition-colors ${
                       !d.esMesActual ? 'bg-neutral-50' : ''
-                    } ${esDropTarget ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : ''} ${
+                    } ${esFechaPasada ? 'opacity-50' : ''} ${esDropTarget ? 'bg-blue-100 ring-2 ring-inset ring-blue-400' : ''} ${
                       esSeleccionado ? 'bg-blue-50 ring-2 ring-inset ring-blue-300' : ''
                     } ${tieneTraslados ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
                   >
@@ -476,14 +501,19 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                     )}
                   </div>
                   <div className="ml-4 flex flex-col gap-2">
-                    {puedeDespachar && s.estado === 'calendarizada' && (
+                    {puedeDespachar && (s.estado === 'calendarizada' || s.estado === 'en_transito') && (
                       <button
-                        onClick={() => handleDespachar(s.id)}
+                        onClick={() => s.estado === 'en_transito' ? handleCancelarDespacho(s.id) : handleDespachar(s.id)}
                         disabled={loading === s.id}
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        title={s.estado === 'en_transito' ? 'Cancelar el despacho y volver a Calendarizada' : 'Marcar la solicitud como En Tránsito'}
+                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 cursor-pointer ${
+                          s.estado === 'en_transito'
+                            ? 'text-neutral-700 bg-neutral-100 border border-neutral-300 hover:bg-neutral-200'
+                            : 'text-white bg-orange-500 hover:bg-orange-600'
+                        }`}
                       >
-                        <PackageSearch className="w-3 h-3" />
-                        Despachar
+                        {s.estado === 'en_transito' ? <RotateCcw className="w-3 h-3" /> : <PackageSearch className="w-3 h-3" />}
+                        {s.estado === 'en_transito' ? 'Cancelar Despacho' : 'Despachar'}
                       </button>
                     )}
                     {puedeRecibir && s.estado === 'en_transito' && (

@@ -71,6 +71,10 @@ export default function AprobacionesClient({
   const [rejectMotivo, setRejectMotivo] = useState('');
   const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
   const [aprobacionFecha, setAprobacionFecha] = useState('');
+  const hoyISO = useMemo(() => {
+    const h = new Date();
+    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
+  }, []);
   const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(null);
 
   const esAdmin = viewer.rol === 'administrador';
@@ -262,12 +266,13 @@ export default function AprobacionesClient({
             <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
               Fecha limite de Entrega *
             </label>
-            <input
-              type="date"
-              value={aprobacionFecha}
-              onChange={(e) => setAprobacionFecha(e.target.value)}
-              className="w-full rounded-lg border border-neutral-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
-            />
+<input
+                type="date"
+                value={aprobacionFecha}
+                min={hoyISO}
+                onChange={(e) => setAprobacionFecha(e.target.value)}
+                className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              />
             <div className="mt-4 flex justify-end gap-2">
               <button
                 onClick={() => setApproveTarget(null)}
