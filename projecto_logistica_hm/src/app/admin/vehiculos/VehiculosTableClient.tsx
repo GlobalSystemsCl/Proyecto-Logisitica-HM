@@ -156,6 +156,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   };
 
   useEffect(() => {
+    // Hydration guard: set flag on mount only, avoids SSR/client mismatch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsHydrated(true);
   }, []);
 
