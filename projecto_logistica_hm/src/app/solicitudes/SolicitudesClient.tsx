@@ -109,10 +109,6 @@ export default function SolicitudesClient({
   const [sucursalDestinoSel, setSucursalDestinoSel] = useState('');
   const [tipoSel, setTipoSel] = useState<TipoSolicitud>('venta');
   const [fechaLimite, setFechaLimite] = useState('');
-  const hoyISO = useMemo(() => {
-    const h = new Date();
-    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
-  }, []);
   const [selectedVehiculos, setSelectedVehiculos] = useState<Set<string>>(new Set());
   const [direccionEvento, setDireccionEvento] = useState('');
   const [tituloEvento, setTituloEvento] = useState('');

@@ -72,10 +72,6 @@ export default function AprobacionesClient({
   const [rejectMotivo, setRejectMotivo] = useState('');
   const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
   const [aprobacionFecha, setAprobacionFecha] = useState('');
-  const hoyISO = useMemo(() => {
-    const h = new Date();
-    return `${h.getFullYear()}-${String(h.getMonth() + 1).padStart(2, '0')}-${String(h.getDate()).padStart(2, '0')}`;
-  }, []);
   const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(null);
 
   const esAdmin = viewer.rol === 'administrador';
