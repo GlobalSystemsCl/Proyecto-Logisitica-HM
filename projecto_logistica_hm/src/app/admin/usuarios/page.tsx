@@ -28,6 +28,7 @@ export default async function AdminUsuariosPage() {
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
+        sucursalNombre={profile.sucursal_nombre}
         backHref="/dashboard"
       />
 

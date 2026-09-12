@@ -27,6 +27,7 @@ export default async function PerfilPage() {
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
+        sucursalNombre={sucursal?.nombre ?? null}
         backHref="/dashboard"
       />
 

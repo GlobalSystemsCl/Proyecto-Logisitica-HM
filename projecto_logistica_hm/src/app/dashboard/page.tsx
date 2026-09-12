@@ -105,6 +105,7 @@ export default async function DashboardPage() {
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
+        sucursalNombre={profile.sucursal_nombre}
       />
 
       {/* Main Content */}

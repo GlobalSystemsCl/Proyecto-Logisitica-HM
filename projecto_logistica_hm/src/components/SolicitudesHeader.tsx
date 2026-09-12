@@ -7,6 +7,7 @@ interface SolicitudesHeaderProps {
   nombre: string;
   apellido: string;
   rol: UserRole;
+  sucursalNombre?: string | null;
   tabs: Array<{ href: string; label: string; active: boolean }>;
 }
 
@@ -14,6 +15,7 @@ export default function SolicitudesHeader({
   nombre,
   apellido,
   rol,
+  sucursalNombre,
   tabs,
 }: SolicitudesHeaderProps) {
   return (
@@ -22,6 +24,7 @@ export default function SolicitudesHeader({
         nombre={nombre}
         apellido={apellido}
         rol={rol}
+        sucursalNombre={sucursalNombre}
         backHref="/dashboard"
       />
       <div className="border-b border-neutral-200 bg-white">

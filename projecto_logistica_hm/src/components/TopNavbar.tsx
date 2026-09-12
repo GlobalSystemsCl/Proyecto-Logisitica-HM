@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import Image from 'next/image';
-import { ArrowLeft, LogOut } from 'lucide-react';
+import { ArrowLeft, LogOut, MapPin } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
 import { ROL_LABEL, UserRole } from '@/types/auth.types';
 
@@ -8,10 +8,11 @@ interface TopNavbarProps {
   nombre: string;
   apellido: string;
   rol: UserRole;
+  sucursalNombre?: string | null;
   backHref?: string;
 }
 
-export default function TopNavbar({ nombre, apellido, rol, backHref }: TopNavbarProps) {
+export default function TopNavbar({ nombre, apellido, rol, sucursalNombre, backHref }: TopNavbarProps) {
   const initials = `${nombre.charAt(0)}${apellido.charAt(0)}`.toUpperCase();
 
   return (
@@ -43,6 +44,10 @@ export default function TopNavbar({ nombre, apellido, rol, backHref }: TopNavbar
         </div>
 
         <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-600">
+            <MapPin className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-xs font-medium">{sucursalNombre || 'Sin sucursal'}</span>
+          </div>
           <Link
             href="/perfil"
             className="flex items-center gap-2.5 pl-1 pr-2 py-1 rounded-xl hover:bg-neutral-50 transition-colors group"

@@ -71,7 +71,7 @@ export class AuthService {
 
       const { data: profile, error: profileError } = await supabase
         .from('usuario')
-        .select('*')
+        .select('*, sucursal:sucursal_id(nombre)')
         .eq('id', user.id)
         .single();
 
@@ -103,7 +103,15 @@ export class AuthService {
         return inserted as UserProfile;
       }
 
-      return profile as UserProfile;
+      const sucursal = profile.sucursal as
+        | { nombre: string | null }
+        | Array<{ nombre: string | null }>
+        | null;
+
+      return {
+        ...profile,
+        sucursal_nombre: Array.isArray(sucursal) ? sucursal[0]?.nombre ?? null : sucursal?.nombre ?? null,
+      } as UserProfile;
     } catch (error) {
       console.error('Error en getCurrentUserProfile:', error);
       return null;

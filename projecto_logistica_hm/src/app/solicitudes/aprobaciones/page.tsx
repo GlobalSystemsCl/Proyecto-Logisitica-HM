@@ -33,6 +33,7 @@ export default async function AprobacionesPage() {
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
+        sucursalNombre={profile.sucursal_nombre}
         tabs={[
           { href: '/solicitudes', label: 'General', active: false },
           { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: true },

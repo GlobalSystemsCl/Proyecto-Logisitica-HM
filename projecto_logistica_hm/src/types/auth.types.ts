@@ -11,6 +11,7 @@ export interface UserProfile {
   intentos_fallidos?: number;
   bloqueado_hasta?: string | null;
   sucursal_id?: number | null;
+  sucursal_nombre?: string | null;
   telefono?: string | null;
   created_at: string;
   updated_at: string;

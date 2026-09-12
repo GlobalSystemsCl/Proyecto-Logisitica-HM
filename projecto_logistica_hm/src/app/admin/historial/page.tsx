@@ -29,6 +29,7 @@ export default async function AdminHistorialPage() {
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
+        sucursalNombre={profile.sucursal_nombre}
         backHref="/dashboard"
       />
 

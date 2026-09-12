@@ -34,6 +34,7 @@ export default async function SolicitudesPage() {
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
+        sucursalNombre={profile.sucursal_nombre}
         tabs={[
           { href: '/solicitudes', label: 'General', active: true },
           ...(esGestor || esEjecutivo
