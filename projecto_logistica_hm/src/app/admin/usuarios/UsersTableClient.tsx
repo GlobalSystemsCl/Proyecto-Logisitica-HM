@@ -4,7 +4,7 @@ import { useState, useEffect, useTransition } from 'react';
 import { UserProfile, UserRole } from '@/types/auth.types';
 import { Sucursal, Zona } from '@/types/sucursal.types';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
-import { createUserAction, updateUserAction, toggleUserStatusAction, resetUserPasswordAction } from '@/app/actions/users.actions';
+import { createUserAction, updateUserAction, toggleUserStatusAction, resetUserPasswordAction, approveUserAction } from '@/app/actions/users.actions';
 import {
   Users,
   UserPlus,
@@ -18,6 +18,7 @@ import {
   Copy,
   Check,
   ShieldAlert,
+  ShieldCheck,
   Lock,
   Building2,
   Pencil,
@@ -156,6 +157,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.activo).length;
   const inactiveUsers = totalUsers - activeUsers;
+  const pendingUsers = users.filter((u) => u.activo && u.aprobado === false).length;
 
   const resetForm = () => {
     setNombre('');
@@ -233,6 +235,27 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
         setFeedback({
           type: 'error',
           message: res.error || 'No se pudo actualizar el estado.',
+        });
+      }
+    });
+  };
+
+  const handleAutorizar = (userId: string, email: string) => {
+    if (!confirm(`¿Autorizar el acceso de ${email} al sistema?`)) {
+      return;
+    }
+
+    startTransition(async () => {
+      const res = await approveUserAction(userId);
+      if (res.success) {
+        setFeedback({
+          type: 'success',
+          message: res.message || 'Usuario autorizado.',
+        });
+      } else {
+        setFeedback({
+          type: 'error',
+          message: res.error || 'No se pudo autorizar al usuario.',
         });
       }
     });
@@ -345,7 +368,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Usuarios</p>
@@ -363,6 +386,16 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           </div>
           <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-white">
             <CheckCircle2 className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-amber-600 uppercase tracking-wider">Pendientes de autorización</p>
+            <p className="text-3xl font-bold text-amber-700 mt-1">{pendingUsers}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700">
+            <ShieldCheck className="w-5 h-5" />
           </div>
         </div>
 
@@ -593,7 +626,12 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
 
                       {/* Status */}
                       <td className="py-3.5 px-4">
-                        {user.activo ? (
+                        {user.aprobado === false ? (
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            Pendiente de autorización
+                          </span>
+                        ) : user.activo ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white border border-neutral-900">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                             Activo
@@ -628,6 +666,17 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
 
                       {/* Action buttons */}
                       <td className="py-3.5 px-4 text-right space-x-2">
+                        {/* Approve pending user button */}
+                        {user.aprobado === false && (
+                          <button
+                            onClick={() => handleAutorizar(user.id, user.email)}
+                            title="Autorizar acceso"
+                            className="p-1.5 rounded-lg text-amber-600 hover:text-white hover:bg-amber-500 transition-colors cursor-pointer"
+                          >
+                            <ShieldCheck className="w-4 h-4" />
+                          </button>
+                        )}
+
                         {/* Edit user button */}
                         <button
                           onClick={() => openEditModal(user)}

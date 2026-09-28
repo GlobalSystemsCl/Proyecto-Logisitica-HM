@@ -84,8 +84,9 @@ export class AuthService {
           email: user.email!,
           nombre: user.user_metadata?.nombre || (isAdminEmail ? 'Maic' : 'Usuario'),
           apellido: user.user_metadata?.apellido || (isAdminEmail ? 'Hernández' : ''),
-          rol: isAdminEmail ? 'administrador' : user.user_metadata?.rol || 'ejecutivo',
+          rol: isAdminEmail ? 'administrador' : 'ejecutivo',
           activo: true,
+          aprobado: user.user_metadata?.aprobado ?? true,
           requiere_cambio_clave: false,
         };
 
@@ -167,10 +168,12 @@ export class AuthService {
     apellido: string;
     email: string;
     password: string;
+    sucursal_id?: number | null;
   }): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
       const cleanEmail = data.email.trim().toLowerCase();
+      const sucursalId = data.sucursal_id ?? null;
 
       const { data: existing } = await admin
         .from('usuario')
@@ -182,6 +185,18 @@ export class AuthService {
         return { success: false, error: 'Ya existe un usuario registrado con ese correo.' };
       }
 
+      // Validar que la sucursal seleccionada exista
+      if (sucursalId !== null) {
+        const { data: sucursal } = await admin
+          .from('sucursal')
+          .select('id')
+          .eq('id', sucursalId)
+          .maybeSingle();
+        if (!sucursal) {
+          return { success: false, error: 'La sucursal seleccionada no es válida.' };
+        }
+      }
+
       const supabase = await createClient();
       const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email: cleanEmail,
@@ -190,7 +205,8 @@ export class AuthService {
           data: {
             nombre: data.nombre.trim(),
             apellido: data.apellido.trim(),
-            rol: 'ejecutivo',
+            sucursal_id: sucursalId,
+            aprobado: false,
             requiere_cambio_clave: false,
           },
         },
@@ -207,24 +223,18 @@ export class AuthService {
       // Confirmar email y asegurar el perfil base en public.usuario
       await admin.auth.admin.updateUserById(authData.user.id, { email_confirm: true });
 
-      const { data: profileRow } = await admin
-        .from('usuario')
-        .select('id')
-        .eq('id', authData.user.id)
-        .maybeSingle();
-
-      if (!profileRow) {
-        const isAdminEmail = cleanEmail === 'maic.hernandez.dev@gmail.com';
-        await admin.from('usuario').upsert({
-          id: authData.user.id,
-          email: cleanEmail,
-          nombre: data.nombre.trim(),
-          apellido: data.apellido.trim(),
-          rol: isAdminEmail ? 'administrador' : 'ejecutivo',
-          activo: true,
-          requiere_cambio_clave: false,
-        });
-      }
+      const isAdminEmail = cleanEmail === 'maic.hernandez.dev@gmail.com';
+      await admin.from('usuario').upsert({
+        id: authData.user.id,
+        email: cleanEmail,
+        nombre: data.nombre.trim(),
+        apellido: data.apellido.trim(),
+        rol: isAdminEmail ? 'administrador' : 'ejecutivo',
+        activo: true,
+        aprobado: isAdminEmail ? true : false,
+        requiere_cambio_clave: false,
+        sucursal_id: sucursalId,
+      });
 
       return { success: true };
     } catch (err: unknown) {
@@ -258,6 +268,14 @@ export class AuthService {
         return {
           success: false,
           error: 'Esta cuenta ha sido desactivada por el administrador. Contacta a soporte o a tu jefatura.',
+        };
+      }
+
+      // Verificar si la cuenta está pendiente de aprobación
+      if (existingUser.aprobado === false) {
+        return {
+          success: false,
+          error: 'Tu cuenta aún no ha sido autorizada por un administrador. Espera la aprobación para poder ingresar al sistema.',
         };
       }
 
@@ -348,6 +366,7 @@ export class AuthService {
           apellido: data.user.user_metadata?.apellido || (isAdmin ? 'Hernández' : ''),
           rol: isAdmin ? 'administrador' : 'ejecutivo',
           activo: true,
+          aprobado: isAdmin ? true : (data.user.user_metadata?.aprobado ?? true),
           requiere_cambio_clave: false,
           intentos_fallidos: 0,
           bloqueado_hasta: null,
@@ -373,6 +392,15 @@ export class AuthService {
       return {
         success: false,
         error: 'Esta cuenta ha sido desactivada por el administrador.',
+      };
+    }
+
+    // Verificar si está pendiente de aprobación
+    if (profile && profile.aprobado === false) {
+      await supabase.auth.signOut();
+      return {
+        success: false,
+        error: 'Tu cuenta aún no ha sido autorizada por un administrador. Espera la aprobación para poder ingresar al sistema.',
       };
     }
 

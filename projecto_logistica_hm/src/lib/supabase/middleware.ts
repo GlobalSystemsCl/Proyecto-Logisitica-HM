@@ -32,8 +32,17 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAuthRoute = path === '/login' || path === '/recuperar-clave' || path === '/auth/callback';
+  const isAuthRoute = path === '/login' || path === '/recuperar-clave' || path === '/auth/callback' || path === '/registro';
   const isSetupRoute = path === '/establecer-clave';
+
+  // Si está autenticado pero pendiente de autorización, no puede usar el sistema
+  if (user && user.user_metadata?.aprobado === false && !isAuthRoute && !isSetupRoute && path !== '/') {
+    await supabase.auth.signOut();
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    url.searchParams.set('error', 'pendiente_aprobacion');
+    return NextResponse.redirect(url);
+  }
 
   // Si no está autenticado y la ruta no es pública, redirigir a /login
   if (!user && !isAuthRoute && !isSetupRoute && path !== '/') {

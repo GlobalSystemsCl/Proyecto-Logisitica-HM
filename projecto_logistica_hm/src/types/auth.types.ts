@@ -17,6 +17,7 @@ export interface UserProfile {
   apellido: string;
   rol: UserRole;
   activo: boolean;
+  aprobado?: boolean;
   requiere_cambio_clave: boolean;
   intentos_fallidos?: number;
   bloqueado_hasta?: string | null;

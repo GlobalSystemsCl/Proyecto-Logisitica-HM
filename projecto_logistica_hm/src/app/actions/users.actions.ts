@@ -90,6 +90,23 @@ export async function toggleUserStatusAction(userId: string, nuevoEstado: boolea
   }
 }
 
+export async function approveUserAction(userId: string) {
+  try {
+    await verifyAdminPermission();
+    const result = await UsersService.approveUser(userId);
+
+    if (!result.success) {
+      return { success: false, error: result.error };
+    }
+
+    revalidatePath('/admin/usuarios');
+    return { success: true, message: 'Usuario autorizado para ingresar al sistema.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error al autorizar usuario';
+    return { success: false, error: msg };
+  }
+}
+
 export async function resetUserPasswordAction(userId: string, email: string) {
   try {
     await verifyAdminPermission();

@@ -115,6 +115,7 @@ export class UsersService {
           nombre: input.nombre.trim(),
           apellido: input.apellido.trim(),
           rol: input.rol,
+          aprobado: true,
           requiere_cambio_clave: true,
         },
       });
@@ -136,6 +137,7 @@ export class UsersService {
         apellido: input.apellido.trim(),
         rol: input.rol,
         activo: true,
+        aprobado: true,
         requiere_cambio_clave: true,
         intentos_fallidos: 0,
         bloqueado_hasta: null,
@@ -256,6 +258,44 @@ export class UsersService {
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al resetear contraseña';
+      return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Autoriza a un usuario autoregistrado para que pueda ingresar al sistema.
+   * Actualiza el perfil y los metadatos de auth (para que el middleware y el
+   * JWT de próximos logins queden marcados como aprobados).
+   */
+  static async approveUser(userId: string): Promise<{
+    success: boolean;
+    error?: string;
+  }> {
+    try {
+      const admin = createAdminClient();
+
+      const { data, error } = await admin
+        .from('usuario')
+        .update({ aprobado: true })
+        .eq('id', userId)
+        .select('id')
+        .single();
+
+      if (error || !data) {
+        return { success: false, error: error?.message || 'No se pudo autorizar al usuario.' };
+      }
+
+      const { error: authError } = await admin.auth.admin.updateUserById(userId, {
+        user_metadata: { aprobado: true },
+      });
+
+      if (authError) {
+        return { success: false, error: authError.message };
+      }
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al autorizar usuario';
       return { success: false, error: msg };
     }
   }

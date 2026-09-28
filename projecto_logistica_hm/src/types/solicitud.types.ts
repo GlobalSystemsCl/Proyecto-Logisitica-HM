@@ -33,7 +33,7 @@ export interface SolicitudLista {
 }
 
 export interface CreateSolicitudInput {
-  ejecutivo_id: string | null;
+  ejecutivo_id?: string | null;
   jefe_local_id?: string | null;
   estado?: SolicitudLista['estado'];
   sucursal: number;

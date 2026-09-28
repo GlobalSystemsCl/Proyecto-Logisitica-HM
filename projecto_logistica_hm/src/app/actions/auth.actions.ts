@@ -57,12 +57,17 @@ export async function registerAction(
   const email = formData.get('email') as string;
   const password = formData.get('password') as string;
   const confirmPassword = formData.get('confirmPassword') as string;
+  const sucursalRaw = formData.get('sucursal') as string;
+  const sucursal = sucursalRaw ? Number(sucursalRaw) : NaN;
 
   if (!nombre?.trim() || !apellido?.trim()) {
     return { success: false, error: 'El nombre y el apellido son obligatorios.' };
   }
   if (!email?.trim()) {
     return { success: false, error: 'El correo electrónico es obligatorio.' };
+  }
+  if (!Number.isInteger(sucursal) || sucursal <= 0) {
+    return { success: false, error: 'Debes seleccionar tu sucursal.' };
   }
   if (!password || password.length < 8) {
     return { success: false, error: 'La contraseña debe tener al menos 8 caracteres.' };
@@ -76,6 +81,7 @@ export async function registerAction(
     apellido,
     email,
     password,
+    sucursal_id: sucursal,
   });
 
   if (!result.success) {

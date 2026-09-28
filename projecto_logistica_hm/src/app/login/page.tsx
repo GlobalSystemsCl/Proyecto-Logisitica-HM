@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { loginAction } from '@/app/actions/auth.actions';
-import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, UserPlus } from 'lucide-react';
 
 function LoginForm() {
   const [state, formAction, isPending] = useActionState(loginAction, null);
@@ -22,6 +22,8 @@ function LoginForm() {
     paramError = 'Tu cuenta se encuentra desactivada por el administrador.';
   } else if (err === 'unauthorized') {
     paramError = 'No tienes permisos suficientes para acceder a esta sección.';
+  } else if (err === 'pendiente_aprobacion') {
+    paramError = 'Tu cuenta aún no ha sido autorizada por un administrador. Espera la aprobación para poder ingresar al sistema.';
   }
 
   // Verificar si en el hash del navegador vino un error de OTP expirado
@@ -178,15 +180,22 @@ function LoginForm() {
             <Lock className="w-3 h-3 text-neutral-400" />
             <span>Conexión cifrada y protegida contra intentos de fuerza bruta</span>
           </div>
-        </div>
 
-        {/* Footer info */}
-        <p className="text-center text-xs text-neutral-400 space-x-2">
-          <span>¿No tienes cuenta?</span>
-          <Link href="/registro" className="underline underline-offset-2 font-medium text-neutral-900 hover:text-neutral-600 transition-colors">
-            Crear cuenta
-          </Link>
-        </p>
+          {/* Primer acceso */}
+          <div className="pt-2 border-t border-neutral-200 space-y-3">
+            <p className="text-center text-xs text-neutral-400">
+              ¿Aún no tienes cuenta?{' '}
+              <span className="font-semibold text-neutral-500">Regístrate como colaborador</span>
+            </p>
+            <Link
+              href="/registro"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-sm font-semibold border border-neutral-300 text-neutral-900 bg-white hover:bg-neutral-50 active:bg-neutral-100 transition-all duration-150 cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" />
+              Crear Cuenta
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );
