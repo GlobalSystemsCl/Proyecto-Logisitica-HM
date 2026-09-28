@@ -18,6 +18,7 @@ import {
   Trash2,
   Download,
   UploadCloud,
+  UserCheck,
 } from 'lucide-react';
 import {
   agregarVehiculoAction,
@@ -45,15 +46,16 @@ import { formatFecha } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
-  pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pendiente_aprobacion: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   aprobada: { label: 'Aprobada', color: 'bg-green-50 text-green-700 border-green-200' },
   pendiente: { label: 'Pendiente', color: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   priorizada: { label: 'Priorizada', color: 'bg-neutral-200 text-neutral-900 border-neutral-200' },
   asignada: { label: 'Asignada', color: 'bg-white text-neutral-900 border-neutral-400' },
   calendarizada: { label: 'Calendarizada', color: 'bg-white text-neutral-900 border-neutral-900 border-2' },
-  en_transito: { label: 'En Tránsito', color: 'bg-neutral-700 text-white border-neutral-700' },
-  entregada: { label: 'Entregada', color: 'bg-neutral-900 text-white border-neutral-900' },
-  finalizada: { label: 'Finalizada', color: 'bg-black text-white border-black ring-2 ring-neutral-300' },
+  despachada: { label: 'Despachada', color: 'bg-sky-50 text-sky-800 border-sky-300' },
+  en_transito: { label: 'En tránsito', color: 'bg-neutral-700 text-white border-neutral-700' },
+  entregada: { label: 'Recepcionada', color: 'bg-neutral-900 text-white border-neutral-900' },
+  finalizada: { label: 'Entregado a cliente', color: 'bg-black text-white border-black ring-2 ring-neutral-300' },
   cancelada: { label: 'Cancelada', color: 'bg-red-50 text-red-700 border-red-200' },
   rechazada: { label: 'Rechazada', color: 'bg-red-50 text-red-700 border-red-200' },
 };
@@ -121,11 +123,13 @@ function getTimelineInfo(accion: string): { label: string; dotClass: string; tex
     asignar: { label: 'Asignada', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
     asignar_logistica: { label: 'Asignada', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
     calendarizar: { label: 'Calendarizada', dotClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
-    despachar: { label: 'En Tránsito', dotClass: 'bg-neutral-700', textClass: 'text-neutral-700' },
-    recibir: { label: 'Entregada', dotClass: 'bg-neutral-800', textClass: 'text-neutral-800' },
-    finalizar: { label: 'Finalizada', dotClass: 'bg-black', textClass: 'text-neutral-900' },
+    despachar: { label: 'Despachada', dotClass: 'bg-sky-500', textClass: 'text-sky-600' },
+    inicio_transito: { label: 'En tránsito', dotClass: 'bg-neutral-700', textClass: 'text-neutral-700' },
+    recibir: { label: 'Recepcionada', dotClass: 'bg-neutral-800', textClass: 'text-neutral-800' },
+    finalizar: { label: 'Entregado a cliente', dotClass: 'bg-black', textClass: 'text-neutral-900' },
     cancelar: { label: 'Cancelada', dotClass: 'bg-red-500', textClass: 'text-red-600' },
     rechazar: { label: 'Rechazada', dotClass: 'bg-red-500', textClass: 'text-red-600' },
+    insistencia: { label: 'Insistencia', dotClass: 'bg-amber-400', textClass: 'text-amber-600' },
     agregar_vehiculo: { label: 'Vehículo agregado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     quitar_vehiculo: { label: 'Vehículo retirado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     observacion: { label: 'Observación', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
@@ -142,30 +146,47 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
     case 'solicitud_creada':
       return 'Solicitud creada y enviada para revisión';
     case 'aprobar':
+    case 'aprobacion':
       return 'Solicitud aprobada para traslado';
-    case 'priorizar': {
+    case 'priorizar':
+    case 'priorizacion': {
       const pos = val?.posicion_prioridad;
       return pos != null ? `Prioridad asignada: ${pos}` : 'Solicitud priorizada';
     }
     case 'asignar':
     case 'asignar_logistica':
       return 'Asignada al área de Logística';
-    case 'calendarizar': {
+    case 'calendarizar':
+    case 'calendarizacion': {
       const fecha = val?.fecha_tentativa_despacho;
-      return fecha ? `Fecha tentativa de traslado: ${formatFecha(String(fecha))}` : 'Solicitud calendarizada';
+      return fecha ? `Fecha estimada de traslado: ${formatFecha(String(fecha))}` : 'Solicitud calendarizada';
     }
-    case 'despachar':
-      return 'Vehículo(s) en tránsito';
+    case 'descalendarizacion':
+      return 'Devuelta a la cola de prioridades';
+    case 'despacho':
+      return 'Vehículo(s) despachados desde la sucursal origen';
+    case 'inicio_transito':
+      return 'Inicio de ruta confirmado: vehículo(s) en tránsito';
+    case 'entrega':
+      return 'Recibido en la sucursal destino';
     case 'recibir':
       return 'Recibido en destino';
+    case 'finalizacion':
     case 'finalizar':
-      return 'Solicitud finalizada exitosamente';
+      return 'Entregado al cliente final';
     case 'cancelar': {
       const motivo = val?.motivo_cancelacion;
       return motivo ? `Motivo: ${String(motivo)}` : 'Solicitud cancelada';
     }
+    case 'rechazo':
     case 'rechazar':
       return 'Solicitud rechazada';
+    case 'insistencia': {
+      const mensaje = val?.mensaje;
+      return mensaje
+        ? `El Ejecutivo insistió: ${String(mensaje)}`
+        : 'El Ejecutivo insistió en avanzar el estado de su solicitud';
+    }
     case 'subir_documento': {
       const nombre = val?.nombre_archivo;
       return nombre ? `Documento subido: ${String(nombre)}` : 'Documento subido';
@@ -227,6 +248,9 @@ export default function SolicitudDetalleModal({
     setNuevoVehiculoId('');
     setDocumentos([]);
   }
+
+  /** La cola de prioridad es interna: el Ejecutivo no debe verla (#14). */
+  const puedeVerPrioridad = currentUserRol !== 'ejecutivo';
 
   useEffect(() => {
     let cancelled = false;
@@ -450,7 +474,7 @@ export default function SolicitudDetalleModal({
                 <MapPin className="w-5 h-5 text-amber-600" />
               </div>
               <div>
-                <p className="text-[11px] text-neutral-400 font-medium">Origen</p>
+                <p className="text-[11px] text-neutral-400 font-medium">Origen de solicitud</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.sucursal_nombre || `#${solicitud.sucursal}`}
                 </p>
@@ -473,21 +497,43 @@ export default function SolicitudDetalleModal({
               </div>
             </div>
             <div className="w-px bg-neutral-200 self-stretch" />
-            {/* Priority */}
+            {/* Priority (oculta para el Ejecutivo) */}
+            {puedeVerPrioridad && (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
+                    <ArrowUp className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-neutral-400 font-medium">Prioridad</p>
+                    <p className="text-sm font-bold text-neutral-900">
+                      {solicitud.posicion_prioridad ?? '—'}
+                    </p>
+                    <p className="text-[11px] text-neutral-500">
+                      {solicitud.posicion_prioridad != null
+                        ? (solicitud.posicion_prioridad <= 2 ? 'Alta' : solicitud.posicion_prioridad <= 5 ? 'Media' : 'Baja')
+                        : 'Sin asignar'}
+                    </p>
+                  </div>
+                </div>
+                <div className="w-px bg-neutral-200 self-stretch" />
+              </>
+            )}
+            {/* Encargado de solicitud (logistica_id reusado) */}
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
-                <ArrowUp className="w-5 h-5 text-amber-600" />
+              <div className="w-11 h-11 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
+                <UserCheck className="w-5 h-5 text-sky-700" />
               </div>
               <div>
-                <p className="text-[11px] text-neutral-400 font-medium">Prioridad</p>
+                <p className="text-[11px] text-neutral-400 font-medium">Encargado de solicitud</p>
                 <p className="text-sm font-bold text-neutral-900">
-                  {solicitud.posicion_prioridad ?? '—'}
+                  {solicitud.logistica_nombre ? (
+                    <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
+                  ) : (
+                    <span className="text-neutral-400 italic text-xs">Sin asignar</span>
+                  )}
                 </p>
-                <p className="text-[11px] text-neutral-500">
-                  {solicitud.posicion_prioridad != null
-                    ? (solicitud.posicion_prioridad <= 2 ? 'Alta' : solicitud.posicion_prioridad <= 5 ? 'Media' : 'Baja')
-                    : 'Sin asignar'}
-                </p>
+                <p className="text-[11px] text-neutral-500">Logística</p>
               </div>
             </div>
             <div className="w-px bg-neutral-200 self-stretch" />
@@ -553,18 +599,41 @@ export default function SolicitudDetalleModal({
                 </div>
               )}
 
+              {/* Fechas de planificación */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
                   <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Creación</p>
                   <p className="text-sm text-neutral-900 font-medium">{formatFecha(solicitud.fecha_creacion)}</p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Despacho Tentativo</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Fecha estimada</p>
                   <p className="text-sm text-neutral-900 font-medium">{formatFecha(solicitud.fecha_tentativa_despacho)}</p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Fecha de Entrega</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Fecha/hora límite</p>
                   <p className="text-sm text-neutral-900 font-medium">{formatFecha(solicitud.fecha_limite)}</p>
+                </div>
+              </div>
+
+              {/* Trazabilidad de fechas del flujo (DEV 2) */}
+              <div className="border border-neutral-200 rounded-xl overflow-hidden">
+                <p className="px-4 py-2.5 bg-neutral-50 border-b border-neutral-200 text-[11px] font-semibold text-neutral-500 uppercase tracking-wider">
+                  Trazabilidad del flujo
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-neutral-200">
+                  {[
+                    { label: 'Fecha de confirmación', value: solicitud.fecha_confirmacion },
+                    { label: 'Fecha de despacho', value: solicitud.fecha_despacho },
+                    { label: 'Inicio de tránsito', value: solicitud.fecha_inicio_transito },
+                    { label: 'Fecha de recepción', value: solicitud.fecha_recepcion },
+                    { label: 'Entrega a cliente', value: solicitud.fecha_entrega_cliente },
+                    { label: 'Fecha de entrega', value: solicitud.fecha_entrega },
+                  ].map((f) => (
+                    <div key={f.label} className="bg-white px-4 py-3">
+                      <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">{f.label}</p>
+                      <p className="text-sm text-neutral-900 font-medium mt-0.5">{formatFecha(f.value)}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -590,7 +659,7 @@ export default function SolicitudDetalleModal({
                   </p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Logística</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado de solicitud</p>
                   <p className="text-sm text-neutral-900 font-medium">
                     {solicitud.logistica_nombre ? (
                       <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
@@ -729,13 +798,13 @@ export default function SolicitudDetalleModal({
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] text-neutral-400 font-medium">Fecha tentativa</p>
+                      <p className="text-[11px] text-neutral-400 font-medium">Fecha estimada</p>
                       <p className="text-sm font-bold text-neutral-900">
                         {formatFecha(solicitud.fecha_tentativa_despacho) || '—'}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] text-neutral-400 font-medium">Fecha de entrega</p>
+                      <p className="text-[11px] text-neutral-400 font-medium">Fecha/hora límite</p>
                       <p className="text-sm font-bold text-neutral-900">
                         {formatFecha(solicitud.fecha_limite) || '—'}
                       </p>

@@ -2,6 +2,7 @@
 
 import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
+import { OrganizacionService } from '@/services/organizacion.service';
 import { UsersService } from '@/services/users.service';
 import { UserProfile, UsuarioDetalle } from '@/types/auth.types';
 import { TipoSolicitud } from '@/types/solicitud.types';
@@ -14,6 +15,37 @@ async function getProfileOrThrow(): Promise<UserProfile> {
     throw new Error('Sesión inválida o usuario inactivo.');
   }
   return profile;
+}
+
+/**
+ * DEV 2 — Validación multi-sucursal del Jefe Local.
+ *
+ * Reemplaza la comparación `solicitud.sucursal === profile.sucursal_id`, que
+ * solo miraba la sucursal PRINCIPAL e impedía gestionar las sucursales
+ * adicionales del N:M (`usuario_sucursal`, DEV 1). Ahora se consulta
+ * `OrganizacionService.usuarioTieneSucursal()` (RPC `usuario_tiene_sucursal`,
+ * SECURITY DEFINER) que valida principal + N:M.
+ *
+ * Devuelve un mensaje de error, o `null` si tiene permiso.
+ */
+async function validarSucursalJefeLocal(
+  profile: UserProfile,
+  sucursalId: number
+): Promise<string | null> {
+  if (profile.rol === 'administrador') return null;
+
+  if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
+    const tieneAlguna = await OrganizacionService.getUserAssignedBranches(profile.id);
+    if (tieneAlguna.length === 0) {
+      return 'No tienes ninguna sucursal asignada.';
+    }
+  }
+
+  const ok = await OrganizacionService.usuarioTieneSucursal(profile.id, sucursalId);
+  if (!ok) {
+    return 'Solo puedes gestionar solicitudes de tus sucursales asignadas.';
+  }
+  return null;
 }
 
 export interface CreateSolicitudData {
@@ -164,18 +196,15 @@ export async function aprobarSolicitudAction(id: string, fecha: string) {
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
 
     if (profile.rol === 'jefe_local') {
-      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
-        return { success: false, error: 'No tienes una sucursal asignada.' };
-      }
-      if (solicitud.sucursal !== profile.sucursal_id) {
-        return { success: false, error: 'Solo puedes aprobar solicitudes de tu propia sucursal.' };
-      }
+      const errorSucursal = await validarSucursalJefeLocal(profile, solicitud.sucursal);
+      if (errorSucursal) return { success: false, error: errorSucursal };
     }
 
     const result = await SolicitudesService.aprobarSolicitud(id, profile.id, fecha);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/aprobaciones');
     return { success: true, message: 'Solicitud aprobada exitosamente.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -199,11 +228,9 @@ export async function rechazarSolicitudAction(id: string, motivo: string) {
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
 
     if (profile.rol === 'jefe_local') {
-      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
-        return { success: false, error: 'No tienes una sucursal asignada.' };
-      }
-      if (solicitud.sucursal !== profile.sucursal_id) {
-        return { success: false, error: 'Solo puedes rechazar solicitudes de tu propia sucursal.' };
+      const errorSucursal = await validarSucursalJefeLocal(profile, solicitud.sucursal);
+      if (errorSucursal) {
+        return { success: false, error: errorSucursal.replace('gestionar', 'rechazar') };
       }
     }
 
@@ -229,19 +256,18 @@ export async function priorizarSolicitudAction(id: string) {
     const solicitud = await SolicitudesService.getSolicitudById(id);
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
 
-    if (
-      profile.rol === 'jefe_local' &&
-      (profile.sucursal_id === null ||
-        profile.sucursal_id === undefined ||
-        solicitud.sucursal !== profile.sucursal_id)
-    ) {
-      return { success: false, error: 'Solo puedes priorizar solicitudes de tu propia sucursal.' };
+    if (profile.rol === 'jefe_local') {
+      const errorSucursal = await validarSucursalJefeLocal(profile, solicitud.sucursal);
+      if (errorSucursal) {
+        return { success: false, error: errorSucursal.replace('gestionar', 'priorizar') };
+      }
     }
 
     const result = await SolicitudesService.priorizarSolicitud(id, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/prioridades');
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -260,19 +286,18 @@ export async function priorizarEnPosicionAction(id: string, posicion: number) {
     const solicitud = await SolicitudesService.getSolicitudById(id);
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
 
-    if (
-      profile.rol === 'jefe_local' &&
-      (profile.sucursal_id === null ||
-        profile.sucursal_id === undefined ||
-        solicitud.sucursal !== profile.sucursal_id)
-    ) {
-      return { success: false, error: 'Solo puedes priorizar solicitudes de tu propia sucursal.' };
+    if (profile.rol === 'jefe_local') {
+      const errorSucursal = await validarSucursalJefeLocal(profile, solicitud.sucursal);
+      if (errorSucursal) {
+        return { success: false, error: errorSucursal.replace('gestionar', 'priorizar') };
+      }
     }
 
     const result = await SolicitudesService.priorizarEnPosicion(id, posicion, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/prioridades');
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -289,11 +314,9 @@ export async function reordenarColaAction(sucursalId: number, orden: string[]) {
     }
 
     if (profile.rol === 'jefe_local') {
-      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
-        return { success: false, error: 'No tienes una sucursal asignada.' };
-      }
-      if (sucursalId !== profile.sucursal_id) {
-        return { success: false, error: 'Solo puedes reordenar la cola de tu propia sucursal.' };
+      const errorSucursal = await validarSucursalJefeLocal(profile, sucursalId);
+      if (errorSucursal) {
+        return { success: false, error: errorSucursal.replace('gestionar', 'reordenar la cola de') };
       }
     }
 
@@ -301,6 +324,7 @@ export async function reordenarColaAction(sucursalId: number, orden: string[]) {
     if (!result.success) return { success: false, error: result.error };
 
     revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/prioridades');
     return { success: true, message: 'Cola de prioridades actualizada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -320,11 +344,9 @@ export async function sacarDeColaAction(id: string) {
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
 
     if (profile.rol === 'jefe_local') {
-      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
-        return { success: false, error: 'No tienes una sucursal asignada.' };
-      }
-      if (solicitud.sucursal !== profile.sucursal_id) {
-        return { success: false, error: 'Solo puedes sacar de la cola solicitudes de tu propia sucursal.' };
+      const errorSucursal = await validarSucursalJefeLocal(profile, solicitud.sucursal);
+      if (errorSucursal) {
+        return { success: false, error: errorSucursal.replace('gestionar', 'sacar de la cola solicitudes de tus') };
       }
     }
 
@@ -353,7 +375,8 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
 
     const esEncargado =
       profile.rol === 'administrador' ||
-      (profile.rol === 'jefe_local' && solicitud.sucursal === profile.sucursal_id) ||
+      (profile.rol === 'jefe_local' &&
+        (await OrganizacionService.usuarioTieneSucursal(profile.id, solicitud.sucursal))) ||
       (profile.rol === 'ejecutivo' && solicitud.ejecutivo_id === profile.id) ||
       profile.rol === 'logistica';
 
@@ -366,6 +389,7 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
 
     revalidatePath('/solicitudes');
     revalidatePath('/solicitudes/prioridades');
+    revalidatePath('/solicitudes/aprobaciones');
     return { success: true, message: 'Solicitud cancelada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -546,7 +570,28 @@ export async function despacharSolicitudAction(solicitudId: string) {
 
     revalidatePath('/solicitudes');
     revalidatePath('/logistica/calendarizaciones');
-    return { success: true, message: 'Solicitud despachada y en tránsito.' };
+    return { success: true, message: 'Solicitud despachada.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+/** Logística confirma el inicio efectivo de la ruta: despachada -> en tránsito. */
+export async function iniciarTransitoSolicitudAction(solicitudId: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
+      return { success: false, error: 'No tienes permisos para iniciar el tránsito de solicitudes.' };
+    }
+
+    const result = await SolicitudesService.iniciarTransitoSolicitud(solicitudId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/logistica/calendarizaciones');
+    return { success: true, message: 'Solicitud en tránsito.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };
@@ -613,8 +658,119 @@ export async function finalizarSolicitudAction(solicitudId: string) {
   }
 }
 
-export async function subirDocumentosSolicitudAction(solicitudId: string, formData: FormData) {
+// ---------------------------------------------------------------------------
+// DEV 2 — Asignación de encargado de Logística
+// ---------------------------------------------------------------------------
+
+/**
+ * Logística (o admin) asigna un encargado a una solicitud Aprobada/Priorizada.
+ * Si no se indica `logisticaId`, el usuario se auto-asigna.
+ *
+ * Reutiliza `solicitud.logistica_id` como "encargado de la solicitud".
+ */
+export async function asignarEncargadoAction(solicitudId: string, logisticaId?: string) {
   try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
+      return { success: false, error: 'Solo Logística o el Administrador pueden asignar el encargado.' };
+    }
+
+    const encargadoId = logisticaId && logisticaId.trim() !== '' ? logisticaId.trim() : profile.id;
+    const result = await SolicitudesService.asignarEncargadoLogistica(solicitudId, encargadoId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/prioridades');
+    revalidatePath('/logistica/calendarizaciones');
+    return { success: true, message: 'Encargado de solicitud asignado.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+/** Lista de usuarios de Logística activos, para el selector de encargado. */
+export async function getEncargadosLogisticaAction(): Promise<
+  Array<{ id: string; nombre: string; apellido: string; sucursal_nombre: string | null }>
+> {
+  try {
+    const profile = await getProfileOrThrow();
+    if (profile.rol !== 'administrador' && profile.rol !== 'logistica') return [];
+
+    const usuarios = await UsersService.getUsers();
+    return usuarios
+      .filter((u) => u.rol === 'logistica' && u.activo)
+      .map((u) => ({
+        id: u.id,
+        nombre: u.nombre,
+        apellido: u.apellido,
+        sucursal_nombre: u.sucursal_nombre ?? null,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// DEV 2 — Insistencia del Ejecutivo (cooldown 24 h)
+// ---------------------------------------------------------------------------
+
+/** El Ejecutivo insiste para desbloquear el avance de su solicitud. */
+export async function insistirSolicitudAction(solicitudId: string, mensaje?: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'ejecutivo') {
+      return { success: false, error: 'Solo el Ejecutivo puede insistir sobre una solicitud.' };
+    }
+
+    const result = await SolicitudesService.insistirSolicitud(solicitudId, profile.id, mensaje);
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error,
+        horas_restantes: result.proxima_insistencia_en_h ?? null,
+      };
+    }
+
+    revalidatePath('/solicitudes');
+    revalidatePath('/solicitudes/aprobaciones');
+    revalidatePath('/solicitudes/prioridades');
+    revalidatePath('/logistica/calendarizaciones');
+    return {
+      success: true,
+      message: 'Insistencia registrada. Se notificó al equipo responsable.',
+      horas_restantes: result.proxima_insistencia_en_h ?? null,
+    };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+/** Horas restantes de cooldown del Ejecutivo para una solicitud (`null` = puede). */
+export async function getCooldownInsistenciaAction(solicitudId: string) {
+  try {
+    const profile = await getProfileOrThrow();
+    if (profile.rol !== 'ejecutivo') return { horas_restantes: null, ultima: null };
+    return await SolicitudesService.getCooldownInsistencia(solicitudId, profile.id);
+  } catch {
+    return { horas_restantes: null, ultima: null };
+  }
+}
+
+/** Historial de insistencias de una solicitud. */
+export async function getInsistenciasAction(solicitudId: string) {
+  try {
+    await getProfileOrThrow();
+    return await SolicitudesService.getInsistencias(solicitudId);
+  } catch {
+    return [];
+  }
+}
+
+export async function subirDocumentosSolicitudAction(solicitudId: string, formData: FormData) {  try {
     if (!solicitudId) return { success: false, error: 'Solicitud inválida.' };
     const profile = await getProfileOrThrow();
 

@@ -1,3 +1,22 @@
+/**
+ * Estados de `public.solicitud`. Los valores son los del enum de PostgreSQL
+ * `estado_solicitud` (inmutables) — la nomenclatura de negocio vive en los
+ * labels de UI (`estadoConfig`).
+ *
+ * Nomenclatura UI asociada:
+ *   pendiente_aprobacion -> "Pendiente"
+ *   aprobada             -> "Aprobada"
+ *   pendiente            -> (huérfano, no usado en el flujo actual)
+ *   priorizada           -> "Priorizada"
+ *   asignada             -> "Asignada"
+ *   calendarizada        -> "Calendarizada"
+ *   despachada           -> "Despachada"   (agregado en DEV 2)
+ *   en_transito          -> "En tránsito"
+ *   entregada            -> "Recepcionada"
+ *   finalizada           -> "Entregado a cliente"
+ *   cancelada            -> "Cancelada"
+ *   rechazada            -> "Rechazada"
+ */
 export type EstadoSolicitud =
   | 'pendiente_aprobacion'
   | 'aprobada'
@@ -5,6 +24,7 @@ export type EstadoSolicitud =
   | 'priorizada'
   | 'asignada'
   | 'calendarizada'
+  | 'despachada'
   | 'en_transito'
   | 'entregada'
   | 'cancelada'

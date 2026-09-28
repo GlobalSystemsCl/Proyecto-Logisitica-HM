@@ -57,7 +57,7 @@ function getEncargadoNombre(sol: SolicitudLista): string | null {
 }
 
 const tipoLabel: Record<TipoSolicitud, string> = {
-  venta: 'Venta',
+  venta: 'Sala de venta',
   evento: 'Evento',
 };
 
@@ -173,7 +173,7 @@ export default function AprobacionesClient({
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-sm text-neutral-500">#{sol.id.slice(0, 8)}</span>
                     <span className="px-2 py-0.5 rounded-md text-xs bg-amber-50 text-amber-700 border border-amber-200">
-                      Pendiente Aprobación
+                      Pendiente
                     </span>
                   </div>
                   <div className="mt-1 text-sm font-semibold text-neutral-900">

@@ -7,11 +7,18 @@ import {
   ObservacionEntry,
   AuditoriaEntry,
   DocumentoSolicitud,
+  InsistenciaEntry,
 } from '@/types/solicitud.types';
 import { UserRole } from '@/types/auth.types';
 import { DisponibilidadVehiculo } from '@/types/sucursal.types';
+import { OrganizacionService } from '@/services/organizacion.service';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
 
+/**
+ * Estados en los que el vehículo sigue RESERVADO (no puede moverse a otra
+ * solicitud). Debe coincidir con la lista de estados usada por
+ * `public.fn_recalcular_slots_ocupados` (migración 20260928_triggers_fechas.sql).
+ */
 export const ESTADOS_ACTIVOS_RESERVA = [
   'pendiente_aprobacion',
   'aprobada',
@@ -19,6 +26,7 @@ export const ESTADOS_ACTIVOS_RESERVA = [
   'priorizada',
   'asignada',
   'calendarizada',
+  'despachada',
   'en_transito',
 ] as const;
 
@@ -28,6 +36,21 @@ const ESTADOS_PRE_DESPACHO = [
   'pendiente',
   'priorizada',
 ];
+
+/** Estados sobre los que Logística (o admin) puede tomar el control operativo. */
+const ESTADOS_ASIGNABLES = ['aprobada', 'priorizada'];
+
+/** Estados en los que el Executive puede pedir insistencia sobre su solicitud. */
+const ESTADOS_INSISTIBLES = [
+  'pendiente_aprobacion',
+  'aprobada',
+  'priorizada',
+  'asignada',
+  'calendarizada',
+];
+
+/** Cooldown para la insistencia del Ejecutivo: 24 horas. */
+export const COOLDOWN_INSISTENCIA_HORAS = 24;
 
 const BUCKET_DOCUMENTOS = 'solicitud-documentos';
 const MAX_TAMANO_DOCUMENTO = 10 * 1024 * 1024;
@@ -59,10 +82,14 @@ interface SolicitudRawRow {
   fecha_despacho: string | null;
   fecha_entrega: string | null;
   fecha_limite: string | null;
+  fecha_confirmacion: string | null;
+  fecha_inicio_transito: string | null;
+  fecha_recepcion: string | null;
+  fecha_entrega_cliente: string | null;
   motivo_cancelacion: string | null;
   direccion_evento: string | null;
   titulo_evento: string | null;
-  suc: { nombre: string | null } | null;
+  suc: { nombre: string | null; zona_id: number | null } | null;
   destino: { nombre: string | null } | null;
   ejecutivo: { nombre: string; apellido: string } | null;
   jefe: { nombre: string; apellido: string } | null;
@@ -88,8 +115,9 @@ function persona(p: { nombre: string; apellido: string } | null): string | null 
 const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
   ejecutivo_id, jefe_local_id, logistica_id,
   fecha_creacion, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_limite, motivo_cancelacion,
+  fecha_confirmacion, fecha_inicio_transito, fecha_recepcion, fecha_entrega_cliente,
   direccion_evento, titulo_evento,
-  suc:sucursal!solicitud_sucursal_fkey(nombre),
+  suc:sucursal!solicitud_sucursal_fkey(nombre, zona_id),
   destino:sucursal!solicitud_sucursal_destino_fkey(nombre),
   ejecutivo:ejecutivo_id(nombre, apellido),
   jefe:jefe_local_id(nombre, apellido),
@@ -117,9 +145,14 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
     fecha_despacho: row.fecha_despacho,
     fecha_entrega: row.fecha_entrega,
     fecha_limite: row.fecha_limite,
+    fecha_confirmacion: row.fecha_confirmacion ?? null,
+    fecha_inicio_transito: row.fecha_inicio_transito ?? null,
+    fecha_recepcion: row.fecha_recepcion ?? null,
+    fecha_entrega_cliente: row.fecha_entrega_cliente ?? null,
     motivo_cancelacion: row.motivo_cancelacion,
     direccion_evento: row.direccion_evento,
     titulo_evento: row.titulo_evento,
+    sucursal_zona_id: row.suc?.zona_id ?? null,
     vehiculos: (row.solicitud_vehiculo || [])
       .filter((sv) => sv.vehiculo)
       .map((sv) => ({
@@ -160,6 +193,7 @@ export interface SolicitudMinima {
   fecha_tentativa_despacho: string | null;
   fecha_despacho: string | null;
   fecha_entrega: string | null;
+  fecha_inicio_transito: string | null;
 }
 
 export class SolicitudesService {
@@ -190,6 +224,25 @@ export class SolicitudesService {
     return solicitud.sucursal_destino !== null
       ? sucursalUsuario === solicitud.sucursal_destino
       : sucursalUsuario === solicitud.sucursal;
+  }
+
+  /**
+   * Sucursal donde se recepciona/entrega la solicitud: destino explícito o, en
+   * eventos, la sucursal de origen.
+   */
+  static sucursalDeRecepcion(solicitud: SolicitudMinima): number {
+    return solicitud.sucursal_destino !== null ? solicitud.sucursal_destino : solicitud.sucursal;
+  }
+
+  /**
+   * VAL-03: el jefe local puede tener varias sucursales (principal + N:M), por
+   * lo que la recepción NO puede validarse contra `usuario.sucursal_id` solamente.
+   */
+  static async usuarioPuedeRecibirEn(
+    usuarioId: string,
+    solicitud: SolicitudMinima
+  ): Promise<boolean> {
+    return OrganizacionService.usuarioTieneSucursal(usuarioId, this.sucursalDeRecepcion(solicitud));
   }
 
   static async getJefeLocalDeSucursal(sucursalId: number): Promise<string | null> {
@@ -232,6 +285,111 @@ export class SolicitudesService {
       console.error('Error en getSolicitudes:', err);
       return [];
     }
+  }
+
+  /**
+   * Lista de solicitudes recortada al alcance real del usuario.
+   *
+   * - `ejecutivo`   -> solo las suyas
+   * - `jefe_local`  -> sucursal origen o destino de todas sus sucursales
+   *                   (sucursal principal + tabla N:M `usuario_sucursal`)
+   * - `logistica`   -> las sucursal origen cuya `zona_id` está en sus zonas
+   * - `administrador` -> todas
+   *
+   * `operaciones` no gestiona solicitudes: cae en "sin alcance" (lista vacía).
+   */
+  static async getSolicitudesFiltradas(
+    userId: string,
+    rol: UserRole
+  ): Promise<SolicitudLista[]> {
+    try {
+      if (rol === 'operaciones') return [];
+
+      if (rol === 'ejecutivo') {
+        return await this.getSolicitudesPorEjecutivo(userId);
+      }
+
+      if (rol === 'jefe_local') {
+        return await this.getSolicitudesPorJefeLocal(userId);
+      }
+
+      if (rol === 'logistica') {
+        return await this.getSolicitudesPorZonas(userId);
+      }
+
+      return await this.getSolicitudes();
+    } catch (err) {
+      console.error('Error en getSolicitudesFiltradas:', err);
+      return [];
+    }
+  }
+
+  /** Ejecutivo: únicamente las solicitudes que él mismo creó. */
+  private static async getSolicitudesPorEjecutivo(userId: string): Promise<SolicitudLista[]> {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('solicitud')
+      .select(SOLICITUD_SELECT)
+      .eq('ejecutivo_id', userId)
+      .order('fecha_creacion', { ascending: false });
+
+    if (error) {
+      console.error('Error al listar solicitudes del ejecutivo:', error);
+      return [];
+    }
+    return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
+  }
+
+  /**
+   * Jefe Local: sucursal origen o sucursal destino de cualquiera de sus
+   * sucursales asignadas (principal + N:M). Una sucursal sin asignar deja al
+   * usuario sin alcance.
+   */
+  private static async getSolicitudesPorJefeLocal(userId: string): Promise<SolicitudLista[]> {
+    const sucursales = await OrganizacionService.getUserAssignedBranches(userId);
+    const ids = sucursales.map((s) => s.id).filter((id) => typeof id === 'number');
+
+    if (ids.length === 0) return [];
+
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('solicitud')
+      .select(SOLICITUD_SELECT)
+      .or(`sucursal.in.(${ids.join(',')}),sucursal_destino.in.(${ids.join(',')})`)
+      .order('fecha_creacion', { ascending: false });
+
+    if (error) {
+      console.error('Error al listar solicitudes del jefe de local:', error);
+      return [];
+    }
+    return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
+  }
+
+  /**
+   * Logística: solo ve las solicitudes cuya sucursal origen pertenece a una de
+   * sus zonas. Sin zonas asignadas -> lista vacía (antes veía todas).
+   */
+  private static async getSolicitudesPorZonas(userId: string): Promise<SolicitudLista[]> {
+    const zonas = await OrganizacionService.getUserZones(userId);
+    const zonaIds = zonas.map((z) => z.id).filter((id) => typeof id === 'number');
+
+    if (zonaIds.length === 0) return [];
+
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('solicitud')
+      .select(SOLICITUD_SELECT)
+      .order('fecha_creacion', { ascending: false });
+
+    if (error) {
+      console.error('Error al listar solicitudes de logística:', error);
+      return [];
+    }
+
+    const zonaSet = new Set<number>(zonaIds);
+    return ((data || []) as unknown as SolicitudRawRow[])
+      .map(mapRow)
+      .filter((s) => s.sucursal_zona_id !== null && zonaSet.has(s.sucursal_zona_id));
   }
 
   static async getVehiculosInventario(): Promise<VehiculoInventario[]> {
@@ -292,7 +450,7 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('solicitud')
-        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, tipo_solicitud, posicion_prioridad')
+        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, tipo_solicitud, posicion_prioridad, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_inicio_transito')
         .eq('id', id)
         .maybeSingle();
 
@@ -831,14 +989,20 @@ export class SolicitudesService {
         return { success: false, error: 'Solo se pueden aprobar solicitudes pendientes de aprobación.' };
       }
 
+      const ahora = new Date().toISOString();
+
       const { error } = await admin
         .from('solicitud')
-        .update({ estado: 'aprobada', fecha_limite: fechaEntrega })
+        .update({
+          estado: 'aprobada',
+          fecha_limite: fechaEntrega,
+          fecha_confirmacion: ahora,
+        })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
 
-      await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada', fecha_entrega: fechaEntrega });
+      await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada', fecha_entrega: fechaEntrega, fecha_confirmacion: ahora });
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error inesperado al aprobar';
@@ -1426,6 +1590,11 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * Logística despacha: `calendarizada` -> `despachada`.
+   * Registra `fecha_despacho` + `fecha_inicio_transito` (respaldo en DB:
+   * trigger `tr_registrar_fechas_flujo`).
+   */
   static async despacharSolicitud(
     id: string,
     usuarioId: string
@@ -1444,8 +1613,9 @@ export class SolicitudesService {
       const { error } = await admin
         .from('solicitud')
         .update({
-          estado: 'en_transito',
+          estado: 'despachada',
           fecha_despacho: ahora,
+          fecha_inicio_transito: ahora,
           // Libera el slot de la cola: despachada ya no compite por prioridad
           posicion_prioridad: null,
         })
@@ -1463,7 +1633,7 @@ export class SolicitudesService {
         id,
         'despacho',
         { estado: 'calendarizada', fecha_despacho: null },
-        { estado: 'en_transito', fecha_despacho: ahora }
+        { estado: 'despachada', fecha_despacho: ahora, fecha_inicio_transito: ahora }
       );
 
       return { success: true };
@@ -1473,6 +1643,50 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * Logística confirma el inicio efectivo de la ruta: `despachada` -> `en_transito`.
+   * Si ya estaba `en_transito` es idempotente (no hace nada).
+   */
+  static async iniciarTransitoSolicitud(
+    id: string,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado === 'en_transito') return { success: true };
+      if (actual.estado !== 'despachada') {
+        return { success: false, error: 'Solo las solicitudes Despachadas pueden iniciar su tránsito.' };
+      }
+
+      const ahora = new Date().toISOString();
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({ estado: 'en_transito', fecha_inicio_transito: actual.fecha_inicio_transito ?? ahora })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'inicio_transito',
+        { estado: 'despachada' },
+        { estado: 'en_transito' }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al iniciar el tránsito';
+      return { success: false, error: msg };
+    }
+  }
+
+  /** Revierte el despacho: `despachada` | `en_transito` -> `calendarizada`. */
   static async cancelarDespacharSolicitud(
     id: string,
     usuarioId: string
@@ -1482,8 +1696,8 @@ export class SolicitudesService {
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
-      if (actual.estado !== 'en_transito') {
-        return { success: false, error: 'Solo las solicitudes En Tránsito pueden volver a Calendarizadas.' };
+      if (actual.estado !== 'en_transito' && actual.estado !== 'despachada') {
+        return { success: false, error: 'Solo las solicitudes Despachadas o En Tránsito pueden volver a Calendarizadas.' };
       }
 
       const { error } = await admin
@@ -1491,6 +1705,7 @@ export class SolicitudesService {
         .update({
           estado: 'calendarizada',
           fecha_despacho: null,
+          fecha_inicio_transito: null,
           posicion_prioridad: null,
         })
         .eq('id', id);
@@ -1502,7 +1717,7 @@ export class SolicitudesService {
         'solicitud',
         id,
         'despacho',
-        { estado: 'en_transito', fecha_despacho: actual.fecha_despacho },
+        { estado: actual.estado, fecha_despacho: actual.fecha_despacho },
         { estado: 'calendarizada', fecha_despacho: null }
       );
 
@@ -1513,6 +1728,14 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * Recepción en sucursal destino: `en_transito` (o `despachada`, si el JL
+   * confirma la recepción antes de que Logística marque el inicio de ruta) ->
+   * `entregada` (UI: "Recepcionada").
+   *
+   * Los vehículos los libera/mueve el trigger de DB
+   * `tr_entregar_solicitud_vehiculos` — no se duplica la lógica aquí.
+   */
   static async recibirSolicitud(
     id: string,
     usuarioId: string
@@ -1522,15 +1745,18 @@ export class SolicitudesService {
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
-      if (actual.estado !== 'en_transito') {
-        return { success: false, error: 'Solo las solicitudes En Tránsito pueden recibirse.' };
+      if (actual.estado !== 'en_transito' && actual.estado !== 'despachada') {
+        return { success: false, error: 'Solo las solicitudes Despachadas o En Tránsito pueden receptarse.' };
       }
 
       const usuario = await SolicitudesService.getUsuarioRolSucursal(admin, usuarioId);
       if (!usuario) return { success: false, error: 'Usuario no encontrado.' };
 
       if (usuario.rol !== 'administrador') {
-        if (usuario.rol !== 'jefe_local' || !SolicitudesService.usuarioEnSucursalRecepcion(usuario.sucursal_id, actual)) {
+        if (
+          usuario.rol !== 'jefe_local' ||
+          !(await this.usuarioPuedeRecibirEn(usuarioId, actual))
+        ) {
           return {
             success: false,
             error: 'Solo el jefe de local de la sucursal destino puede recibir la solicitud.',
@@ -1545,6 +1771,7 @@ export class SolicitudesService {
         .update({
           estado: 'entregada',
           fecha_entrega: ahora,
+          fecha_recepcion: ahora,
           posicion_prioridad: null,
         })
         .eq('id', id);
@@ -1556,8 +1783,8 @@ export class SolicitudesService {
         'solicitud',
         id,
         'entrega',
-        { estado: 'en_transito', fecha_entrega: null },
-        { estado: 'entregada', fecha_entrega: ahora }
+        { estado: actual.estado, fecha_entrega: null },
+        { estado: 'entregada', fecha_entrega: ahora, fecha_recepcion: ahora }
       );
 
       return { success: true };
@@ -1577,7 +1804,7 @@ export class SolicitudesService {
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
       if (actual.estado !== 'entregada') {
-        return { success: false, error: 'Solo las solicitudes Entregadas pueden finalizarse.' };
+        return { success: false, error: 'Solo las solicitudes Recepcionadas pueden entregarse al cliente.' };
       }
 
       const usuario = await SolicitudesService.getUsuarioRolSucursal(admin, usuarioId);
@@ -1585,7 +1812,7 @@ export class SolicitudesService {
 
       if (usuario.rol !== 'administrador') {
         const esJefeLocalDestino =
-          usuario.rol === 'jefe_local' && SolicitudesService.usuarioEnSucursalRecepcion(usuario.sucursal_id, actual);
+          usuario.rol === 'jefe_local' && (await this.usuarioPuedeRecibirEn(usuarioId, actual));
         const esEjecutivoCreador = usuario.rol === 'ejecutivo' && actual.ejecutivo_id === usuarioId;
 
         if (!esJefeLocalDestino && !esEjecutivoCreador) {
@@ -1598,7 +1825,11 @@ export class SolicitudesService {
 
       const { error } = await admin
         .from('solicitud')
-        .update({ estado: 'finalizada', posicion_prioridad: null })
+        .update({
+          estado: 'finalizada',
+          fecha_entrega_cliente: new Date().toISOString(),
+          posicion_prioridad: null,
+        })
         .eq('id', id);
 
       if (error) return { success: false, error: error.message };
@@ -1617,5 +1848,216 @@ export class SolicitudesService {
       const msg = err instanceof Error ? err.message : 'Error inesperado al finalizar';
       return { success: false, error: msg };
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // DEV 2 — Asignación de encargado de Logística
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Logística se auto-asigna (o designa a otro member de logística) como
+   * encargado de la solicitud: `aprobada` | `priorizada` -> `asignada`.
+   *
+   * `logistica_id` ya existía en `public.solicitud` y se reusa como
+   * "encargado de la solicitud" (no se crea `encargado_logistica_id`).
+   */
+  static async asignarEncargadoLogistica(
+    id: string,
+    logisticaId: string,
+    usuarioId?: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+
+      if (!ESTADOS_ASIGNABLES.includes(actual.estado as (typeof ESTADOS_ASIGNABLES)[number])) {
+        return {
+          success: false,
+          error: 'Solo las solicitudes Aprobadas o Priorizadas pueden asignarse a un encargado de Logística.',
+        };
+      }
+
+      const { data: encargado, error: userError } = await admin
+        .from('usuario')
+        .select('id, rol, activo')
+        .eq('id', logisticaId)
+        .maybeSingle();
+
+      if (userError || !encargado) {
+        return { success: false, error: 'El encargado indicado no existe.' };
+      }
+      if (encargado.rol !== 'logistica' && encargado.rol !== 'administrador') {
+        return { success: false, error: 'El encargado debe tener el rol Logística.' };
+      }
+      if (encargado.activo === false) {
+        return { success: false, error: 'El encargado indicado está inactivo.' };
+      }
+
+      const { error } = await admin
+        .from('solicitud')
+        .update({ estado: 'asignada', logistica_id: logisticaId })
+        .eq('id', id);
+
+      if (error) return { success: false, error: error.message };
+
+      await this.registrarAuditoria(
+        usuarioId ?? logisticaId,
+        'solicitud',
+        id,
+        'asignacion_logistica',
+        { estado: actual.estado, logistica_id: actual.logistica_id ?? null },
+        { estado: 'asignada', logistica_id: logisticaId }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al asignar el encargado';
+      return { success: false, error: msg };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // DEV 2 — Insistencia del Ejecutivo (cooldown 24 h)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Registra una insistencia del ejecutivo sobre su propia solicitud.
+   * Solo 1 vez cada {@link COOLDOWN_INSISTENCIA_HORAS} horas por solicitud.
+   */
+  static async insistirSolicitud(
+    id: string,
+    usuarioId: string,
+    mensaje?: string | null
+  ): Promise<{
+    success: boolean;
+    error?: string;
+    proxima_insistencia_en_h?: number;
+  }> {
+    try {
+      const admin = createAdminClient();
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.ejecutivo_id !== usuarioId) {
+        return { success: false, error: 'Solo puedes insistir sobre tus propias solicitudes.' };
+      }
+      if (!ESTADOS_INSISTIBLES.includes(actual.estado as (typeof ESTADOS_INSISTIBLES)[number])) {
+        return {
+          success: false,
+          error: `No se puede insistir sobre una solicitud en estado "${actual.estado}".`,
+        };
+      }
+
+      const cooldown = await this.getUltimaInsistencia(id, usuarioId);
+      if (cooldown) {
+        const transcurridoHoras = (Date.now() - new Date(cooldown.created_at).getTime()) / 3_600_000;
+        const restantes = COOLDOWN_INSISTENCIA_HORAS - transcurridoHoras;
+        if (restantes > 0) {
+          const horas = Math.floor(restantes);
+          const minutos = Math.round((restantes - horas) * 60);
+          return {
+            success: false,
+            error: `Ya insististe sobre esta solicitud. Podrás insistir de nuevo en ${horas}h ${minutos}min.`,
+            proxima_insistencia_en_h: Math.ceil(restantes),
+          };
+        }
+      }
+
+      const texto = mensaje?.trim();
+      const { error } = await admin.from('insistencia').insert({
+        solicitud_id: id,
+        usuario_id: usuarioId,
+        mensaje: texto && texto.length > 0 ? texto : null,
+      });
+
+      if (error) return { success: false, error: error.message };
+
+      await admin.from('observacion').insert({
+        solicitud_id: id,
+        usuario_id: usuarioId,
+        observacion: `[INSISTENCIA] ${texto && texto.length > 0 ? texto : 'Solicito avanzar el estado de mi solicitud.'}`,
+      });
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'insistencia',
+        { estado: actual.estado },
+        { estado: actual.estado, mensaje: texto || null }
+      );
+
+      return { success: true, proxima_insistencia_en_h: COOLDOWN_INSISTENCIA_HORAS };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error inesperado al insistir';
+      return { success: false, error: msg };
+    }
+  }
+
+  /** Última insistencia del usuario sobre la solicitud, si existe. */
+  static async getUltimaInsistencia(
+    solicitudId: string,
+    usuarioId: string
+  ): Promise<InsistenciaEntry | null> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('insistencia')
+        .select('id, solicitud_id, usuario_id, mensaje, created_at')
+        .eq('solicitud_id', solicitudId)
+        .eq('usuario_id', usuarioId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error || !data) return null;
+      return data as InsistenciaEntry;
+    } catch (err) {
+      console.error('Error en getUltimaInsistencia:', err);
+      return null;
+    }
+  }
+
+  /** Historial de insistencias de una solicitud (para la UI y la trazabilidad). */
+  static async getInsistencias(solicitudId: string): Promise<InsistenciaEntry[]> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('insistencia')
+        .select('id, solicitud_id, usuario_id, mensaje, created_at, usuario:usuario_id(nombre, apellido)')
+        .eq('solicitud_id', solicitudId)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error al listar insistencias:', error);
+        return [];
+      }
+
+      return ((data || []) as unknown as Array<Omit<InsistenciaEntry, 'usuario_nombre'> & {
+        usuario: { nombre: string; apellido: string } | null;
+      }>).map((r) => ({ ...r, usuario_nombre: persona(r.usuario) }));
+    } catch (err) {
+      console.error('Error en getInsistencias:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Horas restantes de cooldown para un ejecutivo sobre su solicitud.
+   * `null` = puede insistir ahora mismo.
+   */
+  static async getCooldownInsistencia(
+    solicitudId: string,
+    usuarioId: string
+  ): Promise<{ horas_restantes: number | null; ultima: string | null }> {
+    const ultima = await this.getUltimaInsistencia(solicitudId, usuarioId);
+    if (!ultima) return { horas_restantes: null, ultima: null };
+
+    const transcurridoHoras = (Date.now() - new Date(ultima.created_at).getTime()) / 3_600_000;
+    const restantes = COOLDOWN_INSISTENCIA_HORAS - transcurridoHoras;
+    if (restantes <= 0) return { horas_restantes: null, ultima: ultima.created_at };
+    return { horas_restantes: Math.ceil(restantes), ultima: ultima.created_at };
   }
 }

@@ -1,6 +1,7 @@
 import { AuthService } from '@/services/auth.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
+import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import SolicitudesClient from './SolicitudesClient';
 import SolicitudesHeader from '@/components/SolicitudesHeader';
@@ -26,10 +27,12 @@ export default async function SolicitudesPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const [solicitudes, sucursales, vehiculos] = await Promise.all([
-    SolicitudesService.getSolicitudes(),
+  const sucursalesAsignadas = await OrganizacionService.getUserAssignedBranches(profile.id);
+  const [solicitudes, sucursales, vehiculos, slotsSucursales] = await Promise.all([
+    SolicitudesService.getSolicitudesFiltradas(profile.id, profile.rol),
     SucursalesService.getSucursales(),
     SolicitudesService.getVehiculosInventario(),
+    SucursalesService.getSlotsPorSucursales(sucursalesAsignadas.map((s) => s.id)),
   ]);
 
   return (
@@ -40,6 +43,15 @@ export default async function SolicitudesPage() {
         apellido={profile.apellido}
         rol={profile.rol}
         sucursalNombre={profile.sucursal_nombre}
+        slots={
+          profile.rol === 'jefe_local' || profile.rol === 'administrador'
+            ? slotsSucursales.map((s) => ({
+                nombre: s.nombre,
+                slots: s.slots,
+                slots_ocupados: s.slots_ocupados,
+              }))
+            : null
+        }
         tabs={[
           { href: '/solicitudes', label: 'General', active: true },
           ...(esGestor || esEjecutivo
@@ -55,6 +67,7 @@ export default async function SolicitudesPage() {
         <SolicitudesClient
           solicitudes={solicitudes}
           sucursales={sucursales}
+          sucursales_asignadas={sucursalesAsignadas}
           vehiculos={vehiculos}
           viewer={{
             id: profile.id,
