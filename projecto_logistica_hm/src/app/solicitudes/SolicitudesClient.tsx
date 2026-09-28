@@ -17,6 +17,7 @@ import {
   BellRing,
   Truck,
   UserCheck,
+  Paperclip,
 } from 'lucide-react';
 import {
   createSolicitudAction,
@@ -28,6 +29,7 @@ import {
   getCooldownInsistenciaAction,
   asignarEncargadoAction,
   iniciarTransitoSolicitudAction,
+  subirDocumentosSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import {
   EstadoSolicitud,
@@ -176,6 +178,9 @@ export default function SolicitudesClient({
     }
   }
   const [sucursalDestinoSel, setSucursalDestinoSel] = useState('');
+  if (prevSucursalViewer !== viewer.sucursal_id && viewer.rol === 'ejecutivo' && viewer.sucursal_id) {
+    setSucursalDestinoSel(String(viewer.sucursal_id));
+  }
   const [tipoSel, setTipoSel] = useState<TipoSolicitud>('venta');
   const [fechaLimite, setFechaLimite] = useState('');
   const [selectedVehiculos, setSelectedVehiculos] = useState<Set<string>>(new Set());
@@ -195,6 +200,7 @@ export default function SolicitudesClient({
   const [vehiculoSucursal, setVehiculoSucursal] = useState<number | ''>('');
   const [vehiculoError, setVehiculoError] = useState(false);
   const [obsCreacion, setObsCreacion] = useState('');
+  const [archivosAdjuntos, setArchivosAdjuntos] = useState<File[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [motivo, setMotivo] = useState('');
@@ -406,7 +412,7 @@ export default function SolicitudesClient({
 
   function resetCreateForm() {
     setSucursalSel((esJefeLocal || esEjecutivo) && viewer.sucursal_id ? String(viewer.sucursal_id) : '');
-    setSucursalDestinoSel('');
+    setSucursalDestinoSel(esEjecutivo && viewer.sucursal_id ? String(viewer.sucursal_id) : '');
     setTipoSel('venta');
     setFechaLimite('');
     setSelectedVehiculos(new Set());
@@ -415,6 +421,7 @@ export default function SolicitudesClient({
     setVehiculoError(false);
     setCreateError(null);
     setObsCreacion('');
+    setArchivosAdjuntos([]);
     setDireccionEvento('');
     setTituloEvento('');
     setEjecutivoSel('');
@@ -449,7 +456,21 @@ export default function SolicitudesClient({
       if (!result.success) {
         setCreateError(result.error || 'Error al crear.');
       } else {
-        setFeedback({ type: 'success', message: result.message || 'Solicitud creada.' });
+        let uploadError: string | null = null;
+        if (archivosAdjuntos.length > 0 && result.solicitudId) {
+          const fd = new FormData();
+          archivosAdjuntos.forEach((f) => fd.append('archivos', f));
+          const up = await subirDocumentosSolicitudAction(result.solicitudId, fd);
+          if (!up.success) {
+            uploadError = up.error || 'error inesperado';
+          }
+        }
+        setFeedback({
+          type: uploadError ? 'error' : 'success',
+          message: uploadError
+            ? `Solicitud creada, pero no se pudieron subir los archivos: ${uploadError}`
+            : result.message || 'Solicitud creada.',
+        });
         setIsCreateOpen(false);
         resetCreateForm();
       }
@@ -869,17 +890,10 @@ export default function SolicitudesClient({
             </div>
 
             <form onSubmit={handleCreate} className="p-6 space-y-4 overflow-y-auto">
-              {/* Sucursal Origen */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Origen de solicitud *</label>
-                {esEjecutivo ? (
-                  <input
-                    type="text"
-                    disabled
-                    value={sucursales.find((s) => s.id === viewer.sucursal_id)?.nombre || `Sucursal #${viewer.sucursal_id}`}
-                    className="w-full px-3 py-2 bg-neutral-100 border border-neutral-300 rounded-xl text-sm text-neutral-500 cursor-not-allowed"
-                  />
-                ) : (
+              {/* Sucursal Origen (el Ejecutivo crea siempre desde su propia sucursal) */}
+              {!esEjecutivo && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Origen de solicitud *</label>
                   <select
                     required
                     value={sucursalSel}
@@ -891,11 +905,11 @@ export default function SolicitudesClient({
                       <option key={suc.id} value={String(suc.id)}>{suc.nombre}</option>
                     ))}
                   </select>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Tipo y Fecha */}
-              <div className={esEjecutivo ? 'space-y-1.5' : 'grid grid-cols-2 gap-4'}>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tipo *</label>
                   <select
@@ -907,41 +921,48 @@ export default function SolicitudesClient({
                     <option value="evento">Evento</option>
                   </select>
                 </div>
-                {!esEjecutivo && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha/hora límite *</label>
-                    <input
-                      type="date"
-                      required
-                      min={hoyISO()}
-                      value={fechaLimite}
-                      onChange={(e) => setFechaLimite(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                    />
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha/hora límite *</label>
+                  <input
+                    type="date"
+                    required
+                    min={hoyISO()}
+                    value={fechaLimite}
+                    onChange={(e) => setFechaLimite(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
               </div>
 
               {/* Sucursal Destino (solo venta) */}
               {tipoSel === 'venta' && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Sucursal Destino *</label>
-                  <select
-                    required
-                    value={sucursalDestinoSel}
-                    onChange={(e) => { setSucursalDestinoSel(e.target.value); if (createError) setCreateError(null); }}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  >
-                    <option value="">Selecciona destino...</option>
-                    {sucursalesParaDestino.map((suc) => {
-                      const disp = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
-                      return (
-                        <option key={suc.id} value={String(suc.id)}>
-                          {suc.nombre} — {Math.max(disp, 0)} slots disponibles
-                        </option>
-                      );
-                    })}
-                  </select>
+                  {esEjecutivo ? (
+                    <input
+                      type="text"
+                      disabled
+                      value={sucursales.find((s) => s.id === viewer.sucursal_id)?.nombre || `Sucursal #${viewer.sucursal_id}`}
+                      className="w-full px-3 py-2 bg-neutral-100 border border-neutral-300 rounded-xl text-sm text-neutral-500 cursor-not-allowed"
+                    />
+                  ) : (
+                    <select
+                      required
+                      value={sucursalDestinoSel}
+                      onChange={(e) => { setSucursalDestinoSel(e.target.value); if (createError) setCreateError(null); }}
+                      className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                    >
+                      <option value="">Selecciona destino...</option>
+                      {sucursalesParaDestino.map((suc) => {
+                        const disp = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
+                        return (
+                          <option key={suc.id} value={String(suc.id)}>
+                            {suc.nombre} — {Math.max(disp, 0)} slots disponibles
+                          </option>
+                        );
+                      })}
+                    </select>
+                  )}
                   {sucursalDestinoInfo && (
                     <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
                       sucursalDestinoInfo.excedido
@@ -1119,6 +1140,48 @@ export default function SolicitudesClient({
                 />
               </div>
 
+              {/* Adjuntar archivos / imágenes (opcional) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Adjuntar archivos o imágenes (opcional)</label>
+                <label className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-neutral-400 hover:border-neutral-900 rounded-xl cursor-pointer text-sm text-neutral-600 hover:text-neutral-900 transition-colors">
+                  <Paperclip className="w-4 h-4 shrink-0" />
+                  <span>{archivosAdjuntos.length > 0 ? `${archivosAdjuntos.length} archivo(s) seleccionado(s)` : 'Seleccionar archivos...'}</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.pptx,.txt,.csv,.zip"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = e.target.files ? Array.from(e.target.files) : [];
+                      setArchivosAdjuntos((prev) => [...prev, ...files]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {archivosAdjuntos.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {archivosAdjuntos.map((f, idx) => (
+                      <li key={`${f.name}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs text-neutral-700">
+                        <Paperclip className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-neutral-400 shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                        <button
+                          type="button"
+                          onClick={() => setArchivosAdjuntos((prev) => prev.filter((_, i) => i !== idx))}
+                          className="ml-auto text-neutral-400 hover:text-red-600 cursor-pointer"
+                          aria-label={`Quitar ${f.name}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[11px] text-neutral-400">
+                  Máximo 10 MB por archivo. Formatos: PDF, PNG, JPG, WebP, Word, Excel, PowerPoint, TXT, CSV o ZIP.
+                </p>
+              </div>
+
               <div className={`p-3 border rounded-xl flex items-start gap-2.5 text-xs ${esJefeLocal ? 'bg-green-50 border-green-200 text-green-700' : 'bg-neutral-50 border-neutral-200 text-neutral-600'}`}>
                 {esJefeLocal ? (
                   <>
@@ -1128,7 +1191,7 @@ export default function SolicitudesClient({
                 ) : (
                   <>
                     <Clock className="w-4 h-4 shrink-0 mt-0.5 text-neutral-900" />
-                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y definirá la fecha de entrega.</span>
+                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y podrá aceptar o modificar la fecha de entrega que indicaste.</span>
                   </>
                 )}
               </div>

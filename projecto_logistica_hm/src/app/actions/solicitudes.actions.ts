@@ -84,7 +84,7 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
     if (fechaLimite && esFechaAnteriorAHoy(fechaLimite)) {
       return { success: false, error: 'La fecha de entrega no puede ser anterior al día de hoy.' };
     }
-    if (profile.rol !== 'ejecutivo' && !fechaLimite) {
+    if (!fechaLimite) {
       return { success: false, error: 'Debes indicar la fecha de entrega para la solicitud.' };
     }
 
@@ -92,6 +92,9 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
       const destino = Number(data.sucursal_destino);
       if (!Number.isInteger(destino) || destino <= 0) {
         return { success: false, error: 'Debes seleccionar una sucursal destino.' };
+      }
+      if (profile.rol === 'ejecutivo' && destino !== profile.sucursal_id) {
+        return { success: false, error: 'Como ejecutivo, solo puedes pedir vehículos a tu propia sucursal.' };
       }
     }
 
@@ -166,6 +169,7 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
     revalidatePath('/solicitudes');
     return {
       success: true,
+      solicitudId: result.solicitud?.id,
       message:
         profile.rol === 'jefe_local'
           ? 'Solicitud creada y aprobada automáticamente.'
