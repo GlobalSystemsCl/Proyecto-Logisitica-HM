@@ -10,6 +10,7 @@ import {
   Eye,
   Car,
   Clock,
+  Pencil,
 } from 'lucide-react';
 import {
   aprobarSolicitudAction,
@@ -50,6 +51,16 @@ function formatFecha(iso: string | null): string {
   return new Date(iso).toLocaleDateString('es-CL');
 }
 
+function fechaInputValue(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const anio = d.getUTCFullYear();
+  const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dia = String(d.getUTCDate()).padStart(2, '0');
+  return `${anio}-${mes}-${dia}`;
+}
+
 function getEncargadoNombre(sol: SolicitudLista): string | null {
   if (sol.ejecutivo_nombre) return sol.ejecutivo_nombre;
   if (sol.jefe_local_nombre) return sol.jefe_local_nombre;
@@ -72,6 +83,7 @@ export default function AprobacionesClient({
   const [rejectMotivo, setRejectMotivo] = useState('');
   const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
   const [aprobacionFecha, setAprobacionFecha] = useState('');
+  const [editarFecha, setEditarFecha] = useState(false);
   const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(null);
 
   const esAdmin = viewer.rol === 'administrador';
@@ -94,7 +106,9 @@ export default function AprobacionesClient({
   }
 
   function abrirAprobacion(sol: SolicitudLista) {
-    setAprobacionFecha('');
+    const fecha = fechaInputValue(sol.fecha_limite);
+    setAprobacionFecha(fecha);
+    setEditarFecha(!fecha);
     setApproveTarget(sol);
   }
 
@@ -258,31 +272,53 @@ export default function AprobacionesClient({
               </button>
             </div>
             <p className="text-sm text-neutral-500 mb-4">
-              Aprobando la solicitud #{approveTarget.id.slice(0, 8)}. Indica la fecha limite en la que el o los vehiculos debe ser entregado.
+              Aprobando la solicitud #{approveTarget.id.slice(0, 8)}. Este es el plazo de entrega
+              propuesto por el ejecutivo: puedes aceptarlo o modificarlo.
             </p>
             <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
               Fecha limite de Entrega *
             </label>
-<input
+            <input
               type="date"
               min={hoyISO()}
+              disabled={!editarFecha}
               value={aprobacionFecha}
               onChange={(e) => setAprobacionFecha(e.target.value)}
-              className="w-full rounded-lg border border-neutral-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              className={`w-full rounded-lg border p-3 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900 ${
+                editarFecha
+                  ? 'border-neutral-300 bg-white text-neutral-900'
+                  : 'border-neutral-200 bg-neutral-100 text-neutral-600 cursor-not-allowed'
+              }`}
             />
-            <div className="mt-4 flex justify-end gap-2">
+            {!editarFecha && aprobacionFecha && (
+              <p className="mt-1.5 text-xs text-neutral-500">
+                Fecha propuesta por el ejecutivo. Presiona «Modificar» para cambiarla.
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
               <button
                 onClick={() => setApproveTarget(null)}
                 className="px-4 py-2 rounded-lg text-sm text-neutral-600 hover:bg-neutral-100 cursor-pointer"
               >
                 Cancelar
               </button>
+              {!editarFecha && (
+                <button
+                  onClick={() => setEditarFecha(true)}
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-xl border border-neutral-300 text-neutral-700 text-sm font-semibold hover:bg-neutral-100 disabled:opacity-50 cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Modificar
+                </button>
+              )}
               <button
                 onClick={handleConfirmarAprobacion}
                 disabled={isSubmitting || !aprobacionFecha.trim()}
-                className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-semibold disabled:opacity-50 hover:bg-neutral-700 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-semibold disabled:opacity-50 hover:bg-neutral-700 cursor-pointer inline-flex items-center gap-1.5"
               >
-                {isSubmitting ? 'Aprobando...' : 'Confirmar aprobación'}
+                <CheckCircle2 className="w-4 h-4" />
+                {isSubmitting ? 'Aprobando...' : editarFecha ? 'Confirmar modificación' : 'Aceptar fecha'}
               </button>
             </div>
           </div>
