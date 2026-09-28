@@ -24,6 +24,7 @@ export async function createZonaAction(nombre: string) {
     if (!result.success) {
       return { success: false, error: result.error || 'Error al crear la zona.' };
     }
+    revalidatePath('/admin/sucursales');
     revalidatePath('/admin/zonas');
     return { success: true, message: `Zona "${nombre.trim()}" creada exitosamente.` };
   } catch (err: unknown) {
@@ -39,6 +40,7 @@ export async function updateZonaAction(id: number, nombre: string) {
     if (!result.success) {
       return { success: false, error: result.error || 'Error al actualizar la zona.' };
     }
+    revalidatePath('/admin/sucursales');
     revalidatePath('/admin/zonas');
     return { success: true, message: `Zona "${nombre.trim()}" actualizada exitosamente.` };
   } catch (err: unknown) {
@@ -54,6 +56,7 @@ export async function deleteZonaAction(id: number) {
     if (!result.success) {
       return { success: false, error: result.error || 'Error al eliminar la zona.' };
     }
+    revalidatePath('/admin/sucursales');
     revalidatePath('/admin/zonas');
     return { success: true, message: 'Zona eliminada exitosamente.' };
   } catch (err: unknown) {
