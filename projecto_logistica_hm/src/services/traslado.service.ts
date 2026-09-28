@@ -414,7 +414,8 @@ export class TrasladoService {
       const { data: vendidas, error } = await admin
         .from('solicitud_vehiculo')
         .select('vehiculo_id, solicitud:solicitud_id(sucursal_destino, titulo_evento, fecha_creacion, estado)')
-        .eq('disponibilidad', 'vendido');
+        .eq('disponibilidad', 'vendido')
+        .limit(100000);
 
       if (error) {
         console.error('Error al listar vehículos vendidos:', error);
@@ -445,7 +446,8 @@ export class TrasladoService {
         .from('vehiculo')
         .select('id, chasis, patente, marca, modelo, anio, color, ubicacion, sucursal:ubicacion(nombre)')
         .in('id', ids)
-        .order('patente', { ascending: true });
+        .order('patente', { ascending: true })
+        .limit(100000);
 
       if (vehError) {
         console.error('Error al listar vehículos para traslado:', vehError);

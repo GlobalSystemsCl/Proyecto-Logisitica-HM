@@ -455,7 +455,8 @@ export class OrganizacionService {
           sucursal!vehiculo_ubicacion_fkey(nombre),
           solicitud_vehiculo!solicitud_vehiculo_vehiculo_fk (id, solicitud_id, disponibilidad)
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100000);
 
       if (error) {
         console.error('Error en getAvailableVehicles:', error);

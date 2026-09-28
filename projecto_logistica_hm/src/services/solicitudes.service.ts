@@ -399,7 +399,8 @@ export class SolicitudesService {
       const { data: vehiculos, error } = await admin
         .from('vehiculo')
         .select('id, chasis, patente, marca, modelo, anio, color, ubicacion')
-        .order('patente', { ascending: true });
+        .order('patente', { ascending: true })
+        .limit(100000);
 
       if (error) {
         console.error('Error al listar vehículos:', error);
@@ -410,7 +411,8 @@ export class SolicitudesService {
         .from('solicitud_vehiculo')
         .select('vehiculo_id, solicitud!inner(estado)')
         .eq('disponibilidad', 'reservado')
-        .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA]);
+        .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
+        .limit(100000);
 
       if (reservasError) {
         console.error('Error al consultar reservas activas:', reservasError);
@@ -423,7 +425,8 @@ export class SolicitudesService {
       const { data: vendidos, error: vendidosError } = await admin
         .from('solicitud_vehiculo')
         .select('vehiculo_id')
-        .eq('disponibilidad', 'vendido');
+        .eq('disponibilidad', 'vendido')
+        .limit(100000);
 
       if (vendidosError) {
         console.error('Error al consultar vehículos vendidos:', vendidosError);

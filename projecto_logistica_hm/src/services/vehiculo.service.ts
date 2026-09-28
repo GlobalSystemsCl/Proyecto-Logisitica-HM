@@ -21,7 +21,8 @@ export class VehiculoService {
             disponibilidad
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .limit(100000);
 
       if (error) {
         console.error('Error al listar vehículos:', error);
@@ -68,7 +69,8 @@ export class VehiculoService {
       const { data, error } = await admin
         .from('vehiculo')
         .select('marca')
-        .order('marca');
+        .order('marca')
+        .limit(100000);
 
       if (error) {
         console.error('Error al obtener marcas:', error);
@@ -462,7 +464,7 @@ export class VehiculoService {
       }
 
       // Chasis ya existentes
-      const { data: existentesData } = await admin.from('vehiculo').select('chasis');
+      const { data: existentesData } = await admin.from('vehiculo').select('chasis').limit(100000);
       const chasisExistentes = new Set<string>((existentesData || []).map((v: { chasis: string }) => v.chasis));
 
       let importados = 0;
