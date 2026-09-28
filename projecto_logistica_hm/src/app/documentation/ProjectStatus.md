@@ -423,7 +423,7 @@ Una funcionalidad solamente puede pasar a `COMPLETADO` cuando haya sido validada
 | `solicitud` sin columna `sucursal_destino` ni `fecha_entrega` | Solicitudes/Logística | El destino y la confirmación de entrega no quedan registrados | Alta | Pendiente diseño |
 | `usuario.sucursal_id` era UUID sin FK (sucursal.id es BIGINT) | Usuarios / BD | Integridad referencial débil; impedía filtrar solicitudes por sucursal del jefe_local | Media | Resuelto (2026-08-22): cambiada a BIGINT + FK en `20260822_politicas_rls.sql`; tipos TS actualizados a `number` |
 | Timestamps `WITHOUT TIME ZONE` en la mayoría de tablas | Base de datos | Ambigüedad horaria en auditoría/trazabilidad | Baja | Revisar en próxima pasada |
-| `sucursal.usuario_id` con `ON DELETE CASCADE` usuario→sucursal | Sucursales / BD | Borrar usuario borra su sucursal asociada | Media | Default anómalo ya corregido; validar semántica de cascada |
+| `sucursal.usuario_id` con `ON DELETE CASCADE` usuario→sucursal | Sucursales / BD | Borrar usuario borra su sucursal asociada | Media | Resuelto (2026-09-28): FK pasó a `ON DELETE SET NULL` en `20260928_jefe_local_multisucursal.sql` |
 | Cascada `solicitud.sucursal → ON DELETE CASCADE`: borrar sucursal elimina solicitudes | Base de datos | Pérdida de historial operativo | Media | Validar semántica deseada |
 | Detalles finos del esquema (UNIQUE, largos, ON DELETE, índices, RLS, triggers) sin confirmar | Base de datos | Riesgo de documentar supuestos | Alta | **Resuelto** (2026-08-22): volcado 1:1 cerrado contra catálogo real |
 

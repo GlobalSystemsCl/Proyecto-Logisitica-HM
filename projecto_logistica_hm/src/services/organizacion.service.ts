@@ -264,21 +264,21 @@ export class OrganizacionService {
   // CONTRATO DEV 2 — asignacion de sucursales / zonas
   // ==========================================================================
 
-  /** Sucursales asignadas a un usuario = principal (usuario.sucursal_id) + N:M (usuario_sucursal). */
+  /** Sucursales asignadas a un usuario = principal (usuario.sucursal_id) + las que encabeza como encargado (sucursal.usuario_id). */
   static async getUserAssignedBranches(usuarioId: string): Promise<UsuarioSucursalAsignada[]> {
     if (!usuarioId) return [];
     try {
       const admin = createAdminClient();
 
-      const [principal, asignadas] = await Promise.all([
+      const [principal, encargadas] = await Promise.all([
         admin
           .from('usuario')
           .select('sucursal_id, sucursal:sucursal_id(id, nombre)')
           .eq('id', usuarioId)
           .maybeSingle(),
         admin
-          .from('usuario_sucursal')
-          .select('sucursal_id, sucursal:sucursal_id(id, nombre)')
+          .from('sucursal')
+          .select('id, nombre')
           .eq('usuario_id', usuarioId),
       ]);
 
@@ -295,13 +295,9 @@ export class OrganizacionService {
         if (raw) mapa.set(principalData.sucursal_id, { id: raw.id, nombre: raw.nombre });
       }
 
-      (asignadas.data || []).forEach((row: {
-        sucursal_id: number;
-        sucursal: Array<{ id: number; nombre: string | null }> | { id: number; nombre: string | null } | null;
-      }) => {
-        if (!row.sucursal_id) return;
-        const s = Array.isArray(row.sucursal) ? row.sucursal[0] : row.sucursal;
-        mapa.set(row.sucursal_id, { id: row.sucursal_id, nombre: s?.nombre ?? null });
+      (encargadas.data || []).forEach((row: { id: number; nombre: string | null }) => {
+        if (!row.id) return;
+        mapa.set(row.id, { id: row.id, nombre: row.nombre });
       });
 
       return Array.from(mapa.values());

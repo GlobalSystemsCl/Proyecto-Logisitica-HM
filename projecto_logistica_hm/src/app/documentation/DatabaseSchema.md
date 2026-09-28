@@ -95,6 +95,7 @@ El resultado obtenido se traduce a `CREATE TABLE` en este documento. Nunca se pe
 >
 > **Actualizaciones posteriores al volcado (2026-08-26)**: enum `estado_solicitud` ampliado (nuevos estados), `solicitud.ejecutivo_id` nullable, columnas `sucursal_destino`/`direccion_evento`/`titulo_evento`, trigger `tr_validate_solicitud_tipo`, y deshabilitación de triggers de notificación y auditoría (migraciones `20260826_solicitudes_v2*.sql`, `20260826_deshabilitar_notificaciones.sql`, `20260826_deshabilitar_auditoria_service_role.sql`). Además, la unicidad de `posicion_prioridad` pasó de global a compuesta `UNIQUE (sucursal, posicion_prioridad)` (migración `20260826_cola_prioridad_por_sucursal.sql`).
 > **Actualizaciones posteriores al volcado (2026-09-09)**: nueva tabla `solicitud_documento` (sección 5.9) y bucket privado `solicitud-documentos` para adjuntar documentación a las solicitudes (migración `20260909_solicitud_documentos.sql`; RLS habilitado sin políticas, acceso vía service-role). Además, columna `vehiculo.ubicacion` (`BIGINT REFERENCES sucursal(id)`, nula por defecto) que indica la sucursal desde la que parte el vehículo (migración `20260909_vehiculo_ubicacion.sql`).
+> **Actualizaciones posteriores al volcado (2026-09-28)**: la relación "Jefe de Local → Sucursales" pasa a ser **1:N real** (migración `20260928_jefe_local_multisucursal.sql`): se eliminó la tabla `usuario_sucursal` (N:M) y la sucursal es encabezada por un único `usuario_id` (`sucursal.usuario_id`, restringido a `jefe_local`/`administrador` vía trigger, FK `ON DELETE SET NULL`). `usuario.sucursal_id` sigue existiendo como sucursal **principal** (por defecto en la UI). Ver sección 5.2.
 
 ## 5.0 Tipos ENUM
 
@@ -248,7 +249,7 @@ CREATE TABLE public.sucursal (
 
 ### Observaciones
 
-* `ON DELETE CASCADE` en `usuario_id` implica que eliminar un usuario borra su sucursal asociada: validar si es la semántica deseada.
+* `usuario_id` es el **encargado de la sucursal** y desde el 2026-09-28 (migración `20260928_jefe_local_multisucursal.sql`) define la relación **1:N "Jefe de Local → Sucursales"**: un `jefe_local`/`administrador` puede encabezar varias sucursales, pero cada sucursal tiene **un único** encargado. Se eliminó la tabla `usuario_sucursal` (N:M) y la FK pasó de `ON DELETE CASCADE` a `ON DELETE SET NULL` (borrar un usuario ya **no** borra sus sucursales). Un trigger impone en BD que el encargado tenga rol `jefe_local` o `administrador`.
 * El default anómalo `gen_random_uuid()` que tenía esta columna fue eliminado el 2026-08-22 (migración `20260822_cleanup_funcion_muerta_y_defaults.sql`).
 
 ### Índices
@@ -274,7 +275,7 @@ CREATE POLICY "sucursal_admin_total"
 
 ### Relaciones
 
-* `usuario_id` → `public.usuario(id)` (`ON UPDATE CASCADE ON DELETE CASCADE`)
+* `usuario_id` → `public.usuario(id)` (`ON UPDATE CASCADE ON DELETE SET NULL`; encargado, único por sucursal)
 * Recibe FK: `solicitud.sucursal` (origen).
 
 ---
@@ -821,7 +822,7 @@ Todas verificadas contra catálogo el 2026-08-22. Cuerpos completos disponibles 
 
 # 7. Alertas del esquema (2026-08-22)
 
-1. Cascadas peligrosas: borrar `usuario` borra su `sucursal`; borrar `sucursal` borra sus solicitudes.
+1. Cascadas: borrar `sucursal` borra sus solicitudes (origen). La cascada usuario→sucursal se **eliminó** el 2026-09-28 (FK `sucursal.usuario_id` pasó a `ON DELETE SET NULL`, migración `20260928_jefe_local_multisucursal.sql`).
 2. FKs sin acción hacia `usuario.id` (solicitud, auditoria, observacion, solicitud_vehiculo.vehiculo_id): impiden borrar usuarios con historial (protege trazabilidad, pero conviene documentarlo como decisión).
 3. Timestamps `WITHOUT TIME ZONE` en la mayoría de tablas (solo fechas de despacho/límite/bloqueo usan `TIMESTAMPTZ`).
 4. Falta diseño: `vehiculo.creado_por`/FK sucursal. `solicitud.fecha_despacho`/`fecha_entrega` ya existen y se usan (resuelto 2026-09-03).

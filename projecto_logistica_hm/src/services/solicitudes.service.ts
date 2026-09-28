@@ -292,7 +292,7 @@ export class SolicitudesService {
    *
    * - `ejecutivo`   -> solo las suyas
    * - `jefe_local`  -> sucursal origen o destino de todas sus sucursales
-   *                   (sucursal principal + tabla N:M `usuario_sucursal`)
+   *                   (sucursal principal + las que encabeza como encargado)
    * - `logistica`   -> las sucursal origen cuya `zona_id` está en sus zonas
    * - `administrador` -> todas
    *
@@ -342,8 +342,8 @@ export class SolicitudesService {
 
   /**
    * Jefe Local: sucursal origen o sucursal destino de cualquiera de sus
-   * sucursales asignadas (principal + N:M). Una sucursal sin asignar deja al
-   * usuario sin alcance.
+   * sucursales asignadas (principal + las que encabeza como encargado). Una
+   * sucursal sin asignar deja al usuario sin alcance.
    */
   private static async getSolicitudesPorJefeLocal(userId: string): Promise<SolicitudLista[]> {
     const sucursales = await OrganizacionService.getUserAssignedBranches(userId);

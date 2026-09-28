@@ -18,13 +18,13 @@ async function getProfileOrThrow(): Promise<UserProfile> {
 }
 
 /**
- * DEV 2 — Validación multi-sucursal del Jefe Local.
+ * Dev 2 — Validación multi-sucursal del Jefe Local.
  *
  * Reemplaza la comparación `solicitud.sucursal === profile.sucursal_id`, que
  * solo miraba la sucursal PRINCIPAL e impedía gestionar las sucursales
- * adicionales del N:M (`usuario_sucursal`, DEV 1). Ahora se consulta
- * `OrganizacionService.usuarioTieneSucursal()` (RPC `usuario_tiene_sucursal`,
- * SECURITY DEFINER) que valida principal + N:M.
+ * adicionales. Ahora se consulta `OrganizacionService.usuarioTieneSucursal()`
+ * (RPC `usuario_tiene_sucursal`, SECURITY DEFINER) que valida la sucursal
+ * principal + las que el usuario encabeza como encargado (`sucursal.usuario_id`).
  *
  * Devuelve un mensaje de error, o `null` si tiene permiso.
  */
@@ -410,7 +410,8 @@ export async function eliminarSolicitudAction(id: string) {
 
     const esEncargado =
       profile.rol === 'administrador' ||
-      (profile.rol === 'jefe_local' && solicitud.sucursal === profile.sucursal_id) ||
+      (profile.rol === 'jefe_local' &&
+        (await validarSucursalJefeLocal(profile, solicitud.sucursal)) === null) ||
       (profile.rol === 'ejecutivo' && solicitud.ejecutivo_id === profile.id);
 
     if (!esEncargado) {

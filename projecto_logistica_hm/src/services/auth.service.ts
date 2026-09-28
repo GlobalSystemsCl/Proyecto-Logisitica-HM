@@ -114,8 +114,8 @@ export class AuthService {
 
       const [sucursalesRes, zonasRes] = await Promise.all([
         supabase
-          .from('usuario_sucursal')
-          .select('sucursal_id, sucursal:sucursal_id(id, nombre)')
+          .from('sucursal')
+          .select('id, nombre')
           .eq('usuario_id', user.id),
         supabase
           .from('usuario_zona')
@@ -123,18 +123,10 @@ export class AuthService {
           .eq('usuario_id', user.id),
       ]);
 
-      const sucursales = (sucursalesRes.data || []).map(
-        (row: {
-          sucursal_id: number;
-          sucursal: Array<{ id: number; nombre: string | null }> | { id: number; nombre: string | null } | null;
-        }) => {
-          const s = Array.isArray(row.sucursal) ? row.sucursal[0] : row.sucursal;
-          return {
-            id: row.sucursal_id,
-            nombre: s?.nombre ?? null,
-          };
-        }
-      );
+      const sucursales = (sucursalesRes.data || []).map((row: { id: number; nombre: string | null }) => ({
+        id: row.id,
+        nombre: row.nombre,
+      }));
       const zonas = (zonasRes.data || []).map(
         (row: {
           zona_id: number;

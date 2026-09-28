@@ -139,7 +139,7 @@ interface SolicitudesClientProps {
   sucursales: Sucursal[];
   vehiculos: VehiculoInventario[];
   viewer: ViewerInfo;
-  /** Sucursal principal + N:M del Jefe Local (DEV 1: `usuario_sucursal`). */
+  /** Sucursal principal + las que encabeza como encargado (`sucursal.usuario_id`). */
   sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
 }
 

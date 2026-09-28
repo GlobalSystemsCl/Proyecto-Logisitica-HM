@@ -476,7 +476,7 @@ describe('AuthService', () => {
     it('should_return_profile_with_branch_name', async () => {
       server.auth.getUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       server.results.usuario = [fila({ ...perfil(), sucursal: { nombre: 'Centro' } })];
-      server.results.usuario_sucursal = [{ data: [], error: null }];
+      server.results.sucursal = [{ data: [], error: null }];
       server.results.usuario_zona = [{ data: [], error: null }];
       const res = await AuthService.getCurrentUserProfile();
       expect(res?.sucursal_nombre).toBe('Centro');
@@ -487,8 +487,8 @@ describe('AuthService', () => {
     it('should_map_assigned_branches_and_zones', async () => {
       server.auth.getUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       server.results.usuario = [fila(perfil())];
-      server.results.usuario_sucursal = [
-        { data: [{ sucursal_id: 1, sucursal: { id: 1, nombre: 'Centro' } }], error: null },
+      server.results.sucursal = [
+        { data: [{ id: 1, nombre: 'Centro' }], error: null },
       ];
       server.results.usuario_zona = [
         { data: [{ zona_id: 2, zona: [{ id: 2, nombre: 'Zona Norte' }] }], error: null },

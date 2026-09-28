@@ -17,16 +17,20 @@ export class UsersService {
   }
 
   /**
-   * Obtiene la lista completa de usuarios (incluye sucursales N:M y zonas asignadas)
+   * Obtiene la lista completa de usuarios (incluye sucursales a cargo y zonas asignadas)
    */
   static async getUsers(): Promise<UserProfile[]> {
     try {
       const admin = createAdminClient();
       const [usuariosRes, sucursalesRes, zonasRes] = await Promise.all([
-        admin.from('usuario').select('*').order('created_at', { ascending: false }),
         admin
-          .from('usuario_sucursal')
-          .select('usuario_id, sucursal_id, sucursal:sucursal_id(id, nombre)'),
+          .from('usuario')
+          .select('*, sucursal:sucursal_id(id, nombre)')
+          .order('created_at', { ascending: false }),
+        admin
+          .from('sucursal')
+          .select('id, nombre, usuario_id')
+          .not('usuario_id', 'is', null),
         admin
           .from('usuario_zona')
           .select('usuario_id, zona_id, zona:zona_id(id, nombre)'),
@@ -40,13 +44,12 @@ export class UsersService {
       const sucursalesPorUsuario = new Map<string, Array<{ id: number; nombre: string | null }>>();
       (sucursalesRes.data || []).forEach((row: {
         usuario_id: string;
-        sucursal_id: number;
-        sucursal: Array<{ id: number; nombre: string | null }> | { id: number; nombre: string | null } | null;
+        id: number;
+        nombre: string | null;
       }) => {
-        if (!row.sucursal_id) return;
-        const s = Array.isArray(row.sucursal) ? row.sucursal[0] : row.sucursal;
+        if (!row.usuario_id || !row.id) return;
         const lista = sucursalesPorUsuario.get(row.usuario_id) || [];
-        lista.push({ id: row.sucursal_id, nombre: s?.nombre ?? null });
+        lista.push({ id: row.id, nombre: row.nombre });
         sucursalesPorUsuario.set(row.usuario_id, lista);
       });
 
@@ -63,11 +66,35 @@ export class UsersService {
         zonasPorUsuario.set(row.usuario_id, lista);
       });
 
-      return (usuariosRes.data || []).map((u: UserProfile) => ({
-        ...u,
-        sucursales: sucursalesPorUsuario.get(u.id) || [],
-        zonas: zonasPorUsuario.get(u.id) || [],
-      }));
+      return (usuariosRes.data || []).map((u) => {
+        const row = u as UserProfile & {
+          sucursal_id: number | null;
+          sucursal_nombre: string | null;
+          sucursal?: { id: number; nombre: string | null } | Array<{ id: number; nombre: string | null }> | null;
+        };
+
+        const principalId = row.sucursal_id ?? null;
+        const principalRaw =
+          row.sucursal !== undefined && row.sucursal !== null
+            ? Array.isArray(row.sucursal)
+              ? row.sucursal[0]
+              : row.sucursal
+            : null;
+
+        const mapa = new Map<number, { id: number; nombre: string | null }>(
+          (sucursalesPorUsuario.get(row.id) || []).map((s) => [s.id, s])
+        );
+        if (principalId !== null) {
+          mapa.set(principalId, { id: principalId, nombre: principalRaw?.nombre ?? null });
+        }
+
+        delete row.sucursal;
+        return {
+          ...row,
+          sucursales: Array.from(mapa.values()),
+          zonas: zonasPorUsuario.get(row.id) || [],
+        };
+      });
     } catch (err) {
       console.error('Error en getUsers:', err);
       return [];
@@ -158,20 +185,12 @@ export class UsersService {
         };
       }
 
-      // 4. Asignacion de sucursales y zonas (multisede / logistica por zonas)
-      await this.setSucursalesAsignadas(admin, authUserId, {
-        principal: input.sucursal_id || null,
-        multiplas: input.sucursales_ids || [],
-      });
+      // 4. Asignar sucursales a cargo (encargado) y zonas de logística
+      await this.setSucursalesEncargadas(admin, authUserId, input.rol, [
+        ...(input.sucursal_id ? [input.sucursal_id] : []),
+        ...(input.sucursales_ids || []),
+      ]);
       await this.setZonasAsignadas(admin, authUserId, input.zonas_ids || []);
-
-      // 4.1 Si es jefe_local con sucursal principal, vincularlo como encargado de esa sucursal
-      if (input.rol === 'jefe_local' && input.sucursal_id) {
-        await admin
-          .from('sucursal')
-          .update({ usuario_id: authUserId })
-          .eq('id', input.sucursal_id);
-      }
 
       // 5. Enviar correo con credenciales a través de Brevo
       const emailResult = await EmailService.sendUserCredentialsEmail({
@@ -385,14 +404,28 @@ export class UsersService {
         },
       });
 
-      // Asignaciones N:M (sucursales multiplas y zonas de logistica)
-      if (input.sucursales_ids !== undefined || input.sucursal_id !== undefined) {
+      // Sucursales a cargo (encargado de local) y zonas de logística
+      if (
+        input.sucursales_ids !== undefined ||
+        input.sucursal_id !== undefined ||
+        input.rol !== undefined
+      ) {
         const principal =
           input.sucursal_id !== undefined ? input.sucursal_id : (data as UserProfile).sucursal_id ?? null;
-        await this.setSucursalesAsignadas(admin, userId, {
-          principal,
-          multiplas: input.sucursales_ids || [],
-        });
+
+        let aCargo = input.sucursales_ids;
+        if (aCargo === undefined) {
+          const { data: encargadas } = await admin
+            .from('sucursal')
+            .select('id')
+            .eq('usuario_id', userId);
+          aCargo = (encargadas || []).map((s: { id: number }) => s.id);
+        }
+
+        const idsFinal = new Set<number>((aCargo || []).filter(Boolean));
+        if (principal) idsFinal.add(principal);
+        const rolFinal = input.rol ?? (data as UserProfile).rol ?? 'ejecutivo';
+        await this.setSucursalesEncargadas(admin, userId, rolFinal, Array.from(idsFinal));
       }
       if (input.zonas_ids !== undefined) {
         await this.setZonasAsignadas(admin, userId, input.zonas_ids);
@@ -457,29 +490,29 @@ export class UsersService {
   }
 
   /**
-   * Reemplaza el conjunto de sucursales asignadas (N:M) de un usuario.
-   * La sucursal principal (usuario.sucursal_id) siempre queda incluida.
+   * Reemplaza las sucursales de las que un usuario es encargado
+   * (`sucursal.usuario_id`). Solo los roles `jefe_local` y `administrador`
+   * pueden quedar a cargo de sucursales; a cualquier otro rol se le
+   * desmarcan todas. La lista recibe las sucursales a cargo finales.
    */
-  private static async setSucursalesAsignadas(
+  private static async setSucursalesEncargadas(
     admin: SupabaseClient,
     userId: string,
-    opts: { principal: number | null; multiplas: number[] }
+    rol: string,
+    sucursales: number[]
   ): Promise<void> {
     try {
-      const ids = new Set<number>();
-      if (opts.principal) ids.add(opts.principal);
-      (opts.multiplas || []).forEach((id) => {
-        if (id) ids.add(id);
-      });
+      await admin.from('sucursal').update({ usuario_id: null }).eq('usuario_id', userId);
 
-      await admin.from('usuario_sucursal').delete().eq('usuario_id', userId);
+      const puedeSerEncargado = rol === 'jefe_local' || rol === 'administrador';
+      if (!puedeSerEncargado) return;
 
-      if (ids.size > 0) {
-        const filas = Array.from(ids).map((sucursal_id) => ({ usuario_id: userId, sucursal_id }));
-        await admin.from('usuario_sucursal').insert(filas);
-      }
+      const ids = Array.from(new Set(sucursales.filter((id): id is number => Boolean(id))));
+      if (ids.length === 0) return;
+
+      await admin.from('sucursal').update({ usuario_id: userId }).in('id', ids);
     } catch (err) {
-      console.error('Error en setSucursalesAsignadas:', err);
+      console.error('Error en setSucursalesEncargadas:', err);
     }
   }
 

@@ -836,12 +836,14 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 </select>
               </div>
 
-              <MultiCheckSelector
-                title="Otras sucursales asignadas (multisede)"
-                options={sucursales.filter((s) => s.id !== sucursalId).map((s) => ({ id: s.id, label: s.nombre ?? '' }))}
-                selected={sucursalesIds}
-                onToggle={(id) => setSucursalesIds((prev) => toggleId(prev, id))}
-              />
+              {(rol === 'jefe_local' || rol === 'administrador') && (
+                <MultiCheckSelector
+                  title="Sucursales a su cargo (encargado de local)"
+                  options={sucursales.filter((s) => s.id !== sucursalId).map((s) => ({ id: s.id, label: s.nombre ?? '' }))}
+                  selected={sucursalesIds}
+                  onToggle={(id) => setSucursalesIds((prev) => toggleId(prev, id))}
+                />
+              )}
 
               <MultiCheckSelector
                 title="Zonas de logística territorial"
@@ -983,12 +985,14 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 </select>
               </div>
 
-              <MultiCheckSelector
-                title="Otras sucursales asignadas (multisede)"
-                options={sucursales.filter((s) => s.id !== editSucursalId).map((s) => ({ id: s.id, label: s.nombre ?? '' }))}
-                selected={editSucursalesIds}
-                onToggle={(id) => setEditSucursalesIds((prev) => toggleId(prev, id))}
-              />
+              {(editRol === 'jefe_local' || editRol === 'administrador') && (
+                <MultiCheckSelector
+                  title="Sucursales a su cargo (encargado de local)"
+                  options={sucursales.filter((s) => s.id !== editSucursalId).map((s) => ({ id: s.id, label: s.nombre ?? '' }))}
+                  selected={editSucursalesIds}
+                  onToggle={(id) => setEditSucursalesIds((prev) => toggleId(prev, id))}
+                />
+              )}
 
               <MultiCheckSelector
                 title="Zonas de logística territorial"
