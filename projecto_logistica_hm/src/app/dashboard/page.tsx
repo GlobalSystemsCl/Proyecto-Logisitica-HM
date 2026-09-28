@@ -14,7 +14,6 @@ import {
   ChevronRight,
   LayoutGrid,
   CheckCircle2,
-  ListOrdered,
   type LucideIcon,
 } from 'lucide-react';
 import { ROL_LABEL } from '@/types/auth.types';
@@ -203,16 +202,6 @@ export default async function DashboardPage() {
                 title="Aprobaciones"
                 description="Revisión y aprobación de solicitudes de traslado pendientes."
                 cta="Revisar aprobaciones"
-              />
-            )}
-
-            {isEjecutivo && (
-              <ModuleCard
-                href="/solicitudes/prioridades"
-                icon={ListOrdered}
-                title="Prioridades"
-                description="Gestión y priorización de cola de solicitudes para traslados."
-                cta="Gestionar prioridades"
               />
             )}
 

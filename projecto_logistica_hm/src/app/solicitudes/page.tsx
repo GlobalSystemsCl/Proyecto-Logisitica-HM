@@ -55,10 +55,10 @@ export default async function SolicitudesPage() {
         tabs={[
           { href: '/solicitudes', label: 'General', active: true },
           ...(esGestor || esEjecutivo
-            ? [
-                { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false },
-                { href: '/solicitudes/prioridades', label: 'Prioridades', active: false },
-              ]
+            ? [{ href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false }]
+            : []),
+          ...(esGestor
+            ? [{ href: '/solicitudes/prioridades', label: 'Prioridades', active: false }]
             : []),
         ]}
       />
