@@ -21,6 +21,8 @@ import {
   Unlock,
   Truck,
   Upload,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 interface Props {
@@ -45,6 +47,24 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     message: string;
   } | null>(null);
   const [isSubmitting, startTransition] = useTransition();
+
+  const PAGE_SIZE = 20;
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
+
+  const handleMarcaChange = (value: string) => {
+    setSelectedMarca(value);
+    setCurrentPage(1);
+  };
+
+  const handleDisponibilidadChange = (value: string) => {
+    setSelectedDisponibilidad(value);
+    setCurrentPage(1);
+  };
 
   // Form states
   const [chasis, setChasis] = useState('');
@@ -186,6 +206,11 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   const reservados = vehiculos.filter((v) => v.estado_disponibilidad === 'reservado').length;
   const vendidos = vehiculos.filter((v) => v.estado_disponibilidad === 'vendido').length;
   const disponibles = totalVehiculos - reservados - vendidos;
+
+  const totalPages = Math.max(1, Math.ceil(filteredVehiculos.length / PAGE_SIZE));
+  const currentPageClamped = Math.min(currentPage, totalPages);
+  const pageStart = (currentPageClamped - 1) * PAGE_SIZE;
+  const pageVehiculos = filteredVehiculos.slice(pageStart, pageStart + PAGE_SIZE);
 
   const resetForm = () => {
     setChasis('');
@@ -522,7 +547,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             type="text"
             placeholder="Buscar por chasis, patente, marca..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
           />
         </div>
@@ -534,7 +559,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             </label>
             <select
               value={selectedMarca}
-              onChange={(e) => setSelectedMarca(e.target.value)}
+              onChange={(e) => handleMarcaChange(e.target.value)}
               className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
             >
               <option value="todas">Todas</option>
@@ -550,7 +575,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             </label>
             <select
               value={selectedDisponibilidad}
-              onChange={(e) => setSelectedDisponibilidad(e.target.value)}
+              onChange={(e) => handleDisponibilidadChange(e.target.value)}
               className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
             >
               <option value="todas">Todos</option>
@@ -587,7 +612,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                   </td>
                 </tr>
               ) : (
-                filteredVehiculos.map((vehiculo) => {
+                pageVehiculos.map((vehiculo) => {
                   const isReserved = vehiculo.estado_disponibilidad === 'reservado';
                   const isSold = vehiculo.estado_disponibilidad === 'vendido';
 
@@ -718,6 +743,36 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
           </table>
         </div>
       </div>
+
+      {/* Pagination */}
+      {filteredVehiculos.length > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white border border-neutral-200 rounded-2xl px-4 py-3">
+          <p className="text-xs text-neutral-500">
+            Mostrando {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filteredVehiculos.length)} de {filteredVehiculos.length} vehículos
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setCurrentPage(currentPageClamped - 1)}
+              disabled={currentPageClamped <= 1}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+              Anterior
+            </button>
+            <span className="text-xs font-semibold text-neutral-700 px-2">
+              Página {currentPageClamped} de {totalPages}
+            </span>
+            <button
+              onClick={() => setCurrentPage(currentPageClamped + 1)}
+              disabled={currentPageClamped >= totalPages}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-white border border-neutral-300 text-neutral-700 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              Siguiente
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modal: Crear Vehículo */}
       {isCreateModalOpen && (

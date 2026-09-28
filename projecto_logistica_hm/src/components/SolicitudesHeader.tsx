@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import TopNavbar from './TopNavbar';
+import TopNavbar, { SlotResumen } from './TopNavbar';
 import { UserRole } from '@/types/auth.types';
 
 interface SolicitudesHeaderProps {
@@ -9,6 +9,7 @@ interface SolicitudesHeaderProps {
   rol: UserRole;
   sucursalNombre?: string | null;
   tabs: Array<{ href: string; label: string; active: boolean }>;
+  slots?: SlotResumen[] | null;
 }
 
 export default function SolicitudesHeader({
@@ -17,6 +18,7 @@ export default function SolicitudesHeader({
   rol,
   sucursalNombre,
   tabs,
+  slots,
 }: SolicitudesHeaderProps) {
   return (
     <div className="sticky top-0 z-30">
@@ -26,6 +28,7 @@ export default function SolicitudesHeader({
         rol={rol}
         sucursalNombre={sucursalNombre}
         backHref="/dashboard"
+        slots={slots}
       />
       <div className="border-b border-neutral-200 bg-white">
         <div className="w-full px-4 sm:px-8 lg:px-12 pb-3">

@@ -22,14 +22,36 @@ export interface SolicitudLista {
   logistica_id: string | null;
   logistica_nombre: string | null;
   fecha_creacion: string | null;
+  /** Fecha estimada de despacho (UI: "Fecha estimada"). La fija Logística al calendarizar. */
   fecha_tentativa_despacho: string | null;
+  /** Fecha real de despacho (la fija Logística al pasar a `despachada`). */
   fecha_despacho: string | null;
   fecha_entrega: string | null;
+  /** Fecha/hora límite acordada. La propone el Ejecutivo y la confirma el JL al aprobar. */
   fecha_limite: string | null;
+  /** Trazabilidad DEV 2: momento de la aprobación del Jefe Local. */
+  fecha_confirmacion: string | null;
+  /** Trazabilidad DEV 2: momento del despacho (inicio del tránsito). */
+  fecha_inicio_transito: string | null;
+  /** Trazabilidad DEV 2: momento de la recepción en la sucursal destino. */
+  fecha_recepcion: string | null;
+  /** Trazabilidad DEV 2: momento de la entrega al cliente final. */
+  fecha_entrega_cliente: string | null;
   motivo_cancelacion: string | null;
   direccion_evento: string | null;
   titulo_evento: string | null;
+  /** `sucursal.zona_id` — usado para filtrar el alcance de Logística. */
+  sucursal_zona_id: number | null;
   vehiculos: VehiculoAsociado[];
+}
+
+export interface InsistenciaEntry {
+  id: string;
+  solicitud_id: string;
+  usuario_id: string;
+  usuario_nombre?: string | null;
+  mensaje: string | null;
+  created_at: string;
 }
 
 export interface CreateSolicitudInput {

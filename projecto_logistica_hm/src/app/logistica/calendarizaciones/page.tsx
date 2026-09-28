@@ -1,5 +1,7 @@
 import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
+import { OrganizacionService } from '@/services/organizacion.service';
+import { SucursalesService } from '@/services/sucursales.service';
 import { redirect } from 'next/navigation';
 import CalendarizacionesClient from './CalendarizacionesClient';
 import TopNavbar from '@/components/TopNavbar';
@@ -21,7 +23,11 @@ export default async function LogisticaCalendarizacionesPage() {
     redirect('/dashboard');
   }
 
-  const solicitudes = await SolicitudesService.getSolicitudes();
+  const sucursalesAsignadas = await OrganizacionService.getUserAssignedBranches(profile.id);
+  const [solicitudes, slotsSucursales] = await Promise.all([
+    SolicitudesService.getSolicitudesFiltradas(profile.id, profile.rol),
+    SucursalesService.getSlotsPorSucursales(sucursalesAsignadas.map((s) => s.id)),
+  ]);
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
@@ -32,6 +38,11 @@ export default async function LogisticaCalendarizacionesPage() {
         rol={profile.rol}
         sucursalNombre={profile.sucursal_nombre}
         backHref="/dashboard"
+        slots={
+          profile.rol === 'jefe_local' || profile.rol === 'administrador'
+            ? slotsSucursales.map((s) => ({ nombre: s.nombre, slots: s.slots, slots_ocupados: s.slots_ocupados }))
+            : null
+        }
       />
 
       {/* Main Content */}
@@ -45,6 +56,7 @@ export default async function LogisticaCalendarizacionesPage() {
             rol: profile.rol,
             sucursal_id: profile.sucursal_id ?? null,
           }}
+          sucursales_asignadas={sucursalesAsignadas}
         />
       </main>
     </div>

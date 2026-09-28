@@ -37,7 +37,7 @@ export default async function AprobacionesPage() {
         tabs={[
           { href: '/solicitudes', label: 'General', active: false },
           { href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: true },
-          ...(profile.rol === 'jefe_local' || profile.rol === 'administrador' || profile.rol === 'ejecutivo'
+          ...(profile.rol === 'jefe_local' || profile.rol === 'administrador'
             ? [{ href: '/solicitudes/prioridades', label: 'Prioridades', active: false }]
             : []),
         ]}

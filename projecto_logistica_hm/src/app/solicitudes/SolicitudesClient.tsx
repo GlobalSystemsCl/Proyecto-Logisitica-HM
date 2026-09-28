@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FileText,
   Plus,
@@ -14,6 +14,10 @@ import {
   Clock,
   PackageCheck,
   Flag,
+  BellRing,
+  Truck,
+  UserCheck,
+  Paperclip,
 } from 'lucide-react';
 import {
   createSolicitudAction,
@@ -21,6 +25,11 @@ import {
   getEjecutivosPorSucursalAction,
   recibirSolicitudAction,
   finalizarSolicitudAction,
+  insistirSolicitudAction,
+  getCooldownInsistenciaAction,
+  asignarEncargadoAction,
+  iniciarTransitoSolicitudAction,
+  subirDocumentosSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import {
   EstadoSolicitud,
@@ -33,18 +42,29 @@ import { formatFecha, hoyISO } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 
+/**
+ * Nomenclatura de negocio para los estados.
+ * Los valores son los del enum `estado_solicitud` (inmutables en BD).
+ */
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
-  pendiente_aprobacion: { label: 'Pendiente Aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pendiente_aprobacion: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   aprobada: { label: 'Aprobada', color: 'bg-green-50 text-green-700 border-green-200' },
   pendiente: { label: 'Pendiente', color: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   priorizada: { label: 'Priorizada', color: 'bg-neutral-200 text-neutral-900 border-neutral-200' },
   asignada: { label: 'Asignada', color: 'bg-white text-neutral-900 border-neutral-400' },
   calendarizada: { label: 'Calendarizada', color: 'bg-white text-neutral-900 border-neutral-900 border-2' },
-  en_transito: { label: 'En Tránsito', color: 'bg-neutral-700 text-white border-neutral-700' },
-  entregada: { label: 'Entregada', color: 'bg-neutral-900 text-white border-neutral-900' },
-  finalizada: { label: 'Finalizada', color: 'bg-black text-white border-black ring-2 ring-neutral-300' },
+  despachada: { label: 'Despachada', color: 'bg-sky-50 text-sky-800 border-sky-300' },
+  en_transito: { label: 'En tránsito', color: 'bg-neutral-700 text-white border-neutral-700' },
+  entregada: { label: 'Recepcionada', color: 'bg-neutral-900 text-white border-neutral-900' },
+  finalizada: { label: 'Entregado a cliente', color: 'bg-black text-white border-black ring-2 ring-neutral-300' },
   cancelada: { label: 'Cancelada', color: 'bg-red-50 text-red-700 border-red-200' },
   rechazada: { label: 'Rechazada', color: 'bg-red-50 text-red-700 border-red-200' },
+};
+
+/** Labels de UI del tipo de solicitud (el enum `tipo_solicitud` no cambia). */
+const tipoLabel: Record<TipoSolicitud, string> = {
+  evento: 'Evento',
+  venta: 'Sala de venta',
 };
 
 const PRE_DESPACHO: EstadoSolicitud[] = [
@@ -53,6 +73,53 @@ const PRE_DESPACHO: EstadoSolicitud[] = [
   'pendiente',
   'priorizada',
 ];
+
+/** Estados en los que el Ejecutivo puede insistir (pre-despacho operativo). */
+const ESTADOS_INSISTIBLES: EstadoSolicitud[] = [
+  'pendiente_aprobacion',
+  'aprobada',
+  'priorizada',
+  'asignada',
+  'calendarizada',
+];
+
+const ESTADOS_TERMINADOS: EstadoSolicitud[] = [
+  'entregada',
+  'finalizada',
+  'cancelada',
+  'rechazada',
+];
+
+/**
+ * Semáforo de atraso según `fecha_limite`:
+ *   completada -> flujo terminado, sin marca
+ *   normal     -> más de 2 días de margen
+ *   proxima    -> vence en ≤ 2 días (borde ámbar)
+ *   atrasada   -> ya venció (borde rojo)
+ */
+export function getEstadoAtraso(sol: SolicitudLista): 'normal' | 'proxima' | 'atrasada' | 'completada' {
+  if (ESTADOS_TERMINADOS.includes(sol.estado)) return 'completada';
+  if (!sol.fecha_limite) return 'normal';
+  const diff = (new Date(sol.fecha_limite).getTime() - Date.now()) / 86_400_000;
+  if (diff < 0) return 'atrasada';
+  if (diff <= 2) return 'proxima';
+  return 'normal';
+}
+
+const BORDE_ATRASO: Record<'normal' | 'proxima' | 'atrasada' | 'completada', string> = {
+  normal: '',
+  proxima: 'border-l-4 border-amber-400',
+  atrasada: 'border-l-4 border-red-500',
+  completada: '',
+};
+
+const CHIP_ATRASO: Record<'normal' | 'proxima' | 'atrasada' | 'completada', { texto: string; clase: string } | null> = {
+  normal: null,
+  proxima: { texto: 'Vence pronto', clase: 'bg-amber-50 text-amber-700 border-amber-200' },
+  atrasada: { texto: 'Atrasada', clase: 'bg-red-50 text-red-700 border-red-200' },
+  completada: null,
+};
+
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -72,6 +139,8 @@ interface SolicitudesClientProps {
   sucursales: Sucursal[];
   vehiculos: VehiculoInventario[];
   viewer: ViewerInfo;
+  /** Sucursal principal + N:M del Jefe Local (DEV 1: `usuario_sucursal`). */
+  sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
 }
 
 function getEncargadoId(sol: SolicitudLista): string | null {
@@ -89,6 +158,7 @@ export default function SolicitudesClient({
   sucursales,
   vehiculos,
   viewer,
+  sucursales_asignadas = [],
 }: SolicitudesClientProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
@@ -108,6 +178,9 @@ export default function SolicitudesClient({
     }
   }
   const [sucursalDestinoSel, setSucursalDestinoSel] = useState('');
+  if (prevSucursalViewer !== viewer.sucursal_id && viewer.rol === 'ejecutivo' && viewer.sucursal_id) {
+    setSucursalDestinoSel(String(viewer.sucursal_id));
+  }
   const [tipoSel, setTipoSel] = useState<TipoSolicitud>('venta');
   const [fechaLimite, setFechaLimite] = useState('');
   const [selectedVehiculos, setSelectedVehiculos] = useState<Set<string>>(new Set());
@@ -127,9 +200,13 @@ export default function SolicitudesClient({
   const [vehiculoSucursal, setVehiculoSucursal] = useState<number | ''>('');
   const [vehiculoError, setVehiculoError] = useState(false);
   const [obsCreacion, setObsCreacion] = useState('');
+  const [archivosAdjuntos, setArchivosAdjuntos] = useState<File[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [motivo, setMotivo] = useState('');
+
+  /** solicitationId -> horas restantes de cooldown de insistencia. */
+  const [cooldowns, setCooldowns] = useState<Record<string, number | null>>({});
 
   const esAdmin = viewer.rol === 'administrador';
   const esEjecutivo = viewer.rol === 'ejecutivo';
@@ -188,17 +265,28 @@ export default function SolicitudesClient({
     });
   }, [vehiculos, vehiculoSearch, vehiculoMarca, vehiculoSucursal]);
 
+  /**
+   * El servidor ya entrega la lista recortada al alcance del usuario
+   * (`SolicitudesService.getSolicitudesFiltradas`). Este filtro solo cubre la
+   * vista multi-sucursal del Jefe Local usando `sucursales_asignadas`
+   * (principal + N:M) en vez de solo `viewer.sucursal_id`.
+   */
+  const sucursalesVisibles = useMemo(() => {
+    if (viewer.rol !== 'jefe_local') return null;
+    const ids = sucursales_asignadas.map((s) => s.id);
+    if (ids.length === 0 && viewer.sucursal_id !== null) return [viewer.sucursal_id];
+    return ids;
+  }, [viewer.rol, viewer.sucursal_id, sucursales_asignadas]);
+
   const visibles = useMemo(() => {
-    if (esAdmin || esLogistica) return solicitudes;
-    if (esEjecutivo) return solicitudes.filter((s) => s.ejecutivo_id === viewer.id);
+    if (esAdmin || esLogistica || esEjecutivo) return solicitudes;
     if (esJefeLocal) {
-      if (viewer.sucursal_id === null) return [];
-      return solicitudes.filter(
-        (s) => s.sucursal === viewer.sucursal_id || s.sucursal_destino === viewer.sucursal_id
-      );
+      if (!sucursalesVisibles || sucursalesVisibles.length === 0) return [];
+      const set = new Set(sucursalesVisibles);
+      return solicitudes.filter((s) => set.has(s.sucursal) || (s.sucursal_destino !== null && set.has(s.sucursal_destino)));
     }
     return [];
-  }, [solicitudes, viewer, esAdmin, esEjecutivo, esJefeLocal, esLogistica]);
+  }, [solicitudes, esAdmin, esEjecutivo, esJefeLocal, esLogistica, sucursalesVisibles]);
 
   const filtradas = useMemo(() => {
     let lista = visibles;
@@ -224,23 +312,35 @@ export default function SolicitudesClient({
   const priorizadas = visibles.filter((s) => s.estado === 'priorizada').length;
   const pendientesPorFinalizar = visibles.filter((s) => s.estado === 'entregada').length;
 
+  const puedeVerPrioridad = !esEjecutivo;
+
   function puedeGestionar(sol: SolicitudLista): boolean {
     if (esAdmin) return true;
     if (esEjecutivo) return sol.ejecutivo_id === viewer.id;
-    if (esJefeLocal) return viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id;
+    if (esJefeLocal) {
+      const set = new Set(sucursalesVisibles ?? []);
+      return set.has(sol.sucursal);
+    }
     if (esLogistica) return true;
     return false;
   }
 
   function enSucursalRecepcion(sol: SolicitudLista): boolean {
-    if (viewer.sucursal_id === null || viewer.sucursal_id === undefined) return false;
+    const set = new Set(sucursalesVisibles ?? []);
+    if (set.size === 0 && viewer.sucursal_id === null) return false;
+    if (set.size > 0) {
+      return sol.sucursal_destino !== null && sol.sucursal_destino !== undefined
+        ? set.has(sol.sucursal_destino)
+        : set.has(sol.sucursal);
+    }
     return sol.sucursal_destino !== null && sol.sucursal_destino !== undefined
       ? viewer.sucursal_id === sol.sucursal_destino
       : viewer.sucursal_id === sol.sucursal;
   }
 
+  /** JL destino (o admin) recepciona desde `despachada` o `en_transito`. */
   function puedeRecibir(sol: SolicitudLista): boolean {
-    if (sol.estado !== 'en_transito') return false;
+    if (sol.estado !== 'en_transito' && sol.estado !== 'despachada') return false;
     if (esAdmin) return true;
     if (esJefeLocal) return enSucursalRecepcion(sol);
     return false;
@@ -252,6 +352,26 @@ export default function SolicitudesClient({
     if (esJefeLocal) return enSucursalRecepcion(sol);
     if (esEjecutivo) return sol.ejecutivo_id === viewer.id;
     return false;
+  }
+
+  /** Logística/admin auto-asignan el encargado desde Aprobada o Priorizada. */
+  function puedeAsignarEncargado(sol: SolicitudLista): boolean {
+    if (!esAdmin && !esLogistica) return false;
+    return sol.estado === 'aprobada' || sol.estado === 'priorizada';
+  }
+
+  /** Logística/admin confirman el inicio de la ruta desde `despachada`. */
+  function puedeIniciarTransito(sol: SolicitudLista): boolean {
+    if (!esAdmin && !esLogistica) return false;
+    return sol.estado === 'despachada';
+  }
+
+  /** Solo el Ejecutivo, sobre sus propias solicitudes y en estado activo. */
+  function puedeInsistir(sol: SolicitudLista): boolean {
+    if (!esEjecutivo) return false;
+    if (sol.ejecutivo_id !== viewer.id) return false;
+    if (!ESTADOS_INSISTIBLES.includes(sol.estado)) return false;
+    return (cooldowns[sol.id] ?? null) === null;
   }
 
   useEffect(() => {
@@ -271,9 +391,28 @@ export default function SolicitudesClient({
     return () => { cancelled = true; };
   }, [esJefeLocal]);
 
+  /** Carga los cooldowns de insistencia del Ejecutivo (solo para el botón Insistir). */
+  useEffect(() => {
+    if (!esEjecutivo) return;
+    let cancelled = false;
+    async function load() {
+      const candidatas = solicitudes.filter(
+        (s) => s.ejecutivo_id === viewer.id && ESTADOS_INSISTIBLES.includes(s.estado)
+      );
+      if (candidatas.length === 0) return;
+      const entries = await Promise.all(
+        candidatas.map(async (s) => [s.id, (await getCooldownInsistenciaAction(s.id)).horas_restantes] as const)
+      );
+      if (cancelled) return;
+      setCooldowns(Object.fromEntries(entries));
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [esEjecutivo, solicitudes, viewer.id]);
+
   function resetCreateForm() {
     setSucursalSel((esJefeLocal || esEjecutivo) && viewer.sucursal_id ? String(viewer.sucursal_id) : '');
-    setSucursalDestinoSel('');
+    setSucursalDestinoSel(esEjecutivo && viewer.sucursal_id ? String(viewer.sucursal_id) : '');
     setTipoSel('venta');
     setFechaLimite('');
     setSelectedVehiculos(new Set());
@@ -282,6 +421,7 @@ export default function SolicitudesClient({
     setVehiculoError(false);
     setCreateError(null);
     setObsCreacion('');
+    setArchivosAdjuntos([]);
     setDireccionEvento('');
     setTituloEvento('');
     setEjecutivoSel('');
@@ -316,7 +456,21 @@ export default function SolicitudesClient({
       if (!result.success) {
         setCreateError(result.error || 'Error al crear.');
       } else {
-        setFeedback({ type: 'success', message: result.message || 'Solicitud creada.' });
+        let uploadError: string | null = null;
+        if (archivosAdjuntos.length > 0 && result.solicitudId) {
+          const fd = new FormData();
+          archivosAdjuntos.forEach((f) => fd.append('archivos', f));
+          const up = await subirDocumentosSolicitudAction(result.solicitudId, fd);
+          if (!up.success) {
+            uploadError = up.error || 'error inesperado';
+          }
+        }
+        setFeedback({
+          type: uploadError ? 'error' : 'success',
+          message: uploadError
+            ? `Solicitud creada, pero no se pudieron subir los archivos: ${uploadError}`
+            : result.message || 'Solicitud creada.',
+        });
         setIsCreateOpen(false);
         resetCreateForm();
       }
@@ -364,6 +518,50 @@ export default function SolicitudesClient({
         setFeedback({ type: 'error', message: result.error || 'Error al finalizar.' });
       } else {
         setFeedback({ type: 'success', message: result.message || 'Solicitud finalizada.' });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  const handleInsistir = useCallback(async (sol: SolicitudLista) => {
+    setIsSubmitting(true);
+    try {
+      const result = await insistirSolicitudAction(sol.id);
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'No se pudo registrar la insistencia.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Insistencia registrada.' });
+      }
+      const cd = await getCooldownInsistenciaAction(sol.id);
+      setCooldowns((prev) => ({ ...prev, [sol.id]: cd.horas_restantes }));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, []);
+
+  async function handleAsignarEncargado(sol: SolicitudLista) {
+    setIsSubmitting(true);
+    try {
+      const result = await asignarEncargadoAction(sol.id);
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'No se pudo asignar el encargado.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Encargado asignado.' });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function handleIniciarTransito(sol: SolicitudLista) {
+    setIsSubmitting(true);
+    try {
+      const result = await iniciarTransitoSolicitudAction(sol.id);
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'No se pudo iniciar el tránsito.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Solicitud en tránsito.' });
       }
     } finally {
       setIsSubmitting(false);
@@ -515,13 +713,12 @@ export default function SolicitudesClient({
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase font-semibold text-neutral-500 tracking-wider">
                 <th className="py-3.5 px-4">Solicitud</th>
-                <th className="py-3.5 px-4">Origen</th>
                 <th className="py-3.5 px-4">Destino</th>
                 <th className="py-3.5 px-4">Estado</th>
                 <th className="py-3.5 px-4">Encargado</th>
                 <th className="py-3.5 px-4">Tipo</th>
                 <th className="py-3.5 px-4">Creación</th>
-                <th className="py-3.5 px-4">Fecha límite entrega</th>
+                <th className="py-3.5 px-4">Fecha/hora límite</th>
                 <th className="py-3.5 px-4 text-right">Acciones</th>
                 <th className="py-3.5 px-4 text-right">Ver</th>
               </tr>
@@ -529,7 +726,7 @@ export default function SolicitudesClient({
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filtradas.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-neutral-400">
+                  <td colSpan={9} className="py-8 text-center text-neutral-400">
                     No hay solicitudes que coincidan con los filtros.
                   </td>
                 </tr>
@@ -539,22 +736,20 @@ export default function SolicitudesClient({
                   const destino = sol.tipo_solicitud === 'venta'
                     ? (sol.sucursal_destino_nombre || `#${sol.sucursal_destino}`)
                     : (sol.direccion_evento || '—');
+                  const atraso = getEstadoAtraso(sol);
+                  const chip = CHIP_ATRASO[atraso];
                   return (
-                    <tr key={sol.id} className="hover:bg-neutral-50 transition-colors">
+                    <tr key={sol.id} className={`hover:bg-neutral-50 transition-colors ${BORDE_ATRASO[atraso]}`}>
                       <td className="py-3.5 px-4">
                         <p className="font-mono text-xs font-bold text-neutral-900 uppercase">
                           #{sol.id.slice(0, 8)}
                         </p>
                         <span className="inline-flex mt-0.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-600 border border-neutral-300">
-                          {sol.tipo_solicitud === 'evento' ? 'Evento' : 'Venta'}
+                          {tipoLabel[sol.tipo_solicitud]}
                         </span>
                       </td>
 
-                      <td className="py-3.5 px-4 font-medium text-neutral-900">
-                        {sol.sucursal_nombre || `#${sol.sucursal}`}
-                      </td>
-
-                      <td className="py-3.5 px-4 text-xs text-neutral-600 max-w-[160px] truncate" title={destino}>
+                      <td className="py-3.5 px-4 text-xs text-neutral-600 max-w-[200px] truncate" title={destino}>
                         {destino}
                       </td>
 
@@ -563,9 +758,14 @@ export default function SolicitudesClient({
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color}`}>
                             {estado.label}
                           </span>
-                          {sol.posicion_prioridad !== null && sol.posicion_prioridad !== undefined && (
+                          {puedeVerPrioridad && sol.posicion_prioridad !== null && sol.posicion_prioridad !== undefined && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white">
                               #{sol.posicion_prioridad}
+                            </span>
+                          )}
+                          {chip && (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${chip.clase}`}>
+                              {chip.texto}
                             </span>
                           )}
                         </div>
@@ -581,7 +781,7 @@ export default function SolicitudesClient({
 
                       <td className="py-3.5 px-4">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-neutral-50 text-neutral-700 border border-neutral-300">
-                          {sol.tipo_solicitud === 'evento' ? 'Evento' : 'Venta'}
+                          {tipoLabel[sol.tipo_solicitud]}
                         </span>
                       </td>
 
@@ -590,11 +790,46 @@ export default function SolicitudesClient({
 
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          {esEjecutivo && sol.ejecutivo_id === viewer.id && ESTADOS_INSISTIBLES.includes(sol.estado) && (
+                            <button
+                              onClick={() => handleInsistir(sol)}
+                              disabled={isSubmitting || !puedeInsistir(sol)}
+                              title={
+                                cooldowns[sol.id]
+                                  ? `Podrás insistir de nuevo en ${cooldowns[sol.id]}h`
+                                  : 'Pedir avanzar el estado de mi solicitud'
+                              }
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              <BellRing className="w-3.5 h-3.5" />
+                              {cooldowns[sol.id] ? `Insistir (${cooldowns[sol.id]}h)` : 'Insistir'}
+                            </button>
+                          )}
+                          {puedeAsignarEncargado(sol) && (
+                            <button
+                              onClick={() => handleAsignarEncargado(sol)}
+                              disabled={isSubmitting}
+                              title="Asignarme como encargado de la solicitud"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
+                            >
+                              <UserCheck className="w-3.5 h-3.5" /> Asignarme
+                            </button>
+                          )}
+                          {puedeIniciarTransito(sol) && (
+                            <button
+                              onClick={() => handleIniciarTransito(sol)}
+                              disabled={isSubmitting}
+                              title="Confirmar inicio de la ruta"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-800 border border-sky-300 hover:bg-sky-100 transition-colors cursor-pointer disabled:opacity-40"
+                            >
+                              <Truck className="w-3.5 h-3.5" /> Iniciar ruta
+                            </button>
+                          )}
                           {puedeRecibir(sol) && (
                             <button
                               onClick={() => handleRecibir(sol)}
                               disabled={isSubmitting}
-                              title="Marcar como recibida"
+                              title="Marcar como recepcionada en destino"
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
                             >
                               <PackageCheck className="w-3.5 h-3.5" /> Recibir
@@ -604,10 +839,10 @@ export default function SolicitudesClient({
                             <button
                               onClick={() => handleFinalizar(sol)}
                               disabled={isSubmitting}
-                              title="Finalizar solicitud"
+                              title="Registrar entrega al cliente"
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-b from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-sm ring-1 ring-black/10 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98]"
                             >
-                              <Flag className="w-3.5 h-3.5" /> Finalizar
+                              <Flag className="w-3.5 h-3.5" /> Entregar a cliente
                             </button>
                           )}
                         </div>
@@ -655,17 +890,10 @@ export default function SolicitudesClient({
             </div>
 
             <form onSubmit={handleCreate} className="p-6 space-y-4 overflow-y-auto">
-              {/* Sucursal Origen */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Sucursal de Origen *</label>
-                {esEjecutivo ? (
-                  <input
-                    type="text"
-                    disabled
-                    value={sucursales.find((s) => s.id === viewer.sucursal_id)?.nombre || `Sucursal #${viewer.sucursal_id}`}
-                    className="w-full px-3 py-2 bg-neutral-100 border border-neutral-300 rounded-xl text-sm text-neutral-500 cursor-not-allowed"
-                  />
-                ) : (
+              {/* Sucursal Origen (el Ejecutivo crea siempre desde su propia sucursal) */}
+              {!esEjecutivo && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Origen de solicitud *</label>
                   <select
                     required
                     value={sucursalSel}
@@ -677,11 +905,11 @@ export default function SolicitudesClient({
                       <option key={suc.id} value={String(suc.id)}>{suc.nombre}</option>
                     ))}
                   </select>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Tipo y Fecha */}
-              <div className={esEjecutivo ? 'space-y-1.5' : 'grid grid-cols-2 gap-4'}>
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Tipo *</label>
                   <select
@@ -689,45 +917,52 @@ export default function SolicitudesClient({
                     onChange={(e) => setTipoSel(e.target.value as TipoSolicitud)}
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   >
-                    <option value="venta">Venta</option>
+                    <option value="venta">Sala de venta</option>
                     <option value="evento">Evento</option>
                   </select>
                 </div>
-                {!esEjecutivo && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha de Entrega *</label>
-                    <input
-                      type="date"
-                      required
-                      min={hoyISO()}
-                      value={fechaLimite}
-                      onChange={(e) => setFechaLimite(e.target.value)}
-                      className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                    />
-                  </div>
-                )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha/hora límite *</label>
+                  <input
+                    type="date"
+                    required
+                    min={hoyISO()}
+                    value={fechaLimite}
+                    onChange={(e) => setFechaLimite(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
               </div>
 
               {/* Sucursal Destino (solo venta) */}
               {tipoSel === 'venta' && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Sucursal Destino *</label>
-                  <select
-                    required
-                    value={sucursalDestinoSel}
-                    onChange={(e) => { setSucursalDestinoSel(e.target.value); if (createError) setCreateError(null); }}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  >
-                    <option value="">Selecciona destino...</option>
-                    {sucursalesParaDestino.map((suc) => {
-                      const disp = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
-                      return (
-                        <option key={suc.id} value={String(suc.id)}>
-                          {suc.nombre} — {Math.max(disp, 0)} slots disponibles
-                        </option>
-                      );
-                    })}
-                  </select>
+                  {esEjecutivo ? (
+                    <input
+                      type="text"
+                      disabled
+                      value={sucursales.find((s) => s.id === viewer.sucursal_id)?.nombre || `Sucursal #${viewer.sucursal_id}`}
+                      className="w-full px-3 py-2 bg-neutral-100 border border-neutral-300 rounded-xl text-sm text-neutral-500 cursor-not-allowed"
+                    />
+                  ) : (
+                    <select
+                      required
+                      value={sucursalDestinoSel}
+                      onChange={(e) => { setSucursalDestinoSel(e.target.value); if (createError) setCreateError(null); }}
+                      className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                    >
+                      <option value="">Selecciona destino...</option>
+                      {sucursalesParaDestino.map((suc) => {
+                        const disp = (suc.slots ?? 0) - (suc.slots_ocupados ?? 0);
+                        return (
+                          <option key={suc.id} value={String(suc.id)}>
+                            {suc.nombre} — {Math.max(disp, 0)} slots disponibles
+                          </option>
+                        );
+                      })}
+                    </select>
+                  )}
                   {sucursalDestinoInfo && (
                     <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
                       sucursalDestinoInfo.excedido
@@ -905,6 +1140,48 @@ export default function SolicitudesClient({
                 />
               </div>
 
+              {/* Adjuntar archivos / imágenes (opcional) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Adjuntar archivos o imágenes (opcional)</label>
+                <label className="flex items-center gap-2 px-3 py-2.5 border border-dashed border-neutral-400 hover:border-neutral-900 rounded-xl cursor-pointer text-sm text-neutral-600 hover:text-neutral-900 transition-colors">
+                  <Paperclip className="w-4 h-4 shrink-0" />
+                  <span>{archivosAdjuntos.length > 0 ? `${archivosAdjuntos.length} archivo(s) seleccionado(s)` : 'Seleccionar archivos...'}</span>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.pptx,.txt,.csv,.zip"
+                    className="hidden"
+                    onChange={(e) => {
+                      const files = e.target.files ? Array.from(e.target.files) : [];
+                      setArchivosAdjuntos((prev) => [...prev, ...files]);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                {archivosAdjuntos.length > 0 && (
+                  <ul className="space-y-1.5">
+                    {archivosAdjuntos.map((f, idx) => (
+                      <li key={`${f.name}-${idx}`} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs text-neutral-700">
+                        <Paperclip className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                        <span className="truncate">{f.name}</span>
+                        <span className="text-neutral-400 shrink-0">{(f.size / 1024).toFixed(0)} KB</span>
+                        <button
+                          type="button"
+                          onClick={() => setArchivosAdjuntos((prev) => prev.filter((_, i) => i !== idx))}
+                          className="ml-auto text-neutral-400 hover:text-red-600 cursor-pointer"
+                          aria-label={`Quitar ${f.name}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-[11px] text-neutral-400">
+                  Máximo 10 MB por archivo. Formatos: PDF, PNG, JPG, WebP, Word, Excel, PowerPoint, TXT, CSV o ZIP.
+                </p>
+              </div>
+
               <div className={`p-3 border rounded-xl flex items-start gap-2.5 text-xs ${esJefeLocal ? 'bg-green-50 border-green-200 text-green-700' : 'bg-neutral-50 border-neutral-200 text-neutral-600'}`}>
                 {esJefeLocal ? (
                   <>
@@ -914,7 +1191,7 @@ export default function SolicitudesClient({
                 ) : (
                   <>
                     <Clock className="w-4 h-4 shrink-0 mt-0.5 text-neutral-900" />
-                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y definirá la fecha de entrega.</span>
+                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y podrá aceptar o modificar la fecha de entrega que indicaste.</span>
                   </>
                 )}
               </div>

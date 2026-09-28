@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo, useCallback, DragEvent } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car, PlayCircle } from 'lucide-react';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
-import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, cancelarDespachoSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
+import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, cancelarDespachoSolicitudAction, recibirSolicitudAction, iniciarTransitoSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
 
 interface Props {
@@ -15,6 +15,7 @@ interface Props {
     rol: string;
     sucursal_id: number | null;
   };
+  sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
 }
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -22,11 +23,11 @@ const DIAS_SEMANA = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
 const ESTADOS_CALENDARIZABLES = ['priorizada', 'asignada'];
 
 const tipoLabel: Record<TipoSolicitud, string> = {
-  venta: 'Venta',
+  venta: 'Sala de venta',
   evento: 'Evento',
 };
 
-export default function CalendarizacionesClient({ solicitudes, viewer }: Props) {
+export default function CalendarizacionesClient({ solicitudes, viewer, sucursales_asignadas = [] }: Props) {
   const [mesActual, setMesActual] = useState(new Date().getMonth());
   const [añoActual, setAñoActual] = useState(new Date().getFullYear());
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -43,18 +44,25 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
 
   const puedeRecibir = (s: SolicitudLista) => {
     if (esAdmin) return true;
-    if (viewer.rol !== 'jefe_local' || viewer.sucursal_id === null || viewer.sucursal_id === undefined) return false;
-    return s.sucursal_destino !== null && s.sucursal_destino !== undefined
-      ? viewer.sucursal_id === s.sucursal_destino
-      : viewer.sucursal_id === s.sucursal;
+    if (viewer.rol !== 'jefe_local') return false;
+    const asignadas = sucursales_asignadas.length > 0
+      ? sucursales_asignadas.map((suc) => suc.id)
+      : (viewer.sucursal_id !== null ? [viewer.sucursal_id] : []);
+    const destino = s.sucursal_destino !== null && s.sucursal_destino !== undefined
+      ? s.sucursal_destino
+      : s.sucursal;
+    return asignadas.includes(destino);
   };
 
   const solicitudesFiltradas = useMemo(() => {
-    if (viewer.rol === 'jefe_local' && viewer.sucursal_id) {
-      return solicitudes.filter((s) => s.sucursal === viewer.sucursal_id || s.sucursal_destino === viewer.sucursal_id);
+    if (viewer.rol === 'jefe_local') {
+      const asignadas = sucursales_asignadas.length > 0
+        ? sucursales_asignadas.map((suc) => suc.id)
+        : (viewer.sucursal_id !== null ? [viewer.sucursal_id] : []);
+      return solicitudes.filter((s) => asignadas.includes(s.sucursal) || asignadas.includes(s.sucursal_destino ?? -1));
     }
     return solicitudes;
-  }, [solicitudes, viewer]);
+  }, [solicitudes, viewer, sucursales_asignadas]);
 
   const sucursalesDisponibles = useMemo(() => {
     const mapa = new Map<number, string>();
@@ -77,7 +85,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
   );
 
   const solicitudesActivas = useMemo(
-    () => solicitudesVisibles.filter((s) => ['calendarizada', 'en_transito', 'entregada'].includes(s.estado)),
+    () => solicitudesVisibles.filter((s) => ['calendarizada', 'despachada', 'en_transito', 'entregada'].includes(s.estado)),
     [solicitudesVisibles]
   );
 
@@ -226,6 +234,17 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
     }
   }, []);
 
+  const handleIniciarTransito = useCallback(async (id: string) => {
+    setLoading(id);
+    try {
+      const result = await iniciarTransitoSolicitudAction(id);
+      if (!result.success) alert(result.error);
+    } finally {
+      setLoading(null);
+      setRefreshKey((k) => k + 1);
+    }
+  }, []);
+
   const handleRecibir = useCallback(async (id: string) => {
     setLoading(id);
     try {
@@ -267,7 +286,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Calendarizadas</p>
@@ -278,9 +297,19 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
           </div>
         </div>
 
+        <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-sky-700 uppercase tracking-wider">Despachadas</p>
+            <p className="text-3xl font-bold text-sky-900 mt-1">{solicitudesVisibles.filter((s) => s.estado === 'despachada').length}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center text-sky-800">
+            <PackageSearch className="w-5 h-5" />
+          </div>
+        </div>
+
         <div className="bg-neutral-900 border border-neutral-900 rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">En Tránsito</p>
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">En tránsito</p>
             <p className="text-3xl font-bold text-white mt-1">{solicitudesVisibles.filter((s) => s.estado === 'en_transito').length}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-white">
@@ -290,7 +319,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
 
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Entregadas</p>
+            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Recepcionadas</p>
             <p className="text-3xl font-bold text-neutral-900 mt-1">{solicitudesVisibles.filter((s) => s.estado === 'entregada').length}</p>
           </div>
           <div className="w-11 h-11 rounded-xl border border-neutral-300 flex items-center justify-center text-neutral-900">
@@ -473,9 +502,12 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                       <span className="text-sm font-semibold text-neutral-900">{s.sucursal_nombre} → {s.sucursal_destino_nombre}</span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         s.estado === 'calendarizada' ? 'bg-blue-100 text-blue-800' :
+                        s.estado === 'despachada' ? 'bg-sky-100 text-sky-800' :
                         s.estado === 'en_transito' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
                       }`}>
-                        {s.estado === 'calendarizada' ? 'Calendarizada' : s.estado === 'en_transito' ? 'En Tránsito' : 'Entregada'}
+                        {s.estado === 'calendarizada' ? 'Calendarizada' :
+                         s.estado === 'despachada' ? 'Despachada' :
+                         s.estado === 'en_transito' ? 'En tránsito' : 'Recepcionada'}
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs text-neutral-500">
@@ -501,22 +533,40 @@ export default function CalendarizacionesClient({ solicitudes, viewer }: Props) 
                     )}
                   </div>
                   <div className="ml-4 flex flex-col gap-2">
-                    {puedeDespachar && (s.estado === 'calendarizada' || s.estado === 'en_transito') && (
+                    {puedeDespachar && s.estado === 'calendarizada' && (
                       <button
-                        onClick={() => s.estado === 'en_transito' ? handleCancelarDespacho(s.id) : handleDespachar(s.id)}
+                        onClick={() => handleDespachar(s.id)}
                         disabled={loading === s.id}
-                        title={s.estado === 'en_transito' ? 'Cancelar el despacho y volver a Calendarizada' : 'Marcar la solicitud como En Tránsito'}
-                        className={`flex items-center gap-1 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50 cursor-pointer ${
-                          s.estado === 'en_transito'
-                            ? 'text-neutral-700 bg-neutral-100 border border-neutral-300 hover:bg-neutral-200'
-                            : 'text-white bg-orange-500 hover:bg-orange-600'
-                        }`}
+                        title="Despachar la solicitud"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
-                        {s.estado === 'en_transito' ? <RotateCcw className="w-3 h-3" /> : <PackageSearch className="w-3 h-3" />}
-                        {s.estado === 'en_transito' ? 'Cancelar Despacho' : 'Despachar'}
+                        <PackageSearch className="w-3 h-3" />
+                        Despachar
                       </button>
                     )}
-                    {puedeRecibir(s) && s.estado === 'en_transito' && (
+                    {puedeDespachar && s.estado === 'despachada' && (
+                      <button
+                        onClick={() => handleIniciarTransito(s.id)}
+                        disabled={loading === s.id}
+                        title="Confirmar el inicio de ruta"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        <PlayCircle className="w-3 h-3" />
+                        Iniciar ruta
+                      </button>
+                    )}
+                    {puedeDespachar && (s.estado === 'en_transito' || s.estado === 'despachada') && (
+                      <button
+                        onClick={() => handleCancelarDespacho(s.id)}
+                        disabled={loading === s.id}
+                        title="Cancelar el despacho y volver a Calendarizada"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-neutral-700 bg-neutral-100 border border-neutral-300 hover:bg-neutral-200 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Cancelar Despacho
+                      </button>
+                    )}
+                    {puedeRecibir(s) && (s.estado === 'en_transito' || s.estado === 'despachada') && (
                       <button
                         onClick={() => handleRecibir(s.id)}
                         disabled={loading === s.id}

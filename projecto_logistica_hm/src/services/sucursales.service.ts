@@ -60,6 +60,36 @@ export class SucursalesService {
     }
   }
 
+  /** Slots de las sucursales indicadas (para badge del navbar / vista de slots). */
+  static async getSlotsPorSucursales(ids: number[]): Promise<
+    Array<{ id: number; nombre: string | null; slots: number | null; slots_ocupados: number | null; slots_reservados: number | null }>
+  > {
+    if (!ids || ids.length === 0) return [];
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('sucursal')
+        .select('id, nombre, slots, slots_ocupados, slots_reservados')
+        .in('id', ids)
+        .order('nombre', { ascending: true });
+
+      if (error) {
+        console.error('Error al obtener slots por sucursales:', error);
+        return [];
+      }
+      return (data || []) as unknown as Array<{
+        id: number;
+        nombre: string | null;
+        slots: number | null;
+        slots_ocupados: number | null;
+        slots_reservados: number | null;
+      }>;
+    } catch (err) {
+      console.error('Error en getSlotsPorSucursales:', err);
+      return [];
+    }
+  }
+
   static async getSolicitudesPorSucursal(): Promise<SucursalSolicitudItem[]> {
     try {
       const admin = createAdminClient();

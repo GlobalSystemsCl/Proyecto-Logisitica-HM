@@ -14,11 +14,12 @@ import {
   ChevronRight,
   LayoutGrid,
   CheckCircle2,
-  ListOrdered,
   type LucideIcon,
 } from 'lucide-react';
 import { ROL_LABEL } from '@/types/auth.types';
 import TopNavbar from '@/components/TopNavbar';
+import { OrganizacionService } from '@/services/organizacion.service';
+import { SucursalesService } from '@/services/sucursales.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -98,6 +99,13 @@ export default async function DashboardPage() {
     minute: '2-digit',
   }).format(new Date());
 
+  const slotsResumen =
+    isAdmin || profile.rol === 'jefe_local'
+      ? (await SucursalesService.getSlotsPorSucursales(
+          (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
+        )).map((s) => ({ nombre: s.nombre, slots: s.slots, slots_ocupados: s.slots_ocupados }))
+      : null;
+
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-neutral-900 flex flex-col">
       {/* Top Navbar */}
@@ -106,6 +114,7 @@ export default async function DashboardPage() {
         apellido={profile.apellido}
         rol={profile.rol}
         sucursalNombre={profile.sucursal_nombre}
+        slots={slotsResumen}
       />
 
       {/* Main Content */}
@@ -193,16 +202,6 @@ export default async function DashboardPage() {
                 title="Aprobaciones"
                 description="Revisión y aprobación de solicitudes de traslado pendientes."
                 cta="Revisar aprobaciones"
-              />
-            )}
-
-            {isEjecutivo && (
-              <ModuleCard
-                href="/solicitudes/prioridades"
-                icon={ListOrdered}
-                title="Prioridades"
-                description="Gestión y priorización de cola de solicitudes para traslados."
-                cta="Gestionar prioridades"
               />
             )}
 
