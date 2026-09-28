@@ -13,12 +13,18 @@ import {
   Trash2,
   Car,
   MapPin,
+  Layers,
 } from 'lucide-react';
 import {
   createSucursalAction,
   updateSucursalAction,
   deleteSucursalAction,
 } from '@/app/actions/sucursales.actions';
+import {
+  createZonaAction,
+  updateZonaAction,
+  deleteZonaAction,
+} from '@/app/actions/organizacion.actions';
 import {
   EstadoSolicitud,
   Sucursal,
@@ -75,6 +81,26 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
   const [slots, setSlots] = useState('');
   const [zonaId, setZonaId] = useState<number | null>(null);
 
+  const [zonaModalOpen, setZonaModalOpen] = useState(false);
+  const [editandoZona, setEditandoZona] = useState<Zona | null>(null);
+  const [zonaNombre, setZonaNombre] = useState('');
+  const [zonaSubmitting, setZonaSubmitting] = useState(false);
+  const [zonaDeleteTarget, setZonaDeleteTarget] = useState<Zona | null>(null);
+  const [zonaDeleteError, setZonaDeleteError] = useState<string | null>(null);
+  const [zonaDeleting, setZonaDeleting] = useState(false);
+  const [zonaFiltro, setZonaFiltro] = useState<number | 'todas'>('todas');
+
+  const sucursalesPorZona = useMemo(() => {
+    const map = new Map<number, Sucursal[]>();
+    for (const s of sucursales) {
+      if (s.zona_id == null) continue;
+      const list = map.get(s.zona_id) || [];
+      list.push(s);
+      map.set(s.zona_id, list);
+    }
+    return map;
+  }, [sucursales]);
+
   const totalSucursales = sucursales.length;
   const capacidadTotal = useMemo(
     () => sucursales.reduce((acc, s) => acc + (s.slots || 0), 0),
@@ -101,13 +127,15 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
 
   const filteredSucursales = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
-    if (!term) return sucursales;
-    return sucursales.filter(
-      (s) =>
+    return sucursales.filter((s) => {
+      const matchesTerm =
+        !term ||
         (s.nombre || '').toLowerCase().includes(term) ||
-        (s.direccion || '').toLowerCase().includes(term)
-    );
-  }, [sucursales, searchTerm]);
+        (s.direccion || '').toLowerCase().includes(term);
+      const matchesZona = zonaFiltro === 'todas' || s.zona_id === zonaFiltro;
+      return matchesTerm && matchesZona;
+    });
+  }, [sucursales, searchTerm, zonaFiltro]);
 
   function openCreateModal() {
     setEditingSucursal(null);
@@ -164,6 +192,59 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
     }
   }
 
+  function openZonaCreate() {
+    setEditandoZona(null);
+    setZonaNombre('');
+    setZonaModalOpen(true);
+  }
+
+  function openZonaEdit(zona: Zona) {
+    setEditandoZona(zona);
+    setZonaNombre(zona.nombre);
+    setZonaModalOpen(true);
+  }
+
+  async function handleZonaSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const nombreZona = zonaNombre.trim();
+    if (!nombreZona) {
+      setFeedback({ type: 'error', message: 'El nombre de la zona es obligatorio.' });
+      return;
+    }
+    setZonaSubmitting(true);
+    try {
+      const result = editandoZona
+        ? await updateZonaAction(editandoZona.id, nombreZona)
+        : await createZonaAction(nombreZona);
+
+      if (!result.success) {
+        setFeedback({ type: 'error', message: result.error || 'Ocurrió un error.' });
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Zona guardada.' });
+        setZonaModalOpen(false);
+      }
+    } finally {
+      setZonaSubmitting(false);
+    }
+  }
+
+  async function handleZonaDelete() {
+    if (!zonaDeleteTarget) return;
+    setZonaDeleting(true);
+    setZonaDeleteError(null);
+    try {
+      const result = await deleteZonaAction(zonaDeleteTarget.id);
+      if (!result.success) {
+        setZonaDeleteError(result.error || 'No se pudo eliminar la zona.');
+      } else {
+        setFeedback({ type: 'success', message: result.message || 'Zona eliminada.' });
+        setZonaDeleteTarget(null);
+      }
+    } finally {
+      setZonaDeleting(false);
+    }
+  }
+
   const solicitudesDetalle = detailSucursal
     ? solicitudesPorSucursal.get(detailSucursal.id) || []
     : [];
@@ -175,10 +256,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900 flex items-center gap-2">
             <Building2 className="w-7 h-7 text-neutral-900" />
-            <span>Gestión de Sucursales</span>
+            <span>Gestión de Zonas y Sucursales</span>
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Administra los puntos H.Motores, su capacidad de estacionamiento y sus solicitudes asociadas
+            Crea zonas territoriales, agrupa las sucursales por zona y administra su capacidad de estacionamiento
           </p>
         </div>
 
@@ -259,8 +340,98 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
         </div>
       )}
 
+      {/* Zonas territoriales */}
+      <div className="bg-white border border-neutral-200 rounded-2xl p-5 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold text-neutral-900 flex items-center gap-2">
+              <Layers className="w-5 h-5 text-neutral-900" />
+              Zonas territoriales
+            </h2>
+            <p className="text-sm text-neutral-500 mt-1">
+              Agrupa las sucursales en una zona. Cada sucursal pertenece a una sola zona; los usuarios de
+              logística se asignan a una o más zonas para acotar su trabajo.
+            </p>
+          </div>
+          <button
+            onClick={openZonaCreate}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-semibold rounded-xl transition-all cursor-pointer self-start sm:self-auto"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Nueva Zona</span>
+          </button>
+        </div>
+
+        {zonas.length === 0 ? (
+          <div className="py-8 text-center text-sm text-neutral-400 border border-dashed border-neutral-300 rounded-2xl">
+            Aún no hay zonas. Crea la primera para comenzar a agrupar sucursales.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {zonas.map((zona) => {
+              const sucZona = sucursalesPorZona.get(zona.id) || [];
+              return (
+                <div
+                  key={zona.id}
+                  className="border border-neutral-200 rounded-2xl p-4 flex flex-col gap-3 hover:border-neutral-300 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-bold text-neutral-900 truncate">{zona.nombre}</p>
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        {sucZona.length} {sucZona.length === 1 ? 'sucursal' : 'sucursales'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => openZonaEdit(zona)}
+                        title="Renombrar zona"
+                        className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+                      >
+                        <Pencil className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setZonaDeleteError(null);
+                          setZonaDeleteTarget(zona);
+                        }}
+                        title="Eliminar zona"
+                        className="p-1.5 rounded-lg text-neutral-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {sucZona.length > 0 ? (
+                    <ul className="space-y-1">
+                      {sucZona.slice(0, 4).map((s) => (
+                        <li
+                          key={s.id}
+                          className="flex items-center gap-1.5 text-xs text-neutral-600 min-w-0"
+                        >
+                          <MapPin className="w-3 h-3 shrink-0 text-neutral-400" />
+                          <span className="truncate">{s.nombre}</span>
+                        </li>
+                      ))}
+                      {sucZona.length > 4 && (
+                        <li className="text-[11px] text-neutral-400 pl-4">
+                          +{sucZona.length - 4} más
+                        </li>
+                      )}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-neutral-400 italic">Sin sucursales asignadas</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Filters and Search */}
-      <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-center">
+      <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col lg:flex-row gap-4 justify-between items-center">
         <div className="relative w-full sm:w-80">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
@@ -271,9 +442,30 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
             className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
           />
         </div>
-        <p className="text-xs text-neutral-500 font-medium whitespace-nowrap">
-          {filteredSucursales.length} de {totalSucursales} sucursales
-        </p>
+        <div className="flex items-center gap-3 w-full lg:w-auto">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+              Zona:
+            </label>
+            <select
+              value={zonaFiltro === 'todas' ? 'todas' : zonaFiltro}
+              onChange={(e) =>
+                setZonaFiltro(e.target.value === 'todas' ? 'todas' : Number(e.target.value))
+              }
+              className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            >
+              <option value="todas">Todas las zonas</option>
+              {zonas.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.nombre}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="text-xs text-neutral-500 font-medium whitespace-nowrap">
+            {filteredSucursales.length} de {totalSucursales} sucursales
+          </p>
+        </div>
       </div>
 
       {/* Sucursales Table */}
@@ -615,6 +807,127 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                   className="px-5 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50 cursor-pointer"
                 >
                   {isDeleting ? 'Eliminando...' : 'Eliminar Definitivamente'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Crear / Renombrar Zona */}
+      {zonaModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between p-6 border-b border-neutral-200">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-neutral-900">
+                    {editandoZona ? 'Renombrar Zona' : 'Nueva Zona'}
+                  </h2>
+                  <p className="text-xs text-neutral-500">
+                    {editandoZona ? `Editando "${editandoZona.nombre}"` : 'Alta de zona territorial'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setZonaModalOpen(false)}
+                className="text-neutral-400 hover:text-neutral-900 p-1 rounded-lg hover:bg-neutral-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleZonaSubmit} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Nombre *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. Región del Maule, Santiago, V Región"
+                  value={zonaNombre}
+                  onChange={(e) => setZonaNombre(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">
+                <button
+                  type="button"
+                  onClick={() => setZonaModalOpen(false)}
+                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={zonaSubmitting}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 active:bg-black rounded-xl disabled:opacity-50 cursor-pointer"
+                >
+                  {zonaSubmitting ? 'Guardando...' : editandoZona ? 'Guardar Cambios' : 'Crear Zona'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Confirmar Eliminación de Zona */}
+      {zonaDeleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-6 space-y-4">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-neutral-900">Eliminar Zona</h2>
+                  <p className="text-sm text-neutral-500">
+                    ¿Confirmas eliminar la zona <strong className="text-neutral-900">{zonaDeleteTarget.nombre}</strong>?
+                    Esta acción no se puede deshacer.
+                  </p>
+                </div>
+              </div>
+
+              {(sucursalesPorZona.get(zonaDeleteTarget.id)?.length || 0) > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>
+                    Esta zona tiene{' '}
+                    <strong>{sucursalesPorZona.get(zonaDeleteTarget.id)!.length} sucursal(es)</strong>.
+                    Deberás reasignarlas a otra zona o dejarlas sin zona antes de eliminarla.
+                  </span>
+                </div>
+              )}
+
+              {zonaDeleteError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{zonaDeleteError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setZonaDeleteTarget(null)}
+                  disabled={zonaDeleting}
+                  className="px-4 py-2 text-sm font-semibold text-neutral-600 hover:text-neutral-900 rounded-xl hover:bg-neutral-100 cursor-pointer disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleZonaDelete}
+                  disabled={zonaDeleting}
+                  className="px-5 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50 cursor-pointer"
+                >
+                  {zonaDeleting ? 'Eliminando...' : 'Eliminar Definitivamente'}
                 </button>
               </div>
             </div>

@@ -219,9 +219,9 @@ export default async function DashboardPage() {
               <ModuleCard
                 href="/admin/sucursales"
                 icon={Building2}
-                title="Gestión de Sucursales"
-                description="Alta y edición de sucursales, capacidad de estacionamiento y solicitudes asociadas por punto."
-                cta="Administrar sucursales"
+                title="Gestión de Zonas y Sucursales"
+                description="Alta de zonas territoriales, agrupar sucursales por zona, capacidad de estacionamiento y solicitudes asociadas por punto."
+                cta="Administrar zonas y sucursales"
                 adminBadge
               />
             )}

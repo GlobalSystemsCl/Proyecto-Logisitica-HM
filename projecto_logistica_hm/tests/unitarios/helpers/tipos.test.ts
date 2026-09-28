@@ -25,6 +25,11 @@ function solicitud(overrides: Partial<SolicitudLista> = {}): SolicitudLista {
     fecha_despacho: null,
     fecha_entrega: null,
     fecha_limite: null,
+    fecha_confirmacion: null,
+    fecha_inicio_transito: null,
+    fecha_recepcion: null,
+    fecha_entrega_cliente: null,
+    sucursal_zona_id: null,
     motivo_cancelacion: null,
     direccion_evento: null,
     titulo_evento: null,
@@ -47,6 +52,7 @@ function solicitudMinima(overrides: Partial<SolicitudMinima> = {}): SolicitudMin
     fecha_tentativa_despacho: null,
     fecha_despacho: null,
     fecha_entrega: null,
+    fecha_inicio_transito: null,
     ...overrides,
   };
 }

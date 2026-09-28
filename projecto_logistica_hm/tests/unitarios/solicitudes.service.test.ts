@@ -39,6 +39,7 @@ function minimo(overrides: Partial<SolicitudMinima> = {}): SolicitudMinima {
     fecha_tentativa_despacho: null,
     fecha_despacho: null,
     fecha_entrega: null,
+    fecha_inicio_transito: null,
     ...overrides,
   };
 }

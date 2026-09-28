@@ -13,7 +13,7 @@
 ## 0. Cómo usar y mantener este documento
 
 - **IDs de requisito**: `R-<MODULO>.<n>` (p. ej. `R-SOL-CRE.4`). Numeración continua; si un requisito se reemplaza, el nuevo recibe otro ID y el anterior queda solo en el historial.
-- **Historial de cambios**: por módulo (sección "Historial") y global (sección 14). Fecha ISO `YYYY-MM-DD`, cambio → motivo. Orden: más reciente primero.
+- **Historial de cambios**: por módulo (sección "Historial") y global (sección 16). Fecha ISO `YYYY-MM-DD`, cambio → motivo. Orden: más reciente primero.
 - **Estado de módulo**: `implementado` · `parcial` · `pendiente` · `deshabilitado`.
 - **Plantilla de módulo nuevo**:
 
@@ -29,7 +29,7 @@
     | Fecha | Cambio | Motivo |
   ```
 
-- Al agregar un módulo, actualizar también: índice, visión global (sección 1), flujo de interacción y registro global (sección 14).
+- Al agregar un módulo, actualizar también: índice, visión global (sección 1), flujo de interacción y registro global (sección 16).
 
 ---
 
@@ -39,10 +39,10 @@
 
 | Rol | Alcance |
 |---|---|
-| `administrador` | Todo el sistema: usuarios, vehículos, sucursales, historial, solicitudes, aprobaciones y priorización. |
+| `administrador` | Todo el sistema: usuarios, vehículos, sucursales, zonas territoriales, historial, solicitudes, aprobaciones y priorización. |
 | `ejecutivo` | Crea solicitudes en **su sucursal**; ve y da seguimiento; no asigna fecha de entrega. |
 | `jefe_local` | Crea solicitudes (con fecha) en su sucursal; **aprueba/rechaza** las de su sucursal; prioriza y ordena la cola; gestiona vehículos. |
-| `logistica` | Gestiona calendarizaciones, despachos y traslados; puede calendarizar, despachar y cancelar solicitudes. |
+| `logistica` | Gestiona calendarizaciones, despachos y traslados; puede calendarizar, despachar y cancelar solicitudes. Su alcance (solicitudes, calendarización, traslados) se limita a sus **zonas/sucursales asignadas** (organización territorial). |
 
 ### 1.2 Mapa de rutas por módulo
 
@@ -55,6 +55,7 @@
 | Vehículos | `/admin/vehiculos` | `administrador`, `jefe_local`, `logistica` |
 | Usuarios | `/admin/usuarios` | `administrador` |
 | Sucursales | `/admin/sucursales` | `administrador` |
+| Organización territorial (Zonas y Sucursales) | `/admin/sucursales` | `administrador` |
 | Historial/Auditoría | `/admin/historial` | `administrador` |
 | Logística | `/logistica/calendarizaciones` | `jefe_local`, `logistica`, `administrador` |
 | Perfil | `/perfil` | autenticados |
@@ -63,7 +64,7 @@
 ### 1.3 Flujo principal de interacción entre módulos
 
 ```text
-Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehículos · Historial]
+Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales/Zonas · Vehículos · Historial]
                           └ → Solicitudes
                                  │
       Ejecutivo crea ────────────┤  jefe_local_id = jefe de local de su sucursal
@@ -167,8 +168,8 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 ## 5. Módulo: Gestión de Sucursales
 
 - **Estado**: `implementado`
-- **Qué hace**: CRUD de sucursales (`administrador`): nombre, dirección, slots y relación con el `jefe_local` encargado.
-- **Cómo funciona**: `SucursalesService` rechaza nombres duplicados y valida `slots` entero ≥ 0 con `slots_ocupados ≤ slots`. El borrado se **bloquea si hay usuarios asignados** a la sucursal y elimina en cascada las solicitudes asociadas (reporta cuántas).
+- **Qué hace**: CRUD de sucursales (`administrador`): nombre, dirección, slots, relación con el `jefe_local` encargado y **asignación opcional a una zona territorial** (`zona_id`). Panel: `/admin/sucursales`.
+- **Cómo funciona**: `SucursalesService` rechaza nombres duplicados y valida `slots` entero ≥ 0 con `slots_ocupados ≤ slots`. El borrado se **bloquea si hay usuarios asignados** a la sucursal y elimina en cascada las solicitudes asociadas (reporta cuántas). Al crear/editar, el administrador puede elegir la zona territorial a la que pertenece la sucursal.
 - **Requisitos específicos**:
   - `R-SUC.1` — CRUD de sucursales solo administrador.
   - `R-SUC.2` — Nombre único; slots válidos.
@@ -178,11 +179,13 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
   - `R-SUC.6` — Los slots se ocupan al crear la solicitud (estado `pendiente_aprobacion` o `aprobada`).
   - `R-SUC.7` — Al rechazar o cancelar una solicitud, se liberan automáticamente los slots ocupados.
   - `R-SUC.8` — El frontend muestra slots disponibles al seleccionar sucursal destino.
-- **Con qué se conecta**: `sucursales.service.ts`, `sucursales.actions.ts`, `SucursalesTableClient.tsx`, tablas `sucursal`, `usuario`, `solicitud`.
-- **Depende de**: Módulo Usuarios (encargado), Módulo Solicitudes (origen/destino).
+  - `R-SUC.9` — La sucursal puede asignarse a **una** zona territorial (`sucursal.zona_id`) al crearla o editarla.
+- **Con qué se conecta**: `sucursales.service.ts`, `sucursales.actions.ts`, `SucursalesTableClient.tsx`, `organizacion.service.ts` (zonas), tablas `sucursal`, `zona` (vía `zona_id`), `usuario`, `solicitud`.
+- **Depende de**: Módulo Usuarios (encargado), Módulo Solicitudes (origen/destino), Módulo Organización Territorial (zonas).
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-28 | Sucursal asignable a una zona territorial (`zona_id`) desde el panel; tabla con filtro por zona | Habilitar la agrupación de sucursales por zonas territoriales |
   | 2026-09-02 | Se agrega validación de slots: triggers para validar, incrementar y decrementar `slots_ocupados` | Evitar sobreasignación de vehículos a sucursales |
   | 2026-08-27 | Se registra en RequisitosModulos.md | Documentación de requisitos |
 
@@ -271,19 +274,21 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 
 - **Estado**: `parcial`
 - **Qué hace**: calendarización de traslados con fecha tentativa, despacho (en tránsito), confirmación de entrega en destino y finalización formal. Ruta: `/logistica/calendarizaciones`.
-- **Cómo funciona**: `CalendarizacionesClient.tsx` muestra solicitudes `priorizada`/`calendarizada`/`en_transito`/`entregada`/`finalizada` en vista de calendario. Jefe_local/logística pueden **calendarizar** (arrastrar a fecha → `calendarizada`, guarda `fecha_tentativa_despacho` y `logistica_id`). Logística/admin pueden **descalendarizar** (vuelve a `priorizada`). Logística/admin pueden **despachar** (`calendarizada` → `en_transito`, guarda `fecha_despacho`). Jefe_local/admin pueden **recibir** (`en_transito` → `entregada`, guarda `fecha_entrega`). Jefe_local/admin pueden **finalizar** (`entregada` → `finalizada`). Todos los pasos registran auditoría. Botones "Recibir" y "Finalizar" también disponibles en `/solicitudes` (vista general).
+- **Cómo funciona**: `CalendarizacionesClient.tsx` muestra solicitudes `priorizada`/`calendarizada`/`en_transito`/`entregada`/`finalizada` en vista de calendario. Jefe_local/logística pueden **calendarizar** (arrastrar a fecha → `calendarizada`, guarda `fecha_tentativa_despacho` y `logistica_id`). Logística/admin pueden **descalendarizar** (vuelve a `priorizada`). Logística/admin pueden **despachar** (`calendarizada` → `en_transito`, guarda `fecha_despacho`). Jefe_local/admin pueden **recibir** (`en_transito` → `entregada`, guarda `fecha_entrega`). Jefe_local/admin pueden **finalizar** (`entregada` → `finalizada`). Todos los pasos registran auditoría. Botones "Recibir" y "Finalizar" también disponibles en `/solicitudes` (vista general). **La logística opera solo sobre sus zonas/sucursales asignadas**: `getSolicitudesFiltradas` usa `getSolicitudesPorZonas` (filtra por `solicitud.sucursal_zona_id` de las zonas de `usuario_zona`) para el rol logística, y las calendarizaciones/slots usan `getUserAssignedBranches`.
 - **Requisitos específicos**:
   - `R-LOG.2` — Calendarización con fecha tentativa (`calendarizada`). **Implementado**.
   - `R-LOG.3` — Despacho / en tránsito (`en_transito`). **Implementado**.
   - `R-LOG.4` — Confirmación de entrega en destino (`entregada`). **Implementado**.
   - `R-LOG.5` — Finalización formal (`finalizada`). **Implementado**.
   - `R-LOG.6` — Libera los vehículos al completar/cancelar. Implementado vía trigger `disponibilidad()` (al cancelar).
+  - `R-LOG.7` — La logística ve y opera solo solicitudes de sus zonas/sucursales asignadas (organización territorial). **Implementado**.
   - `R-LOG.1` — Asignación explícita de solicitud a logística (`asignada`). **Pendiente**: el estado `asignada` existe en el enum y `calendarizarSolicitud` lo acepta como FROM, pero no hay transición que lo produzca. Actualmente `logistica_id` se fija implícitamente al calendarizar.
-- **Con qué se conecta**: `solicitudes.service.ts` (`calendarizarSolicitud`, `descalendarizarSolicitud`, `despacharSolicitud`, `recibirSolicitud`, `finalizarSolicitud`), `solicitudes.actions.ts` (acciones homónimas), `CalendarizacionesClient.tsx`, `SolicitudesClient.tsx` (botones Recibir/Finalizar), tablas `solicitud`, `notificacion` (sin UI aún).
-- **Depende de**: Módulo Solicitudes (estados previos).
+- **Con qué se conecta**: `solicitudes.service.ts` (`calendarizarSolicitud`, `descalendarizarSolicitud`, `despacharSolicitud`, `recibirSolicitud`, `finalizarSolicitud`, `getSolicitudesFiltradas`, `getSolicitudesPorZonas`), `solicitudes.actions.ts` (acciones homónimas), `CalendarizacionesClient.tsx`, `SolicitudesClient.tsx` (botones Recibir/Finalizar), `organizacion.service.ts` (`getUserZones`, `getUserAssignedBranches`), tablas `solicitud`, `notificacion` (sin UI aún).
+- **Depende de**: Módulo Solicitudes (estados previos), Módulo Organización Territorial (alcance por zonas).
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-28 | Documentado el alcance territorial de logística por zonas (`getSolicitudesPorZonas`, `getUserAssignedBranches`) como R-LOG.7 | La logística ya operaba limitada a sus zonas; se formaliza en requisitos |
   | 2026-09-03 | Implementado: calendarizar, despachar, recibir, finalizar con UI en `/logistica/calendarizaciones` y botones en `/solicitudes` | Completar flujo logístico del MVP |
   | 2026-09-03 | Fix: revalidate path corregido de `/solicitudes/calendarizaciones` a `/logistica/calendarizaciones` | Path incorrecto impedía refresco de UI |
   | 2026-08-27 | Se documenta como pendiente | Módulo fuera del alcance actual del MVP |
@@ -395,12 +400,37 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales · Vehícu
 
 ---
 
-## 15. Registro global de cambios
+## 15. Módulo: Organización Territorial (Zonas y Sucursales)
+
+- **Estado**: `implementado`
+- **Qué hace**: el `administrador` gestiona **zonas territoriales** (regiones/áreas) y agrupa sucursales en una zona. Un usuario de rol `logistica` se asigna a una o varias zonas/sucursales y su **alcance operativo** (solicitudes, calendarización, traslados) queda limitado a ellas. Panel: `/admin/sucursales` (título "Gestión de Zonas y Sucursales").
+- **Cómo funciona**: el panel muestra la sección **"Zonas territoriales"** con una card por zona (nombre, nº de sucursales y listado), botones Editar/Eliminar y un modal crear/renombrar zona; la tabla de sucursales incluye un **filtro por zona** y cada sucursal se asigna a su zona al crearla/editarla. `OrganizacionService` (`getZonas`, `createZona`, `updateZona`, `deleteZona`) valida nombre obligatorio y único (búsqueda `ilike`) y **bloquea el borrado de una zona con sucursales asignadas** (hay que reasignarlas antes). Las actions (`createZonaAction`/`updateZonaAction`/`deleteZonaAction`) revalidan `/admin/sucursales` y `/admin/zonas`. La asignación de usuarios de logística a zonas/sucursales se hace desde Gestión de Usuarios (Pestañas "Zonas" / "Sucursales" → tablas `usuario_zona`/`usuario_sucursal`). Aplicación del alcance: `getSolicitudesFiltradas` filtra para logística por `solicitud.sucursal_zona_id` (`getSolicitudesPorZonas`); calendarizaciones y slots usan `getUserAssignedBranches`.
+- **Requisitos específicos**:
+  - `R-ORG.1` — CRUD de zonas solo administrador desde el panel "Gestión de Zonas y Sucursales".
+  - `R-ORG.2` — El nombre de la zona es obligatorio y no puede repetirse (incluye renombrar a un nombre ya usado).
+  - `R-ORG.3` — No se puede eliminar una zona que tenga sucursales asignadas; el sistema exige reasignarlas antes.
+  - `R-ORG.4` — Una sucursal pertenece a **una sola** zona (`sucursal.zona_id`, opcional) y se asigna al crear/editar.
+  - `R-ORG.5` — El panel muestra las sucursales de cada zona y permite filtrar la tabla de sucursales por zona.
+  - `R-ORG.6` — Un usuario de logística se asigna a una o varias zonas (`usuario_zona`) y/o sucursales (`usuario_sucursal`) desde Gestión de Usuarios.
+  - `R-ORG.7` — La logística ve y opera solo solicitudes de sus zonas (`getSolicitudesPorZonas` sobre `sucursal_zona_id`); calendarización y slots usan sus sucursales asignadas.
+  - `R-ORG.8` — La validación de pertenencia se centraliza en `OrganizacionService` (`usuarioTieneSucursal`, `getUserAssignedBranches`, `getUserZones`); la operativa NO reimplementa la lógica de asignación.
+- **Con qué se conecta**: `organizacion.service.ts` (CRUD zonas + asignaciones), `organizacion.actions.ts` (`createZonaAction`, `updateZonaAction`, `deleteZonaAction`), `sucursales.service.ts`/`sucursales.actions.ts` (`zona_id`), `SucursalesTableClient.tsx` (UI zonas), `users.actions.ts`/`UsersTableClient.tsx` (asignación a usuarios), `solicitudes.service.ts` (`getSolicitudesFiltradas`, `getSolicitudesPorZonas`), `dashboard/page.tsx` (card admin), tablas `zona`, `usuario_zona`, `usuario_sucursal`, `sucursal.zona_id`.
+- **Depende de**: Módulo Usuarios (asignación de zonas/sucursales), Módulo Sucursales (`zona_id`), Módulo Logística (aplicación del alcance).
+- **Historial**:
+  | Fecha | Cambio | Motivo |
+  |---|---|---|
+  | 2026-09-28 | UI de gestión de zonas: sección "Zonas territoriales" con cards (crear/renombrar/eliminar con protección), filtro por zona en la tabla de sucursales, asignación de sucursal a zona y revalidación de `/admin/sucursales`; card del dashboard renombrada a "Gestión de Zonas y Sucursales" | La gestión de zonas existía en backend/BD (DEV 1) sin panel para el administrador |
+  | 2026-09-15 | Esquema de zonas: tablas `zona`, `usuario_zona`, `usuario_sucursal`, columna `sucursal.zona_id`, fns `usuario_tiene_sucursal` y RLS (`20260915_zona_organizacion.sql`) | Soportar organización territorial y alcance de logística por zonas |
+
+---
+
+## 16. Registro global de cambios
 
 Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-09-28 | Organización Territorial | Panel "Gestión de Zonas y Sucursales": CRUD de zonas (crear/renombrar/eliminar con protección), asignación de sucursal a zona y filtro por zona; revalidate de las actions de zona; card del dashboard renombrada | Habilitar la gestión visual de zonas territoriales y su vínculo con sucursales y el alcance de Logística |
 | 2026-09-05 | Perfil de Usuario | Rediseño UI del perfil (sin franja negra; hero con iniciales y resumen de contacto) y nombres de usuario cliqueables (popup de datos) en todos los puntos del sistema que indican un usuario/encargado: tabla y detalle de solicitudes, historial de cambios, observaciones, prioridades, aprobaciones, sucursales (encargado + personas de solicitudes), historial de auditoría y gestión de usuarios | Acceso ágil a datos de contacto ante urgencias en cualquier fase del traslado; perfil más pulido |
 | 2026-09-05 | Perfil de Usuario | Nuevo módulo: página `/perfil`, edición de nombre/apellido/teléfono, columna `telefono`, tarjeta "Contacto responsable" del detalle de solicitud con rol/sucursal/teléfono/correo y popups de datos de usuario en historial/observaciones | Necesidad de contacto accesible del responsable y de los usuarios que intervienen en las solicitudes |
 | 2026-09-03 | Logística Operativa | Implementado flujo completo: calendarizar, despachar, recibir, finalizar con UI en `/logistica/calendarizaciones` y botones en `/solicitudes` | Completar flujo logístico del MVP |
@@ -419,7 +449,7 @@ Orden: más reciente primero.
 
 ---
 
-## 16. Referencias
+## 17. Referencias
 
 - `Brain.md` — contexto permanente del proyecto.
 - `ProjectStatus.md` — estado real del proyecto.
