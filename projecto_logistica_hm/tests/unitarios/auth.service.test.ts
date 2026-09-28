@@ -224,6 +224,49 @@ describe('AuthService', () => {
       expect(server.auth.signUp).not.toHaveBeenCalled();
     });
 
+    it('should_reject_when_email_format_is_invalid', async () => {
+      const res = await AuthService.register({
+        nombre: 'Juan',
+        apellido: 'Pérez',
+        email: 'correo-sin-arroba',
+        password: 'secret123',
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('El formato del correo electrónico no es válido.');
+      expect(server.auth.signUp).not.toHaveBeenCalled();
+      expect(admin.callsTo('usuario')).toHaveLength(0);
+    });
+
+    it('should_reject_when_password_exceeds_max_length', async () => {
+      const res = await AuthService.register({
+        nombre: 'Juan',
+        apellido: 'Pérez',
+        email: 'user@test.com',
+        password: 'a'.repeat(73),
+      });
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('La contraseña no puede superar los 72 caracteres.');
+      expect(server.auth.signUp).not.toHaveBeenCalled();
+    });
+
+    it('should_translate_signup_error_when_email_is_already_in_auth', async () => {
+      admin.results.usuario = [{ data: null, error: null }];
+      server.auth.signUp.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'User already registered' },
+      });
+      const res = await AuthService.register({
+        nombre: 'Juan',
+        apellido: 'Pérez',
+        email: 'user@test.com',
+        password: 'secret123',
+      });
+      expect(res).toEqual({
+        success: false,
+        error: 'Ya existe un usuario registrado con ese correo.',
+      });
+    });
+
     it('should_normalize_email_to_lowercase', async () => {
       admin.results.usuario = [{ data: null, error: null }];
       server.auth.signUp.mockResolvedValue({ data: { user: authUser() }, error: null });
@@ -309,36 +352,18 @@ describe('AuthService', () => {
       expect(server.auth.signUp).not.toHaveBeenCalled();
     });
 
-    it('should_assign_administrador_for_principal_email', async () => {
-      admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({
-        data: { user: authUser({ email: ADMIN_PRINCIPAL }) },
-        error: null,
-      });
-      await AuthService.register({
+    it('should_reject_admin_principal_email_on_self_registration', async () => {
+      const res = await AuthService.register({
         nombre: 'Maic',
         apellido: 'Hernández',
         email: ADMIN_PRINCIPAL,
         password: 'secret123',
       });
-      const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
-      expect(upsert?.[1]).toMatchObject({ rol: 'administrador' });
-    });
-
-    it('should_approve_principal_admin_account', async () => {
-      admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({
-        data: { user: authUser({ email: ADMIN_PRINCIPAL }) },
-        error: null,
+      expect(res).toEqual({
+        success: false,
+        error: 'El correo del Administrador Principal no puede registrarse de forma autónoma.',
       });
-      await AuthService.register({
-        nombre: 'Maic',
-        apellido: 'Hernández',
-        email: ADMIN_PRINCIPAL,
-        password: 'secret123',
-      });
-      const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
-      expect(upsert?.[1]).toMatchObject({ aprobado: true });
+      expect(server.auth.signUp).not.toHaveBeenCalled();
     });
 
     it('should_confirm_email_on_registration', async () => {

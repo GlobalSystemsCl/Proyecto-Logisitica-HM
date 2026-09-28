@@ -63,12 +63,13 @@ export default function RegistroForm({ sucursales }: Props) {
             <div className="flex items-start gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm animate-in fade-in duration-200">
               <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span className="font-semibold block">Cuenta creada</span>
+                <span className="font-semibold block">Solicitud enviada</span>
                 <span className="text-xs leading-relaxed opacity-90">
-                  {state.message}. Ya puedes{' '}
+                  {state.message}{' '}
                   <Link href="/login" className="underline font-semibold hover:text-green-900">
-                    iniciar sesión
-                  </Link>.
+                    Iniciar sesión
+                  </Link>
+                  .
                 </span>
               </div>
             </div>
@@ -84,6 +85,7 @@ export default function RegistroForm({ sucursales }: Props) {
                   name="nombre"
                   type="text"
                   required
+                  maxLength={100}
                   placeholder="Ej. Juan"
                   className="block w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
@@ -96,6 +98,7 @@ export default function RegistroForm({ sucursales }: Props) {
                   name="apellido"
                   type="text"
                   required
+                  maxLength={100}
                   placeholder="Ej. Pérez"
                   className="block w-full px-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
@@ -115,6 +118,7 @@ export default function RegistroForm({ sucursales }: Props) {
                   type="email"
                   autoComplete="email"
                   required
+                  maxLength={254}
                   placeholder="usuario@gmail.com"
                   className="block w-full pl-10 pr-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
@@ -161,6 +165,7 @@ export default function RegistroForm({ sucursales }: Props) {
                   autoComplete="new-password"
                   required
                   minLength={8}
+                  maxLength={72}
                   placeholder="Mínimo 8 caracteres"
                   className="block w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
@@ -188,6 +193,7 @@ export default function RegistroForm({ sucursales }: Props) {
                   autoComplete="new-password"
                   required
                   minLength={8}
+                  maxLength={72}
                   placeholder="Repite tu contraseña"
                   className="block w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />

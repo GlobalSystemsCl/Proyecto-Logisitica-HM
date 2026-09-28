@@ -3,6 +3,7 @@
 import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
+import { validarCampoTexto, validarEmailFormato, validarPasswordRegistro } from '@/lib/validaciones';
 
 export interface UpdateProfileState {
   success?: boolean;
@@ -60,18 +61,22 @@ export async function registerAction(
   const sucursalRaw = formData.get('sucursal') as string;
   const sucursal = sucursalRaw ? Number(sucursalRaw) : NaN;
 
-  if (!nombre?.trim() || !apellido?.trim()) {
-    return { success: false, error: 'El nombre y el apellido son obligatorios.' };
-  }
-  if (!email?.trim()) {
-    return { success: false, error: 'El correo electrónico es obligatorio.' };
-  }
+  const errorNombre = validarCampoTexto(nombre, 'nombre', 100);
+  if (errorNombre) return { success: false, error: errorNombre };
+
+  const errorApellido = validarCampoTexto(apellido, 'apellido', 100);
+  if (errorApellido) return { success: false, error: errorApellido };
+
+  const errorEmail = validarEmailFormato(email);
+  if (errorEmail) return { success: false, error: errorEmail };
+
   if (!Number.isInteger(sucursal) || sucursal <= 0) {
     return { success: false, error: 'Debes seleccionar tu sucursal.' };
   }
-  if (!password || password.length < 8) {
-    return { success: false, error: 'La contraseña debe tener al menos 8 caracteres.' };
-  }
+
+  const errorPassword = validarPasswordRegistro(password);
+  if (errorPassword) return { success: false, error: errorPassword };
+
   if (password !== confirmPassword) {
     return { success: false, error: 'Las contraseñas no coinciden.' };
   }
@@ -90,7 +95,7 @@ export async function registerAction(
 
   return {
     success: true,
-    message: 'Cuenta creada exitosamente. Ya puedes iniciar sesión.',
+    message: 'Solicitud de acceso enviada. Espera la autorización del administrador para poder ingresar.',
   };
 }
 

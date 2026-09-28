@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { UserProfile } from '@/types/auth.types';
+import { validarCampoTexto, validarEmailFormato, validarPasswordRegistro } from '@/lib/validaciones';
+
+const ADMIN_PRINCIPAL_EMAIL = 'maic.hernandez.dev@gmail.com';
 
 export class AuthService {
   /**
@@ -175,6 +178,28 @@ export class AuthService {
       const cleanEmail = data.email.trim().toLowerCase();
       const sucursalId = data.sucursal_id ?? null;
 
+      // Verificaciones de formato y saneamiento
+      const errorNombre = validarCampoTexto(data.nombre, 'nombre', 100);
+      if (errorNombre) return { success: false, error: errorNombre };
+
+      const errorApellido = validarCampoTexto(data.apellido, 'apellido', 100);
+      if (errorApellido) return { success: false, error: errorApellido };
+
+      const errorEmail = validarEmailFormato(data.email);
+      if (errorEmail) return { success: false, error: errorEmail };
+
+      const errorPassword = validarPasswordRegistro(data.password);
+      if (errorPassword) return { success: false, error: errorPassword };
+
+      // El administrador principal no puede autoregistrarse: su cuenta la
+      // crea el administrador vía panel (o el seed). Evita escalar a rol admin.
+      if (cleanEmail === ADMIN_PRINCIPAL_EMAIL) {
+        return {
+          success: false,
+          error: 'El correo del Administrador Principal no puede registrarse de forma autónoma.',
+        };
+      }
+
       const { data: existing } = await admin
         .from('usuario')
         .select('id')
@@ -212,7 +237,18 @@ export class AuthService {
         },
       });
 
+      // Traducir errores conocidos de Supabase (especialmente el de email duplicado,
+      // que se dispara incluso cuando la fila de perfil quedó huérfana).
       if (signUpError) {
+        const msg = signUpError.message.toLowerCase();
+        const already =
+          msg.includes('already registered') ||
+          msg.includes('already been registered') ||
+          signUpError.code === 'user_already_exists' ||
+          signUpError.code === 'email_address_not_authorized';
+        if (already) {
+          return { success: false, error: 'Ya existe un usuario registrado con ese correo.' };
+        }
         return { success: false, error: signUpError.message };
       }
 
@@ -223,15 +259,14 @@ export class AuthService {
       // Confirmar email y asegurar el perfil base en public.usuario
       await admin.auth.admin.updateUserById(authData.user.id, { email_confirm: true });
 
-      const isAdminEmail = cleanEmail === 'maic.hernandez.dev@gmail.com';
       await admin.from('usuario').upsert({
         id: authData.user.id,
         email: cleanEmail,
         nombre: data.nombre.trim(),
         apellido: data.apellido.trim(),
-        rol: isAdminEmail ? 'administrador' : 'ejecutivo',
+        rol: 'ejecutivo',
         activo: true,
-        aprobado: isAdminEmail ? true : false,
+        aprobado: false,
         requiere_cambio_clave: false,
         sucursal_id: sucursalId,
       });
