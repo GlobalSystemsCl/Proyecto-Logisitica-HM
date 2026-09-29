@@ -21,13 +21,14 @@ export class VehiculoService {
             disponibilidad
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: true });
 
       const data = await this.fetchAllRowsPaginated(query, (error) => {
         console.error('Error al listar vehículos:', error);
       });
 
-      const vehiculos = (data ?? []).map((v: Record<string, unknown>) => {
+      const vehiculos = this.deduplicarPorId(data ?? []).map((v) => {
         const sv = v.solicitud_vehiculo as Array<{ solicitud_id: string; disponibilidad: string }> | null;
         const reservaActiva = sv?.find((s) => s.disponibilidad === 'reservado');
         const vendido = !reservaActiva && (sv?.some((s) => s.disponibilidad === 'vendido') || false);
@@ -62,6 +63,13 @@ export class VehiculoService {
    * Recupera TODAS las filas de una consulta paginando de a mil.
    * Supabase/PostgREST limita cada petición a 1000 filas (aunque se pida
    * `limit(100000)`), por lo que se itera con `.range()`.
+   *
+   * La consulta DEBE venir ordenada por una columna única (típicamente `id`) como
+   * desempate: `range()` es un `OFFSET/LIMIT`, y si el `ORDER BY` no es un orden
+   * total (por ejemplo `created_at`, donde las importaciones masivas comparten
+   * timestamp) Postgres puede devolver la misma fila en dos páginas y saltarse
+   * otra, provocando `id` duplicados.
+   *
    * Devuelve `null` si alguna página falla (tras notificar a `onError`).
    */
   private static async fetchAllRowsPaginated(
@@ -88,12 +96,29 @@ export class VehiculoService {
   }
 
   /**
+   * Elimina filas repetidas por `id`, conservando la primera aparición.
+   * Red de seguridad ante Insights no deterministas o inserciones concurrentes
+   * durante la paginación: evita `key` duplicadas en las listas de la UI y
+   * conteos inflados.
+   */
+  private static deduplicarPorId(filas: Array<Record<string, unknown>>): Array<Record<string, unknown>> {
+    const vistos = new Set<string>();
+    return filas.filter((f) => {
+      const id = f.id as string | undefined;
+      if (id === undefined) return true;
+      if (vistos.has(id)) return false;
+      vistos.add(id);
+      return true;
+    });
+  }
+
+  /**
    * Obtiene las marcas únicas registradas en la base de datos
    */
   static async getMarcas(): Promise<string[]> {
     try {
       const admin = createAdminClient();
-      const query = admin.from('vehiculo').select('marca').order('marca');
+      const query = admin.from('vehiculo').select('marca').order('marca').order('id', { ascending: true });
 
       const data = await this.fetchAllRowsPaginated(query, (error) => {
         console.error('Error al obtener marcas:', error);
@@ -488,7 +513,7 @@ export class VehiculoService {
 
       // Chasis ya existentes (paginado: evita el tope de 1000 filas por petición)
       const filasChasis = await this.fetchAllRowsPaginated(
-        admin.from('vehiculo').select('chasis'),
+        admin.from('vehiculo').select('chasis').order('id', { ascending: true }),
         (error) => console.error('Error al leer chasis existentes:', error),
       );
       const chasisExistentes = new Set<string>((filasChasis ?? []).map((v) => (v as { chasis: string }).chasis));
