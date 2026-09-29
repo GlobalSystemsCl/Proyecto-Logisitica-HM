@@ -37,6 +37,7 @@ const CHAIN_METHODS = [
   'neq',
   'in',
   'not',
+  'or',
   'ilike',
   'is',
   'like',

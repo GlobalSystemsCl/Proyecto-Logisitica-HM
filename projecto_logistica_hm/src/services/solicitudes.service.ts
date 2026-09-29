@@ -248,19 +248,65 @@ export class SolicitudesService {
   static async getJefeLocalDeSucursal(sucursalId: number): Promise<string | null> {
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
+
+      // 1) Sucursal principal del jefe (usuario.sucursal_id)
+      const { data: principal } = await admin
         .from('usuario')
         .select('id')
         .eq('rol', 'jefe_local')
         .eq('sucursal_id', sucursalId)
         .limit(1);
 
-      if (error) {
-        console.error('Error al consultar jefe de local de la sucursal:', error);
-        return null;
+      if (principal && principal.length > 0) {
+        return (principal[0] as { id: string }).id;
       }
 
-      return (data && data.length > 0 ? (data[0] as { id: string }).id : null) ?? null;
+      // 2) Encargado directo de la sucursal (sucursal.usuario_id)
+      const encargado = await admin
+        .from('sucursal')
+        .select('usuario_id')
+        .eq('id', sucursalId)
+        .maybeSingle();
+
+      if (encargado?.data && (encargado.data as { usuario_id: string | null }).usuario_id) {
+        const jlEncargado = await admin
+          .from('usuario')
+          .select('id')
+          .eq('id', (encargado.data as { usuario_id: string }).usuario_id)
+          .eq('rol', 'jefe_local')
+          .maybeSingle();
+
+        if (jlEncargado.data) {
+          return (jlEncargado.data as { id: string }).id;
+        }
+      }
+
+      // 3) Sucursales adicionales del jefe (tabla N:M usuario_sucursal)
+      try {
+        const { data: asignadas } = await admin
+          .from('usuario_sucursal')
+          .select('usuario_id')
+          .eq('sucursal_id', sucursalId);
+
+        if (asignadas && asignadas.length > 0) {
+          const ids = (asignadas as Array<{ usuario_id: string }>).map((r) => r.usuario_id);
+          const { data: jefes } = await admin
+            .from('usuario')
+            .select('id')
+            .in('id', ids)
+            .eq('rol', 'jefe_local')
+            .limit(1);
+
+          if (jefes && jefes.length > 0) {
+            return (jefes[0] as { id: string }).id;
+          }
+        }
+      } catch (nmErr) {
+        // Tabla N:M puede no existir en algunos entornos: no es fatal.
+        console.warn('No se pudo consultar usuario_sucursal en getJefeLocalDeSucursal:', nmErr);
+      }
+
+      return null;
     } catch (err) {
       console.error('Error en getJefeLocalDeSucursal:', err);
       return null;

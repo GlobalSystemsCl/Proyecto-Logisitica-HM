@@ -64,6 +64,15 @@ export interface VehiculoParaTraslado {
   en_traslado_activo: boolean;
 }
 
+/** Resultado paginado del listado de vehículos para traslado. */
+export interface VehiculosParaTrasladoResult {
+  vehiculos: VehiculoParaTraslado[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
 export interface ResumenSlotsSucursal {
   id: number;
   nombre: string | null;

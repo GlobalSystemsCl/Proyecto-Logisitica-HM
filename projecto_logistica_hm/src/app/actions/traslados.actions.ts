@@ -118,14 +118,21 @@ export async function getTrasladosAction() {
   }
 }
 
-/** Vehículos ya vendidos disponibles para un traslado interno. */
-export async function getVehiculosParaTrasladoAction() {
+/** Vehículos para un traslado interno (listado completo, con búsqueda, filtros y paginación). */
+export async function getVehiculosParaTrasladoAction(
+  q?: string,
+  page?: number,
+  pageSize?: number,
+  opciones?: { sucursalId?: number | null; marca?: string | null }
+) {
   try {
     const profile = await getProfileOrThrow();
-    if (!esLogistica(profile)) return [];
-    return await TrasladoService.getVehiculosParaTraslado();
+    if (!esLogistica(profile)) {
+      return { vehiculos: [], total: 0, page: 1, pageSize: 12, totalPages: 0 };
+    }
+    return await TrasladoService.getVehiculosParaTraslado(q, page, pageSize, opciones);
   } catch {
-    return [];
+    return { vehiculos: [], total: 0, page: 1, pageSize: 12, totalPages: 0 };
   }
 }
 

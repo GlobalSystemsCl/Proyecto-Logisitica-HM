@@ -106,14 +106,14 @@ export function getEstadoAtraso(sol: SolicitudLista): 'normal' | 'proxima' | 'at
   return 'normal';
 }
 
-const BORDE_ATRASO: Record<'normal' | 'proxima' | 'atrasada' | 'completada', string> = {
+export const BORDE_ATRASO: Record<'normal' | 'proxima' | 'atrasada' | 'completada', string> = {
   normal: '',
   proxima: 'border-l-4 border-amber-400',
   atrasada: 'border-l-4 border-red-500',
   completada: '',
 };
 
-const CHIP_ATRASO: Record<'normal' | 'proxima' | 'atrasada' | 'completada', { texto: string; clase: string } | null> = {
+export const CHIP_ATRASO: Record<'normal' | 'proxima' | 'atrasada' | 'completada', { texto: string; clase: string } | null> = {
   normal: null,
   proxima: { texto: 'Vence pronto', clase: 'bg-amber-50 text-amber-700 border-amber-200' },
   atrasada: { texto: 'Atrasada', clase: 'bg-red-50 text-red-700 border-red-200' },

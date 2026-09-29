@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Truck,
   MapPin,
@@ -9,20 +9,27 @@ import {
   Plus,
   X,
   Car,
+  Search,
+  ChevronLeft,
+  ChevronRight,
   Loader2,
 } from 'lucide-react';
 import {
   crearTrasladoAction,
   despacharTrasladoAction,
   recibirTrasladoAction,
+  getVehiculosParaTrasladoAction,
 } from '@/app/actions/traslados.actions';
 import {
   TrasladoInterno,
-  VehiculoParaTraslado,
+  VehiculosParaTrasladoResult,
   CreateTrasladoInput,
 } from '@/types/traslado.types';
 import { Sucursal } from '@/types/sucursal.types';
+import { Marca } from '@/types/vehiculo.types';
 import { formatFecha } from '@/lib/fechas';
+
+const PAGE_SIZE = 12;
 
 const estadoConfig: Record<TrasladoInterno['estado'], { label: string; color: string }> = {
   pendiente: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -33,16 +40,21 @@ const estadoConfig: Record<TrasladoInterno['estado'], { label: string; color: st
 interface TrasladosClientProps {
   traslados: TrasladoInterno[];
   sucursales: Sucursal[];
-  vehiculos: VehiculoParaTraslado[];
+  marcas: Marca[];
+  vehiculosIniciales: VehiculosParaTrasladoResult;
   esOperador: boolean;
-  viewerId: string;
+  viewerRol: string;
+  viewerSucursales: number[];
 }
 
 export default function TrasladosClient({
   traslados,
   sucursales,
-  vehiculos,
+  marcas,
+  vehiculosIniciales,
   esOperador,
+  viewerRol,
+  viewerSucursales,
 }: TrasladosClientProps) {
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -55,9 +67,40 @@ export default function TrasladosClient({
   const [observacion, setObservacion] = useState('');
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
 
+  // Búsqueda y paginación de vehículos
+  const [busqueda, setBusqueda] = useState('');
+  const [sucursalFiltro, setSucursalFiltro] = useState<number | 'todas'>('todas');
+  const [marcaFiltro, setMarcaFiltro] = useState<string>('todas');
+  const [pagina, setPagina] = useState(1);
+  const [resultados, setResultados] = useState<VehiculosParaTrasladoResult>(vehiculosIniciales);
+  const [cargandoVehiculos, setCargandoVehiculos] = useState(false);
+  const primerRender = useRef(true);
+
+  useEffect(() => {
+    if (!esOperador) return;
+    if (primerRender.current) {
+      primerRender.current = false;
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setCargandoVehiculos(true);
+      try {
+        const res = await getVehiculosParaTrasladoAction(busqueda, pagina, PAGE_SIZE, {
+          sucursalId: sucursalFiltro === 'todas' ? null : sucursalFiltro,
+          marca: marcaFiltro === 'todas' ? null : marcaFiltro,
+        });
+        setResultados(res);
+      } finally {
+        setCargandoVehiculos(false);
+      }
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [busqueda, pagina, sucursalFiltro, marcaFiltro, esOperador]);
+
   const visibles = traslados.filter((t) => filtro === 'todos' || t.estado === filtro);
 
   const toggleVehiculo = (id: string) => {
+    if (cargandoVehiculos) return;
     setSeleccionados((prev) =>
       prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
     );
@@ -65,9 +108,27 @@ export default function TrasladosClient({
 
   const puedeCrear = esOperador && origen !== '' && destino !== '' && seleccionados.length > 0;
 
+  const handleBusqueda = (valor: string) => {
+    setBusqueda(valor);
+    setPagina(1);
+  };
+
+  const handleSucursalFiltro = (valor: string) => {
+    setSucursalFiltro(valor === 'todas' ? 'todas' : Number(valor));
+    setPagina(1);
+  };
+
+  const handleMarcaFiltro = (valor: string) => {
+    setMarcaFiltro(valor);
+    setPagina(1);
+  };
+
+  const totalPages = esOperador ? resultados.totalPages : 0;
+  const paginaActual = esOperador ? resultados.page : 1;
+
   const handleCrear = async () => {
     if (!puedeCrear) {
-      setFeedback({ tipo: 'error', mensaje: 'Selecciona origen, destino y al menos un vehículo vendido.' });
+      setFeedback({ tipo: 'error', mensaje: 'Selecciona origen, destino y al menos un vehículo.' });
       return;
     }
     const input: CreateTrasladoInput = {
@@ -118,8 +179,6 @@ export default function TrasladosClient({
       setLoading(null);
     }
   };
-
-  const vehiculosDisponibles = vehiculos.filter((v) => !v.en_traslado_activo);
 
   return (
     <div className="space-y-6">
@@ -215,25 +274,78 @@ export default function TrasladosClient({
           </div>
 
           <div className="mt-4">
-            <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-2">
-              Vehículos vendidos ({seleccionados.length} seleccionado(s))
-            </p>
-            {vehiculosDisponibles.length === 0 ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
+              <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                Vehículos ({seleccionados.length} seleccionado(s))
+              </p>
+            </div>
+            <div className="flex flex-col lg:flex-row gap-2 mb-3">
+              <div className="relative grow">
+                <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  value={busqueda}
+                  onChange={(e) => handleBusqueda(e.target.value)}
+                  placeholder="Buscar por patente o chasis"
+                  className="w-full bg-white border border-neutral-300 rounded-xl pl-9 pr-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                  Sucursal:
+                </label>
+                <select
+                  value={sucursalFiltro === 'todas' ? 'todas' : Number(sucursalFiltro)}
+                  onChange={(e) => handleSucursalFiltro(e.target.value)}
+                  className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900 cursor-pointer"
+                >
+                  <option value="todas">Todas</option>
+                  {sucursales.map((s) => (
+                    <option key={s.id} value={s.id}>{s.nombre}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                  Marca:
+                </label>
+                <select
+                  value={marcaFiltro}
+                  onChange={(e) => handleMarcaFiltro(e.target.value)}
+                  className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 font-medium focus:outline-none focus:ring-2 focus:ring-neutral-900 cursor-pointer"
+                >
+                  <option value="todas">Todas</option>
+                  {marcas.map((m) => (
+                    <option key={m.id} value={m.nombre} title={m.nombre}>{m.codigo}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {cargandoVehiculos ? (
+              <div className="flex items-center justify-center border border-dashed border-neutral-300 rounded-xl px-4 py-8">
+                <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+              </div>
+            ) : resultados.vehiculos.length === 0 ? (
               <p className="text-sm text-neutral-400 border border-dashed border-neutral-300 rounded-xl px-4 py-6 text-center">
-                No hay vehículos vendidos disponibles para trasladar.
+                {busqueda.trim()
+                  ? 'No se encontraron vehículos con esa patente o chasis.'
+                  : 'No hay vehículos para trasladar.'}
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                {vehiculosDisponibles.map((v) => {
+                {resultados.vehiculos.map((v) => {
                   const activo = seleccionados.includes(v.id);
                   return (
                     <button
                       key={v.id}
                       onClick={() => toggleVehiculo(v.id)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors cursor-pointer ${
-                        activo
-                          ? 'border-neutral-900 bg-neutral-900 text-white'
-                          : 'border-neutral-200 bg-white hover:border-neutral-400'
+                      disabled={v.en_traslado_activo}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${
+                        v.en_traslado_activo
+                          ? 'border-neutral-200 bg-neutral-50 text-neutral-300 cursor-not-allowed'
+                          : activo
+                            ? 'border-neutral-900 bg-neutral-900 text-white cursor-pointer'
+                            : 'border-neutral-200 bg-white hover:border-neutral-400 cursor-pointer'
                       }`}
                     >
                       <Car className="w-4 h-4 shrink-0 opacity-70" />
@@ -242,10 +354,37 @@ export default function TrasladosClient({
                         <span className={`block text-[11px] truncate ${activo ? 'text-neutral-300' : 'text-neutral-500'}`}>
                           {v.marca} {v.modelo} {v.anio} · {v.ubicacion_nombre ?? 'Sin ubicación'}
                         </span>
+                        {v.en_traslado_activo && (
+                          <span className="block text-[11px] font-semibold text-amber-600">Ya en traslado</span>
+                        )}
                       </span>
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {totalPages > 1 && (
+              <div className="mt-3 flex items-center justify-between text-xs text-neutral-500">
+                <span>
+                  {resultados.total} vehículo(s) · Página {paginaActual} de {totalPages}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setPagina((p) => Math.max(1, p - 1))}
+                    disabled={paginaActual <= 1 || cargandoVehiculos}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-40 cursor-pointer"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5" /> Anterior
+                  </button>
+                  <button
+                    onClick={() => setPagina((p) => Math.min(totalPages, p + 1))}
+                    disabled={paginaActual >= totalPages || cargandoVehiculos}
+                    className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-neutral-300 bg-white hover:bg-neutral-50 disabled:opacity-40 cursor-pointer"
+                  >
+                    Siguiente <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -273,7 +412,10 @@ export default function TrasladosClient({
           {visibles.map((t) => {
             const estado = estadoConfig[t.estado];
             const puedeDespachar = esOperador && t.estado === 'pendiente';
-            const puedeRecibir = t.estado === 'en_transito';
+            const puedeRecibir =
+              t.estado === 'en_transito' &&
+              (viewerRol === 'administrador' ||
+                (viewerRol === 'jefe_local' && viewerSucursales.includes(t.destino_id)));
             return (
               <div key={t.id} className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm">
                 <div className="flex items-start justify-between gap-3">
