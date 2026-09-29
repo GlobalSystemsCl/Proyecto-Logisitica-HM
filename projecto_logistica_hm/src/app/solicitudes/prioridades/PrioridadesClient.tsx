@@ -38,6 +38,7 @@ import {
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
 import { formatFecha } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
+import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -468,6 +469,8 @@ function SolicitudCard({
   resaltado?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const estadoAtraso = getEstadoAtraso(sol);
+  const chipAtraso = CHIP_ATRASO[estadoAtraso];
 
   return (
     <div
@@ -480,7 +483,7 @@ function SolicitudCard({
           ? 'border-neutral-900 ring-2 ring-neutral-900 shadow-lg opacity-60'
           : resaltado
             ? 'border-neutral-900 ring-2 ring-neutral-900/40'
-            : 'border-neutral-200 hover:border-neutral-300'
+            : `border-neutral-200 hover:border-neutral-300 ${BORDE_ATRASO[estadoAtraso]}`
       }`}
     >
       <div className="flex items-start gap-3">
@@ -500,6 +503,11 @@ function SolicitudCard({
             <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
               {tipoLabel[sol.tipo_solicitud]}
             </span>
+            {chipAtraso && (
+              <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${chipAtraso.clase}`}>
+                {chipAtraso.texto}
+              </span>
+            )}
           </div>
 
           {sol.vehiculos.length > 0 ? (

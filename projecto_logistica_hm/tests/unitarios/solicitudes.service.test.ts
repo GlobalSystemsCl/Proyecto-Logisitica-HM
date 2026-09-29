@@ -203,6 +203,31 @@ describe('SolicitudesService.getJefeLocalDeSucursal', () => {
     expect(admin.callsTo('usuario')).toContainEqual(['eq', 'sucursal_id', 5]);
   });
 
+  it('should_devolver_id_cuando_es_encargado_via_sucursal_usuario_id', async () => {
+    admin.results.usuario = [fila([]), fila({ id: 'u-22' })];
+    admin.results.sucursal = [fila({ usuario_id: 'u-22' })];
+    const res = await SolicitudesService.getJefeLocalDeSucursal(5);
+    expect(res).toBe('u-22');
+    expect(admin.callsTo('sucursal')).toContainEqual(['eq', 'id', 5]);
+  });
+
+  it('should_devolver_id_cuando_esta_en_tabla_usuario_sucursal', async () => {
+    admin.results.usuario = [fila([]), fila([{ id: 'u-33' }])];
+    admin.results.sucursal = [fila({ usuario_id: null })];
+    admin.results.usuario_sucursal = [fila([{ usuario_id: 'u-33' }])];
+    const res = await SolicitudesService.getJefeLocalDeSucursal(5);
+    expect(res).toBe('u-33');
+    expect(admin.callsTo('usuario_sucursal')).toContainEqual(['eq', 'sucursal_id', 5]);
+  });
+
+  it('should_ignorar_encargado_que_no_es_jefe_local_y_continuar', async () => {
+    admin.results.usuario = [fila([]), fila(null), fila([{ id: 'u-44' }])];
+    admin.results.sucursal = [fila({ usuario_id: 'u-44' })];
+    admin.results.usuario_sucursal = [fila([{ usuario_id: 'u-44' }])];
+    const res = await SolicitudesService.getJefeLocalDeSucursal(5);
+    expect(res).toBe('u-44');
+  });
+
   it('should_devolver_null_sin_jefe_local', async () => {
     admin.results.usuario = [fila([])];
     const res = await SolicitudesService.getJefeLocalDeSucursal(5);
