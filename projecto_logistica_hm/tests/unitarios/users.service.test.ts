@@ -228,6 +228,122 @@ describe('UsersService', () => {
     });
   });
 
+  describe('getUsuarioDetalleById', () => {
+    it('should_return_basic_contact_data', async () => {
+      admin.results.usuario = [
+        fila({
+          id: 'u-20',
+          email: 'a@test.com',
+          nombre: 'Ana',
+          apellido: 'Pérez',
+          rol: 'ejecutivo',
+          activo: true,
+          telefono: '+56912345678',
+          sucursal_id: 1,
+          created_at: '2026-01-01T00:00:00Z',
+          sucursal: { nombre: 'Casa Matriz' },
+        }),
+      ];
+      admin.results.sucursal = [fila([])];
+      admin.results.usuario_zona = [fila([])];
+
+      const detalle = await UsersService.getUsuarioDetalleById('u-20');
+
+      expect(detalle).toMatchObject({
+        id: 'u-20',
+        email: 'a@test.com',
+        nombre: 'Ana',
+        apellido: 'Pérez',
+        rol: 'ejecutivo',
+        activo: true,
+        telefono: '+56912345678',
+        sucursal_id: 1,
+        sucursal_nombre: 'Casa Matriz',
+        sucursales: [{ id: 1, nombre: 'Casa Matriz' }],
+        zonas: [],
+      });
+    });
+
+    it('should_include_managed_branches_and_zones', async () => {
+      admin.results.usuario = [
+        fila({
+          id: 'u-21',
+          email: 'j@test.com',
+          nombre: 'Jefe',
+          apellido: 'Local',
+          rol: 'jefe_local',
+          activo: true,
+          telefono: null,
+          sucursal_id: 1,
+          created_at: '2026-01-01T00:00:00Z',
+          sucursal: { nombre: 'Casa Matriz' },
+        }),
+      ];
+      admin.results.sucursal = [fila([{ id: 2, nombre: 'Norte' }, { id: 3, nombre: 'Sur' }])];
+      admin.results.usuario_zona = [fila([{ zona_id: 5, zona: { id: 5, nombre: 'Zona Norte' } }])];
+
+      const detalle = await UsersService.getUsuarioDetalleById('u-21');
+
+      const ids = (detalle?.sucursales || []).map((s) => s.id).sort();
+      expect(ids).toEqual([1, 2, 3]);
+      expect(detalle?.zonas).toEqual([{ id: 5, nombre: 'Zona Norte' }]);
+    });
+
+    it('should_not_duplicate_main_branch_when_also_managed', async () => {
+      admin.results.usuario = [
+        fila({
+          id: 'u-22',
+          email: 'j@test.com',
+          nombre: 'Jefe',
+          apellido: 'Local',
+          rol: 'jefe_local',
+          activo: true,
+          telefono: null,
+          sucursal_id: 1,
+          created_at: '2026-01-01T00:00:00Z',
+          sucursal: { nombre: 'Casa Matriz' },
+        }),
+      ];
+      admin.results.sucursal = [fila([{ id: 1, nombre: 'Casa Matriz' }])];
+      admin.results.usuario_zona = [fila([])];
+
+      const detalle = await UsersService.getUsuarioDetalleById('u-22');
+
+      expect(detalle?.sucursales).toEqual([{ id: 1, nombre: 'Casa Matriz' }]);
+    });
+
+    it('should_return_null_when_usuario_query_fails', async () => {
+      admin.results.usuario = [{ data: null, error: { message: 'no existe columna' } }];
+
+      const detalle = await UsersService.getUsuarioDetalleById('u-23');
+
+      expect(detalle).toBeNull();
+    });
+
+    it('should_return_detail_with_empty_lists_when_aux_queries_fail', async () => {
+      admin.results.usuario = [
+        fila({
+          id: 'u-24',
+          email: 'l@test.com',
+          nombre: 'Log',
+          apellido: 'R',
+          rol: 'logistica',
+          activo: true,
+          telefono: null,
+          sucursal_id: null,
+          created_at: '2026-01-01T00:00:00Z',
+          sucursal: null,
+        }),
+      ];
+      admin.results.sucursal = [{ data: null, error: { message: 'boom' } }];
+      admin.results.usuario_zona = [{ data: null, error: { message: 'boom' } }];
+
+      const detalle = await UsersService.getUsuarioDetalleById('u-24');
+
+      expect(detalle).toMatchObject({ id: 'u-24', sucursal_nombre: null, sucursales: [], zonas: [] });
+    });
+  });
+
   describe('updateUser', () => {
     const base = {
       email: 'j2@test.com',

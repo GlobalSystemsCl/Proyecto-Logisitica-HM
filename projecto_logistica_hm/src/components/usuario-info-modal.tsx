@@ -12,6 +12,7 @@ import {
   X,
   Loader2,
   AlertCircle,
+  Globe,
 } from 'lucide-react';
 import { getUsuarioDetalleAction } from '@/app/actions/solicitudes.actions';
 import { ROL_LABEL, UsuarioDetalle } from '@/types/auth.types';
@@ -50,6 +51,9 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
   }, [usuarioId]);
 
   const nombre = data ? `${data.nombre} ${data.apellido}`.trim() : nombreFallback || 'Usuario';
+  const esEncargadoDeLocal = data?.rol === 'jefe_local' || data?.rol === 'administrador';
+  const esLogistica = data?.rol === 'logistica';
+  const sucursalesACargo = (data?.sucursales ?? []).filter((s) => s.id !== data?.sucursal_id);
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
@@ -118,12 +122,72 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
                   <Building2 className="w-4 h-4 text-neutral-600" />
                 </span>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Sucursal</p>
+                  <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Sucursal de pertenencia</p>
                   <p className="text-sm font-semibold text-neutral-900">
                     {data.sucursal_nombre || (data.sucursal_id ? `#${data.sucursal_id}` : 'Sin asignar')}
                   </p>
                 </div>
               </div>
+
+              {esEncargadoDeLocal && (
+                <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <span className="w-9 h-9 rounded-lg bg-white border border-neutral-200 flex items-center justify-center shrink-0">
+                      <Building2 className="w-4 h-4 text-neutral-600" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
+                        Sucursales a su cargo
+                      </p>
+                      <p className="text-[11px] text-neutral-500">Encargado de local</p>
+                    </div>
+                  </div>
+                  {sucursalesACargo.length === 0 ? (
+                    <p className="text-xs text-neutral-400 italic">Sin sucursales adicionales a cargo.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {sucursalesACargo.map((s) => (
+                        <span
+                          key={s.id}
+                          className="px-2 py-1 rounded-lg bg-white border border-neutral-200 text-[11px] font-semibold text-neutral-700"
+                        >
+                          {s.nombre || `Sucursal #${s.id}`}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {esLogistica && (
+                <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3">
+                  <div className="flex items-center gap-3 mb-2.5">
+                    <span className="w-9 h-9 rounded-lg bg-white border border-neutral-200 flex items-center justify-center shrink-0">
+                      <Globe className="w-4 h-4 text-neutral-600" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
+                        Zonas de logística territorial
+                      </p>
+                      <p className="text-[11px] text-neutral-500">Alcance territorial del usuario</p>
+                    </div>
+                  </div>
+                  {(data.zonas ?? []).length === 0 ? (
+                    <p className="text-xs text-neutral-400 italic">Sin zonas asignadas.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(data.zonas ?? []).map((z) => (
+                        <span
+                          key={z.id}
+                          className="px-2 py-1 rounded-lg bg-white border border-neutral-200 text-[11px] font-semibold text-neutral-700"
+                        >
+                          {z.nombre}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 flex items-center gap-3">
                 <span className="w-9 h-9 rounded-lg bg-white border border-neutral-200 flex items-center justify-center shrink-0">
                   <Phone className="w-4 h-4 text-neutral-600" />

@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { CreateUserInput, UpdateUserInput, UserProfile, UsuarioDetalle } from '@/types/auth.types';
+import { CreateUserInput, UpdateUserInput, UserProfile, UsuarioDetalle, UsuarioSucursalAsignada, UsuarioZonaAsignada } from '@/types/auth.types';
 import { EmailService } from '@/services/email.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -452,18 +452,23 @@ export class UsersService {
   static async getUsuarioDetalleById(userId: string): Promise<UsuarioDetalle | null> {
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
-        .from('usuario')
-        .select('id, email, nombre, apellido, rol, activo, telefono, sucursal_id, created_at, sucursal:sucursal_id(nombre)')
-        .eq('id', userId)
-        .single();
 
-      if (error || !data) {
-        console.error('Error en getUsuarioDetalleById:', error);
+      const [usuarioRes, encargadasRes, zonasRes] = await Promise.all([
+        admin
+          .from('usuario')
+          .select('id, email, nombre, apellido, rol, activo, telefono, sucursal_id, created_at, sucursal:sucursal_id(nombre)')
+          .eq('id', userId)
+          .single(),
+        admin.from('sucursal').select('id, nombre').eq('usuario_id', userId),
+        admin.from('usuario_zona').select('zona_id, zona:zona_id(id, nombre)').eq('usuario_id', userId),
+      ]);
+
+      if (usuarioRes.error || !usuarioRes.data) {
+        console.error('Error en getUsuarioDetalleById:', usuarioRes.error);
         return null;
       }
 
-      const row = data as unknown as {
+      const row = usuarioRes.data as unknown as {
         id: string;
         email: string;
         nombre: string;
@@ -478,6 +483,25 @@ export class UsersService {
 
       const sucursalRaw = Array.isArray(row.sucursal) ? row.sucursal[0] : row.sucursal;
 
+      // Sucursales del usuario: el mapa une la principal (pertenencia) + las que
+      // está a cargo (encargado de local), para que el detalle muestre ambas.
+      const mapa = new Map<number, UsuarioSucursalAsignada>();
+      ((encargadasRes.data as Array<{ id: number; nombre: string | null }> | null) || []).forEach((s) => {
+        if (!s.id) return;
+        mapa.set(s.id, { id: s.id, nombre: s.nombre ?? null });
+      });
+      if (row.sucursal_id !== null) {
+        mapa.set(row.sucursal_id, { id: row.sucursal_id, nombre: sucursalRaw?.nombre ?? null });
+      }
+
+      const zonas: UsuarioZonaAsignada[] = ((zonasRes.data as Array<{
+        zona_id: number;
+        zona: { id: number; nombre: string | null } | Array<{ id: number; nombre: string | null }> | null;
+      }> | null) || []).map((z) => {
+        const raw = Array.isArray(z.zona) ? z.zona[0] : z.zona;
+        return { id: z.zona_id, nombre: raw?.nombre ?? `Zona ${z.zona_id}` };
+      });
+
       return {
         id: row.id,
         email: row.email,
@@ -488,6 +512,8 @@ export class UsersService {
         telefono: row.telefono ?? null,
         sucursal_id: row.sucursal_id ?? null,
         sucursal_nombre: sucursalRaw?.nombre ?? null,
+        sucursales: Array.from(mapa.values()),
+        zonas,
         created_at: row.created_at,
       };
     } catch (err) {
