@@ -1,4 +1,7 @@
+e
+
 # Plan de Implementación — DEV 2
+
 ## Proyecto Logística H.M. · Fase Solicitudes + Logística + Operación
 
 > **Basado en análisis real del código, migraciones y arquitectura existente.**
@@ -6,33 +9,18 @@
 
 ---
 
-## ESTADO ACTUAL DE IMPLEMENTACIÓN (2026-09-28)
-
-- ✅ **Fases 2 a 8**: implementación completa en código (verificada con `tsc --noEmit`, `next lint` y `next build` sin errores).
-- ⬜ **Fase 1 (BD)**: pendiente de ejecutar las 6 migraciones `20260928_*` en Supabase SQL Editor.
-- ⬜ **Fase 9 (QA)**: pendiente de ejecutar hasta que Fase 1 esté aplicada (pruebas end-to-end manuales).
-- **Orden de ejecución de migraciones (indispensable)**:
-  1. `20260928_solicitud_fechas.sql` — columnas de fechas en `solicitud`
-  2. `20260928_enum_despachada.sql` — **SOLA, en transacción separada**
-  3. `20260928_triggers_fechas.sql` — **DESPUÉS del enum, otra sesión SQL**
-  4. `20260928_traslado_interno.sql`
-  5. `20260928_insistencia.sql`
-  6. `20260928_rls_nuevas_tablas.sql`
-
----
-
 ## DIAGNÓSTICO: Lo que DEV 1 dejó listo (CONSUMIR, no reimplementar)
 
-| Contrato | Archivo | Línea | Función |
-|---|---|---|---|
-| `OrganizacionService.getUserAssignedBranches(uid)` | `organizacion.service.ts` | 268 | Sucursales asignadas (principal + N:M) |
-| `OrganizacionService.getUserZones(uid)` | `organizacion.service.ts` | 315 | Zonas de logística |
-| `OrganizacionService.usuarioTieneSucursal(uid, sid)` | `organizacion.service.ts` | 346 | Validación vía RPC SQL SECURITY DEFINER |
-| `OrganizacionService.getAvailableVehicles()` | `organizacion.service.ts` | 448 | Vehículos disponibles (liberados) |
-| `OrganizacionService.getVehicle(id)` | `organizacion.service.ts` | 403 | Vehículo con disponibilidad |
-| Tabla `usuario_sucursal` (N:M) | `20260915_zona_organizacion.sql` | — | Jefe Local multi-sucursal |
-| Tabla `usuario_zona` (N:M) | `20260915_zona_organizacion.sql` | — | Logística por zonas |
-| Función SQL `usuario_tiene_sucursal(uuid, bigint)` | `20260915_zona_organizacion.sql` | 136 | Helper negocio DB |
+| Contrato                                               | Archivo                            | Línea | Función                                  |
+| ------------------------------------------------------ | ---------------------------------- | ------ | ----------------------------------------- |
+| `OrganizacionService.getUserAssignedBranches(uid)`   | `organizacion.service.ts`        | 268    | Sucursales asignadas (principal + N:M)    |
+| `OrganizacionService.getUserZones(uid)`              | `organizacion.service.ts`        | 315    | Zonas de logística                       |
+| `OrganizacionService.usuarioTieneSucursal(uid, sid)` | `organizacion.service.ts`        | 346    | Validación vía RPC SQL SECURITY DEFINER |
+| `OrganizacionService.getAvailableVehicles()`         | `organizacion.service.ts`        | 448    | Vehículos disponibles (liberados)        |
+| `OrganizacionService.getVehicle(id)`                 | `organizacion.service.ts`        | 403    | Vehículo con disponibilidad              |
+| Tabla`usuario_sucursal` (N:M)                        | `20260915_zona_organizacion.sql` | —     | Jefe Local multi-sucursal                 |
+| Tabla`usuario_zona` (N:M)                            | `20260915_zona_organizacion.sql` | —     | Logística por zonas                      |
+| Función SQL`usuario_tiene_sucursal(uuid, bigint)`   | `20260915_zona_organizacion.sql` | 136    | Helper negocio DB                         |
 
 ---
 
@@ -53,20 +41,20 @@
 
 ### Gap: nomenclatura actual vs. requerida
 
-| Valor DB (inmutable) | Label UI actual | Label UI nuevo | Acción |
-|---|---|---|---|
-| `pendiente_aprobacion` | "Pendiente Aprobación" | **Pendiente** | Solo cambiar label |
-| `aprobada` | "Aprobada" | **Aprobada** | Mantener |
-| `pendiente` | "Pendiente" | Huérfano sin uso | Mantener en DB, ignorar en flujo |
-| `priorizada` | "Priorizada" | **Priorizada** | Mantener |
-| `asignada` | "Asignada" | **Asignada** | Mantener |
-| `calendarizada` | "Calendarizada" | **Calendarizada** | Mantener |
-| `despachada` | _(no existe)_ | **Despachada** | **AGREGAR al enum** |
-| `en_transito` | "En Tránsito" | **En tránsito** | Solo label |
-| `entregada` | "Entregada" | **Recepcionada** | Solo label |
-| `finalizada` | "Finalizada" | **Entregado a cliente** | Solo label |
-| `cancelada` | "Cancelada" | **Cancelada** | Mantener |
-| `rechazada` | "Rechazada" | **Rechazada** | Mantener |
+| Valor DB (inmutable)     | Label UI actual         | Label UI nuevo                | Acción                          |
+| ------------------------ | ----------------------- | ----------------------------- | -------------------------------- |
+| `pendiente_aprobacion` | "Pendiente Aprobación" | **Pendiente**           | Solo cambiar label               |
+| `aprobada`             | "Aprobada"              | **Aprobada**            | Mantener                         |
+| `pendiente`            | "Pendiente"             | Huérfano sin uso             | Mantener en DB, ignorar en flujo |
+| `priorizada`           | "Priorizada"            | **Priorizada**          | Mantener                         |
+| `asignada`             | "Asignada"              | **Asignada**            | Mantener                         |
+| `calendarizada`        | "Calendarizada"         | **Calendarizada**       | Mantener                         |
+| `despachada`           | _(no existe)_         | **Despachada**          | **AGREGAR al enum**        |
+| `en_transito`          | "En Tránsito"          | **En tránsito**        | Solo label                       |
+| `entregada`            | "Entregada"             | **Recepcionada**        | Solo label                       |
+| `finalizada`           | "Finalizada"            | **Entregado a cliente** | Solo label                       |
+| `cancelada`            | "Cancelada"             | **Cancelada**           | Mantener                         |
+| `rechazada`            | "Rechazada"             | **Rechazada**           | Mantener                         |
 
 > **REGLA CRÍTICA**: Los valores del enum PostgreSQL NO se renombran. Solo cambiamos labels en `estadoConfig` de `SolicitudesClient.tsx` y `SolicitudDetalleModal.tsx`.
 
@@ -83,55 +71,55 @@ Requerido: calendarizada → despachada → en_transito → entregada[Recepciona
 
 ### DEV 2 exclusivo (riesgo 0 de conflicto)
 
-| Archivo | Motivo |
-|---|---|
-| `src/types/sucursal.types.ts` | Agregar `'despachada'` al union `EstadoSolicitud` |
-| `src/types/solicitud.types.ts` | Agregar fechas: `fecha_confirmacion`, `fecha_inicio_transito`, `fecha_recepcion`, `fecha_entrega_cliente` |
-| `src/services/solicitudes.service.ts` | Adaptar flujo, insistir, filtrado por zona |
-| `src/app/actions/solicitudes.actions.ts` | Nuevas actions + actualizar validaciones multi-sucursal |
-| `src/app/solicitudes/SolicitudesClient.tsx` | Labels, botón Insistir, ocultar prioridad a ejecutivos |
-| `src/components/SolicitudDetalleModal.tsx` | Trazabilidad, fechas, encargado logística |
-| `src/app/solicitudes/page.tsx` | Pasar `sucursales_asignadas` al client |
+| Archivo                                       | Motivo                                                                                                           |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `src/types/sucursal.types.ts`               | Agregar`'despachada'` al union `EstadoSolicitud`                                                             |
+| `src/types/solicitud.types.ts`              | Agregar fechas:`fecha_confirmacion`, `fecha_inicio_transito`, `fecha_recepcion`, `fecha_entrega_cliente` |
+| `src/services/solicitudes.service.ts`       | Adaptar flujo, insistir, filtrado por zona                                                                       |
+| `src/app/actions/solicitudes.actions.ts`    | Nuevas actions + actualizar validaciones multi-sucursal                                                          |
+| `src/app/solicitudes/SolicitudesClient.tsx` | Labels, botón Insistir, ocultar prioridad a ejecutivos                                                          |
+| `src/components/SolicitudDetalleModal.tsx`  | Trazabilidad, fechas, encargado logística                                                                       |
+| `src/app/solicitudes/page.tsx`              | Pasar`sucursales_asignadas` al client                                                                          |
 
 ### Archivos nuevos (DEV 2 crea)
 
-| Archivo | Contenido |
-|---|---|
-| `src/types/traslado.types.ts` | Tipos traslado interno |
-| `src/services/traslado.service.ts` | Lógica traslados internos |
-| `src/app/actions/traslados.actions.ts` | Server actions traslados |
-| `src/app/solicitudes/traslados/page.tsx` | Vista traslados internos |
-| `src/app/solicitudes/traslados/TrasladosClient.tsx` | UI traslados |
-| `src/app/logistica/slots/page.tsx` | Vista slots multi-sucursal |
-| `src/app/logistica/slots/SlotsClient.tsx` | UI slots |
-| `src/app/faq/page.tsx` | Preguntas frecuentes |
+| Archivo                                               | Contenido                  |
+| ----------------------------------------------------- | -------------------------- |
+| `src/types/traslado.types.ts`                       | Tipos traslado interno     |
+| `src/services/traslado.service.ts`                  | Lógica traslados internos |
+| `src/app/actions/traslados.actions.ts`              | Server actions traslados   |
+| `src/app/solicitudes/traslados/page.tsx`            | Vista traslados internos   |
+| `src/app/solicitudes/traslados/TrasladosClient.tsx` | UI traslados               |
+| `src/app/logistica/slots/page.tsx`                  | Vista slots multi-sucursal |
+| `src/app/logistica/slots/SlotsClient.tsx`           | UI slots                   |
+| `src/app/faq/page.tsx`                              | Preguntas frecuentes       |
 
 ### Archivos compartidos con DEV 1 (mínima modificación)
 
-| Archivo | Qué tocar | Qué NO tocar |
-|---|---|---|
-| `src/types/sucursal.types.ts` | Solo agregar `'despachada'` al union type | No tocar `Sucursal`, `Zona`, `VehiculoAsociado` |
-| `src/services/organizacion.service.ts` | **SOLO LEER** — importar sin modificar | No agregar métodos, no refactorizar |
-| `src/components/TopNavbar.tsx` | Agregar prop `sucursales_asignadas` opcional | No cambiar layout existente |
+| Archivo                                  | Qué tocar                                    | Qué NO tocar                                        |
+| ---------------------------------------- | --------------------------------------------- | ---------------------------------------------------- |
+| `src/types/sucursal.types.ts`          | Solo agregar`'despachada'` al union type    | No tocar`Sucursal`, `Zona`, `VehiculoAsociado` |
+| `src/services/organizacion.service.ts` | **SOLO LEER** — importar sin modificar | No agregar métodos, no refactorizar                 |
+| `src/components/TopNavbar.tsx`         | Agregar prop`sucursales_asignadas` opcional | No cambiar layout existente                          |
 
 ---
 
 ## B. TABLAS A MODIFICAR
 
-| Tabla | Columnas a agregar | Notas |
-|---|---|---|
-| `solicitud` | `fecha_confirmacion TIMESTAMPTZ`, `fecha_inicio_transito TIMESTAMPTZ`, `fecha_recepcion TIMESTAMPTZ`, `fecha_entrega_cliente TIMESTAMPTZ` | `fecha_despacho` y `logistica_id` ya existen; reusar `logistica_id` como encargado |
-| `solicitud_vehiculo` | Sin cambios | Ya tiene enum `disponibilidad` con `'vendido'` |
+| Tabla                  | Columnas a agregar                                                                                                                                | Notas                                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `solicitud`          | `fecha_confirmacion TIMESTAMPTZ`, `fecha_inicio_transito TIMESTAMPTZ`, `fecha_recepcion TIMESTAMPTZ`, `fecha_entrega_cliente TIMESTAMPTZ` | `fecha_despacho` y `logistica_id` ya existen; reusar `logistica_id` como encargado |
+| `solicitud_vehiculo` | Sin cambios                                                                                                                                       | Ya tiene enum`disponibilidad` con `'vendido'`                                        |
 
 ---
 
 ## C. TABLAS NUEVAS
 
-| Tabla | Descripción |
-|---|---|
-| `traslado_interno` | `id`, `origen_id` (FK sucursal), `destino_id` (FK sucursal), `logistica_id` (FK usuario), `estado` (enum), `fecha_despacho`, `fecha_recepcion`, `observacion`, `created_at`, `updated_at` |
-| `traslado_interno_vehiculo` | `id`, `traslado_id` (FK), `vehiculo_id` (FK), `disponibilidad` (enum), `created_at` |
-| `insistencia` | `id`, `solicitud_id` (FK), `usuario_id` (FK), `mensaje TEXT`, `created_at` |
+| Tabla                         | Descripción                                                                                                                                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `traslado_interno`          | `id`, `origen_id` (FK sucursal), `destino_id` (FK sucursal), `logistica_id` (FK usuario), `estado` (enum), `fecha_despacho`, `fecha_recepcion`, `observacion`, `created_at`, `updated_at` |
+| `traslado_interno_vehiculo` | `id`, `traslado_id` (FK), `vehiculo_id` (FK), `disponibilidad` (enum), `created_at`                                                                                                                 |
+| `insistencia`               | `id`, `solicitud_id` (FK), `usuario_id` (FK), `mensaje TEXT`, `created_at`                                                                                                                          |
 
 ---
 
@@ -313,27 +301,27 @@ CREATE POLICY "insistencia_insert" ON public.insistencia FOR INSERT TO authentic
 
 ### Flujo Normal
 
-| Valor DB | Label UI | Quién avanza | Efecto |
-|---|---|---|---|
-| `pendiente_aprobacion` | **Pendiente** | — (creado por ejecutivo) | Inicial |
-| `aprobada` | **Aprobada** | Jefe Local | `fecha_confirmacion` = now() |
-| `priorizada` | **Priorizada** | Jefe Local | `posicion_prioridad` asignada |
-| `asignada` | **Asignada** | Logística | `logistica_id` = encargado |
-| `calendarizada` | **Calendarizada** | Logística | `fecha_tentativa_despacho` asignada |
-| `despachada` | **Despachada** | Logística | `fecha_despacho` + `fecha_inicio_transito` = now() |
-| `en_transito` | **En tránsito** | Sistema (inmediato) | Auto o manual |
-| `entregada` | **Recepcionada** | Jefe Local destino | `fecha_recepcion` = now() · vehículo LIBERADO |
-| `finalizada` | **Entregado a cliente** | Ejecutivo / Jefe Local | `fecha_entrega_cliente` = now() · vehículo VENDIDO |
-| `cancelada` | **Cancelada** | Varios | Slots liberados |
-| `rechazada` | **Rechazada** | Jefe Local | Slots liberados |
+| Valor DB                 | Label UI                      | Quién avanza             | Efecto                                                 |
+| ------------------------ | ----------------------------- | ------------------------- | ------------------------------------------------------ |
+| `pendiente_aprobacion` | **Pendiente**           | — (creado por ejecutivo) | Inicial                                                |
+| `aprobada`             | **Aprobada**            | Jefe Local                | `fecha_confirmacion` = now()                         |
+| `priorizada`           | **Priorizada**          | Jefe Local                | `posicion_prioridad` asignada                        |
+| `asignada`             | **Asignada**            | Logística                | `logistica_id` = encargado                           |
+| `calendarizada`        | **Calendarizada**       | Logística                | `fecha_tentativa_despacho` asignada                  |
+| `despachada`           | **Despachada**          | Logística                | `fecha_despacho` + `fecha_inicio_transito` = now() |
+| `en_transito`          | **En tránsito**        | Sistema (inmediato)       | Auto o manual                                          |
+| `entregada`            | **Recepcionada**        | Jefe Local destino        | `fecha_recepcion` = now() · vehículo LIBERADO      |
+| `finalizada`           | **Entregado a cliente** | Ejecutivo / Jefe Local    | `fecha_entrega_cliente` = now() · vehículo VENDIDO |
+| `cancelada`            | **Cancelada**           | Varios                    | Slots liberados                                        |
+| `rechazada`            | **Rechazada**           | Jefe Local                | Slots liberados                                        |
 
 ### Flujo Traslado Interno
 
-| Valor DB | Label UI | Quién avanza |
-|---|---|---|
-| `pendiente` | **Pendiente** | Creado por Logística |
-| `en_transito` | **En tránsito** | Logística despacha |
-| `recepcionado` | **Recepcionado** | Jefe Local destino |
+| Valor DB         | Label UI               | Quién avanza         |
+| ---------------- | ---------------------- | --------------------- |
+| `pendiente`    | **Pendiente**    | Creado por Logística |
+| `en_transito`  | **En tránsito** | Logística despacha   |
+| `recepcionado` | **Recepcionado** | Jefe Local destino    |
 
 ---
 
@@ -407,24 +395,24 @@ class TrasladoService {
 
 ## H. PERMISOS POR ROL
 
-| Acción | Ejecutivo | Jefe Local | Logística | Admin |
-|---|---|---|---|---|
-| Crear solicitud | ✅ (propia sucursal) | ✅ (sus sucursales) | ❌ | ✅ |
-| Ver solicitudes | Solo propias | Sus sucursales | Sus zonas | Todas |
-| Aprobar / Rechazar | ❌ | ✅ (sus sucursales) | ❌ | ✅ |
-| Modificar fecha_limite | ❌ | ✅ (al aprobar) | ❌ | ✅ |
-| Priorizar | ❌ | ✅ | ❌ | ✅ |
-| Asignar encargado logística | ❌ | ❌ | ✅ | ✅ |
-| Calendarizar | ❌ | ❌ | ✅ | ✅ |
-| Despachar | ❌ | ❌ | ✅ | ✅ |
-| Recepcionar | ❌ | ✅ (destino) | ❌ | ✅ |
-| Entregar a cliente | ✅ (propia sol.) | ✅ (destino) | ❌ | ✅ |
-| Insistir | ✅ (24h cooldown) | ❌ | ❌ | ❌ |
-| Ver prioridad | ❌ | ✅ | ✅ | ✅ |
-| Crear traslado interno | ❌ | ❌ | ✅ | ✅ |
-| Ver slots navbar | ❌ | ✅ (sus suc.) | ❌ | ✅ |
-| Subir documentos | ✅ | ✅ | ✅ | ✅ |
-| Cancelar | ✅ (pre-despacho) | ✅ (sus suc.) | ✅ | ✅ |
+| Acción                      | Ejecutivo            | Jefe Local          | Logística | Admin |
+| ---------------------------- | -------------------- | ------------------- | ---------- | ----- |
+| Crear solicitud              | ✅ (propia sucursal) | ✅ (sus sucursales) | ❌         | ✅    |
+| Ver solicitudes              | Solo propias         | Sus sucursales      | Sus zonas  | Todas |
+| Aprobar / Rechazar           | ❌                   | ✅ (sus sucursales) | ❌         | ✅    |
+| Modificar fecha_limite       | ❌                   | ✅ (al aprobar)     | ❌         | ✅    |
+| Priorizar                    | ❌                   | ✅                  | ❌         | ✅    |
+| Asignar encargado logística | ❌                   | ❌                  | ✅         | ✅    |
+| Calendarizar                 | ❌                   | ❌                  | ✅         | ✅    |
+| Despachar                    | ❌                   | ❌                  | ✅         | ✅    |
+| Recepcionar                  | ❌                   | ✅ (destino)        | ❌         | ✅    |
+| Entregar a cliente           | ✅ (propia sol.)     | ✅ (destino)        | ❌         | ✅    |
+| Insistir                     | ✅ (24h cooldown)    | ❌                  | ❌         | ❌    |
+| Ver prioridad                | ❌                   | ✅                  | ✅         | ✅    |
+| Crear traslado interno       | ❌                   | ❌                  | ✅         | ✅    |
+| Ver slots navbar             | ❌                   | ✅ (sus suc.)       | ❌         | ✅    |
+| Subir documentos             | ✅                   | ✅                  | ✅         | ✅    |
+| Cancelar                     | ✅ (pre-despacho)    | ✅ (sus suc.)       | ✅         | ✅    |
 
 ### Cambios críticos en acciones existentes
 
@@ -519,15 +507,15 @@ static async getSolicitudesFiltradas(
 
 ## K. RIESGOS DE CONFLICTO GIT
 
-| Archivo | Nivel | Mitigación |
-|---|---|---|
-| `src/types/sucursal.types.ts` | 🟡 MEDIO | Solo agregar `'despachada'` al final del union; coordinar con DEV 1 |
-| `src/app/actions/solicitudes.actions.ts` | 🟡 MEDIO | Cambio quirúrgico en 3 funciones; comentar motivo |
-| `src/services/solicitudes.service.ts` | 🟢 BAJO | DEV 1 no toca este archivo por convenio |
-| `src/components/TopNavbar.tsx` | 🟡 MEDIO | Solo prop opcional nueva; no rompe |
-| `src/services/organizacion.service.ts` | 🔴 NO TOCAR | Solo importar |
-| Migraciones SQL `20260928_*` | 🟢 BAJO | Fecha propia no colisiona con DEV 1 |
-| Triggers en `solicitud` | 🟡 MEDIO | Verificar que `tr_registrar_fechas_flujo` no colisione con triggers existentes |
+| Archivo                                    | Nivel       | Mitigación                                                                     |
+| ------------------------------------------ | ----------- | ------------------------------------------------------------------------------- |
+| `src/types/sucursal.types.ts`            | 🟡 MEDIO    | Solo agregar`'despachada'` al final del union; coordinar con DEV 1            |
+| `src/app/actions/solicitudes.actions.ts` | 🟡 MEDIO    | Cambio quirúrgico en 3 funciones; comentar motivo                              |
+| `src/services/solicitudes.service.ts`    | 🟢 BAJO     | DEV 1 no toca este archivo por convenio                                         |
+| `src/components/TopNavbar.tsx`           | 🟡 MEDIO    | Solo prop opcional nueva; no rompe                                              |
+| `src/services/organizacion.service.ts`   | 🔴 NO TOCAR | Solo importar                                                                   |
+| Migraciones SQL`20260928_*`              | 🟢 BAJO     | Fecha propia no colisiona con DEV 1                                             |
+| Triggers en`solicitud`                   | 🟡 MEDIO    | Verificar que`tr_registrar_fechas_flujo` no colisione con triggers existentes |
 
 ---
 
@@ -627,6 +615,7 @@ WHERE tablename IN ('traslado_interno','traslado_interno_vehiculo','insistencia'
 ```
 
 **Checklist de pruebas Fase 1:**
+
 - [ ] P1.1 — 4 columnas nuevas en `solicitud`
 - [ ] P1.2 — `'despachada'` en el enum `estado_solicitud`
 - [ ] P1.3 — Trigger `tr_registrar_fechas_flujo` existe
@@ -642,14 +631,14 @@ WHERE tablename IN ('traslado_interno','traslado_interno_vehiculo','insistencia'
 
 ### 🔲 FASE 2 — Tipos TypeScript *(30 min)*
 
-**Estado de fase: ✅ COMPLETA (implementación)** *(no iniciar sin Fase 1 ✅)*
+**Estado de fase: ⬜ PENDIENTE** *(no iniciar sin Fase 1 ✅)*
 
 #### Pasos de implementación
 
-- [x] 7. `sucursal.types.ts` → agregar `'despachada'` a `EstadoSolicitud`
-- [x] 8. `solicitud.types.ts` → agregar 4 fechas nuevas a `SolicitudLista` y `SolicitudMinima`
-- [x] 9. Actualizar `SOLICITUD_SELECT` en `solicitudes.service.ts` con nuevas columnas
-- [x] 10. Crear `src/types/traslado.types.ts`
+- [ ] 7. `sucursal.types.ts` → agregar `'despachada'` a `EstadoSolicitud`
+- [ ] 8. `solicitud.types.ts` → agregar 4 fechas nuevas a `SolicitudLista` y `SolicitudMinima`
+- [ ] 9. Actualizar `SOLICITUD_SELECT` en `solicitudes.service.ts` con nuevas columnas
+- [ ] 10. Crear `src/types/traslado.types.ts`
 
 #### 🧪 Plan de pruebas — Fase 2
 
@@ -694,6 +683,7 @@ grep -n "fecha_confirmacion" src/services/solicitudes.service.ts
 ```
 
 **Checklist de pruebas Fase 2:**
+
 - [ ] P2.1 — `tsc --noEmit` sin errores
 - [ ] P2.2 — `'despachada'` en `EstadoSolicitud`
 - [ ] P2.3 — 4 fechas nuevas en `SolicitudLista`
@@ -707,19 +697,19 @@ grep -n "fecha_confirmacion" src/services/solicitudes.service.ts
 
 ### 🔲 FASE 3 — Servicios *(3-4 horas)*
 
-**Estado de fase: ✅ COMPLETA (implementación)** *(no iniciar sin Fase 2 ✅)*
+**Estado de fase: ⬜ PENDIENTE** *(no iniciar sin Fase 2 ✅)*
 
 #### Pasos de implementación
 
-- [x] 11. `solicitudes.service.ts` → `mapRow()`: mapear nuevas fechas
-- [x] 12. `solicitudes.service.ts` → `getSolicitudesFiltradas()`: filtro por rol/zona
-- [x] 13. `solicitudes.service.ts` → `aprobarSolicitud()`: agregar `fecha_confirmacion`
-- [x] 14. `solicitudes.service.ts` → `despacharSolicitud()`: estado `'despachada'` + fechas
-- [x] 15. `solicitudes.service.ts` → `recibirSolicitud()`: agregar `fecha_recepcion`
-- [x] 16. `solicitudes.service.ts` → `finalizarSolicitud()`: agregar `fecha_entrega_cliente`
-- [x] 17. `solicitudes.service.ts` → nuevo `insistirSolicitud()` con rate limit 24h
-- [x] 18. `solicitudes.service.ts` → nuevo `asignarEncargadoLogistica()` (estado `asignada`)
-- [x] 19. Crear `src/services/traslado.service.ts` completo
+- [ ] 11. `solicitudes.service.ts` → `mapRow()`: mapear nuevas fechas
+- [ ] 12. `solicitudes.service.ts` → `getSolicitudesFiltradas()`: filtro por rol/zona
+- [ ] 13. `solicitudes.service.ts` → `aprobarSolicitud()`: agregar `fecha_confirmacion`
+- [ ] 14. `solicitudes.service.ts` → `despacharSolicitud()`: estado `'despachada'` + fechas
+- [ ] 15. `solicitudes.service.ts` → `recibirSolicitud()`: agregar `fecha_recepcion`
+- [ ] 16. `solicitudes.service.ts` → `finalizarSolicitud()`: agregar `fecha_entrega_cliente`
+- [ ] 17. `solicitudes.service.ts` → nuevo `insistirSolicitud()` con rate limit 24h
+- [ ] 18. `solicitudes.service.ts` → nuevo `asignarEncargadoLogistica()` (estado `asignada`)
+- [ ] 19. Crear `src/services/traslado.service.ts` completo
 
 #### 🧪 Plan de pruebas — Fase 3
 
@@ -732,6 +722,7 @@ npx tsc --noEmit
 ```
 
 **Prueba 3.2 — `getSolicitudesFiltradas` filtra correctamente (manual en UI)**
+
 1. Iniciar sesión como usuario con rol `logistica` que tenga UNA zona asignada
 2. Navegar a `/solicitudes`
 3. Verificar que solo se ven solicitudes cuya sucursal tiene `zona_id` en las zonas del usuario
@@ -739,30 +730,35 @@ npx tsc --noEmit
 5. **ESPERADO**: filtro por zona funciona
 
 **Prueba 3.3 — `aprobarSolicitud` registra `fecha_confirmacion` (manual en UI)**
+
 1. Iniciar sesión como `jefe_local`
 2. Aprobar una solicitud en estado `pendiente_aprobacion`
 3. Verificar en Supabase Table Editor → tabla `solicitud` → columna `fecha_confirmacion` no debe ser NULL
 4. **ESPERADO**: `fecha_confirmacion` = timestamp del momento de aprobación
 
 **Prueba 3.4 — `despacharSolicitud` usa estado `despachada` (manual en UI)**
+
 1. Iniciar sesión como `logistica`
 2. Despachar una solicitud en estado `calendarizada`
 3. Verificar en tabla `solicitud`: `estado = 'despachada'`, `fecha_despacho` no NULL, `fecha_inicio_transito` no NULL
 4. **ESPERADO**: los 3 campos actualizados correctamente
 
 **Prueba 3.5 — `recibirSolicitud` registra `fecha_recepcion`**
+
 1. Como `jefe_local` del destino, recepcionar una solicitud en `en_transito`
 2. Verificar: `estado = 'entregada'`, `fecha_recepcion` no NULL
 3. Verificar: `solicitud_vehiculo.disponibilidad = 'liberado'` para todos los vehículos
 4. **ESPERADO**: vehículo liberado + fecha registrada
 
 **Prueba 3.6 — `finalizarSolicitud` registra `fecha_entrega_cliente`**
+
 1. Como ejecutivo o `jefe_local`, finalizar una solicitud en `entregada`
 2. Verificar: `estado = 'finalizada'`, `fecha_entrega_cliente` no NULL
 3. Verificar: `solicitud_vehiculo.disponibilidad = 'vendido'`, `vehiculo.ubicacion = NULL`
 4. **ESPERADO**: vehículo vendido + ubicacion NULL + fecha registrada
 
 **Prueba 3.7 — `insistirSolicitud` con rate limit**
+
 1. Como ejecutivo, hacer clic en "Insistir" en una solicitud propia activa
 2. Verificar en tabla `insistencia`: nueva fila con `solicitud_id` y `usuario_id`
 3. Intentar insistir de nuevo **inmediatamente** → debe rechazar con mensaje de cooldown
@@ -776,6 +772,7 @@ npx tsc --noEmit
 ```
 
 **Checklist de pruebas Fase 3:**
+
 - [ ] P3.1 — `tsc --noEmit` sin errores
 - [ ] P3.2 — Filtrado de solicitudes por zona funciona para logística
 - [ ] P3.3 — `fecha_confirmacion` se registra al aprobar
@@ -791,16 +788,16 @@ npx tsc --noEmit
 
 ### 🔲 FASE 4 — Server Actions *(1-2 horas)*
 
-**Estado de fase: ✅ COMPLETA (implementación)** *(no iniciar sin Fase 3 ✅)*
+**Estado de fase: ⬜ PENDIENTE** *(no iniciar sin Fase 3 ✅)*
 
 #### Pasos de implementación
 
-- [x] 20. `solicitudes.actions.ts` → `aprobarSolicitudAction()`: usar `usuarioTieneSucursal`
-- [x] 21. `solicitudes.actions.ts` → `priorizarSolicitudAction()`: usar `usuarioTieneSucursal`
-- [x] 22. `solicitudes.actions.ts` → `cancelarSolicitudAction()`: usar `usuarioTieneSucursal`
-- [x] 23. `solicitudes.actions.ts` → nuevo `insistirSolicitudAction()`
-- [x] 24. `solicitudes.actions.ts` → nuevo `asignarEncargadoAction()`
-- [x] 25. Crear `src/app/actions/traslados.actions.ts` completo
+- [ ] 20. `solicitudes.actions.ts` → `aprobarSolicitudAction()`: usar `usuarioTieneSucursal`
+- [ ] 21. `solicitudes.actions.ts` → `priorizarSolicitudAction()`: usar `usuarioTieneSucursal`
+- [ ] 22. `solicitudes.actions.ts` → `cancelarSolicitudAction()`: usar `usuarioTieneSucursal`
+- [ ] 23. `solicitudes.actions.ts` → nuevo `insistirSolicitudAction()`
+- [ ] 24. `solicitudes.actions.ts` → nuevo `asignarEncargadoAction()`
+- [ ] 25. Crear `src/app/actions/traslados.actions.ts` completo
 
 #### 🧪 Plan de pruebas — Fase 4
 
@@ -811,6 +808,7 @@ npx tsc --noEmit
 ```
 
 **Prueba 4.2 — Jefe Local multi-sucursal puede aprobar solicitudes de todas sus sucursales**
+
 1. Crear usuario `jefe_local` con 2 sucursales asignadas en `usuario_sucursal`
 2. Crear solicitud en sucursal 1 (la que NO es la `sucursal_id` principal)
 3. Iniciar sesión como ese `jefe_local`
@@ -818,31 +816,37 @@ npx tsc --noEmit
 5. **ESPERADO**: aprobación exitosa (antes del fix fallaba)
 
 **Prueba 4.3 — Jefe Local NO puede aprobar solicitudes fuera de sus sucursales**
+
 1. Con el mismo usuario, intentar aprobar una solicitud de una sucursal 3 (no asignada)
 2. **ESPERADO**: error "Solo puedes aprobar solicitudes de tus sucursales asignadas"
 
 **Prueba 4.4 — Jefe Local puede priorizar solicitudes de todas sus sucursales**
+
 1. Mismo `jefe_local` con 2 sucursales
 2. Priorizar una solicitud de sucursal 2 (no principal)
 3. **ESPERADO**: priorización exitosa
 
 **Prueba 4.5 — `insistirSolicitudAction` funciona desde la UI**
+
 1. Como ejecutivo, abrir modal de solicitud propia en estado activo
 2. Hacer clic en "Insistir"
 3. **ESPERADO**: mensaje de éxito, botón deshabilitado con countdown 24h
 
 **Prueba 4.6 — `asignarEncargadoAction` cambia estado a `asignada`**
+
 1. Como logística, asignarse como encargado de una solicitud `aprobada` o `priorizada`
 2. Verificar: `estado = 'asignada'`, `logistica_id` = id del usuario logística
 3. **ESPERADO**: ambos campos actualizados
 
 **Prueba 4.7 — `traslados.actions.ts` compila y exporta las funciones esperadas**
+
 ```bash
 grep -n "export async function" src/app/actions/traslados.actions.ts
 # ESPERADO: crearTrasladoAction, despacharTrasladoAction, recibirTrasladoAction
 ```
 
 **Checklist de pruebas Fase 4:**
+
 - [ ] P4.1 — `tsc --noEmit` sin errores
 - [ ] P4.2 — JL multi-sucursal puede aprobar en sucursal no-principal
 - [ ] P4.3 — JL NO puede aprobar en sucursal ajena
@@ -857,29 +861,30 @@ grep -n "export async function" src/app/actions/traslados.actions.ts
 
 ### 🔲 FASE 5 — UI Solicitudes existente *(3-4 horas)*
 
-**Estado de fase: ✅ COMPLETA (implementación)** *(no iniciar sin Fase 4 ✅)*
+**Estado de fase: ⬜ PENDIENTE** *(no iniciar sin Fase 4 ✅)*
 
 #### Pasos de implementación
 
-- [x] 26. `SolicitudesClient.tsx` → `estadoConfig`: renombrar todos los labels
-- [x] 27. `SolicitudesClient.tsx` → `tipoSolicitudConfig`: "venta" → "Sala de venta"
-- [x] 28. `SolicitudesClient.tsx` → ocultar `posicion_prioridad` a ejecutivos
-- [x] 29. `SolicitudesClient.tsx` → agregar botón **Insistir** (ejecutivos, sol. propia, estado activo)
-- [x] 30. `SolicitudesClient.tsx` → label `fecha_limite` → "Fecha/hora límite"
-- [x] 31. `SolicitudesClient.tsx` → label `fecha_tentativa_despacho` → "Fecha estimada"
-- [x] 32. `SolicitudesClient.tsx` → indicador visual de atraso (normal/próxima/atrasada)
-- [x] 33. `SolicitudesClient.tsx` → filtro de visibilidad usando `getSolicitudesFiltradas`
-- [x] 34. `SolicitudesClient.tsx` → label "Origen de solicitud" (reemplaza "Sucursal de origen")
-- [x] 35. `SolicitudDetalleModal.tsx` → sección "Encargado de solicitud" (`logistica_id`)
-- [x] 36. `SolicitudDetalleModal.tsx` → nuevas fechas en timeline de trazabilidad
-- [x] 37. `SolicitudDetalleModal.tsx` → ocultar prioridad a ejecutivos
-- [x] 38. `solicitudes/page.tsx` → pasar `sucursales_asignadas` del JL al client component
+- [ ] 26. `SolicitudesClient.tsx` → `estadoConfig`: renombrar todos los labels
+- [ ] 27. `SolicitudesClient.tsx` → `tipoSolicitudConfig`: "venta" → "Sala de venta"
+- [ ] 28. `SolicitudesClient.tsx` → ocultar `posicion_prioridad` a ejecutivos
+- [ ] 29. `SolicitudesClient.tsx` → agregar botón **Insistir** (ejecutivos, sol. propia, estado activo)
+- [ ] 30. `SolicitudesClient.tsx` → label `fecha_limite` → "Fecha/hora límite"
+- [ ] 31. `SolicitudesClient.tsx` → label `fecha_tentativa_despacho` → "Fecha estimada"
+- [ ] 32. `SolicitudesClient.tsx` → indicador visual de atraso (normal/próxima/atrasada)
+- [ ] 33. `SolicitudesClient.tsx` → filtro de visibilidad usando `getSolicitudesFiltradas`
+- [ ] 34. `SolicitudesClient.tsx` → label "Origen de solicitud" (reemplaza "Sucursal de origen")
+- [ ] 35. `SolicitudDetalleModal.tsx` → sección "Encargado de solicitud" (`logistica_id`)
+- [ ] 36. `SolicitudDetalleModal.tsx` → nuevas fechas en timeline de trazabilidad
+- [ ] 37. `SolicitudDetalleModal.tsx` → ocultar prioridad a ejecutivos
+- [ ] 38. `solicitudes/page.tsx` → pasar `sucursales_asignadas` del JL al client component
 
 #### 🧪 Plan de pruebas — Fase 5
 
 Pruebas visuales en el navegador con `npm run dev`:
 
 **Prueba 5.1 — Labels de estado correctos (inspección visual)**
+
 1. Abrir `/solicitudes` como admin
 2. Verificar que los badges de estado muestran:
    - `pendiente_aprobacion` → badge "Pendiente" (no "Pendiente Aprobación")
@@ -889,11 +894,13 @@ Pruebas visuales en el navegador con `npm run dev`:
 3. **ESPERADO**: todos los labels correctos según la tabla de nomenclatura
 
 **Prueba 5.2 — "Sala de venta" en formulario de creación**
+
 1. Como ejecutivo, abrir modal de nueva solicitud
 2. Verificar que el campo de tipo muestra "Sala de venta" (no "Venta")
 3. **ESPERADO**: label actualizado
 
 **Prueba 5.3 — Prioridad oculta para ejecutivos**
+
 1. Iniciar sesión como ejecutivo
 2. Abrir una solicitud propia que esté en estado `priorizada`
 3. Verificar que NO aparece la posición en la cola ni el número de prioridad
@@ -901,6 +908,7 @@ Pruebas visuales en el navegador con `npm run dev`:
 5. **ESPERADO**: prioridad invisible para ejecutivos, visible para JL y logística
 
 **Prueba 5.4 — Botón Insistir visible solo para ejecutivos en sus solicitudes**
+
 1. Como ejecutivo, ir a `/solicitudes`
 2. En una solicitud propia en estado `asignada` → debe aparecer botón "Insistir"
 3. En una solicitud de OTRO ejecutivo → NO debe aparecer
@@ -908,12 +916,14 @@ Pruebas visuales en el navegador con `npm run dev`:
 5. **ESPERADO**: visibilidad condicionada correctamente
 
 **Prueba 5.5 — Labels de fechas correctos**
+
 1. Abrir modal de creación de solicitud
 2. Verificar que el campo de fecha muestra "Fecha/hora límite" (no "Fecha límite" o "Tentativa")
 3. En modal de detalle de solicitud calendarizada → verificar "Fecha estimada"
 4. **ESPERADO**: ambos labels actualizados
 
 **Prueba 5.6 — Indicador visual de atraso**
+
 1. Modificar manualmente en BD `fecha_limite` de una solicitud activa a ayer (pasada)
    ```sql
    UPDATE public.solicitud SET fecha_limite = now() - interval '1 day'
@@ -925,22 +935,26 @@ Pruebas visuales en el navegador con `npm run dev`:
 5. Cambiar a pasado mañana → sin indicador especial
 
 **Prueba 5.7 — Encargado de solicitud en modal de detalle**
+
 1. Asignar un encargado logístico a una solicitud (paso 4.6)
 2. Abrir el modal de detalle de esa solicitud como cualquier rol
 3. **ESPERADO**: aparece sección "Encargado de solicitud" con nombre del logístico
 
 **Prueba 5.8 — Nuevas fechas en trazabilidad**
+
 1. Tomar una solicitud que haya pasado por todo el flujo (crear, aprobar, calendarizar, despachar, recepcionar, finalizar)
 2. Abrir su modal de detalle → pestaña de trazabilidad
 3. **ESPERADO**: se ven los timestamps de cada transición incluyendo `fecha_confirmacion`, `fecha_recepcion`, `fecha_entrega_cliente`
 
 **Prueba 5.9 — "Origen de solicitud" no aparece en cards**
+
 1. Ir a `/solicitudes` como cualquier rol
 2. Verificar que en las tarjetas de solicitud NO aparece el texto "Sucursal de origen"
 3. En modal de detalle → verificar que aparece "Origen" (no eliminado, solo reubicado)
 4. **ESPERADO**: sin "Sucursal de origen" en lista, sí en detalle
 
 **Prueba 5.10 — Funcionalidades existentes no rotas**
+
 1. Crear una solicitud nueva como ejecutivo → debe funcionar
 2. Cancelar una solicitud como JL → debe funcionar
 3. Subir un documento a una solicitud → debe funcionar
@@ -948,6 +962,7 @@ Pruebas visuales en el navegador con `npm run dev`:
 5. **ESPERADO**: todas las funcionalidades previas sin regresión
 
 **Checklist de pruebas Fase 5:**
+
 - [ ] P5.1 — Labels de estado correctos visualmente
 - [ ] P5.2 — "Sala de venta" en formulario de creación
 - [ ] P5.3 — Prioridad oculta para ejecutivos
@@ -965,31 +980,35 @@ Pruebas visuales en el navegador con `npm run dev`:
 
 ### 🔲 FASE 6 — UI Traslados Internos *(3 horas)*
 
-**Estado de fase: ✅ COMPLETA (implementación)** *(no iniciar sin Fase 5 ✅)*
+**Estado de fase: ⬜ PENDIENTE** *(no iniciar sin Fase 5 ✅)*
 
 #### Pasos de implementación
 
-- [x] 39. Crear `src/app/solicitudes/traslados/page.tsx`
-- [x] 40. Crear `src/app/solicitudes/traslados/TrasladosClient.tsx`
+- [ ] 39. Crear `src/app/solicitudes/traslados/page.tsx`
+- [ ] 40. Crear `src/app/solicitudes/traslados/TrasladosClient.tsx`
 
 #### 🧪 Plan de pruebas — Fase 6
 
 **Prueba 6.1 — Vista accesible para logística**
+
 1. Iniciar sesión como `logistica`
 2. Navegar a `/solicitudes/traslados`
 3. **ESPERADO**: página carga sin error 404 ni error de permisos
 
 **Prueba 6.2 — Ejecutivo NO puede acceder**
+
 1. Iniciar sesión como `ejecutivo`
 2. Navegar a `/solicitudes/traslados`
 3. **ESPERADO**: redirección a `/solicitudes` o mensaje de "Sin permisos"
 
 **Prueba 6.3 — Crear traslado interno**
+
 1. Como `logistica`, ir a `/solicitudes/traslados`
 2. Crear un nuevo traslado: origen → destino, seleccionar 1 vehículo VENDIDO
 3. **ESPERADO**: traslado creado con estado `pendiente`, slot reservado en sucursal destino
 
 **Prueba 6.4 — Verificar reserva de slot al crear traslado**
+
 ```sql
 -- Antes de crear:
 SELECT slots, slots_ocupados, slots_reservados FROM public.sucursal WHERE id = <destino_id>;
@@ -1000,25 +1019,31 @@ SELECT slots, slots_ocupados, slots_reservados FROM public.sucursal WHERE id = <
 ```
 
 **Prueba 6.5 — Despachar traslado**
+
 1. Con traslado en estado `pendiente`, hacer clic en "Despachar"
 2. **ESPERADO**: estado cambia a `en_transito`, `fecha_despacho` registrada
 
 **Prueba 6.6 — Jefe Local ve traslados que llegan a su sucursal**
+
 1. Iniciar sesión como `jefe_local` de la sucursal destino
 2. Navegar a `/solicitudes/traslados` (o donde se muestre al JL)
 3. **ESPERADO**: ve el traslado pendiente/en tránsito hacia su sucursal
 
 **Prueba 6.7 — Jefe Local NO puede rechazar un traslado**
+
 1. Como `jefe_local` destino, verificar que NO existe botón "Rechazar" en el traslado
 2. **ESPERADO**: solo puede recepcionar, no rechazar
 
 **Prueba 6.8 — Recepcionar traslado y verificar slots**
+
 ```sql
 -- Antes de recepcionar (sucursal destino):
 SELECT slots_ocupados, slots_reservados FROM public.sucursal WHERE id = <destino_id>;
 ```
+
 1. Como `jefe_local` destino, recepcionar el traslado
 2. **ESPERADO**: estado `recepcionado`, `fecha_recepcion` registrada
+
 ```sql
 -- Después de recepcionar:
 SELECT slots_ocupados, slots_reservados FROM public.sucursal WHERE id = <destino_id>;
@@ -1028,6 +1053,7 @@ SELECT ubicacion, disponibilidad FROM public.vehiculo JOIN public.solicitud_vehi
 ```
 
 **Checklist de pruebas Fase 6:**
+
 - [ ] P6.1 — Ruta `/solicitudes/traslados` carga para logística
 - [ ] P6.2 — Ejecutivo no puede acceder a traslados
 - [ ] P6.3 — Crear traslado interno funciona
@@ -1043,21 +1069,23 @@ SELECT ubicacion, disponibilidad FROM public.vehiculo JOIN public.solicitud_vehi
 
 ### 🔲 FASE 7 — Slots multi-sucursal *(2 horas)*
 
-**Estado de fase: ✅ COMPLETA (implementación)** *(no iniciar sin Fase 6 ✅)*
+**Estado de fase: ⬜ PENDIENTE** *(no iniciar sin Fase 6 ✅)*
 
 #### Pasos de implementación
 
-- [x] 41. `TopNavbar.tsx` → prop `sucursales_asignadas` + badge/dropdown de slots (JL)
-- [x] 42. Crear `src/app/logistica/slots/page.tsx` + `SlotsClient.tsx`
+- [ ] 41. `TopNavbar.tsx` → prop `sucursales_asignadas` + badge/dropdown de slots (JL)
+- [ ] 42. Crear `src/app/logistica/slots/page.tsx` + `SlotsClient.tsx`
 
 #### 🧪 Plan de pruebas — Fase 7
 
 **Prueba 7.1 — Badge de slots visible en navbar para JL**
+
 1. Iniciar sesión como `jefe_local` con 2+ sucursales asignadas
 2. Verificar que en la barra superior aparece un elemento con información de slots
 3. **ESPERADO**: badge/ícono con número de slots disponibles visible
 
 **Prueba 7.2 — Badge muestra datos correctos**
+
 1. El badge debe mostrar slots de TODAS las sucursales asignadas al JL (no solo la principal)
 2. Comparar con los datos en BD:
    ```sql
@@ -1071,20 +1099,24 @@ SELECT ubicacion, disponibilidad FROM public.vehiculo JOIN public.solicitud_vehi
 3. **ESPERADO**: los números en el badge coinciden con los de BD
 
 **Prueba 7.3 — Badge NO aparece para ejecutivos**
+
 1. Iniciar sesión como `ejecutivo`
 2. Verificar que NO hay badge de slots en el navbar
 3. **ESPERADO**: sin badge
 
 **Prueba 7.4 — Vista `/logistica/slots` accesible**
+
 1. Como `jefe_local`, navegar a `/logistica/slots`
 2. **ESPERADO**: página carga mostrando slots de todas las sucursales asignadas
 
 **Prueba 7.5 — Slots actualizados en tiempo real después de operación**
+
 1. Crear una solicitud nueva con destino a sucursal del JL
 2. Sin recargar, verificar si el badge se actualiza (o tras recarga)
 3. **ESPERADO**: slots_ocupados aumenta en el badge/vista
 
 **Checklist de pruebas Fase 7:**
+
 - [ ] P7.1 — Badge de slots visible en navbar para JL
 - [ ] P7.2 — Badge muestra datos correctos de todas las sucursales
 - [ ] P7.3 — Badge NO aparece para ejecutivos
@@ -1097,33 +1129,38 @@ SELECT ubicacion, disponibilidad FROM public.vehiculo JOIN public.solicitud_vehi
 
 ### 🔲 FASE 8 — FAQ *(1 hora)*
 
-**Estado de fase: ✅ COMPLETA (implementación)** *(no iniciar sin Fase 7 ✅)*
+**Estado de fase: ⬜ PENDIENTE** *(no iniciar sin Fase 7 ✅)*
 
 #### Pasos de implementación
 
-- [x] 43. Crear `src/app/faq/page.tsx` reutilizando componentes del diseño actual
+- [ ] 43. Crear `src/app/faq/page.tsx` reutilizando componentes del diseño actual
 
 #### 🧪 Plan de pruebas — Fase 8
 
 **Prueba 8.1 — Ruta `/faq` carga sin errores**
+
 1. Navegar a `/faq` con cualquier sesión activa
 2. **ESPERADO**: página carga sin 404 ni error de JS
 
 **Prueba 8.2 — Accesible para todos los roles**
+
 - [ ] Verificar como `ejecutivo` → carga ✅
 - [ ] Verificar como `jefe_local` → carga ✅
 - [ ] Verificar como `logistica` → carga ✅
 - [ ] Verificar como `administrador` → carga ✅
 
 **Prueba 8.3 — Contenido estructurado**
+
 1. La página debe tener al menos 5 preguntas frecuentes relevantes al flujo de solicitudes
 2. **ESPERADO**: preguntas agrupadas por categoría (Solicitudes, Estados, Vehículos, etc.)
 
 **Prueba 8.4 — Diseño consistente con el resto del sistema**
+
 1. Verificar que usa el mismo font, colores y componentes del diseño actual
 2. **ESPERADO**: visualmente coherente con `/solicitudes`
 
 **Checklist de pruebas Fase 8:**
+
 - [ ] P8.1 — Ruta `/faq` carga sin errores
 - [ ] P8.2 — Accesible para todos los roles
 - [ ] P8.3 — Contenido con mínimo 5 preguntas frecuentes relevantes
@@ -1148,16 +1185,16 @@ SELECT ubicacion, disponibilidad FROM public.vehiculo JOIN public.solicitud_vehi
 
 Ejecutar en orden, verificando cada paso:
 
-| Paso | Actor | Acción | Verificación en BD |
-|---|---|---|---|
-| 1 | Ejecutivo | Crea solicitud tipo "Sala de venta" | `estado='pendiente_aprobacion'`, `fecha_creacion` ≠ NULL |
-| 2 | JL | Aprueba con fecha límite | `estado='aprobada'`, `fecha_confirmacion` ≠ NULL |
-| 3 | JL | Prioriza | `estado='priorizada'`, `posicion_prioridad` ≠ NULL |
-| 4 | Logística | Asigna encargado | `estado='asignada'`, `logistica_id` ≠ NULL |
-| 5 | Logística | Calendariza | `estado='calendarizada'`, `fecha_tentativa_despacho` ≠ NULL |
-| 6 | Logística | Despacha | `estado='despachada'`, `fecha_despacho` ≠ NULL, `fecha_inicio_transito` ≠ NULL |
-| 7 | JL destino | Recepciona | `estado='entregada'`, `fecha_recepcion` ≠ NULL, vehículo `liberado` |
-| 8 | Ejecutivo | Entrega a cliente | `estado='finalizada'`, `fecha_entrega_cliente` ≠ NULL, vehículo `vendido`, `ubicacion=NULL` |
+| Paso | Actor      | Acción                             | Verificación en BD                                                                                   |
+| ---- | ---------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| 1    | Ejecutivo  | Crea solicitud tipo "Sala de venta" | `estado='pendiente_aprobacion'`, `fecha_creacion` ≠ NULL                                         |
+| 2    | JL         | Aprueba con fecha límite           | `estado='aprobada'`, `fecha_confirmacion` ≠ NULL                                                 |
+| 3    | JL         | Prioriza                            | `estado='priorizada'`, `posicion_prioridad` ≠ NULL                                               |
+| 4    | Logística | Asigna encargado                    | `estado='asignada'`, `logistica_id` ≠ NULL                                                       |
+| 5    | Logística | Calendariza                         | `estado='calendarizada'`, `fecha_tentativa_despacho` ≠ NULL                                      |
+| 6    | Logística | Despacha                            | `estado='despachada'`, `fecha_despacho` ≠ NULL, `fecha_inicio_transito` ≠ NULL                |
+| 7    | JL destino | Recepciona                          | `estado='entregada'`, `fecha_recepcion` ≠ NULL, vehículo `liberado`                           |
+| 8    | Ejecutivo  | Entrega a cliente                   | `estado='finalizada'`, `fecha_entrega_cliente` ≠ NULL, vehículo `vendido`, `ubicacion=NULL` |
 
 ```sql
 -- Verificación final del flujo en BD:
@@ -1198,6 +1235,7 @@ SELECT nombre, slots, slots_ocupados, slots_reservados FROM public.sucursal WHER
 ```
 
 **Prueba 9.4 — Cancelación libera slots**
+
 1. Crear solicitud con destino y vehículo
 2. Cancelar la solicitud (pre-despacho)
 3. Verificar que `slots_ocupados` y `slots_reservados` vuelven a valores previos
@@ -1205,16 +1243,17 @@ SELECT nombre, slots, slots_ocupados, slots_reservados FROM public.sucursal WHER
 
 **Prueba 9.5 — Prueba de permisos cruzados (seguridad)**
 
-| Intento | Debe FALLAR |
-|---|---|
-| Ejecutivo intentando aprobar su propia solicitud | ✅ Error de permisos |
-| Logística intentando crear una solicitud | ✅ Error de permisos |
+| Intento                                                                   | Debe FALLAR          |
+| ------------------------------------------------------------------------- | -------------------- |
+| Ejecutivo intentando aprobar su propia solicitud                          | ✅ Error de permisos |
+| Logística intentando crear una solicitud                                 | ✅ Error de permisos |
 | JL de sucursal A intentando aprobar solicitud de sucursal B (no asignada) | ✅ Error de permisos |
-| Ejecutivo B intentando insistir en solicitud de Ejecutivo A | ✅ Error de permisos |
-| Ejecutivo intentando ver solicitudes de otros ejecutivos | ✅ No aparecen |
-| Logística sin zona asignada viendo solicitudes | ✅ Lista vacía |
+| Ejecutivo B intentando insistir en solicitud de Ejecutivo A               | ✅ Error de permisos |
+| Ejecutivo intentando ver solicitudes de otros ejecutivos                  | ✅ No aparecen       |
+| Logística sin zona asignada viendo solicitudes                           | ✅ Lista vacía      |
 
 **Prueba 9.6 — Sin regresiones en funcionalidades pre-existentes**
+
 - [ ] Login / Logout funciona
 - [ ] Importación CSV de vehículos funciona (no tocada)
 - [ ] Gestión de usuarios admin funciona (no tocada)
@@ -1223,6 +1262,7 @@ SELECT nombre, slots, slots_ocupados, slots_reservados FROM public.sucursal WHER
 - [ ] Vista de calendarizaciones en `/logistica/calendarizaciones` funciona
 
 **Prueba 9.7 — Flujo de traslado interno end-to-end**
+
 1. Logística crea traslado de sucursal A → B con vehículo vendido
 2. Verificar: `traslado_interno.estado = 'pendiente'`, slot reservado en B
 3. Logística despacha: `estado = 'en_transito'`
@@ -1230,11 +1270,13 @@ SELECT nombre, slots, slots_ocupados, slots_reservados FROM public.sucursal WHER
 5. Verificar que `vehiculo.disponibilidad` sigue siendo `'vendido'` (no liberado)
 
 **Prueba 9.8 — Performance: carga de `/solicitudes` razonable**
+
 1. Con 50+ solicitudes en BD
 2. Navegar a `/solicitudes`
 3. **ESPERADO**: carga < 3 segundos, sin errores en consola del navegador
 
 **Checklist de pruebas Fase 9:**
+
 - [ ] P9.1 — Flujo completo happy path ejecutado correctamente
 - [ ] P9.2 — Trazabilidad completa en tabla `auditoria`
 - [ ] P9.3 — Slots correctos en cada etapa del flujo
@@ -1269,11 +1311,13 @@ Cuando las 9 fases estén completas y verificadas:
 ## Detalle técnico por punto del requerimiento
 
 ### #1 — Modal de creación
+
 - **"Venta" → "Sala de venta"**: solo cambiar label en el `<select>` del formulario. El valor `'venta'` permanece en DB.
 - **"Fecha/hora límite"**: campo `fecha_limite` ya existe. Cambiar solo el `<label>` HTML.
 - **La propone el Ejecutivo**: ya funciona así — es opcional al crear. JL la confirma/modifica al aprobar.
 
 ### #2 — Origen de solicitud
+
 - En **lista/cards**: no mostrar como columna prominente. Usar solo "Destino" y "Estado".
 - En **modal de detalle**: mostrar como "Origen" en la sección de resumen.
 - En **trazabilidad/auditoría**: siempre preservar el dato histórico.
@@ -1293,12 +1337,14 @@ function getEstadoAtraso(sol: SolicitudLista): 'normal' | 'proxima' | 'atrasada'
 ```
 
 ### #15 — Botón Insistir
+
 - Solo ejecutivos, en sus propias solicitudes, en estados activos pre-entrega.
 - Rate limit: consultar `insistencia` donde `solicitud_id = X AND usuario_id = Y AND created_at > now() - interval '24 hours'`.
 - Si ya insistió en las últimas 24h: mostrar tiempo restante, deshabilitar botón.
 - Registrar en `insistencia` + entrada en `auditoria` + observación `[INSISTENCIA]`.
 
 ### #17 — Slots en navbar para JL
+
 ```tsx
 // Agregar a TopNavbar.tsx
 interface TopNavbarProps {
@@ -1310,6 +1356,7 @@ interface TopNavbarProps {
 ```
 
 ### #19 — Slots en traslados internos
+
 - Al crear `traslado_interno`: verificar slots en `sucursal_destino` (misma validación que solicitudes normales).
 - Incrementar `slots_reservados` y `slots_ocupados` al crear.
 - Al `recepcionado`: decrementar `slots_reservados` y recalcular con `fn_recalcular_slots_ocupados`.
@@ -1319,16 +1366,16 @@ interface TopNavbarProps {
 
 ## Nomenclatura final UI (tabla de cambios)
 
-| Elemento | Actual | Nuevo |
-|---|---|---|
-| Tipo "venta" | "Venta" | "Sala de venta" |
-| `en_transito` label | "En Tránsito" | "En tránsito" |
-| `entregada` label | "Entregada" | "Recepcionada" |
-| `finalizada` label | "Finalizada" | "Entregado a cliente" |
-| `fecha_tentativa_despacho` label | "Tentativa" | "Fecha estimada" |
-| Origen label | "Sucursal de origen" | "Origen de solicitud" |
-| `logistica_id` label | "Logística" | "Encargado de solicitud" |
-| Fecha aprobación | Sin label | "Fecha de confirmación" |
+| Elemento                           | Actual               | Nuevo                    |
+| ---------------------------------- | -------------------- | ------------------------ |
+| Tipo "venta"                       | "Venta"              | "Sala de venta"          |
+| `en_transito` label              | "En Tránsito"       | "En tránsito"           |
+| `entregada` label                | "Entregada"          | "Recepcionada"           |
+| `finalizada` label               | "Finalizada"         | "Entregado a cliente"    |
+| `fecha_tentativa_despacho` label | "Tentativa"          | "Fecha estimada"         |
+| Origen label                       | "Sucursal de origen" | "Origen de solicitud"    |
+| `logistica_id` label             | "Logística"         | "Encargado de solicitud" |
+| Fecha aprobación                  | Sin label            | "Fecha de confirmación" |
 
 ---
 

@@ -10,7 +10,7 @@ export class VehiculoService {
   static async getVehiculos(): Promise<VehiculoConDisponibilidad[]> {
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
+      const query = admin
         .from('vehiculo')
         .select(`
           *,
@@ -21,15 +21,13 @@ export class VehiculoService {
             disponibilidad
           )
         `)
-        .order('created_at', { ascending: false })
-        .limit(100000);
+        .order('created_at', { ascending: false });
 
-      if (error) {
+      const data = await this.fetchAllRowsPaginated(query, (error) => {
         console.error('Error al listar vehículos:', error);
-        return [];
-      }
+      });
 
-      const vehiculos = (data || []).map((v: Record<string, unknown>) => {
+      const vehiculos = (data ?? []).map((v: Record<string, unknown>) => {
         const sv = v.solicitud_vehiculo as Array<{ solicitud_id: string; disponibilidad: string }> | null;
         const reservaActiva = sv?.find((s) => s.disponibilidad === 'reservado');
         const vendido = !reservaActiva && (sv?.some((s) => s.disponibilidad === 'vendido') || false);
@@ -61,23 +59,48 @@ export class VehiculoService {
   }
 
   /**
+   * Recupera TODAS las filas de una consulta paginando de a mil.
+   * Supabase/PostgREST limita cada petición a 1000 filas (aunque se pida
+   * `limit(100000)`), por lo que se itera con `.range()`.
+   * Devuelve `null` si alguna página falla (tras notificar a `onError`).
+   */
+  private static async fetchAllRowsPaginated(
+    query: {
+      range: (from: number, to: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>;
+    },
+    onError: (error: { message: string }) => void,
+  ): Promise<Array<Record<string, unknown>> | null> {
+    const TAMANO_PAGINA = 1000;
+    const filas: Array<Record<string, unknown>> = [];
+
+    for (let desde = 0; ; desde += TAMANO_PAGINA) {
+      const { data, error } = await query.range(desde, desde + TAMANO_PAGINA - 1);
+      if (error) {
+        onError(error);
+        return null;
+      }
+      const pagina = (data as Array<Record<string, unknown>> | null) ?? [];
+      filas.push(...pagina);
+      if (pagina.length < TAMANO_PAGINA) break;
+    }
+
+    return filas;
+  }
+
+  /**
    * Obtiene las marcas únicas registradas en la base de datos
    */
   static async getMarcas(): Promise<string[]> {
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
-        .from('vehiculo')
-        .select('marca')
-        .order('marca')
-        .limit(100000);
+      const query = admin.from('vehiculo').select('marca').order('marca');
 
-      if (error) {
+      const data = await this.fetchAllRowsPaginated(query, (error) => {
         console.error('Error al obtener marcas:', error);
-        return [];
-      }
+      });
+      if (data === null) return [];
 
-      const marcasUnicas = [...new Set((data || []).map((v: { marca: string }) => v.marca))];
+      const marcasUnicas = [...new Set(data.map((v) => v.marca as string))];
       return marcasUnicas;
     } catch (err) {
       console.error('Error en getMarcas:', err);
@@ -463,9 +486,12 @@ export class VehiculoService {
         marcasResueltas.set(codigoRaw, nombre);
       }
 
-      // Chasis ya existentes
-      const { data: existentesData } = await admin.from('vehiculo').select('chasis').limit(100000);
-      const chasisExistentes = new Set<string>((existentesData || []).map((v: { chasis: string }) => v.chasis));
+      // Chasis ya existentes (paginado: evita el tope de 1000 filas por petición)
+      const filasChasis = await this.fetchAllRowsPaginated(
+        admin.from('vehiculo').select('chasis'),
+        (error) => console.error('Error al leer chasis existentes:', error),
+      );
+      const chasisExistentes = new Set<string>((filasChasis ?? []).map((v) => (v as { chasis: string }).chasis));
 
       let importados = 0;
       let duplicados = 0;

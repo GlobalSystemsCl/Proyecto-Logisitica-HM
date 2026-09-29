@@ -428,6 +428,49 @@ describe('VehiculoService', () => {
       expect(res[0].estado_disponibilidad).toBe('liberado');
       expect(res[0].ubicacion_nombre).toBeNull();
     });
+
+    it('should_paginate_through_1000_row_pages_and_merge_everything', async () => {
+      const pagina1 = Array.from({ length: 1000 }, (_, i) => ({ ...vehiculoRow(), id: `veh-${i}` }));
+      const pagina2 = [{ ...vehiculoRow(), id: 'veh-1000' }];
+      admin.results.vehiculo = [
+        { data: pagina1, error: null },
+        { data: pagina2, error: null },
+      ];
+      const res = await VehiculoService.getVehiculos();
+      expect(res).toHaveLength(1001);
+      expect(res[0].id).toBe('veh-0');
+      expect(res[1000].id).toBe('veh-1000');
+      const ranges = admin.callsTo('vehiculo').filter((c) => c[0] === 'range');
+      expect(ranges).toEqual([
+        ['range', 0, 999],
+        ['range', 1000, 1999],
+      ]);
+    });
+
+    it('should_stop_paginating_when_a_partial_page_is_returned', async () => {
+      const pagina1 = Array.from({ length: 1000 }, (_, i) => ({ ...vehiculoRow(), id: `veh-${i}` }));
+      const pagina2 = Array.from({ length: 500 }, (_, i) => ({ ...vehiculoRow(), id: `veh-part-${i}` }));
+      admin.results.vehiculo = [
+        { data: pagina1, error: null },
+        { data: pagina2, error: null },
+      ];
+      const res = await VehiculoService.getVehiculos();
+      expect(res).toHaveLength(1500);
+      const ranges = admin.callsTo('vehiculo').filter((c) => c[0] === 'range');
+      expect(ranges).toEqual([
+        ['range', 0, 999],
+        ['range', 1000, 1999],
+      ]);
+    });
+
+    it('should_return_empty_array_when_a_middle_page_fails', async () => {
+      const pagina1 = Array.from({ length: 1000 }, (_, i) => ({ ...vehiculoRow(), id: `veh-${i}` }));
+      admin.results.vehiculo = [
+        { data: pagina1, error: null },
+        { data: null, error: { message: 'boom' } },
+      ];
+      expect(await VehiculoService.getVehiculos()).toEqual([]);
+    });
   });
 
   describe('getMarcas', () => {
@@ -436,6 +479,16 @@ describe('VehiculoService', () => {
         { data: [{ marca: 'Toyota' }, { marca: 'Kia' }, { marca: 'Toyota' }], error: null },
       ];
       expect(await VehiculoService.getMarcas()).toEqual(['Toyota', 'Kia']);
+    });
+
+    it('should_paginate_and_dedupe_brands_across_pages', async () => {
+      const pagina1 = Array.from({ length: 1000 }, (_, i) => ({ marca: i % 2 === 0 ? 'Toyota' : 'Kia' }));
+      const pagina2 = [{ marca: 'Toyota' }, { marca: 'Ford' }];
+      admin.results.vehiculo = [
+        { data: pagina1, error: null },
+        { data: pagina2, error: null },
+      ];
+      expect(await VehiculoService.getMarcas()).toEqual(['Toyota', 'Kia', 'Ford']);
     });
 
     it('should_return_empty_array_when_query_fails', async () => {

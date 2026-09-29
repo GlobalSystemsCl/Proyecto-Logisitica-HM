@@ -190,7 +190,7 @@ export class UsersService {
         ...(input.sucursal_id ? [input.sucursal_id] : []),
         ...(input.sucursales_ids || []),
       ]);
-      await this.setZonasAsignadas(admin, authUserId, input.zonas_ids || []);
+      await this.setZonasAsignadas(admin, authUserId, input.rol, input.zonas_ids || []);
 
       // 5. Enviar correo con credenciales a través de Brevo
       const emailResult = await EmailService.sendUserCredentialsEmail({
@@ -427,8 +427,15 @@ export class UsersService {
         const rolFinal = input.rol ?? (data as UserProfile).rol ?? 'ejecutivo';
         await this.setSucursalesEncargadas(admin, userId, rolFinal, Array.from(idsFinal));
       }
-      if (input.zonas_ids !== undefined) {
-        await this.setZonasAsignadas(admin, userId, input.zonas_ids);
+      if (input.zonas_ids !== undefined || input.rol !== undefined) {
+        const rolFinal = input.rol ?? (data as UserProfile).rol ?? 'ejecutivo';
+        if (rolFinal === 'logistica') {
+          if (input.zonas_ids !== undefined) {
+            await this.setZonasAsignadas(admin, userId, rolFinal, input.zonas_ids);
+          }
+        } else {
+          await this.setZonasAsignadas(admin, userId, rolFinal, []);
+        }
       }
 
       return { success: true, user: data as UserProfile };
@@ -516,14 +523,22 @@ export class UsersService {
     }
   }
 
-  /** Reemplaza las zonas asignadas (N:M) de un usuario (logistica por zonas). */
+  /**
+   * Reemplaza las zonas asignadas (N:M) de un usuario. Únicamente los usuarios
+   * de rol `logistica` pueden quedar encargados por zonas territoriales: a
+   * cualquier otro rol se le limpian todas las asignaciones existentes.
+   */
   private static async setZonasAsignadas(
     admin: SupabaseClient,
     userId: string,
+    rol: string,
     zonas_ids: number[]
   ): Promise<void> {
     try {
       await admin.from('usuario_zona').delete().eq('usuario_id', userId);
+
+      const soloLogistica = rol === 'logistica';
+      if (!soloLogistica) return;
 
       const ids = (zonas_ids || []).filter(Boolean);
       if (ids.length > 0) {

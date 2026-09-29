@@ -143,6 +143,54 @@ describe('UsersService', () => {
         .find((c: [string, ...unknown[]]) => c[0] === 'update' && (c[1] as { usuario_id?: string })?.usuario_id === 'u-4');
       expect(assign).toBeUndefined();
     });
+
+    it('should_assign_zones_when_role_is_logistica', async () => {
+      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-log', rol: 'logistica' })];
+      admin.results.sucursal = [{ data: null, error: null }];
+      admin.results.usuario_zona = [{ data: null, error: null }, { data: null, error: null }];
+      admin.auth.admin.createUser.mockResolvedValue({
+        data: { user: { id: 'u-log' } },
+        error: null,
+      });
+
+      const res = await UsersService.createUser({
+        nombre: 'Leo',
+        apellido: 'Zona',
+        email: 'logistica@test.com',
+        rol: 'logistica',
+        zonas_ids: [1, 2],
+      });
+
+      expect(res.success).toBe(true);
+      const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
+      expect(inserts).toHaveLength(1);
+      expect(inserts[0][1]).toEqual([
+        { usuario_id: 'u-log', zona_id: 1 },
+        { usuario_id: 'u-log', zona_id: 2 },
+      ]);
+    });
+
+    it('should_not_assign_zones_when_role_is_not_logistica', async () => {
+      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-8', rol: 'ejecutivo' })];
+      admin.results.sucursal = [{ data: null, error: null }];
+      admin.results.usuario_zona = [{ data: null, error: null }];
+      admin.auth.admin.createUser.mockResolvedValue({
+        data: { user: { id: 'u-8' } },
+        error: null,
+      });
+
+      const res = await UsersService.createUser({
+        nombre: 'Rolando',
+        apellido: 'Vera',
+        email: 'ejecutivo2@test.com',
+        rol: 'ejecutivo',
+        zonas_ids: [1, 2],
+      });
+
+      expect(res.success).toBe(true);
+      const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
+      expect(inserts).toHaveLength(0);
+    });
   });
 
   describe('getUsers', () => {
@@ -226,6 +274,40 @@ describe('UsersService', () => {
         .callsTo('sucursal')
         .find((c: [string, ...unknown[]]) => c[0] === 'update' && (c[1] as { usuario_id: string | null })?.usuario_id === null);
       expect(nullUpdate).toEqual(['update', { usuario_id: null }]);
+    });
+
+    it('should_clear_zones_when_role_is_demoted_from_logistica', async () => {
+      admin.results.usuario = [fila({ id: 'u-9', sucursal_id: null, ...base, rol: 'logistica' })];
+      admin.results.sucursal = [
+        { data: null, error: null },
+        { data: null, error: null },
+      ];
+      admin.results.usuario_zona = [{ data: null, error: null }];
+      admin.auth.admin.updateUserById.mockResolvedValue({ data: {}, error: null });
+
+      const res = await UsersService.updateUser('u-9', { rol: 'jefe_local' });
+
+      expect(res.success).toBe(true);
+      const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
+      expect(inserts).toHaveLength(0);
+      expect(admin.callsTo('usuario_zona')).toContainEqual(['delete']);
+    });
+
+    it('should_assign_zones_when_role_is_logistica', async () => {
+      admin.results.usuario = [fila({ id: 'u-10', sucursal_id: null, ...base, rol: 'ejecutivo' })];
+      admin.results.sucursal = [
+        { data: null, error: null },
+        { data: null, error: null },
+      ];
+      admin.results.usuario_zona = [{ data: null, error: null }, { data: null, error: null }];
+      admin.auth.admin.updateUserById.mockResolvedValue({ data: {}, error: null });
+
+      const res = await UsersService.updateUser('u-10', { rol: 'logistica', zonas_ids: [5] });
+
+      expect(res.success).toBe(true);
+      const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
+      expect(inserts).toHaveLength(1);
+      expect(inserts[0][1]).toEqual([{ usuario_id: 'u-10', zona_id: 5 }]);
     });
   });
 });

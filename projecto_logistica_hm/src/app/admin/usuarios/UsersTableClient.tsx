@@ -806,7 +806,11 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 </label>
                 <select
                   value={rol}
-                  onChange={(e) => setRol(e.target.value as UserRole)}
+                  onChange={(e) => {
+                    const next = e.target.value as UserRole;
+                    setRol(next);
+                    if (next !== 'logistica') setZonasIds([]);
+                  }}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                 >
                   <option value="ejecutivo">Ejecutivo (Gestión de solicitudes/vehículos)</option>
@@ -845,12 +849,14 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 />
               )}
 
-              <MultiCheckSelector
-                title="Zonas de logística territorial"
-                options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
-                selected={zonasIds}
-                onToggle={(id) => setZonasIds((prev) => toggleId(prev, id))}
-              />
+              {rol === 'logistica' && (
+                <MultiCheckSelector
+                  title="Zonas de logística territorial"
+                  options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
+                  selected={zonasIds}
+                  onToggle={(id) => setZonasIds((prev) => toggleId(prev, id))}
+                />
+              )}
 
               {/* Optional Custom Password */}
               <div className="space-y-1.5">
@@ -955,7 +961,11 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 </label>
                 <select
                   value={editRol}
-                  onChange={(e) => setEditRol(e.target.value as UserRole)}
+                  onChange={(e) => {
+                    const next = e.target.value as UserRole;
+                    setEditRol(next);
+                    if (next !== 'logistica') setEditZonasIds([]);
+                  }}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                 >
                   <option value="ejecutivo">Ejecutivo (Gestión de solicitudes/vehículos)</option>
@@ -994,12 +1004,14 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 />
               )}
 
-              <MultiCheckSelector
-                title="Zonas de logística territorial"
-                options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
-                selected={editZonasIds}
-                onToggle={(id) => setEditZonasIds((prev) => toggleId(prev, id))}
-              />
+              {editRol === 'logistica' && (
+                <MultiCheckSelector
+                  title="Zonas de logística territorial"
+                  options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
+                  selected={editZonasIds}
+                  onToggle={(id) => setEditZonasIds((prev) => toggleId(prev, id))}
+                />
+              )}
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">

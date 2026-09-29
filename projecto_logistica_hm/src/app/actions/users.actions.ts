@@ -44,7 +44,7 @@ export async function createUserAction(data: CreateUserData) {
       rol,
       sucursal_id: sucursal_id ?? null,
       sucursales_ids: sucursales_ids || [],
-      zonas_ids: zonas_ids || [],
+      zonas_ids: rol === 'logistica' ? zonas_ids || [] : [],
     };
 
     const result = await UsersService.createUser(input, password);
@@ -161,7 +161,7 @@ export async function updateUserAction(data: UpdateUserData) {
       rol,
       sucursal_id: sucursal_id ?? null,
       sucursales_ids: sucursales_ids || [],
-      zonas_ids: zonas_ids || [],
+      zonas_ids: rol === 'logistica' ? zonas_ids || [] : [],
     });
 
     if (!result.success) {

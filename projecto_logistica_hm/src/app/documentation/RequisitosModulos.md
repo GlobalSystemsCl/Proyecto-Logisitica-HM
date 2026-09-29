@@ -124,8 +124,8 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales/Zonas · V
 ## 3. Módulo: Gestión de Usuarios
 
 - **Estado**: `implementado`
-- **Qué hace**: CRUD de usuarios del sistema (solo `administrador`): crear, activar/desactivar, resetear contraseña, editar rol/sucursal. Genera contraseña provisoria y la envía por email (Brevo).
-- **Cómo funciona**: `createUserAction` crea en `auth.admin.createUser` (email confirmado, `requiere_cambio_clave=true`) + upsert en `public.usuario`; si es `jefe_local` lo vincula como encargado de la sucursal (`usuario_id`). Prevenciones: no permite desactivarse a sí mismo ni desactivar al admin principal (`maic.hernandez.dev@gmail.com`). Sin autoregistro.
+- **Qué hace**: CRUD de usuarios del sistema (solo `administrador`): crear, activar/desactivar, resetear contraseña, editar rol/sucursal. Genera contraseña provisoria y la envía por email (Brevo). Asigna **zonas** (solo rol `logistica`) y **sucursales a cargo** (encargado de local, roles `jefe_local`/administrador).
+- **Cómo funciona**: `createUserAction` crea en `auth.admin.createUser` (email confirmado, `requiere_cambio_clave=true`) + upsert en `public.usuario`; si es `jefe_local` lo vincula como encargado de la sucursal (`usuario_id`). **Regla de pertenencia/organización**: un usuario pertenece a **una sola sucursal** (`usuario.sucursal_id`); ser "encargado" (a cargo) de sucursales es distinto de pertenecer a ellas. Las **zonas** (`usuario_zona`) solo se asignan a usuarios de rol `logistica`; si un usuario deja de ser logística, sus zonas se limpian automáticamente. Prevenciones: no permite desactivarse a sí mismo ni desactivar al admin principal (`maic.hernandez.dev@gmail.com`). Sin autoregistro.
 - **Requisitos específicos**:
   - `R-USU.1` — Solo administradores gestionan usuarios; sin registro público.
   - `R-USU.2` — Alta con contraseña provisoria `HM-*` y envío Brevo.
@@ -133,11 +133,14 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales/Zonas · V
   - `R-USU.4` — Activación/desactivación en tiempo real (afecta el login).
   - `R-USU.5` — Edición de rol, sucursal y datos.
   - `R-USU.6` — Un `jefe_local` creado queda como encargado de su sucursal.
-- **Con qué se conecta**: `users.service.ts`, `users.actions.ts`, `EmailService`, Supabase Auth Admin, tabla `usuario`, `sucursal`.
-- **Depende de**: Módulo Autenticación (sesión), Módulo Correo.
+  - `R-USU.7` — Solo el rol `logistica` puede tener zonas territoriales asignadas; al asignar/editar otro rol las zonas se limpian.
+  - `R-USU.8` — El usuario pertenece a una única sucursal (`sucursal_id`); un `jefe_local` puede estar a cargo de varias (`sucursal.usuario_id`) sin pertenecer a ellas.
+- **Con qué se conecta**: `users.service.ts`, `users.actions.ts`, `EmailService`, Supabase Auth Admin, tablas `usuario`, `sucursal`, `usuario_zona`.
+- **Depende de**: Módulo Autenticación (sesión), Módulo Correo, Módulo Organización Territorial (zonas).
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-28 | Zonas asignables solo a rol `logistica` (UI oculta el selector para otros roles; service/actions limpian `usuario_zona` en roles no-logística). Regla de pertenencia única a una sucursal: "a cargo" ≠ "pertenece" | Corrección: los encargados por zona son solo logística; los usuarios pertenecen a una sola sucursal |
   | 2026-08-27 | Se registra en RequisitosModulos.md | Documentación de requisitos |
 
 ---
@@ -411,7 +414,7 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales/Zonas · V
   - `R-ORG.3` — No se puede eliminar una zona que tenga sucursales asignadas; el sistema exige reasignarlas antes.
   - `R-ORG.4` — Una sucursal pertenece a **una sola** zona (`sucursal.zona_id`, opcional) y se asigna al crear/editar.
   - `R-ORG.5` — El panel muestra las sucursales de cada zona y permite filtrar la tabla de sucursales por zona.
-  - `R-ORG.6` — Un usuario de logística se asigna a una o varias zonas (`usuario_zona`) y/o sucursales (`usuario_sucursal`) desde Gestión de Usuarios.
+  - `R-ORG.6` — Solo los usuarios de rol `logistica` reciben zonas territoriales (`usuario_zona`); a cualquier otro rol se le limpian (UI + service/actions). Las sucursales "a cargo" (`sucursal.usuario_id`) son del `jefe_local`/administrador, independientes de la pertenencia (`usuario.sucursal_id`).
   - `R-ORG.7` — La logística ve y opera solo solicitudes de sus zonas (`getSolicitudesPorZonas` sobre `sucursal_zona_id`); calendarización y slots usan sus sucursales asignadas.
   - `R-ORG.8` — La validación de pertenencia se centraliza en `OrganizacionService` (`usuarioTieneSucursal`, `getUserAssignedBranches`, `getUserZones`); la operativa NO reimplementa la lógica de asignación.
 - **Con qué se conecta**: `organizacion.service.ts` (CRUD zonas + asignaciones), `organizacion.actions.ts` (`createZonaAction`, `updateZonaAction`, `deleteZonaAction`), `sucursales.service.ts`/`sucursales.actions.ts` (`zona_id`), `SucursalesTableClient.tsx` (UI zonas), `users.actions.ts`/`UsersTableClient.tsx` (asignación a usuarios), `solicitudes.service.ts` (`getSolicitudesFiltradas`, `getSolicitudesPorZonas`), `dashboard/page.tsx` (card admin), tablas `zona`, `usuario_zona`, `usuario_sucursal`, `sucursal.zona_id`.
@@ -430,6 +433,7 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-09-28 | Organización Territorial | Regla de asignación de zonas: **solo rol `logistica`** (selector oculto para otros roles; `setZonasAsignadas` limpia `usuario_zona` en roles no-logística) y **pertenencia única a una sucursal** (a cargo ≠ pertenece; `jefe_local` puede encabezar varias sucursales) | Los encargados por zona son únicamente logística; los usuarios pertenecen a una sola sucursal |
 | 2026-09-28 | Organización Territorial | Panel "Gestión de Zonas y Sucursales": CRUD de zonas (crear/renombrar/eliminar con protección), asignación de sucursal a zona y filtro por zona; revalidate de las actions de zona; card del dashboard renombrada | Habilitar la gestión visual de zonas territoriales y su vínculo con sucursales y el alcance de Logística |
 | 2026-09-05 | Perfil de Usuario | Rediseño UI del perfil (sin franja negra; hero con iniciales y resumen de contacto) y nombres de usuario cliqueables (popup de datos) en todos los puntos del sistema que indican un usuario/encargado: tabla y detalle de solicitudes, historial de cambios, observaciones, prioridades, aprobaciones, sucursales (encargado + personas de solicitudes), historial de auditoría y gestión de usuarios | Acceso ágil a datos de contacto ante urgencias en cualquier fase del traslado; perfil más pulido |
 | 2026-09-05 | Perfil de Usuario | Nuevo módulo: página `/perfil`, edición de nombre/apellido/teléfono, columna `telefono`, tarjeta "Contacto responsable" del detalle de solicitud con rol/sucursal/teléfono/correo y popups de datos de usuario en historial/observaciones | Necesidad de contacto accesible del responsable y de los usuarios que intervienen en las solicitudes |
