@@ -148,8 +148,8 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales/Zonas · V
 ## 4. Módulo: Gestión de Vehículos
 
 - **Estado**: `implementado`
-- **Qué hace**: alta/edición/borrado manual de vehículos; consulta de inventario con disponibilidad; validación de datos y de uso en solicitudes activas.
-- **Cómo funciona**: `VehiculoService` valida **chasis 17 alfanuméricos**, **patente chilena** (`XXXX-XX`/`XXXX-XXXX`), año 1900..año+1 y duplicados. Un vehículo **reservado en solicitud activa no se puede editar ni eliminar**. La disponibilidad se deriva de `solicitud_vehiculo` con `disponibilidad='reservado'` en estados activos. Roles de alta: administrador, jefe_local, logística (borrar solo administrador).
+- **Qué hace**: alta/edición/borrado manual de vehículos; consulta de inventario con disponibilidad; filtrado del inventario por texto, marca, estado, sucursal/ubicación y rango de fecha de registro; validación de datos y de uso en solicitudes activas.
+- **Cómo funciona**: `VehiculoService` valida **chasis 17 alfanuméricos**, **patente chilena** (`XXXX-XX`/`XXXX-XXXX`), año 1900..año+1 y duplicados. Un vehículo **reservado en solicitud activa no se puede editar ni eliminar**. La disponibilidad se deriva de `solicitud_vehiculo` con `disponibilidad='reservado'` en estados activos. El listado completo se trae al servidor en una sola pasada (paginación interna por `.range()` de 1000 filas **con desempate por `id`** y deduplicación por `id`, para que el `ORDER BY created_at` —no determinista en importaciones masivas— no devuelva filas repetidas). El filtrado del inventario es de cliente y puro: vive en `src/lib/filtrosVehiculos.ts` (`filtrarVehiculos`, `contarPorDisponibilidad`, `hayFiltrosActivos`), combinado con búsqueda libre, marca, estado, **ubicación** (cada sucursal + el grupo "En viaje / Container" para los vehículos con `ubicacion IS NULL`) y **rango de fecha de registro** (`created_at`, extremos inclusivos, unbound = sin límite). Las métricas de las tarjetas superiores respetan los filtros activos. Roles de alta: administrador, jefe_local, logística (borrar solo administrador).
 - **Requisitos específicos**:
   - `R-VEH.1` — Alta manual de vehículos con los campos chasis, patente, marca, modelo, año, color.
   - `R-VEH.2` — Validación de formato (chasis, patente chilena, año, duplicados).
@@ -158,11 +158,18 @@ Login (Auth) → Dashboard → [Administrador: Usuarios · Sucursales/Zonas · V
   - `R-VEH.5` — Inventario muestra disponibilidad (reservado/en_disponible) según reservas activas.
   - `R-VEH.6` — Roles autorizados a incorporar vehículos: administrador, jefe_local, logística.
   - `R-VEH.7` — Campo `precio` opcional (≥ 0) al crear y editar un vehículo; se muestra en el inventario.
-- **Con qué se conecta**: `vehiculo.service.ts`, `vehiculo.actions.ts`, `VehiculosTableClient.tsx`, tablas `vehiculo`, `solicitud_vehiculo`.
-- **Depende de**: reservas creadas por el Módulo Solicitudes.
+  - `R-VEH.8` — El inventario se puede filtrar por sucursal de ubicación, incluyendo la opción "En viaje / Container" (vehículos sin sucursal asignada).
+  - `R-VEH.9` — El inventario se puede filtrar por rango de fecha de registro (desde/hasta, extremos inclusivos, cada extremo opcional).
+  - `R-VEH.10` — Los filtros son combinables entre sí, restablecen la paginación a la página 1 y se pueden limpiar con un solo botón ("Limpiar filtros").
+  - `R-VEH.11` — Las tarjetas de métricas (Total / Disponibles / En Uso / Vendidos) reflejan los resultados filtrados.
+  - `R-VEH.12` — La carga del inventario no puede devolver vehículos duplicados por paginación del servidor.
+- **Con qué se conecta**: `vehiculo.service.ts`, `vehiculo.actions.ts`, `VehiculosTableClient.tsx`, `src/lib/filtrosVehiculos.ts`, tablas `vehiculo`, `solicitud_vehiculo`.
+- **Depende de**: reservas creadas por el Módulo Solicitudes; lista de sucursales del Módulo de Gestión de Sucursales (opciones del filtro de ubicación).
 - **Historial**:
   | Fecha | Cambio | Motivo |
   |---|---|---|
+  | 2026-09-29 | Filtros de ubicación (sucursal + En viaje / Container) y de rango de fecha de registro; métricas por filtros; botón "Limpiar filtros"; lógica de filtrado extraída a `src/lib/filtrosVehiculos.ts` con tests | Auditar subconjuntos del inventario (p. ej. vehículos en container o registrados en un rango de fechas) |
+  | 2026-09-29 | `getVehiculos`/`getMarcas`/import CSV ordenan por `id` como desempate y deduplican por `id` | El `ORDER BY created_at` con `OFFSET` devolvía 220 vehículos duplicados y 220 omitidos de 2261, provocando el error de `key` duplicada en la tabla |
   | 2026-08-28 | Nuevo campo opcional `precio` (numeric 14,2) en alta/edición e inventario de vehículos; migración `20260828_vehiculo_precio.sql` | Registrar el valor comercial de cada vehículo |
   | 2026-08-27 | Se registra en RequisitosModulos.md | Documentación de requisitos |
 
@@ -434,6 +441,8 @@ Orden: más reciente primero.
 
 | Fecha | Módulo | Cambio | Motivo |
 |---|---|---|---|
+| 2026-09-29 | Vehículos | Filtros de **ubicación** (cada sucursal + "En viaje / Container") y de **rango de fecha de registro** (desde/hasta) en `/admin/vehiculos`, combinables con búsqueda/marca/estado; métricas y paginación responden a los filtros; botón "Limpiar filtros"; lógica pura en `src/lib/filtrosVehiculos.ts` con 39 tests | Localizar vehículos por sucursal y por momento de registro |
+| 2026-09-29 | Vehículos | Fix: `getVehiculos`/`getMarcas`/import CSV desempatan el `ORDER BY` por `id` y deduplican por `id` | La paginación con `OFFSET` sobre `created_at` (empates en importaciones masivas) devolvía 220 duplicados y 220 omitidos de 2261 → error de React de `key` duplicada |
 | 2026-09-29 | Perfil de Usuario | Popup "Datos de contacto" adaptativo por rol: `getUsuarioDetalleById` devuelve sucursales a cargo y zonas (`usuario_zona`); el modal muestra "Sucursal de pertenencia" + "Sucursales a su cargo" para `jefe_local`/`administrador` y "Zonas de logística territorial" para `logistica` | Reflejar la organización real del usuario en el contacto: encargado de varias sucursales y logística por zonas |
 | 2026-09-28 | Organización Territorial | Regla de asignación de zonas: **solo rol `logistica`** (selector oculto para otros roles; `setZonasAsignadas` limpia `usuario_zona` en roles no-logística) y **pertenencia única a una sucursal** (a cargo ≠ pertenece; `jefe_local` puede encabezar varias sucursales) | Los encargados por zona son únicamente logística; los usuarios pertenecen a una sola sucursal |
 | 2026-09-28 | Organización Territorial | Panel "Gestión de Zonas y Sucursales": CRUD de zonas (crear/renombrar/eliminar con protección), asignación de sucursal a zona y filtro por zona; revalidate de las actions de zona; card del dashboard renombrada | Habilitar la gestión visual de zonas territoriales y su vínculo con sucursales y el alcance de Logística |
