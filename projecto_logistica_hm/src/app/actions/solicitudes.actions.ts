@@ -7,7 +7,7 @@ import { UsersService } from '@/services/users.service';
 import { UserProfile, UsuarioDetalle } from '@/types/auth.types';
 import { TipoSolicitud } from '@/types/solicitud.types';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
-import { revalidatePath } from 'next/cache';
+import { revalidarSolicitudes } from '@/lib/rutas';
 
 async function getProfileOrThrow(): Promise<UserProfile> {
   const profile = await AuthService.getCurrentUserProfile();
@@ -166,7 +166,7 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
       return { success: false, error: result.error || 'Error al crear la solicitud.' };
     }
 
-    revalidatePath('/solicitudes');
+    revalidarSolicitudes();
     return {
       success: true,
       solicitudId: result.solicitud?.id,
@@ -207,8 +207,7 @@ export async function aprobarSolicitudAction(id: string, fecha: string) {
     const result = await SolicitudesService.aprobarSolicitud(id, profile.id, fecha);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/aprobaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud aprobada exitosamente.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -241,7 +240,7 @@ export async function rechazarSolicitudAction(id: string, motivo: string) {
     const result = await SolicitudesService.rechazarSolicitud(id, motivo, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud rechazada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -270,8 +269,7 @@ export async function priorizarSolicitudAction(id: string) {
     const result = await SolicitudesService.priorizarSolicitud(id, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/prioridades');
+    revalidarSolicitudes();
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -300,8 +298,7 @@ export async function priorizarEnPosicionAction(id: string, posicion: number) {
     const result = await SolicitudesService.priorizarEnPosicion(id, posicion, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/prioridades');
+    revalidarSolicitudes();
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -327,8 +324,7 @@ export async function reordenarColaAction(sucursalId: number, orden: string[]) {
     const result = await SolicitudesService.reordenarCola(sucursalId, orden, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/prioridades');
+    revalidarSolicitudes();
     return { success: true, message: 'Cola de prioridades actualizada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -357,8 +353,7 @@ export async function sacarDeColaAction(id: string) {
     const result = await SolicitudesService.sacarDeCola(id, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/prioridades');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud sacada de la cola de prioridades.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -391,9 +386,7 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
     const result = await SolicitudesService.cancelarSolicitud(id, motivo, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/prioridades');
-    revalidatePath('/solicitudes/aprobaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud cancelada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -421,8 +414,7 @@ export async function eliminarSolicitudAction(id: string) {
     const result = await SolicitudesService.eliminarSolicitud(id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/prioridades');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud eliminada definitivamente.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -441,7 +433,7 @@ export async function agregarVehiculoAction(solicitudId: string, vehiculoId: str
     const result = await SolicitudesService.agregarVehiculo(solicitudId, vehiculoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
+    revalidarSolicitudes();
     return { success: true, message: 'Vehículo reservado para esta solicitud.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -460,7 +452,7 @@ export async function quitarVehiculoAction(solicitudVehiculoId: string) {
     const result = await SolicitudesService.quitarVehiculo(solicitudVehiculoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
+    revalidarSolicitudes();
     return { success: true, message: 'Reserva retirada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -479,7 +471,7 @@ export async function agregarObservacionAction(solicitudId: string, texto: strin
     const result = await SolicitudesService.agregarObservacion(solicitudId, profile.id, texto);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
+    revalidarSolicitudes();
     return { success: true, message: 'Observación agregada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -533,8 +525,7 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
     const result = await SolicitudesService.calendarizarSolicitud(solicitudId, fechaDespacho, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud calendarizada exitosamente.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -553,8 +544,7 @@ export async function descalendarizarSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.descalendarizarSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud devuelta a priorizada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -573,9 +563,28 @@ export async function despacharSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.despacharSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud despachada.' };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    return { success: false, error: msg };
+  }
+}
+
+/** Logística confirma el inicio efectivo de la ruta: despachada -> en tránsito. */
+export async function iniciarTransitoSolicitudAction(solicitudId: string) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
+      return { success: false, error: 'No tienes permisos para iniciar el tránsito de solicitudes.' };
+    }
+
+    const result = await SolicitudesService.iniciarTransitoSolicitud(solicitudId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidarSolicitudes();
+    return { success: true, message: 'Solicitud en tránsito.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };
@@ -593,8 +602,7 @@ export async function cancelarDespachoSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.cancelarDespacharSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Despacho cancelado: la solicitud volvió a Calendarizada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -613,8 +621,7 @@ export async function recibirSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.recibirSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud recibida en destino.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -633,8 +640,7 @@ export async function finalizarSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.finalizarSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Solicitud finalizada.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -664,9 +670,7 @@ export async function asignarEncargadoAction(solicitudId: string, logisticaId?: 
     const result = await SolicitudesService.asignarEncargadoLogistica(solicitudId, encargadoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/prioridades');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return { success: true, message: 'Encargado de solicitud asignado.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -718,10 +722,7 @@ export async function insistirSolicitudAction(solicitudId: string, mensaje?: str
       };
     }
 
-    revalidatePath('/solicitudes');
-    revalidatePath('/solicitudes/aprobaciones');
-    revalidatePath('/solicitudes/prioridades');
-    revalidatePath('/logistica/calendarizaciones');
+    revalidarSolicitudes();
     return {
       success: true,
       message: 'Insistencia registrada. Se notificó al equipo responsable.',

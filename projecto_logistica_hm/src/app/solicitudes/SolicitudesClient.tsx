@@ -9,6 +9,7 @@ import {
   AlertCircle,
   X,
   Eye,
+  XCircle,
   ArrowUp,
   Ban,
   Clock,
@@ -37,6 +38,16 @@ import {
 } from '@/types/solicitud.types';
 import { Sucursal } from '@/types/sucursal.types';
 import { formatFecha, hoyISO } from '@/lib/fechas';
+import {
+  GRUPOS_FILTRO_SOLICITUDES,
+  contarPorGrupo,
+  coincideBusqueda,
+  destinoDeSolicitud,
+  estadoEnGrupo,
+  filtrarPorGrupo,
+  grupoFiltro,
+  type GrupoFiltroSolicitud,
+} from '@/lib/filtroSolicitudes';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 
@@ -45,7 +56,7 @@ import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
  * Los valores son los del enum `estado_solicitud` (inmutables en BD).
  */
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
-  pendiente_aprobacion: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pendiente_aprobacion: { label: 'Pendiente de aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   aprobada: { label: 'Aprobada', color: 'bg-green-50 text-green-700 border-green-200' },
   pendiente: { label: 'Pendiente', color: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   priorizada: { label: 'Priorizada', color: 'bg-neutral-200 text-neutral-900 border-neutral-200' },
@@ -160,6 +171,7 @@ export default function SolicitudesClient({
 }: SolicitudesClientProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
+  const [grupoActivo, setGrupoActivo] = useState<GrupoFiltroSolicitud>('todas');
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -285,29 +297,34 @@ export default function SolicitudesClient({
     return [];
   }, [solicitudes, esAdmin, esEjecutivo, esJefeLocal, esLogistica, sucursalesVisibles]);
 
+  /**
+   * Filtros de la lista, en cascada: grupo de estado (barra de chips con
+   * contadores) → estado exacto (select) → texto. El grupo manda porque es el
+   * que refleja cómo piensa el usuario; el estado exacto queda para afinar.
+   */
   const filtradas = useMemo(() => {
-    let lista = visibles;
+    let lista = filtrarPorGrupo(visibles, grupoActivo);
     if (filtroEstado !== 'todos') {
       lista = lista.filter((s) => s.estado === filtroEstado);
     }
-    const term = searchTerm.trim().toLowerCase();
-    if (term) {
-      lista = lista.filter(
-        (s) =>
-          (s.sucursal_nombre || '').toLowerCase().includes(term) ||
-          s.id.toLowerCase().includes(term) ||
-          (s.ejecutivo_nombre || '').toLowerCase().includes(term) ||
-          (getEncargadoNombre(s) || '').toLowerCase().includes(term) ||
-          (s.sucursal_destino_nombre || '').toLowerCase().includes(term) ||
-          s.vehiculos.some((v) => (v.patente ?? '').toLowerCase().includes(term))
-      );
+    if (searchTerm.trim()) {
+      lista = lista.filter((s) => coincideBusqueda(s, searchTerm));
     }
     return lista;
-  }, [visibles, filtroEstado, searchTerm]);
+  }, [visibles, grupoActivo, filtroEstado, searchTerm]);
 
-  const pendientesAprobacion = visibles.filter((s) => s.estado === 'pendiente_aprobacion').length;
-  const priorizadas = visibles.filter((s) => s.estado === 'priorizada').length;
-  const pendientesPorFinalizar = visibles.filter((s) => s.estado === 'entregada').length;
+  const conteo = useMemo(() => contarPorGrupo(visibles), [visibles]);
+
+  /** Al cambiar el grupo, el estado exacto debe seguir siendo válido. */
+  function activarGrupo(id: GrupoFiltroSolicitud) {
+    setGrupoActivo(id);
+    if (filtroEstado !== 'todos' && !estadoEnGrupo(filtroEstado as EstadoSolicitud, id)) {
+      setFiltroEstado('todos');
+    }
+  }
+
+  const pendientesAprobacion = conteo.pendientes;
+  const pendientesPorFinalizar = conteo.por_entregar;
 
   const puedeVerPrioridad = !esEjecutivo;
 
@@ -548,10 +565,12 @@ export default function SolicitudesClient({
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900 flex items-center gap-2">
             <FileText className="w-7 h-7 text-neutral-900" />
-            <span>Gestión de Solicitudes</span>
+            <span>{esEjecutivo ? 'Mis Solicitudes' : 'Gestión de Solicitudes'}</span>
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Flujo de traslado de vehículos entre sucursales de H.Motores
+            {esEjecutivo
+              ? 'Crea tus solicitudes y sigue aquí su estado: pendientes, aprobadas, por entregar y finalizadas.'
+              : 'Flujo de traslado de vehículos entre sucursales de H.Motores'}
           </p>
         </div>
 
@@ -575,9 +594,16 @@ export default function SolicitudesClient({
         </div>
       )}
 
-      {/* Metric Cards */}
+      {/* Metric Cards: hacen de acceso directo al filtro de cada grupo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => activarGrupo('todas')}
+          aria-pressed={grupoActivo === 'todas'}
+          className={`text-left bg-white border rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer ${
+            grupoActivo === 'todas' ? 'border-neutral-900 ring-2 ring-neutral-900' : 'border-neutral-200 hover:border-neutral-400'
+          }`}
+        >
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Visibles</p>
             <p className="text-3xl font-bold text-neutral-900 mt-1">{visibles.length}</p>
@@ -585,9 +611,16 @@ export default function SolicitudesClient({
           <div className="w-11 h-11 rounded-xl border border-neutral-300 flex items-center justify-center text-neutral-900">
             <FileText className="w-5 h-5" />
           </div>
-        </div>
+        </button>
 
-        <div className="bg-neutral-900 border border-neutral-900 rounded-2xl p-5 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => activarGrupo('pendientes')}
+          aria-pressed={grupoActivo === 'pendientes'}
+          className={`text-left bg-neutral-900 border border-neutral-900 rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer ${
+            grupoActivo === 'pendientes' ? 'ring-2 ring-neutral-400' : 'hover:bg-neutral-800'
+          }`}
+        >
           <div>
             <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Pendientes Aprobación</p>
             <p className="text-3xl font-bold text-white mt-1">{pendientesAprobacion}</p>
@@ -595,27 +628,45 @@ export default function SolicitudesClient({
           <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-white">
             <Clock className="w-5 h-5" />
           </div>
-        </div>
+        </button>
 
-        <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => activarGrupo('en_curso')}
+          aria-pressed={grupoActivo === 'en_curso'}
+          className={`text-left bg-white border rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer ${
+            grupoActivo === 'en_curso' ? 'border-neutral-900 ring-2 ring-neutral-900' : 'border-neutral-200 hover:border-neutral-400'
+          }`}
+        >
           <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Priorizadas</p>
-            <p className="text-3xl font-bold text-neutral-400 mt-1">{priorizadas}</p>
+            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">En Curso</p>
+            <p className="text-3xl font-bold text-neutral-400 mt-1">{conteo.en_curso}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-400">
-            <ArrowUp className="w-5 h-5" />
+            {puedeVerPrioridad ? (
+              <ArrowUp className="w-5 h-5" />
+            ) : (
+              <Truck className="w-5 h-5" />
+            )}
           </div>
-        </div>
+        </button>
 
-        <div className="bg-emerald-600 border border-emerald-600 rounded-2xl p-5 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => activarGrupo('por_entregar')}
+          aria-pressed={grupoActivo === 'por_entregar'}
+          className={`text-left bg-emerald-600 border border-emerald-600 rounded-2xl p-5 flex items-center justify-between transition-all cursor-pointer ${
+            grupoActivo === 'por_entregar' ? 'ring-2 ring-emerald-300' : 'hover:bg-emerald-700'
+          }`}
+        >
           <div>
-            <p className="text-xs font-medium text-emerald-100 uppercase tracking-wider">Pendientes por Finalizar</p>
+            <p className="text-xs font-medium text-emerald-100 uppercase tracking-wider">Por entregar</p>
             <p className="text-3xl font-bold text-white mt-1">{pendientesPorFinalizar}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-white/15 flex items-center justify-center text-white">
             <Flag className="w-5 h-5" />
           </div>
-        </div>
+        </button>
       </div>
 
       {/* Feedback Banner */}
@@ -650,32 +701,68 @@ export default function SolicitudesClient({
         </div>
       )}
 
-      {/* Filters */}
-      <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-          <input
-            type="text"
-            placeholder="Buscar por sucursal, ID, ejecutivo, patente..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-          />
+      {/* Filters: chips de grupo (con contador) + búsqueda + estado exacto */}
+      <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-4">
+        <div
+          role="group"
+          aria-label="Filtrar solicitudes por estado"
+          className="flex flex-wrap items-center gap-2"
+        >
+          {GRUPOS_FILTRO_SOLICITUDES.map((grupo) => {
+            const activo = grupoActivo === grupo.id;
+            const cantidad = conteo[grupo.id];
+            return (
+              <button
+                key={grupo.id}
+                type="button"
+                onClick={() => activarGrupo(grupo.id)}
+                aria-pressed={activo}
+                title={grupo.descripcion}
+                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full border text-sm font-semibold transition-all cursor-pointer ${
+                  activo
+                    ? 'bg-neutral-900 text-white border-neutral-900'
+                    : 'bg-white text-neutral-600 border-neutral-300 hover:border-neutral-900 hover:text-neutral-900'
+                }`}
+              >
+                {grupo.label}
+                <span
+                  className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${
+                    activo ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-500'
+                  }`}
+                >
+                  {cantidad}
+                </span>
+              </button>
+            );
+          })}
         </div>
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Estado:</label>
-          <select
-            value={filtroEstado}
-            onChange={(e) => setFiltroEstado(e.target.value)}
-            className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-          >
-            <option value="todos">Todos</option>
-            {(Object.keys(estadoConfig) as EstadoSolicitud[]).map((est) => (
-              <option key={est} value={est}>
-                {estadoConfig[est].label}
-              </option>
-            ))}
-          </select>
+
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Buscar por sucursal, ID, ejecutivo, patente..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            />
+          </div>
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Estado:</label>
+            <select
+              value={filtroEstado}
+              onChange={(e) => setFiltroEstado(e.target.value)}
+              className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            >
+              <option value="todos">Todos</option>
+              {(Object.keys(estadoConfig) as EstadoSolicitud[]).map((est) => (
+                <option key={est} value={est}>
+                  {estadoConfig[est].label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -700,15 +787,15 @@ export default function SolicitudesClient({
               {filtradas.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="py-8 text-center text-neutral-400">
-                    No hay solicitudes que coincidan con los filtros.
+                    {visibles.length === 0
+                      ? 'Todavía no tienes solicitudes.'
+                      : `No hay solicitudes en "${grupoFiltro(grupoActivo).label}".`}
                   </td>
                 </tr>
               ) : (
                 filtradas.map((sol) => {
                   const estado = estadoConfig[sol.estado];
-                  const destino = sol.tipo_solicitud === 'venta'
-                    ? (sol.sucursal_destino_nombre || `#${sol.sucursal_destino}`)
-                    : (sol.direccion_evento || '—');
+                  const destino = destinoDeSolicitud(sol);
                   const atraso = getEstadoAtraso(sol);
                   const chip = CHIP_ATRASO[atraso];
                   return (
@@ -728,9 +815,21 @@ export default function SolicitudesClient({
 
                       <td className="py-3.5 px-4">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color}`}>
-                            {estado.label}
-                          </span>
+                          {sol.estado === 'rechazada' ? (
+                            <button
+                              type="button"
+                              onClick={() => setDetailTarget(sol)}
+                              title="Ver el motivo del rechazo"
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color} hover:brightness-95 transition-[filter] cursor-pointer`}
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              {estado.label}
+                            </button>
+                          ) : (
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color}`}>
+                              {estado.label}
+                            </span>
+                          )}
                           {puedeVerPrioridad && sol.posicion_prioridad !== null && sol.posicion_prioridad !== undefined && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white">
                               #{sol.posicion_prioridad}

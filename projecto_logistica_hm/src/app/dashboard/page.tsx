@@ -1,78 +1,17 @@
-﻿import { AuthService } from '@/services/auth.service';
-import { redirect } from 'next/navigation';
-import Link from 'next/link';
+﻿import { redirect } from 'next/navigation';
 import Image from 'next/image';
-import {
-  Users,
-  Car,
-  FileText,
-  Building2,
-  Truck,
-  History,
-  ArrowRight,
-  Shield,
-  ChevronRight,
-  LayoutGrid,
-  CheckCircle2,
-  type LucideIcon,
-} from 'lucide-react';
-import { ROL_LABEL } from '@/types/auth.types';
-import TopNavbar from '@/components/TopNavbar';
+import { Shield, LayoutGrid } from 'lucide-react';
+import { AuthService } from '@/services/auth.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
+import { SolicitudesService } from '@/services/solicitudes.service';
+import { ROL_LABEL } from '@/types/auth.types';
+import type { SlotSucursalResumen } from '@/lib/slots';
+import PageHeader from '@/components/PageHeader';
+import DashboardCardGrid from '@/components/DashboardCardGrid';
+import DashboardPrioridades from '@/components/DashboardPrioridades';
 
 export const dynamic = 'force-dynamic';
-
-type ModuleCardProps = {
-  href: string;
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  cta: string;
-  adminBadge?: boolean;
-};
-
-function ModuleCard({
-  href,
-  icon: Icon,
-  title,
-  description,
-  cta,
-  adminBadge,
-}: ModuleCardProps) {
-  return (
-    <Link
-      href={href}
-      className="group relative bg-white border border-neutral-200 hover:border-neutral-400 rounded-2xl p-6 transition-all duration-200 hover:shadow-md flex flex-col justify-between min-h-[220px]"
-    >
-      <div className="space-y-4">
-        <div className="flex items-start justify-between">
-          <div className="w-11 h-11 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-600 group-hover:bg-neutral-900 group-hover:text-white group-hover:border-neutral-900 transition-colors">
-            <Icon className="w-5 h-5" />
-          </div>
-          <div className="flex items-center gap-2">
-            {adminBadge && (
-              <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600 border border-neutral-200">
-                Admin
-              </span>
-            )}
-            <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-neutral-500 transition-colors" />
-          </div>
-        </div>
-        <div>
-          <h3 className="font-bold text-[#1a2b4b] group-hover:text-neutral-700 transition-colors">
-            {title}
-          </h3>
-          <p className="text-xs text-neutral-500 mt-1.5 leading-relaxed">{description}</p>
-        </div>
-      </div>
-      <div className="mt-5 flex items-center gap-1 text-xs font-semibold text-neutral-600 group-hover:text-neutral-900">
-        <span>{cta}</span>
-        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
-      </div>
-    </Link>
-  );
-}
 
 export default async function DashboardPage() {
   const profile = await AuthService.getCurrentUserProfile();
@@ -89,8 +28,18 @@ export default async function DashboardPage() {
     redirect('/establecer-clave');
   }
 
-  const isAdmin = profile.rol === 'administrador';
-  const isEjecutivo = profile.rol === 'ejecutivo';
+  /**
+   * El Ejecutivo no tiene hub: `/solicitudes` es su página principal y reúne
+   * todo lo suyo (crear, editar, seguir y entregar). Redirigirlo evita un
+   * dashboard con una sola card y una vuelta circular con la flecha "volver".
+   */
+  if (profile.rol === 'ejecutivo') {
+    redirect('/solicitudes');
+  }
+
+  const { rol } = profile;
+  const veSlots = rol === 'administrador' || rol === 'jefe_local';
+
   const timestamp = new Intl.DateTimeFormat('es-CL', {
     day: 'numeric',
     month: 'short',
@@ -99,27 +48,35 @@ export default async function DashboardPage() {
     minute: '2-digit',
   }).format(new Date());
 
-  const slotsResumen =
-    isAdmin || profile.rol === 'jefe_local'
-      ? (await SucursalesService.getSlotsPorSucursales(
-          (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
-        )).map((s) => ({ nombre: s.nombre, slots: s.slots, slots_ocupados: s.slots_ocupados }))
-      : null;
+  const sucursalesAsignadas = veSlots
+    ? (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
+    : [];
+
+  const slots: SlotSucursalResumen[] = veSlots
+    ? await SucursalesService.getSlotsPorSucursales(sucursalesAsignadas)
+    : [];
+
+  const prioridades =
+    rol === 'jefe_local'
+      ? await SolicitudesService.getSolicitudesPriorizadasPorSucursales(sucursalesAsignadas)
+      : [];
+
+  const pendientesAprobar =
+    rol === 'jefe_local' || rol === 'administrador'
+      ? (await SolicitudesService.getSolicitudesPendientesAprobacion(sucursalesAsignadas)).length
+      : 0;
 
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-neutral-900 flex flex-col">
-      {/* Top Navbar */}
-      <TopNavbar
+      <PageHeader
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
         sucursalNombre={profile.sucursal_nombre}
-        slots={slotsResumen}
+        slots={slots}
       />
 
-      {/* Main Content */}
       <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8 space-y-8">
-        {/* Welcome Banner */}
         <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm min-h-[220px] sm:min-h-[240px]">
           <Image
             src="/banner3.png"
@@ -139,19 +96,21 @@ export default async function DashboardPage() {
               Bienvenido, {profile.nombre} {profile.apellido}
             </h1>
             <p className="text-sm text-neutral-500 max-w-lg leading-relaxed">
-              Plataforma interna para la gestión, control operativo y trazabilidad del traslado de
-              vehículos entre sucursales de H.Motores.
+              Desde acá entrás a todo lo que tenés disponible: {ROL_LABEL[rol]}.
             </p>
           </div>
         </div>
 
-        {/* System Modules Grid */}
+        {(rol === 'jefe_local' || rol === 'administrador') && (
+          <DashboardPrioridades solicitudes={prioridades} porAprobar={pendientesAprobar} />
+        )}
+
         <div className="space-y-5">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-[#1a2b4b] tracking-tight flex items-center gap-2">
                 <LayoutGrid className="w-5 h-5 text-blue-600" />
-                <span>Módulos del Sistema</span>
+                <span>Tus módulos</span>
               </h2>
               <p className="text-sm text-neutral-500 mt-0.5">
                 Selecciona el módulo que deseas utilizar
@@ -159,100 +118,14 @@ export default async function DashboardPage() {
             </div>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-blue-50 border border-blue-100 text-blue-700 self-start">
               <Shield className="w-3.5 h-3.5 text-blue-600" />
-              <span>Tu rol: {ROL_LABEL[profile.rol]}</span>
+              <span>Tu rol: {ROL_LABEL[rol]}</span>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {isAdmin && (
-              <ModuleCard
-                href="/admin/usuarios"
-                icon={Users}
-                title="Gestión de Usuarios"
-                description="Creación de cuentas, envío de invitaciones por correo y control de activación/desactivación."
-                cta="Administrar colaboradores"
-                adminBadge
-              />
-            )}
-
-            {!isEjecutivo && (
-              <ModuleCard
-                href="/admin/vehiculos"
-                icon={Car}
-                title="Gestión de Vehículos"
-                description="Incorporación manual de vehículos al inventario interno, control de disponibilidad y datos del vehículo."
-                cta="Administrar vehículos"
-              />
-            )}
-
-            {isEjecutivo && (
-              <ModuleCard
-                href="/solicitudes"
-                icon={FileText}
-                title="Solicitudes"
-                description="Creación y seguimiento de solicitudes de traslado de vehículos."
-                cta="Ver solicitudes"
-              />
-            )}
-
-            {isEjecutivo && (
-              <ModuleCard
-                href="/solicitudes/aprobaciones"
-                icon={CheckCircle2}
-                title="Aprobaciones"
-                description="Revisión y aprobación de solicitudes de traslado pendientes."
-                cta="Revisar aprobaciones"
-              />
-            )}
-
-            {!isEjecutivo && (
-              <ModuleCard
-                href="/solicitudes"
-                icon={FileText}
-                title="Gestión de Solicitudes"
-                description="Creación de traslados, cola de priorización por sucursal y reserva de vehículos."
-                cta="Gestionar solicitudes"
-              />
-            )}
-
-            {isAdmin && (
-              <ModuleCard
-                href="/admin/sucursales"
-                icon={Building2}
-                title="Gestión de Zonas y Sucursales"
-                description="Alta de zonas territoriales, agrupar sucursales por zona, capacidad de estacionamiento y solicitudes asociadas por punto."
-                cta="Administrar zonas y sucursales"
-                adminBadge
-              />
-            )}
-
-            {(profile.rol === 'logistica' ||
-              profile.rol === 'jefe_local' ||
-              profile.rol === 'administrador') && (
-                <ModuleCard
-                  href="/logistica/calendarizaciones"
-                  icon={Truck}
-                  title="Gestión Logística"
-                  description="Calendarización de traslados, fecha tentativa, despacho y confirmación de entrega en destino."
-                  cta="Gestionar traslados"
-                />
-              )}
-
-            {isAdmin && (
-              <ModuleCard
-                href="/admin/historial"
-                icon={History}
-                title="Historial y Trazabilidad"
-                description="Registro inmutable de acciones, responsables y fechas para auditoría operativa continua."
-                cta="Ver historial completo"
-                adminBadge
-              />
-            )}
-          </div>
+          <DashboardCardGrid rol={rol} />
         </div>
       </main>
 
-      {/* Footer Status Bar */}
       <footer className="border-t border-neutral-200 bg-white mt-auto">
         <div className="w-full px-4 sm:px-8 lg:px-12 h-12 flex items-center justify-between text-xs text-neutral-500">
           <div className="flex items-center gap-2">
