@@ -13,7 +13,13 @@ export default async function AprobacionesPage() {
     redirect('/login');
   }
 
-  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador' && profile.rol !== 'ejecutivo') {
+  /**
+   * Aprobaciones es la cola del jefe de local y del administrador. Para el
+   * Ejecutivo no aplica: todo lo suyo (crear, editar, seguir y entregar) vive
+   * unificado en `/solicitudes`, y esta vista nunca debe mostrarle solicitudes
+   * de otras sucursales.
+   */
+  if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
     redirect('/solicitudes');
   }
 

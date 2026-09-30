@@ -1,7 +1,7 @@
 import { AuthService } from '@/services/auth.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { redirect } from 'next/navigation';
-import TopNavbar from '@/components/TopNavbar';
+import PageHeader from '@/components/PageHeader';
 import PerfilClient from './PerfilClient';
 
 export const dynamic = 'force-dynamic';
@@ -22,8 +22,7 @@ export default async function PerfilPage() {
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
-      {/* Top Navbar */}
-      <TopNavbar
+      <PageHeader
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}

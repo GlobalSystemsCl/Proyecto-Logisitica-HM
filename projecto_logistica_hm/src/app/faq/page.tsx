@@ -2,7 +2,7 @@ import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { HelpCircle, ChevronRight, Circle } from 'lucide-react';
-import TopNavbar from '@/components/TopNavbar';
+import PageHeader from '@/components/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,7 +62,7 @@ const CATEGORIAS = [
       },
       {
         p: '¿Dónde veo la disponibilidad de slots?',
-        r: 'El Jefe de Local y el Administrador ven un badge de slots libres en la barra superior y una vista detallada en la ruta /logistica/slots.',
+        r: 'El Jefe de Local y el Administrador ven un badge de slots libres en el encabezado de cada página, y el detalle por sucursal en la card "Slots de Estacionamiento" del dashboard (ruta /logistica/slots).',
       },
     ],
   },
@@ -94,12 +94,12 @@ export default async function FaqPage() {
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
-      <TopNavbar
+      <PageHeader
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
         sucursalNombre={profile.sucursal_nombre}
-        backHref={profile.rol === 'administrador' ? '/admin' : '/dashboard'}
+        backHref="/dashboard"
       />
 
       <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8">

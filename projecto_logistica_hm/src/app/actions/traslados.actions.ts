@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidarSolicitudes } from '@/lib/rutas';
 import { AuthService } from '@/services/auth.service';
 import { TrasladoService } from '@/services/traslado.service';
 import { OrganizacionService } from '@/services/organizacion.service';
@@ -38,7 +38,7 @@ export async function crearTrasladoAction(
     const result = await TrasladoService.crearTraslado(input, vehiculoIds, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes/traslados');
+    revalidarSolicitudes();
     return { success: true, message: 'Traslado interno creado.', traslado: result.traslado };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -58,7 +58,7 @@ export async function despacharTrasladoAction(trasladoId: string) {
     const result = await TrasladoService.despacharTraslado(trasladoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes/traslados');
+    revalidarSolicitudes();
     return { success: true, message: 'Traslado despachado.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
@@ -81,7 +81,7 @@ export async function recibirTrasladoAction(trasladoId: string) {
     const result = await TrasladoService.recibirTraslado(trasladoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    revalidatePath('/solicitudes/traslados');
+    revalidarSolicitudes();
     return { success: true, message: 'Traslado recepcionado en destino.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';

@@ -19,6 +19,7 @@ import {
   Download,
   UploadCloud,
   UserCheck,
+  XCircle,
 } from 'lucide-react';
 import {
   agregarVehiculoAction,
@@ -43,10 +44,11 @@ import {
 import { VehiculoAsociado } from '@/types/sucursal.types';
 import { ROL_LABEL, UserRole, UsuarioDetalle } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
+import { extraerMotivoRechazo } from '@/lib/motivoRechazo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
-  pendiente_aprobacion: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
+  pendiente_aprobacion: { label: 'Pendiente de aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   aprobada: { label: 'Aprobada', color: 'bg-green-50 text-green-700 border-green-200' },
   pendiente: { label: 'Pendiente', color: 'bg-neutral-100 text-neutral-500 border-neutral-200' },
   priorizada: { label: 'Priorizada', color: 'bg-neutral-200 text-neutral-900 border-neutral-200' },
@@ -398,6 +400,14 @@ export default function SolicitudDetalleModal({
       ? solicitud.sucursal_destino_nombre || `#${solicitud.sucursal_destino}`
       : solicitud.titulo_evento || '—';
 
+  /**
+   * El motivo de rechazo vive en la observación con prefijo `[RECHAZO]` (no hay
+   * columna propia). Cuando el estado es `rechazada` pero no aparece la
+   * observación —solicitudes históricas— se avisa en vez de ocultar el panel.
+   */
+  const esRechazada = solicitud.estado === 'rechazada';
+  const rechazo = esRechazada ? extraerMotivoRechazo(observaciones) : null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
       <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -446,6 +456,54 @@ export default function SolicitudDetalleModal({
             )}
           </p>
         </div>
+
+        {/* Motivo de rechazo: visible en la parte superior y en todas las pestañas */}
+        {esRechazada && (
+          <div className="mx-8 mt-5 mb-1 shrink-0 rounded-2xl border border-red-300 bg-red-50 p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0">
+                <XCircle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-base font-bold text-red-900">
+                  Solicitud rechazada
+                </p>
+                <p className="text-xs font-semibold text-red-700 uppercase tracking-wider mt-2 mb-1.5">
+                  Motivo del rechazo
+                </p>
+                {rechazo ? (
+                  <>
+                    <p className="text-base text-red-900 leading-relaxed">
+                      {rechazo.motivo}
+                    </p>
+                    <p className="text-xs text-red-700 mt-3 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {rechazo.usuario_nombre ? (
+                        <UsuarioNombreBoton
+                          usuarioId={rechazo.usuario_id}
+                          nombre={`${rechazo.usuario_nombre} (Jefe de Local)`}
+                          muted
+                        />
+                      ) : (
+                        <span>Jefe de Local</span>
+                      )}
+                      <span aria-hidden>·</span>
+                      <span>{formatFecha(rechazo.created_at)}</span>
+                    </p>
+                    <p className="text-xs text-red-700 mt-3 leading-relaxed">
+                      Si consideras que el motivo no corresponde, revisa la solicitud y
+                      vuelve a enviarla con la información corregida.
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-base text-red-900 leading-relaxed">
+                    Esta solicitud fue rechazada, pero el motivo no quedó registrado en el
+                    sistema. Comunícate con el Jefe de Local para obtener más detalle.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Info Cards Strip */}
         <div className="px-8 py-5 border-b border-neutral-200 shrink-0 overflow-x-auto">

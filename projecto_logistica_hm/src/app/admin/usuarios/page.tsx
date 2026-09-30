@@ -4,7 +4,7 @@ import { SucursalesService } from '@/services/sucursales.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import UsersTableClient from './UsersTableClient';
-import TopNavbar from '@/components/TopNavbar';
+import PageHeader from '@/components/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,8 +27,7 @@ export default async function AdminUsuariosPage() {
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
-      {/* Top Navbar */}
-      <TopNavbar
+      <PageHeader
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}

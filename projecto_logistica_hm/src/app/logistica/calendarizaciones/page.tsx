@@ -4,7 +4,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { redirect } from 'next/navigation';
 import CalendarizacionesClient from './CalendarizacionesClient';
-import TopNavbar from '@/components/TopNavbar';
+import PageHeader from '@/components/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,8 +31,7 @@ export default async function LogisticaCalendarizacionesPage() {
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
-      {/* Top Navbar */}
-      <TopNavbar
+      <PageHeader
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}
@@ -40,7 +39,7 @@ export default async function LogisticaCalendarizacionesPage() {
         backHref="/dashboard"
         slots={
           profile.rol === 'jefe_local' || profile.rol === 'administrador'
-            ? slotsSucursales.map((s) => ({ nombre: s.nombre, slots: s.slots, slots_ocupados: s.slots_ocupados }))
+            ? slotsSucursales
             : null
         }
       />
