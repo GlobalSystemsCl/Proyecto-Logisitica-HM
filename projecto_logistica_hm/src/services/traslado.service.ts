@@ -26,9 +26,11 @@ import type {
  *
  * Los contadores de slots y el movimiento de vehículos viven en triggers de BD
  * (migraciones `20260928_traslado_interno.sql`,
- * `20260930_desactivar_validacion_slots.sql` y
- * `20261001_traslado_recepcion_libera_inventario.sql`);
- * este servicio solo valida permisos/estado y escribe las filas.
+ * `20261002_restaurar_contadores_slots.sql`): al crear el traslado el destino
+ * suman `slots_reservados`/`slots_ocupados`; al recepcionar se decrementa
+ * `slots_reservados` y la fila vuelve a `liberado`. La validación por capacidad
+ * fue eliminada — los slots son solo informativos y pueden sobrepasarse.
+ * Este servicio solo valida permisos/estado y escribe las filas.
  */
 const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
   fecha_despacho, fecha_recepcion, observacion, created_at, updated_at,

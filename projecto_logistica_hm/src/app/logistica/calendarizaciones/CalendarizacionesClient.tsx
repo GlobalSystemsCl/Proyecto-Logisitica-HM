@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo, useCallback, DragEvent } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car, PlayCircle } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car } from 'lucide-react';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
-import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, cancelarDespachoSolicitudAction, recibirSolicitudAction, iniciarTransitoSolicitudAction } from '@/app/actions/solicitudes.actions';
+import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, cancelarDespachoSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
 
 interface Props {
@@ -85,7 +85,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
   );
 
   const solicitudesActivas = useMemo(
-    () => solicitudesVisibles.filter((s) => ['calendarizada', 'despachada', 'en_transito', 'entregada'].includes(s.estado)),
+    () => solicitudesVisibles.filter((s) => ['calendarizada', 'en_transito', 'entregada'].includes(s.estado)),
     [solicitudesVisibles]
   );
 
@@ -234,17 +234,6 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
     }
   }, []);
 
-  const handleIniciarTransito = useCallback(async (id: string) => {
-    setLoading(id);
-    try {
-      const result = await iniciarTransitoSolicitudAction(id);
-      if (!result.success) alert(result.error);
-    } finally {
-      setLoading(null);
-      setRefreshKey((k) => k + 1);
-    }
-  }, []);
-
   const handleRecibir = useCallback(async (id: string) => {
     setLoading(id);
     try {
@@ -286,7 +275,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Calendarizadas</p>
@@ -294,16 +283,6 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
           </div>
           <div className="w-11 h-11 rounded-xl border border-neutral-300 flex items-center justify-center text-neutral-900">
             <Calendar className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-sky-50 border border-sky-200 rounded-2xl p-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-sky-700 uppercase tracking-wider">Despachadas</p>
-            <p className="text-3xl font-bold text-sky-900 mt-1">{solicitudesVisibles.filter((s) => s.estado === 'despachada').length}</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-sky-100 flex items-center justify-center text-sky-800">
-            <PackageSearch className="w-5 h-5" />
           </div>
         </div>
 
@@ -502,11 +481,9 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
                       <span className="text-sm font-semibold text-neutral-900">{s.sucursal_nombre} → {s.sucursal_destino_nombre}</span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         s.estado === 'calendarizada' ? 'bg-blue-100 text-blue-800' :
-                        s.estado === 'despachada' ? 'bg-sky-100 text-sky-800' :
                         s.estado === 'en_transito' ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
                       }`}>
                         {s.estado === 'calendarizada' ? 'Calendarizada' :
-                         s.estado === 'despachada' ? 'Despachada' :
                          s.estado === 'en_transito' ? 'En tránsito' : 'Recepcionada'}
                       </span>
                     </div>
@@ -544,18 +521,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
                         Despachar
                       </button>
                     )}
-                    {puedeDespachar && s.estado === 'despachada' && (
-                      <button
-                        onClick={() => handleIniciarTransito(s.id)}
-                        disabled={loading === s.id}
-                        title="Confirmar el inicio de ruta"
-                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                      >
-                        <PlayCircle className="w-3 h-3" />
-                        Iniciar ruta
-                      </button>
-                    )}
-                    {puedeDespachar && (s.estado === 'en_transito' || s.estado === 'despachada') && (
+                    {puedeDespachar && s.estado === 'en_transito' && (
                       <button
                         onClick={() => handleCancelarDespacho(s.id)}
                         disabled={loading === s.id}
@@ -566,7 +532,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
                         Cancelar Despacho
                       </button>
                     )}
-                    {puedeRecibir(s) && (s.estado === 'en_transito' || s.estado === 'despachada') && (
+                    {puedeRecibir(s) && s.estado === 'en_transito' && (
                       <button
                         onClick={() => handleRecibir(s.id)}
                         disabled={loading === s.id}

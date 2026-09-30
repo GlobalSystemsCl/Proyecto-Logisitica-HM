@@ -27,7 +27,6 @@ export const ESTADOS_ACTIVOS_RESERVA = [
   'priorizada',
   'asignada',
   'calendarizada',
-  'despachada',
   'en_transito',
 ] as const;
 
@@ -215,16 +214,6 @@ export class SolicitudesService {
       console.error('Error en getUsuarioRolSucursal:', err);
       return null;
     }
-  }
-
-  static usuarioEnSucursalRecepcion(
-    sucursalUsuario: number | null,
-    solicitud: SolicitudMinima
-  ): boolean {
-    if (sucursalUsuario === null) return false;
-    return solicitud.sucursal_destino !== null
-      ? sucursalUsuario === solicitud.sucursal_destino
-      : sucursalUsuario === solicitud.sucursal;
   }
 
   /**
@@ -1598,7 +1587,8 @@ export class SolicitudesService {
   }
 
   /**
-   * Logística despacha: `calendarizada` -> `despachada`.
+   * Logística despacha: `calendarizada` -> `en_transito` (despacho directo,
+   * sin estado intermedio `despachada`).
    * Registra `fecha_despacho` + `fecha_inicio_transito` (respaldo en DB:
    * trigger `tr_registrar_fechas_flujo`).
    */
@@ -1620,10 +1610,10 @@ export class SolicitudesService {
       const { error } = await admin
         .from('solicitud')
         .update({
-          estado: 'despachada',
+          estado: 'en_transito',
           fecha_despacho: ahora,
           fecha_inicio_transito: ahora,
-          // Libera el slot de la cola: despachada ya no compite por prioridad
+          // Libera el slot de la cola: en tránsito ya no compite por prioridad
           posicion_prioridad: null,
         })
         .eq('id', id);
@@ -1640,7 +1630,7 @@ export class SolicitudesService {
         id,
         'despacho',
         { estado: 'calendarizada', fecha_despacho: null },
-        { estado: 'despachada', fecha_despacho: ahora, fecha_inicio_transito: ahora }
+        { estado: 'en_transito', fecha_despacho: ahora, fecha_inicio_transito: ahora }
       );
 
       return { success: true };
@@ -1650,50 +1640,7 @@ export class SolicitudesService {
     }
   }
 
-  /**
-   * Logística confirma el inicio efectivo de la ruta: `despachada` -> `en_transito`.
-   * Si ya estaba `en_transito` es idempotente (no hace nada).
-   */
-  static async iniciarTransitoSolicitud(
-    id: string,
-    usuarioId: string
-  ): Promise<{ success: boolean; error?: string }> {
-    try {
-      const admin = createAdminClient();
-
-      const actual = await this.getSolicitudById(id);
-      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
-      if (actual.estado === 'en_transito') return { success: true };
-      if (actual.estado !== 'despachada') {
-        return { success: false, error: 'Solo las solicitudes Despachadas pueden iniciar su tránsito.' };
-      }
-
-      const ahora = new Date().toISOString();
-
-      const { error } = await admin
-        .from('solicitud')
-        .update({ estado: 'en_transito', fecha_inicio_transito: actual.fecha_inicio_transito ?? ahora })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
-
-      await this.registrarAuditoria(
-        usuarioId,
-        'solicitud',
-        id,
-        'inicio_transito',
-        { estado: 'despachada' },
-        { estado: 'en_transito' }
-      );
-
-      return { success: true };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al iniciar el tránsito';
-      return { success: false, error: msg };
-    }
-  }
-
-  /** Revierte el despacho: `despachada` | `en_transito` -> `calendarizada`. */
+  /** Revierte el despacho: `en_transito` -> `calendarizada`. */
   static async cancelarDespacharSolicitud(
     id: string,
     usuarioId: string
@@ -1703,8 +1650,8 @@ export class SolicitudesService {
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
-      if (actual.estado !== 'en_transito' && actual.estado !== 'despachada') {
-        return { success: false, error: 'Solo las solicitudes Despachadas o En Tránsito pueden volver a Calendarizadas.' };
+      if (actual.estado !== 'en_transito') {
+        return { success: false, error: 'Solo las solicitudes En Tránsito pueden volver a Calendarizadas.' };
       }
 
       const { error } = await admin
@@ -1712,7 +1659,6 @@ export class SolicitudesService {
         .update({
           estado: 'calendarizada',
           fecha_despacho: null,
-          fecha_inicio_transito: null,
           posicion_prioridad: null,
         })
         .eq('id', id);
@@ -1736,9 +1682,7 @@ export class SolicitudesService {
   }
 
   /**
-   * Recepción en sucursal destino: `en_transito` (o `despachada`, si el JL
-   * confirma la recepción antes de que Logística marque el inicio de ruta) ->
-   * `entregada` (UI: "Recepcionada").
+   * Recepción en sucursal destino: `en_transito` -> `entregada` (UI: "Recepcionada").
    *
    * Los vehículos los libera/mueve el trigger de DB
    * `tr_entregar_solicitud_vehiculos` — no se duplica la lógica aquí.
@@ -1752,8 +1696,8 @@ export class SolicitudesService {
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
-      if (actual.estado !== 'en_transito' && actual.estado !== 'despachada') {
-        return { success: false, error: 'Solo las solicitudes Despachadas o En Tránsito pueden receptarse.' };
+      if (actual.estado !== 'en_transito') {
+        return { success: false, error: 'Solo las solicitudes En Tránsito pueden recibirse.' };
       }
 
       const usuario = await SolicitudesService.getUsuarioRolSucursal(admin, usuarioId);

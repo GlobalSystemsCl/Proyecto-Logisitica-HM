@@ -36,6 +36,7 @@ import {
   sacarDeColaAction,
 } from '@/app/actions/solicitudes.actions';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
+import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
@@ -55,6 +56,8 @@ interface ViewerInfo {
 
 interface PrioridadesClientProps {
   solicitudes: SolicitudLista[];
+  /** Sucursales del Jefe Local: principal + las que encabeza como encargado. */
+  sucursalesAsignadas: UsuarioSucursalAsignada[];
   viewer: ViewerInfo;
 }
 
@@ -69,6 +72,7 @@ const ZONA_POR_PRIORIZAR = 'zona-por-priorizar';
 
 export default function PrioridadesClient({
   solicitudes,
+  sucursalesAsignadas,
   viewer,
 }: PrioridadesClientProps) {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
@@ -96,34 +100,37 @@ export default function PrioridadesClient({
   const esAdmin = viewer.rol === 'administrador';
   const esJefeLocal = viewer.rol === 'jefe_local';
 
-  const sucursalQueVale = useMemo<number | null>(() => {
-    if (esAdmin) return null; // admin ve todas las sucursales; la cola se agrupa por sucursal
-    if (esJefeLocal) return viewer.sucursal_id;
+  // Sucursales sobre las que el Jefe Local gestiona su cola: TODAS sus
+  // sucursales (principal + las que encabeza como encargado), igual que en
+  // Aprobaciones. El administrador ve todas las sucursales (cola mixta).
+  const sucursalesFiltro = useMemo<Set<number> | null>(() => {
+    if (esAdmin) return null;
+    if (esJefeLocal) return new Set(sucursalesAsignadas.map((s) => s.id));
     return null;
-  }, [esAdmin, esJefeLocal, viewer.sucursal_id]);
+  }, [esAdmin, esJefeLocal, sucursalesAsignadas]);
 
-  // Solicitudes priorizadas = cola. Para admin, agrupar por sucursal.
+  // Solicitudes priorizadas = cola. Para admin/JL multi-sucursal, agrupar por sucursal.
   const cola = useMemo(() => {
     let lista = solicitudes.filter(
       (s) => s.estado === 'priorizada' && s.posicion_prioridad !== null
     );
-    if (sucursalQueVale !== null) {
-      lista = lista.filter((s) => s.sucursal === sucursalQueVale);
+    if (sucursalesFiltro !== null) {
+      lista = lista.filter((s) => sucursalesFiltro.has(s.sucursal));
     }
     return lista.sort(
       (a, b) => (a.posicion_prioridad ?? 0) - (b.posicion_prioridad ?? 0)
     );
-  }, [solicitudes, sucursalQueVale]);
+  }, [solicitudes, sucursalesFiltro]);
 
   const porPriorizar = useMemo(() => {
     let lista = solicitudes.filter(
       (s) => s.estado === 'aprobada' && s.posicion_prioridad === null
     );
-    if (sucursalQueVale !== null) {
-      lista = lista.filter((s) => s.sucursal === sucursalQueVale);
+    if (sucursalesFiltro !== null) {
+      lista = lista.filter((s) => sucursalesFiltro.has(s.sucursal));
     }
     return lista;
-  }, [solicitudes, sucursalQueVale]);
+  }, [solicitudes, sucursalesFiltro]);
 
   // Estado local: orden de la cola y lista "Por Priorizar" (para DnD optimista).
   // Se inicializan desde los props para que SSR y cliente coincidan y no haya flash.
@@ -169,18 +176,19 @@ export default function PrioridadesClient({
     setFeedback({ type, message: msg });
   }
 
-  function programarReorden(nuevoOrden: string[]) {
+  function programarReorden(nuevoOrden: string[], sucursalId: number) {
     setListas(nuevoOrden, listasRef.current.por);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       timerRef.current = null;
       encolarOperacion(async () => {
-        const suc = sucursalQueVale;
-        if (suc === null) {
-          mostrarFeedback('Los administradores deben elegir una sucursal para reordenar.', 'error');
-          return;
-        }
-        const result = await reordenarColaAction(suc, nuevoOrden);
+        // La cola es por sucursal: solo reescribir el bloque de la sucursal
+        // que se está reordenando (no tocar las posiciones de las otras).
+        const suborden = nuevoOrden.filter(
+          (id2) => dataPorId.get(id2)?.sucursal === sucursalId
+        );
+        if (suborden.length === 0) return;
+        const result = await reordenarColaAction(sucursalId, suborden);
         mostrarFeedback(
           result.success ? 'Cola de prioridades actualizada.' : result.error || 'Error al reordenar.',
           result.success ? 'success' : 'error'
@@ -220,11 +228,17 @@ export default function PrioridadesClient({
 
     // Reordenar dentro de la cola
     if (enCola && orden.includes(oId)) {
+      if (esAdmin) {
+        mostrarFeedback('Los administradores deben elegir una sucursal para reordenar.', 'error');
+        return;
+      }
       const prevOrden = listasRef.current.orden;
       const oldIndex = prevOrden.indexOf(aId);
       const newIndex = prevOrden.indexOf(oId);
       if (oldIndex === -1 || newIndex === -1) return;
-      programarReorden(arrayMove(prevOrden, oldIndex, newIndex));
+      const suc = dataPorId.get(aId)?.sucursal ?? dataPorId.get(oId)?.sucursal;
+      if (suc === null || suc === undefined) return;
+      programarReorden(arrayMove(prevOrden, oldIndex, newIndex), suc);
       return;
     }
 

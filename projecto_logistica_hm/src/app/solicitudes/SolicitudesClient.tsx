@@ -15,7 +15,6 @@ import {
   PackageCheck,
   Flag,
   BellRing,
-  Truck,
   UserCheck,
   Paperclip,
 } from 'lucide-react';
@@ -28,7 +27,6 @@ import {
   insistirSolicitudAction,
   getCooldownInsistenciaAction,
   asignarEncargadoAction,
-  iniciarTransitoSolicitudAction,
   subirDocumentosSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import {
@@ -227,9 +225,8 @@ export default function SolicitudesClient({
       ...suc,
       disponibles: Math.max(disponibles, 0),
       reservados: suc.slots_reservados || 0,
-      excedido: selectedVehiculos.size > disponibles,
     };
-  }, [sucursalDestinoSel, sucursales, selectedVehiculos.size]);
+  }, [sucursalDestinoSel, sucursales]);
 
   const sucursalesPorId = useMemo(() => {
     const mapa = new Map<number, string | null>();
@@ -338,9 +335,9 @@ export default function SolicitudesClient({
       : viewer.sucursal_id === sol.sucursal;
   }
 
-  /** JL destino (o admin) recepciona desde `despachada` o `en_transito`. */
+  /** JL destino (o admin) recepciona desde `en_transito`. */
   function puedeRecibir(sol: SolicitudLista): boolean {
-    if (sol.estado !== 'en_transito' && sol.estado !== 'despachada') return false;
+    if (sol.estado !== 'en_transito') return false;
     if (esAdmin) return true;
     if (esJefeLocal) return enSucursalRecepcion(sol);
     return false;
@@ -358,12 +355,6 @@ export default function SolicitudesClient({
   function puedeAsignarEncargado(sol: SolicitudLista): boolean {
     if (!esAdmin && !esLogistica) return false;
     return sol.estado === 'aprobada' || sol.estado === 'priorizada';
-  }
-
-  /** Logística/admin confirman el inicio de la ruta desde `despachada`. */
-  function puedeIniciarTransito(sol: SolicitudLista): boolean {
-    if (!esAdmin && !esLogistica) return false;
-    return sol.estado === 'despachada';
   }
 
   /** Solo el Ejecutivo, sobre sus propias solicitudes y en estado activo. */
@@ -432,10 +423,6 @@ export default function SolicitudesClient({
     if (selectedVehiculos.size === 0) {
       setVehiculoError(true);
       setCreateError('Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.');
-      return;
-    }
-    if (tipoSel === 'venta' && sucursalDestinoInfo?.excedido) {
-      setCreateError(`No hay slots suficientes en la sucursal destino. Disponibles: ${sucursalDestinoInfo.disponibles}, seleccionados: ${selectedVehiculos.size}.`);
       return;
     }
     setVehiculoError(false);
@@ -548,20 +535,6 @@ export default function SolicitudesClient({
         setFeedback({ type: 'error', message: result.error || 'No se pudo asignar el encargado.' });
       } else {
         setFeedback({ type: 'success', message: result.message || 'Encargado asignado.' });
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function handleIniciarTransito(sol: SolicitudLista) {
-    setIsSubmitting(true);
-    try {
-      const result = await iniciarTransitoSolicitudAction(sol.id);
-      if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'No se pudo iniciar el tránsito.' });
-      } else {
-        setFeedback({ type: 'success', message: result.message || 'Solicitud en tránsito.' });
       }
     } finally {
       setIsSubmitting(false);
@@ -815,16 +788,6 @@ export default function SolicitudesClient({
                               <UserCheck className="w-3.5 h-3.5" /> Asignarme
                             </button>
                           )}
-                          {puedeIniciarTransito(sol) && (
-                            <button
-                              onClick={() => handleIniciarTransito(sol)}
-                              disabled={isSubmitting}
-                              title="Confirmar inicio de la ruta"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-sky-50 text-sky-800 border border-sky-300 hover:bg-sky-100 transition-colors cursor-pointer disabled:opacity-40"
-                            >
-                              <Truck className="w-3.5 h-3.5" /> Iniciar ruta
-                            </button>
-                          )}
                           {puedeRecibir(sol) && (
                             <button
                               onClick={() => handleRecibir(sol)}
@@ -964,22 +927,13 @@ export default function SolicitudesClient({
                     </select>
                   )}
                   {sucursalDestinoInfo && (
-                    <div className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg ${
-                      sucursalDestinoInfo.excedido
-                        ? 'bg-red-50 text-red-700 border border-red-200'
-                        : 'bg-neutral-50 text-neutral-600 border border-neutral-200'
-                    }`}>
+                    <div className="flex items-center gap-2 text-xs px-3 py-1.5 rounded-lg bg-neutral-50 text-neutral-600 border border-neutral-200">
                       <span className="font-medium">
                         Disponibles: {sucursalDestinoInfo.disponibles} / {sucursalDestinoInfo.slots ?? 0}
                       </span>
                       {sucursalDestinoInfo.reservados > 0 && (
                         <span className="text-neutral-500">
                           · {sucursalDestinoInfo.reservados} reservad{sucursalDestinoInfo.reservados !== 1 ? 'os' : 'o'}
-                        </span>
-                      )}
-                      {sucursalDestinoInfo.excedido && (
-                        <span className="text-red-600 font-semibold">
-                          — Excede en {selectedVehiculos.size - sucursalDestinoInfo.disponibles} slot{selectedVehiculos.size - sucursalDestinoInfo.disponibles !== 1 ? 's' : ''}
                         </span>
                       )}
                     </div>

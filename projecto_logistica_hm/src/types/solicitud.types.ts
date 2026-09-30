@@ -24,7 +24,7 @@ export interface SolicitudLista {
   fecha_creacion: string | null;
   /** Fecha estimada de despacho (UI: "Fecha estimada"). La fija Logística al calendarizar. */
   fecha_tentativa_despacho: string | null;
-  /** Fecha real de despacho (la fija Logística al pasar a `despachada`). */
+  /** Fecha real de despacho (la fija Logística al pasar a `en_transito`). */
   fecha_despacho: string | null;
   fecha_entrega: string | null;
   /** Fecha/hora límite acordada. La propone el Ejecutivo y la confirma el JL al aprobar. */

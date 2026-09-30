@@ -1,5 +1,6 @@
 import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
+import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import PrioridadesClient from './PrioridadesClient';
 
@@ -16,11 +17,13 @@ export default async function PrioridadesPage() {
     redirect('/solicitudes');
   }
 
+  const sucursalesAsignadas = await OrganizacionService.getUserAssignedBranches(profile.id);
   const solicitudes = await SolicitudesService.getSolicitudes();
 
   return (
     <PrioridadesClient
       solicitudes={solicitudes}
+      sucursalesAsignadas={sucursalesAsignadas}
       viewer={{
         id: profile.id,
         nombre: profile.nombre,

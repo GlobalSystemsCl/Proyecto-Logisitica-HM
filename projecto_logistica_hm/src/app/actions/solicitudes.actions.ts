@@ -582,27 +582,6 @@ export async function despacharSolicitudAction(solicitudId: string) {
   }
 }
 
-/** Logística confirma el inicio efectivo de la ruta: despachada -> en tránsito. */
-export async function iniciarTransitoSolicitudAction(solicitudId: string) {
-  try {
-    const profile = await getProfileOrThrow();
-
-    if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
-      return { success: false, error: 'No tienes permisos para iniciar el tránsito de solicitudes.' };
-    }
-
-    const result = await SolicitudesService.iniciarTransitoSolicitud(solicitudId, profile.id);
-    if (!result.success) return { success: false, error: result.error };
-
-    revalidatePath('/solicitudes');
-    revalidatePath('/logistica/calendarizaciones');
-    return { success: true, message: 'Solicitud en tránsito.' };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
-  }
-}
-
 export async function cancelarDespachoSolicitudAction(solicitudId: string) {
   try {
     const profile = await getProfileOrThrow();

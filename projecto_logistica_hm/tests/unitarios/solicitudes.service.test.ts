@@ -169,23 +169,6 @@ describe('SolicitudesService.getUsuarioRolSucursal', () => {
   });
 });
 
-describe('SolicitudesService.usuarioEnSucursalRecepcion', () => {
-  it('should_devolver_false_si_no_tiene_sucursal', () => {
-    expect(SolicitudesService.usuarioEnSucursalRecepcion(null, minimo())).toBe(false);
-  });
-
-  it('should_igualar_sucursal_destino_cuando_existe', () => {
-    expect(SolicitudesService.usuarioEnSucursalRecepcion(2, minimo())).toBe(true);
-    expect(SolicitudesService.usuarioEnSucursalRecepcion(1, minimo())).toBe(false);
-  });
-
-  it('should_igualar_sucursal_origen_sin_destino', () => {
-    const sol = minimo({ sucursal_destino: null });
-    expect(SolicitudesService.usuarioEnSucursalRecepcion(1, sol)).toBe(true);
-    expect(SolicitudesService.usuarioEnSucursalRecepcion(2, sol)).toBe(false);
-  });
-});
-
 describe('SolicitudesService.getJefeLocalDeSucursal', () => {
   beforeEach(() => {
     admin.reset();
@@ -933,7 +916,12 @@ describe('SolicitudesService.aprobarSolicitud', () => {
     const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, ' 2099-01-01 ');
     expect(res).toEqual({ success: true });
     const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
-    expect(update?.[1]).toEqual({ estado: 'aprobada', fecha_limite: '2099-01-01' });
+    expect(update?.[1]).toMatchObject({ estado: 'aprobada', fecha_limite: '2099-01-01' });
+    // El servicio registra la fecha de confirmación explícitamente (no depende
+    // solo del trigger `tr_registrar_fechas_flujo`).
+    expect((update?.[1] as { fecha_confirmacion?: unknown }).fecha_confirmacion).toEqual(
+      expect.any(String)
+    );
     expect(auditoria).toHaveBeenCalled();
   });
 });
@@ -1712,6 +1700,9 @@ describe('SolicitudesService.recibirSolicitud', () => {
 
   it('should_recibir_como_jefe_local_destino', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // El permiso multi-sucursal lo resuelve el RPC `usuario_tiene_sucursal`
+    // (principal + sucursal a cargo), no `usuario.sucursal_id`.
+    admin.rpc.mockResolvedValueOnce({ data: true, error: null });
     admin.results.solicitud = [fila(minimo({ estado: 'en_transito' })), fila(null)];
     admin.results.usuario = [fila({ rol: 'jefe_local', sucursal_id: 2 })];
     const auditoria = spyRegistrarAuditoria();
@@ -1752,7 +1743,7 @@ describe('SolicitudesService.finalizarSolicitud', () => {
   it('should_rechazar_estado_no_entregada', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'en_transito' }))];
     const res = await SolicitudesService.finalizarSolicitud('s-1', USUARIO_ID);
-    expect(res.error).toBe('Solo las solicitudes Entregadas pueden finalizarse.');
+    expect(res.error).toBe('Solo las solicitudes Recepcionadas pueden entregarse al cliente.');
   });
 
   it('should_rechazar_sin_permisos', async () => {
@@ -1779,12 +1770,19 @@ describe('SolicitudesService.finalizarSolicitud', () => {
     const res = await SolicitudesService.finalizarSolicitud('s-1', USUARIO_ID);
     expect(res).toEqual({ success: true });
     const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
-    expect(update?.[1]).toEqual({ estado: 'finalizada', posicion_prioridad: null });
+    expect(update?.[1]).toMatchObject({
+      estado: 'finalizada',
+      posicion_prioridad: null,
+      fecha_entrega_cliente: expect.any(String),
+    });
     expect(auditoria).toHaveBeenCalled();
   });
 
   it('should_finalizar_como_jefe_local_destino', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    // El permiso multi-sucursal lo resuelve el RPC `usuario_tiene_sucursal`
+    // (principal + sucursal a cargo), no `usuario.sucursal_id`.
+    admin.rpc.mockResolvedValueOnce({ data: true, error: null });
     admin.results.solicitud = [
       fila(minimo({ estado: 'entregada', sucursal_destino: 2 })),
       fila(null),
