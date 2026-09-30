@@ -1,5 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createSupabaseMock, fila, filaConCount } from '../mocks/supabase';
+import { SolicitudesService } from '@/services/solicitudes.service';
 
 const admin = createSupabaseMock();
 
@@ -26,6 +27,42 @@ function filaVehiculo(overrides: Record<string, unknown> = {}) {
 
 function nodoTraslado(vehiculoId: string) {
   return { vehiculo_id: vehiculoId };
+}
+
+function filaTraslado(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 't-1',
+    origen_id: 1,
+    destino_id: 2,
+    logistica_id: 'log-1',
+    estado: 'pendiente',
+    fecha_despacho: null,
+    fecha_recepcion: null,
+    observacion: null,
+    created_at: '2026-01-01T10:00:00Z',
+    updated_at: '2026-01-01T10:00:00Z',
+    origen: { nombre: 'Sucursal Norte' },
+    destino: { nombre: 'Sucursal Sur' },
+    logistica: { nombre: 'Ana', apellido: 'Pérez' },
+    traslado_interno_vehiculo: [
+      {
+        id: 'tv-1',
+        disponibilidad: 'reservado',
+        vehiculo_id: 'veh-1',
+        vehiculo: {
+          id: 'veh-1',
+          chasis: '1HGCM82633A004352',
+          patente: 'ABCD-12',
+          marca: 'Toyota',
+          modelo: 'Corolla',
+          anio: 2024,
+          color: 'Negro',
+          ubicacion: 1,
+        },
+      },
+    ],
+    ...overrides,
+  };
 }
 
 describe('TrasladoService', () => {
@@ -141,6 +178,28 @@ describe('TrasladoService', () => {
 
       expect(res.vehiculos).toEqual([]);
       expect(res.total).toBe(0);
+    });
+  });
+
+  describe('crearTraslado', () => {
+    it('should_crear_traslado_de_cualquier_vehiculo_sin_validar_estado_ni_slots', async () => {
+      admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
+      admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
+      admin.results.traslado_interno_vehiculo = [fila([]), fila(null)];
+      admin.results.traslado_interno = [fila({ id: 't-1' }), fila(filaTraslado())];
+      const auditoria = vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
+
+      const res = await TrasladoService.crearTraslado(
+        { origen_id: 1, destino_id: 2 },
+        ['veh-1', 'veh-2', 'veh-3'],
+        'log-1'
+      );
+
+      expect(res.success).toBe(true);
+      expect(res.traslado?.id).toBe('t-1');
+      expect(JSON.stringify(admin.callsTo('sucursal'))).not.toContain('slots');
+      expect(admin.callsTo('solicitud_vehiculo')).toHaveLength(0);
+      expect(auditoria).toHaveBeenCalled();
     });
   });
 });

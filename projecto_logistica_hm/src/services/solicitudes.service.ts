@@ -17,7 +17,8 @@ import { esFechaAnteriorAHoy } from '@/lib/fechas';
 /**
  * Estados en los que el vehículo sigue RESERVADO (no puede moverse a otra
  * solicitud). Debe coincidir con la lista de estados usada por
- * `public.fn_recalcular_slots_ocupados` (migración 20260928_triggers_fechas.sql).
+ * `public.fn_recalcular_slots_ocupados` (migración 20260928_triggers_fechas.sql),
+ * que hoy solo actualiza el conteo informativo de slots (sin validar capacidad).
  */
 export const ESTADOS_ACTIVOS_RESERVA = [
   'pendiente_aprobacion',
@@ -586,24 +587,6 @@ export class SolicitudesService {
           success: false,
           error: 'Uno o más vehículos seleccionados ya están reservados en otra solicitud activa.',
         };
-      }
-
-      if (input.tipo_solicitud === 'venta' && input.sucursal_destino) {
-        const { data: sucursal, error: sucError } = await admin
-          .from('sucursal')
-          .select('slots, slots_ocupados')
-          .eq('id', input.sucursal_destino)
-          .single();
-
-        if (!sucError && sucursal) {
-          const slotsDisponibles = Math.max((sucursal.slots ?? 0) - (sucursal.slots_ocupados ?? 0), 0);
-          if (vehiculoIds.length > slotsDisponibles) {
-            return {
-              success: false,
-              error: `No hay slots disponibles en la sucursal destino. Disponibles: ${slotsDisponibles}, solicitados: ${vehiculoIds.length}.`,
-            };
-          }
-        }
       }
 
       const { data, error } = await admin
@@ -1418,31 +1401,6 @@ export class SolicitudesService {
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
       if (!ESTADOS_PRE_DESPACHO.includes(actual.estado)) {
         return { success: false, error: 'Los vehículos solo se gestionan pre-despacho.' };
-      }
-
-      if (actual.tipo_solicitud === 'venta' && actual.sucursal_destino) {
-        const { count } = await admin
-          .from('solicitud_vehiculo')
-          .select('id', { count: 'exact', head: true })
-          .eq('solicitud_id', solicitudId)
-          .eq('disponibilidad', 'reservado');
-
-        const vehiculosEnSolicitud = count ?? 0;
-        const { data: sucursal, error: sucError } = await admin
-          .from('sucursal')
-          .select('slots, slots_ocupados')
-          .eq('id', actual.sucursal_destino)
-          .single();
-
-        if (!sucError && sucursal) {
-          const slotsDisponibles = Math.max((sucursal.slots ?? 0) - (sucursal.slots_ocupados ?? 0), 0);
-          if (vehiculosEnSolicitud >= slotsDisponibles) {
-            return {
-              success: false,
-              error: `No hay slots disponibles en la sucursal destino. Disponibles: ${slotsDisponibles}.`,
-            };
-          }
-        }
       }
 
       const { data: reservaActiva } = await admin

@@ -186,10 +186,10 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     if (!isHydrated) return true;
 
     const matchesSearch =
-      v.chasis.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v.chasis ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (v.patente ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.marca.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.modelo.toLowerCase().includes(searchTerm.toLowerCase());
+      (v.marca ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (v.modelo ?? '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesMarca = selectedMarca === 'todas' || v.marca === selectedMarca;
 

@@ -190,7 +190,7 @@ export default function TrasladosClient({
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
             {esOperador
-              ? 'Mueve vehículos ya vendidos entre sucursales. El JL destino solo puede recepcionar.'
+              ? 'Mueve vehículos entre sucursales. El JL destino solo puede recepcionar.'
               : 'Traslados que llegan a tus sucursales.'}
           </p>
         </div>
