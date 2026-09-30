@@ -54,6 +54,11 @@ export default async function SolicitudesPage() {
         }
         tabs={[
           { href: '/solicitudes', label: 'General', active: true },
+          ...(profile.rol === 'administrador' ||
+          profile.rol === 'logistica' ||
+          profile.rol === 'jefe_local'
+            ? [{ href: '/solicitudes/traslados', label: 'Traslados', active: false }]
+            : []),
           ...(esGestor || esEjecutivo
             ? [{ href: '/solicitudes/aprobaciones', label: 'Aprobaciones', active: false }]
             : []),

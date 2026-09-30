@@ -1,4 +1,5 @@
 import { AuthService } from '@/services/auth.service';
+import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import { getTrasladosAction, getVehiculosParaTrasladoAction, getSucursalesTrasladoAction } from '@/app/actions/traslados.actions';
 import SolicitudesHeader from '@/components/SolicitudesHeader';
@@ -24,10 +25,18 @@ export default async function TrasladosPage() {
 
   const esOperador = profile.rol === 'administrador' || profile.rol === 'logistica';
 
-  const [traslados, sucursales, vehiculos] = await Promise.all([
+  const viewerSucursales =
+    profile.rol === 'jefe_local'
+      ? (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
+      : [];
+
+  const [traslados, sucursales, vehiculosIniciales, marcas] = await Promise.all([
     getTrasladosAction(),
     getSucursalesTrasladoAction(),
-    esOperador ? getVehiculosParaTrasladoAction() : Promise.resolve([]),
+    esOperador
+      ? getVehiculosParaTrasladoAction('', 1, 12)
+      : Promise.resolve({ vehiculos: [], total: 0, page: 1, pageSize: 12, totalPages: 0 }),
+    esOperador ? OrganizacionService.getMarcasCatalogo() : Promise.resolve([]),
   ]);
 
   return (
@@ -51,9 +60,11 @@ export default async function TrasladosPage() {
         <TrasladosClient
           traslados={traslados}
           sucursales={sucursales}
-          vehiculos={vehiculos}
+          marcas={marcas}
+          vehiculosIniciales={vehiculosIniciales}
           esOperador={esOperador}
-          viewerId={profile.id}
+          viewerRol={profile.rol}
+          viewerSucursales={viewerSucursales}
         />
       </main>
     </div>

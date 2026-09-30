@@ -5,7 +5,7 @@ import type {
   CreateTrasladoInput,
   EstadoTraslado,
   TrasladoInterno,
-  VehiculoParaTraslado,
+  VehiculosParaTrasladoResult,
 } from '@/types/traslado.types';
 
 /**
@@ -404,67 +404,54 @@ export class TrasladoService {
   }
 
   /**
-   * Vehículos vendibles para un traslado: ya `vendido` y sin traslado en
-   * tránsito. Marca `en_traslado_activo` para deshabilitarlos en la UI.
+   * Vehículos para un traslado: listado completo de `vehiculo`, con búsqueda
+   * por patente o chasis, filtros por sucursal y marca, y paginación.
+   * Marca `en_traslado_activo` a los que ya integran un traslado pendiente/en
+   * tránsito para deshabilitarlos en la UI.
    */
-  static async getVehiculosParaTraslado(): Promise<VehiculoParaTraslado[]> {
+  static async getVehiculosParaTraslado(
+    q = '',
+    page = 1,
+    pageSize = 12,
+    opciones?: { sucursalId?: number | null; marca?: string | null }
+  ): Promise<VehiculosParaTrasladoResult> {
+    const vacio: VehiculosParaTrasladoResult = { vehiculos: [], total: 0, page, pageSize, totalPages: 0 };
     try {
       const admin = createAdminClient();
 
-      const { data: vendidas, error } = await admin
-        .from('solicitud_vehiculo')
-        .select('vehiculo_id, solicitud:solicitud_id(sucursal_destino, titulo_evento, fecha_creacion, estado)')
-        .eq('disponibilidad', 'vendido')
-        .limit(100000);
+      const filtro = q.trim();
+      page = Math.max(1, page);
+      pageSize = Math.min(Math.max(1, pageSize), 100);
+
+      let query = admin
+        .from('vehiculo')
+        .select(
+          'id, chasis, patente, marca, modelo, anio, color, ubicacion, sucursal:ubicacion(nombre)',
+          { count: 'exact' }
+        );
+
+      if (opciones?.sucursalId) {
+        query = query.eq('ubicacion', opciones.sucursalId);
+      }
+      if (opciones?.marca) {
+        query = query.eq('marca', opciones.marca);
+      }
+      if (filtro) {
+        const seguro = filtro.replace(/%/g, '');
+        query = query.or(`patente.ilike.%${seguro}%,chasis.ilike.%${seguro}%`);
+      }
+
+      const { data, error, count } = await query
+        .order('patente', { ascending: true })
+        .range((page - 1) * pageSize, page * pageSize - 1);
 
       if (error) {
-        console.error('Error al listar vehículos vendidos:', error);
-        return [];
+        console.error('Error al listar vehículos para traslado:', error);
+        return vacio;
       }
 
-      const porVehiculo = new Map<
-        string,
-        { sucursal_destino: number | null; titulo_evento: string | null; fecha_creacion: string | null }
-      >();
-      for (const row of (vendidas || []) as unknown as Array<{
-        vehiculo_id: string;
-        solicitud: { sucursal_destino: number | null; titulo_evento: string | null; fecha_creacion: string | null } | null;
-      }>) {
-        if (!porVehiculo.has(row.vehiculo_id)) {
-          porVehiculo.set(row.vehiculo_id, {
-            sucursal_destino: row.solicitud?.sucursal_destino ?? null,
-            titulo_evento: row.solicitud?.titulo_evento ?? null,
-            fecha_creacion: row.solicitud?.fecha_creacion ?? null,
-          });
-        }
-      }
-
-      const ids = [...porVehiculo.keys()];
-      if (ids.length === 0) return [];
-
-      const { data: vehiculos, error: vehError } = await admin
-        .from('vehiculo')
-        .select('id, chasis, patente, marca, modelo, anio, color, ubicacion, sucursal:ubicacion(nombre)')
-        .in('id', ids)
-        .order('patente', { ascending: true })
-        .limit(100000);
-
-      if (vehError) {
-        console.error('Error al listar vehículos para traslado:', vehError);
-        return [];
-      }
-
-      const { data: enTraslado } = await admin
-        .from('traslado_interno_vehiculo')
-        .select('vehiculo_id, traslado:traslado_interno!inner(estado)')
-        .in('vehiculo_id', ids)
-        .in('traslado.estado', ['pendiente', 'en_transito']);
-
-      const ocupados = new Set(
-        ((enTraslado || []) as unknown as Array<{ vehiculo_id: string }>).map((t) => t.vehiculo_id)
-      );
-
-      return ((vehiculos || []) as unknown as Array<{
+      const total = count ?? 0;
+      const filas = (data || []) as unknown as Array<{
         id: string;
         chasis: string;
         patente: string | null;
@@ -474,21 +461,44 @@ export class TrasladoService {
         color: string | null;
         ubicacion: number | null;
         sucursal: { nombre: string | null } | null;
-      }>).map((v) => ({
-        id: v.id,
-        chasis: v.chasis,
-        patente: v.patente,
-        marca: v.marca,
-        modelo: v.modelo,
-        anio: v.anio,
-        color: v.color,
-        ubicacion: v.ubicacion,
-        ubicacion_nombre: v.sucursal?.nombre ?? null,
-        en_traslado_activo: ocupados.has(v.id),
-      }));
+      }>;
+
+      const ids = filas.map((v) => v.id);
+      const ocupados = new Set<string>();
+
+      if (ids.length > 0) {
+        const { data: enTraslado } = await admin
+          .from('traslado_interno_vehiculo')
+          .select('vehiculo_id, traslado:traslado_interno!inner(estado)')
+          .in('vehiculo_id', ids)
+          .in('traslado.estado', ['pendiente', 'en_transito']);
+
+        for (const t of (enTraslado || []) as unknown as Array<{ vehiculo_id: string }>) {
+          ocupados.add(t.vehiculo_id);
+        }
+      }
+
+      return {
+        vehiculos: filas.map((v) => ({
+          id: v.id,
+          chasis: v.chasis,
+          patente: v.patente,
+          marca: v.marca,
+          modelo: v.modelo,
+          anio: v.anio,
+          color: v.color,
+          ubicacion: v.ubicacion,
+          ubicacion_nombre: v.sucursal?.nombre ?? null,
+          en_traslado_activo: ocupados.has(v.id),
+        })),
+        total,
+        page,
+        pageSize,
+        totalPages: total === 0 ? 0 : Math.max(1, Math.ceil(total / pageSize)),
+      };
     } catch (err) {
       console.error('Error en getVehiculosParaTraslado:', err);
-      return [];
+      return vacio;
     }
   }
 }
