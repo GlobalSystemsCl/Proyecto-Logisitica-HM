@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { OrganizacionService } from '@/services/organizacion.service';
-import { SolicitudesService } from '@/services/solicitudes.service';
+import { ESTADOS_ACTIVOS_RESERVA, SolicitudesService } from '@/services/solicitudes.service';
 import type {
   CreateTrasladoInput,
   EstadoTraslado,
@@ -9,17 +9,25 @@ import type {
 } from '@/types/traslado.types';
 
 /**
- * Traslados internos: mueven vehículos entre sucursales (sin restricción de
- * estado de venta: cualquier vehículo del sistema puede trasladarse).
+ * Traslados internos: mueven vehículos ENTRE SUCURSALES (solo movimiento de
+ * inventario). Solo se trasladan vehículos en estado `liberado`; al crearse el
+ * traslado, la fila de `traslado_interno_vehiculo` queda `reservado` y, al
+ * recepcionar, vuelve a `liberado` (el vehículo puede tomar una nueva solicitud).
+ *
+ * El estado `vendido` es EXCLUSIVO del flujo de solicitudes de ejecutivos (se
+ * marca al entregar el vehículo al cliente); los traslados jamás marcan venta.
  *
  * Diferencias clave respecto de una solicitud normal:
- *  - el vehículo NO cambia de `disponibilidad` (conserva su estado original)
- *  - al recepcionar, `vehiculo.ubicacion` pasa a ser la sucursal destino
+ *  - solo aceptan vehículos `liberado` (ni `reservado` ni `vendido`)
+ *  - al recepcionar, `vehiculo.ubicacion` pasa a la sucursal destino y la fila
+ *    del traslado pasa de `reservado` a `liberado`
  *  - NO validan capacidad de slots del destino (solo informativos)
  *  - el JL destino solo puede recepcionar: no existe acción de rechazo
  *
  * Los contadores de slots y el movimiento de vehículos viven en triggers de BD
- * (migraciones `20260928_traslado_interno.sql` y `20260930_desactivar_validacion_slots.sql`);
+ * (migraciones `20260928_traslado_interno.sql`,
+ * `20260930_desactivar_validacion_slots.sql` y
+ * `20261001_traslado_recepcion_libera_inventario.sql`);
  * este servicio solo valida permisos/estado y escribe las filas.
  */
 const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
@@ -102,8 +110,9 @@ function mapTraslado(row: TrasladoRawRow): TrasladoInterno {
 export class TrasladoService {
   /**
    * Crea un traslado interno con los vehículos indicados.
-   * No valida capacidad de slots del destino, ni restringe el estado de venta
-   * del vehículo (cualquier vehículo puede trasladarse).
+   * Solo acepta vehículos en estado `liberado` (movimiento de inventario);
+   * rechaza los `reservado` (en solicitud activa) y los `vendido`.
+   * No valida capacidad de slots del destino (solo informativos).
    */
   static async crearTraslado(
     input: CreateTrasladoInput,
@@ -156,6 +165,34 @@ export class TrasladoService {
       );
       if (yaEnTraslado.size > 0) {
         return { success: false, error: 'Alguno de los vehículos ya tiene un traslado pendiente o en curso.' };
+      }
+
+      // Solo se trasladan vehículos en estado 'liberado' (inventario disponible):
+      // se excluyen los reservados en una solicitud activa y los vendidos.
+      const [reservados, vendidos] = await Promise.all([
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id, solicitud!inner(estado)')
+          .eq('disponibilidad', 'reservado')
+          .in('vehiculo_id', vehiculosIds)
+          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA]),
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id')
+          .eq('disponibilidad', 'vendido')
+          .in('vehiculo_id', vehiculosIds),
+      ]);
+
+      const noLiberados = new Set<string>([
+        ...((reservados?.data || []) as unknown as Array<{ vehiculo_id: string }>).map((r) => r.vehiculo_id),
+        ...((vendidos?.data || []) as unknown as Array<{ vehiculo_id: string }>).map((v) => v.vehiculo_id),
+      ]);
+
+      if (noLiberados.size > 0) {
+        return {
+          success: false,
+          error: 'Solo los vehículos en estado liberado pueden trasladarse.',
+        };
       }
 
       const { data: traslado, error: insertError } = await admin
@@ -377,10 +414,10 @@ export class TrasladoService {
   }
 
   /**
-   * Vehículos para un traslado: listado completo de `vehiculo`, con búsqueda
-   * por patente o chasis, filtros por sucursal y marca, y paginación.
-   * Marca `en_traslado_activo` a los que ya integran un traslado pendiente/en
-   * tránsito para deshabilitarlos en la UI.
+   * Vehículos para un traslado: solo los que están en estado `liberado`
+   * (inventario disponible), con búsqueda por patente o chasis, filtros por
+   * sucursal y marca, y paginación. Marca `en_traslado_activo` a los que ya
+   * integran un traslado pendiente/en tránsito para deshabilitarlos en la UI.
    */
   static async getVehiculosParaTraslado(
     q = '',
@@ -392,6 +429,26 @@ export class TrasladoService {
     try {
       const admin = createAdminClient();
 
+      // Vehículos NO trasladables: reservados en una solicitud activa o vendidos.
+      const [reservados, vendidos] = await Promise.all([
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id, solicitud!inner(estado)')
+          .eq('disponibilidad', 'reservado')
+          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
+          .limit(100000),
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id')
+          .eq('disponibilidad', 'vendido')
+          .limit(100000),
+      ]);
+
+      const excluidos = new Set<string>([
+        ...((reservados?.data || []) as unknown as Array<{ vehiculo_id: string }>).map((r) => r.vehiculo_id),
+        ...((vendidos?.data || []) as unknown as Array<{ vehiculo_id: string }>).map((v) => v.vehiculo_id),
+      ]);
+
       const filtro = q.trim();
       page = Math.max(1, page);
       pageSize = Math.min(Math.max(1, pageSize), 100);
@@ -402,6 +459,10 @@ export class TrasladoService {
           'id, chasis, patente, marca, modelo, anio, color, ubicacion, sucursal:ubicacion(nombre)',
           { count: 'exact' }
         );
+
+      if (excluidos.size > 0) {
+        query = query.not('id', 'in', `(${Array.from(excluidos).join(',')})`);
+      }
 
       if (opciones?.sucursalId) {
         query = query.eq('ubicacion', opciones.sucursalId);

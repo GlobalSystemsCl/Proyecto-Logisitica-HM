@@ -179,13 +179,29 @@ describe('TrasladoService', () => {
       expect(res.vehiculos).toEqual([]);
       expect(res.total).toBe(0);
     });
+
+    it('should_exclude_reservados_y_vendidos_al_listar_vehiculos_para_traslado', async () => {
+      admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'veh-res' }]), fila([{ vehiculo_id: 'veh-vend' }])];
+      admin.results.vehiculo = [filaConCount(1, [filaVehiculo({ id: 'veh-1' })])];
+      admin.results.traslado_interno_vehiculo = [fila([])];
+
+      const res = await TrasladoService.getVehiculosParaTraslado('', 1, 12);
+
+      expect(res.vehiculos).toHaveLength(1);
+      expect(res.vehiculos[0].id).toBe('veh-1');
+      const notCall = admin.callsTo('vehiculo').find((c) => c[0] === 'not');
+      expect(notCall?.[1]).toBe('id');
+      expect(notCall?.[2]).toBe('in');
+      expect(notCall?.[3]).toBe('(veh-res,veh-vend)');
+    });
   });
 
   describe('crearTraslado', () => {
-    it('should_crear_traslado_de_cualquier_vehiculo_sin_validar_estado_ni_slots', async () => {
+    it('should_crear_traslado_cuando_todos_los_vehiculos_estan_liberados_sin_validar_slots', async () => {
       admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
       admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
       admin.results.traslado_interno_vehiculo = [fila([]), fila(null)];
+      admin.results.solicitud_vehiculo = [fila([]), fila([])];
       admin.results.traslado_interno = [fila({ id: 't-1' }), fila(filaTraslado())];
       const auditoria = vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
 
@@ -198,8 +214,42 @@ describe('TrasladoService', () => {
       expect(res.success).toBe(true);
       expect(res.traslado?.id).toBe('t-1');
       expect(JSON.stringify(admin.callsTo('sucursal'))).not.toContain('slots');
-      expect(admin.callsTo('solicitud_vehiculo')).toHaveLength(0);
+      expect(admin.callsTo('solicitud_vehiculo').length).toBeGreaterThan(0);
       expect(auditoria).toHaveBeenCalled();
+    });
+
+    it('should_rechazar_traslado_cuando_un_vehiculo_esta_vendido', async () => {
+      admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
+      admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
+      admin.results.traslado_interno_vehiculo = [fila([])];
+      admin.results.solicitud_vehiculo = [fila([]), fila([{ vehiculo_id: 'veh-2' }])];
+
+      const res = await TrasladoService.crearTraslado(
+        { origen_id: 1, destino_id: 2 },
+        ['veh-1', 'veh-2'],
+        'log-1'
+      );
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('liberado');
+      expect(admin.callsTo('traslado_interno').filter((c) => c[0] === 'insert')).toHaveLength(0);
+    });
+
+    it('should_rechazar_traslado_cuando_un_vehiculo_esta_reservado_en_solicitud_activa', async () => {
+      admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
+      admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
+      admin.results.traslado_interno_vehiculo = [fila([])];
+      admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'veh-2' }]), fila([])];
+
+      const res = await TrasladoService.crearTraslado(
+        { origen_id: 1, destino_id: 2 },
+        ['veh-1', 'veh-2'],
+        'log-1'
+      );
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('liberado');
+      expect(admin.callsTo('traslado_interno').filter((c) => c[0] === 'insert')).toHaveLength(0);
     });
   });
 });

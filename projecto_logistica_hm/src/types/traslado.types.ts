@@ -7,9 +7,10 @@ import type { DisponibilidadVehiculo } from './sucursal.types';
 export type EstadoTraslado = 'pendiente' | 'en_transito' | 'recepcionado';
 
 /**
- * Un traslado interno mueve vehículos YA VENDIDOS entre sucursales.
- * El vehículo nunca cambia de `disponibilidad`: sigue `vendido`.
- * El JL destino solo puede recepcionar; no puede rechazar.
+ * Un traslado interno mueve vehículos en estado `liberado` entre sucursales
+ * (solo movimiento de inventario). Al crearse la fila queda `reservado` y al
+ * recepcionar vuelve a `liberado`. El estado `vendido` es exclusivo del flujo
+ * de solicitudes de ejecutivos. El JL destino solo puede recepcionar.
  */
 export interface TrasladoVehiculo {
   traslado_vehiculo_id: string;
@@ -48,8 +49,8 @@ export interface CreateTrasladoInput {
 }
 
 /**
- * Vehículo vendible para un traslado interno: ya está `vendido` y NO está
- * en tránsito en otro traslado.
+ * Vehículo trasladable: está en estado `liberado` (inventario disponible) y NO
+ * está en tránsito en otro traslado.
  */
 export interface VehiculoParaTraslado {
   id: string;
