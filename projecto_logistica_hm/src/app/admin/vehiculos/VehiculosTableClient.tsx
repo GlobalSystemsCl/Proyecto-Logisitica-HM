@@ -1,7 +1,15 @@
 'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useEffect, useMemo, useTransition } from 'react';
 import { VehiculoConDisponibilidad } from '@/types/vehiculo.types';
+import {
+  FILTRO_EN_VIAJE,
+  FILTRO_TODAS,
+  FILTROS_INICIALES,
+  contarPorDisponibilidad,
+  filtrarVehiculos,
+  hayFiltrosActivos,
+} from '@/lib/filtrosVehiculos';
 import {
   createVehiculoAction,
   updateVehiculoAction,
@@ -35,8 +43,11 @@ interface Props {
 export default function VehiculosTableClient({ vehiculos, marcas, sucursales, userRole }: Props) {
   const [isHydrated, setIsHydrated] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedMarca, setSelectedMarca] = useState<string>('todas');
-  const [selectedDisponibilidad, setSelectedDisponibilidad] = useState<string>('todas');
+  const [selectedMarca, setSelectedMarca] = useState<string>(FILTRO_TODAS);
+  const [selectedDisponibilidad, setSelectedDisponibilidad] = useState<string>(FILTRO_TODAS);
+  const [selectedUbicacion, setSelectedUbicacion] = useState<string>(FILTRO_TODAS);
+  const [fechaDesde, setFechaDesde] = useState('');
+  const [fechaHasta, setFechaHasta] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
@@ -63,6 +74,31 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
 
   const handleDisponibilidadChange = (value: string) => {
     setSelectedDisponibilidad(value);
+    setCurrentPage(1);
+  };
+
+  const handleUbicacionChange = (value: string) => {
+    setSelectedUbicacion(value);
+    setCurrentPage(1);
+  };
+
+  const handleFechaDesdeChange = (value: string) => {
+    setFechaDesde(value);
+    setCurrentPage(1);
+  };
+
+  const handleFechaHastaChange = (value: string) => {
+    setFechaHasta(value);
+    setCurrentPage(1);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm(FILTROS_INICIALES.busqueda);
+    setSelectedMarca(FILTROS_INICIALES.marca);
+    setSelectedDisponibilidad(FILTROS_INICIALES.disponibilidad);
+    setSelectedUbicacion(FILTROS_INICIALES.ubicacion);
+    setFechaDesde(FILTROS_INICIALES.fechaDesde);
+    setFechaHasta(FILTROS_INICIALES.fechaHasta);
     setCurrentPage(1);
   };
 
@@ -182,30 +218,34 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   }, []);
 
   // Filter vehiculos
-  const filteredVehiculos = vehiculos.filter((v) => {
-    if (!isHydrated) return true;
+  const filteredVehiculos = useMemo(
+    () =>
+      isHydrated
+        ? filtrarVehiculos(vehiculos, {
+            busqueda: searchTerm,
+            marca: selectedMarca,
+            disponibilidad: selectedDisponibilidad,
+            ubicacion: selectedUbicacion,
+            fechaDesde,
+            fechaHasta,
+          })
+        : vehiculos,
+    [vehiculos, isHydrated, searchTerm, selectedMarca, selectedDisponibilidad, selectedUbicacion, fechaDesde, fechaHasta],
+  );
 
-    const matchesSearch =
-      (v.chasis ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v.patente ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v.marca ?? '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (v.modelo ?? '').toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesMarca = selectedMarca === 'todas' || v.marca === selectedMarca;
-
-    const matchesDisponibilidad =
-      selectedDisponibilidad === 'todas' ||
-      (selectedDisponibilidad === 'reservado' && v.estado_disponibilidad === 'reservado') ||
-      (selectedDisponibilidad === 'liberado' && v.estado_disponibilidad === 'liberado') ||
-      (selectedDisponibilidad === 'vendido' && v.estado_disponibilidad === 'vendido');
-
-    return matchesSearch && matchesMarca && matchesDisponibilidad;
+  const filtrosActivos = hayFiltrosActivos({
+    busqueda: searchTerm,
+    marca: selectedMarca,
+    disponibilidad: selectedDisponibilidad,
+    ubicacion: selectedUbicacion,
+    fechaDesde,
+    fechaHasta,
   });
 
-  const totalVehiculos = vehiculos.length;
-  const reservados = vehiculos.filter((v) => v.estado_disponibilidad === 'reservado').length;
-  const vendidos = vehiculos.filter((v) => v.estado_disponibilidad === 'vendido').length;
-  const disponibles = totalVehiculos - reservados - vendidos;
+  const { total: totalVehiculos, reservados, vendidos, disponibles } = useMemo(
+    () => contarPorDisponibilidad(filteredVehiculos),
+    [filteredVehiculos],
+  );
 
   const totalPages = Math.max(1, Math.ceil(filteredVehiculos.length / PAGE_SIZE));
   const currentPageClamped = Math.min(currentPage, totalPages);
@@ -479,11 +519,14 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Vehículos</p>
             <p className="text-3xl font-bold text-neutral-900 mt-1">{totalVehiculos}</p>
+            {filtrosActivos && (
+              <p className="text-[11px] text-neutral-400 mt-0.5">de {vehiculos.length} en inventario</p>
+            )}
           </div>
           <div className="w-11 h-11 rounded-xl border border-neutral-300 flex items-center justify-center text-neutral-900">
             <Car className="w-5 h-5" />
@@ -507,6 +550,16 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
           </div>
           <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-white">
             <Lock className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Vendidos</p>
+            <p className="text-3xl font-bold text-neutral-900 mt-1">{vendidos}</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-500">
+            <CheckCircle2 className="w-5 h-5" />
           </div>
         </div>
       </div>
@@ -540,50 +593,127 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       )}
 
       {/* Filters and Search */}
-      <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col sm:flex-row gap-4 justify-between items-center">
-        <div className="relative w-full sm:w-80">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-          <input
-            type="text"
-            placeholder="Buscar por chasis, patente, marca..."
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-          />
+      <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Buscar por chasis, patente, marca..."
+              value={searchTerm}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="filtro-marca"
+                className="text-xs font-semibold text-neutral-500 uppercase tracking-wider"
+              >
+                Marca:
+              </label>
+              <select
+                id="filtro-marca"
+                value={selectedMarca}
+                onChange={(e) => handleMarcaChange(e.target.value)}
+                className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              >
+                <option value={FILTRO_TODAS}>Todas</option>
+                {marcas.map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="filtro-estado"
+                className="text-xs font-semibold text-neutral-500 uppercase tracking-wider"
+              >
+                Estado:
+              </label>
+              <select
+                id="filtro-estado"
+                value={selectedDisponibilidad}
+                onChange={(e) => handleDisponibilidadChange(e.target.value)}
+                className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              >
+                <option value={FILTRO_TODAS}>Todos</option>
+                <option value="liberado">Disponibles</option>
+                <option value="reservado">En Uso</option>
+                <option value="vendido">Vendidos</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label
+                htmlFor="filtro-ubicacion"
+                className="text-xs font-semibold text-neutral-500 uppercase tracking-wider"
+              >
+                Ubicación:
+              </label>
+              <select
+                id="filtro-ubicacion"
+                value={selectedUbicacion}
+                onChange={(e) => handleUbicacionChange(e.target.value)}
+                className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              >
+                <option value={FILTRO_TODAS}>Todas</option>
+                <option value={FILTRO_EN_VIAJE}>En viaje / Container</option>
+                {sucursales.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.nombre || `Sucursal #${s.id}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-              Marca:
-            </label>
-            <select
-              value={selectedMarca}
-              onChange={(e) => handleMarcaChange(e.target.value)}
-              className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-            >
-              <option value="todas">Todas</option>
-              {marcas.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between border-t border-neutral-100 pt-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
+                  Registro:
+            </span>
+            <div className="flex items-center gap-2">
+              <label htmlFor="filtro-fecha-desde" className="text-xs text-neutral-500">
+                Desde
+              </label>
+              <input
+                id="filtro-fecha-desde"
+                type="date"
+                value={fechaDesde}
+                max={fechaHasta || undefined}
+                onChange={(e) => handleFechaDesdeChange(e.target.value)}
+                className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <label htmlFor="filtro-fecha-hasta" className="text-xs text-neutral-500">
+                Hasta
+              </label>
+              <input
+                id="filtro-fecha-hasta"
+                type="date"
+                value={fechaHasta}
+                min={fechaDesde || undefined}
+                onChange={(e) => handleFechaHastaChange(e.target.value)}
+                className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              />
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-              Estado:
-            </label>
-            <select
-              value={selectedDisponibilidad}
-              onChange={(e) => handleDisponibilidadChange(e.target.value)}
-              className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+          {filtrosActivos && (
+            <button
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto px-3 py-2 rounded-xl text-xs font-semibold bg-neutral-100 text-neutral-700 border border-neutral-200 hover:bg-neutral-200 transition-colors cursor-pointer"
             >
-              <option value="todas">Todos</option>
-              <option value="liberado">Disponibles</option>
-              <option value="reservado">En Uso</option>
-              <option value="vendido">Vendidos</option>
-            </select>
-          </div>
+              <X className="w-3.5 h-3.5" />
+              Limpiar filtros
+            </button>
+          )}
         </div>
       </div>
 

@@ -471,6 +471,40 @@ describe('VehiculoService', () => {
       ];
       expect(await VehiculoService.getVehiculos()).toEqual([]);
     });
+
+    it('should_order_by_created_at_then_id_to_make_pagination_deterministic', async () => {
+      admin.results.vehiculo = [{ data: [vehiculoRow()], error: null }];
+      await VehiculoService.getVehiculos();
+      const orders = admin.callsTo('vehiculo').filter((c) => c[0] === 'order');
+      expect(orders).toEqual([
+        ['order', 'created_at', { ascending: false }],
+        ['order', 'id', { ascending: true }],
+      ]);
+    });
+
+    it('should_dedupe_rows_repeated_across_pages_by_id', async () => {
+      const pagina1 = Array.from({ length: 1000 }, (_, i) => ({ ...vehiculoRow(), id: `veh-${i}` }));
+      const pagina2 = [
+        { ...vehiculoRow(), id: 'veh-999' },
+        { ...vehiculoRow(), id: 'veh-1000' },
+        { ...vehiculoRow(), id: 'veh-1000' },
+      ];
+      admin.results.vehiculo = [
+        { data: pagina1, error: null },
+        { data: pagina2, error: null },
+      ];
+      const res = await VehiculoService.getVehiculos();
+      expect(res).toHaveLength(1001);
+      expect(new Set(res.map((v) => v.id)).size).toBe(1001);
+      expect(res[999].id).toBe('veh-999');
+      expect(res[1000].id).toBe('veh-1000');
+    });
+
+    it('should_keep_rows_without_id_when_deduplicating', async () => {
+      const sinId = { ...vehiculoRow(), id: undefined };
+      admin.results.vehiculo = [{ data: [sinId, sinId], error: null }];
+      expect(await VehiculoService.getVehiculos()).toHaveLength(2);
+    });
   });
 
   describe('getMarcas', () => {
@@ -494,6 +528,16 @@ describe('VehiculoService', () => {
     it('should_return_empty_array_when_query_fails', async () => {
       admin.results.vehiculo = [{ data: null, error: { message: 'boom' } }];
       expect(await VehiculoService.getMarcas()).toEqual([]);
+    });
+
+    it('should_order_by_marca_then_id_to_make_pagination_deterministic', async () => {
+      admin.results.vehiculo = [{ data: [{ marca: 'Toyota' }], error: null }];
+      await VehiculoService.getMarcas();
+      const orders = admin.callsTo('vehiculo').filter((c) => c[0] === 'order');
+      expect(orders).toEqual([
+        ['order', 'marca'],
+        ['order', 'id', { ascending: true }],
+      ]);
     });
   });
 
@@ -535,6 +579,14 @@ describe('VehiculoService', () => {
       const res = await VehiculoService.importVehiculosCSV(csv);
       expect(res.errores).toBe(1);
       expect(res.importados).toBe(0);
+    });
+
+    it('should_read_existing_chassis_ordered_by_id', async () => {
+      admin.results.sucursal = [{ data: [], error: null }];
+      admin.results.vehiculo = [{ data: [], error: null }];
+      await VehiculoService.importVehiculosCSV(CSV);
+      const orders = admin.callsTo('vehiculo').filter((c) => c[0] === 'order');
+      expect(orders).toEqual([['order', 'id', { ascending: true }]]);
     });
   });
 });
