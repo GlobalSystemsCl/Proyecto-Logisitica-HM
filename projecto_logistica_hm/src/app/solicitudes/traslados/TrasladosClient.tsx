@@ -59,6 +59,7 @@ export default function TrasladosClient({
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<'todos' | 'pendiente' | 'en_transito' | 'recepcionado'>('todos');
+  const [detalle, setDetalle] = useState<TrasladoInterno | null>(null);
 
   // Formulario de creación
   const [formOpen, setFormOpen] = useState(false);
@@ -417,7 +418,19 @@ export default function TrasladosClient({
               (viewerRol === 'administrador' ||
                 (viewerRol === 'jefe_local' && viewerSucursales.includes(t.destino_id)));
             return (
-              <div key={t.id} className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm">
+              <div
+                key={t.id}
+                onClick={() => setDetalle(t)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setDetalle(t);
+                  }
+                }}
+                className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm hover:border-neutral-400 hover:shadow cursor-pointer transition-all"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -442,7 +455,10 @@ export default function TrasladosClient({
                   <div className="flex flex-col gap-2 shrink-0">
                     {puedeDespachar && (
                       <button
-                        onClick={() => handleDespachar(t.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDespachar(t.id);
+                        }}
                         disabled={loading === t.id}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
@@ -452,7 +468,10 @@ export default function TrasladosClient({
                     )}
                     {puedeRecibir && (
                       <button
-                        onClick={() => handleRecibir(t.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRecibir(t.id);
+                        }}
                         disabled={loading === t.id}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
@@ -463,18 +482,9 @@ export default function TrasladosClient({
                   </div>
                 </div>
 
-                <div className="mt-4 border-t border-neutral-100 pt-3 space-y-1.5">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">Vehículos</p>
-                  {t.vehiculos.map((v) => (
-                    <div key={v.traslado_vehiculo_id} className="flex items-center gap-2 text-sm">
-                      <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                      <span className="font-semibold text-neutral-900">{v.patente || '—'}</span>
-                      <span className="text-neutral-400">·</span>
-                      <span className="text-neutral-500 font-mono text-xs">{v.chasis}</span>
-                    </div>
-                  ))}
+                <div className="mt-4 border-t border-neutral-100 pt-3">
                   {t.fecha_despacho && (
-                    <p className="text-xs text-neutral-500 pt-1">
+                    <p className="text-xs text-neutral-500">
                       <span className="font-semibold">Despacho:</span> {formatFecha(t.fecha_despacho)}
                     </p>
                   )}
@@ -483,10 +493,88 @@ export default function TrasladosClient({
                       <span className="font-semibold">Recepción:</span> {formatFecha(t.fecha_recepcion)}
                     </p>
                   )}
+                  <p className="mt-2 flex items-center justify-between text-xs font-semibold text-neutral-600">
+                    <span>{t.vehiculos.length} vehículo(s)</span>
+                    <span className="inline-flex items-center gap-1 text-neutral-400">
+                      Ver detalle <ChevronRight className="w-3.5 h-3.5" />
+                    </span>
+                  </p>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {detalle && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => setDetalle(null)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-5 shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs text-neutral-400">#{detalle.id.slice(0, 8)}</span>
+                  <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${estadoConfig[detalle.estado].color}`}>
+                    {estadoConfig[detalle.estado].label}
+                  </span>
+                </div>
+                <div className="mt-2 flex items-center gap-2 text-sm font-bold text-neutral-900">
+                  <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
+                  <span className="truncate">{detalle.origen_nombre ?? detalle.origen_id}</span>
+                  <span className="text-neutral-400">→</span>
+                  <span className="truncate">{detalle.destino_nombre ?? detalle.destino_id}</span>
+                </div>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Encargado: {detalle.logistica_nombre ?? detalle.logistica_id} · Creado: {formatFecha(detalle.created_at)}
+                </p>
+                {detalle.observacion && (
+                  <p className="mt-1 text-xs text-neutral-500 italic">“{detalle.observacion}”</p>
+                )}
+              </div>
+              <button
+                onClick={() => setDetalle(null)}
+                className="p-2 rounded-lg text-neutral-500 hover:bg-neutral-100 shrink-0 cursor-pointer"
+                aria-label="Cerrar detalle"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 border-t border-neutral-100 pt-3">
+              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">
+                Vehículos ({detalle.vehiculos.length})
+              </p>
+              {detalle.vehiculos.length === 0 ? (
+                <p className="text-sm text-neutral-400">Sin vehículos registrados.</p>
+              ) : (
+                <div className="grid grid-cols-1 gap-2">
+                  {detalle.vehiculos.map((v) => (
+                    <div key={v.traslado_vehiculo_id} className="flex items-center gap-3 rounded-xl border border-neutral-200 px-3 py-2.5">
+                      <Car className="w-4 h-4 text-neutral-400 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-neutral-900 truncate">
+                          {v.patente || '—'}
+                          <span className="text-neutral-400 font-normal"> · {v.chasis}</span>
+                        </p>
+                        <p className="text-xs text-neutral-500 truncate">
+                          {v.marca} {v.modelo} {v.anio}
+                          {v.color ? ` · ${v.color}` : ''}
+                          {v.ubicacion != null
+                            ? ` · Ubicación: ${sucursales.find((s) => s.id === v.ubicacion)?.nombre ?? v.ubicacion}`
+                            : ''}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
