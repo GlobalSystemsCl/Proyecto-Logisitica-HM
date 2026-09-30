@@ -17,6 +17,7 @@ import {
   rechazarSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
 import { SolicitudLista, EstadoSolicitud, TipoSolicitud, VehiculoInventario } from '@/types/solicitud.types';
+import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import { hoyISO } from '@/lib/fechas';
 
@@ -36,6 +37,8 @@ interface ViewerInfo {
 interface AprobacionesClientProps {
   solicitudes: SolicitudLista[];
   vehiculos: VehiculoInventario[];
+  /** Sucursales del Jefe Local: principal + las que encabeza como encargado. */
+  sucursalesAsignadas: UsuarioSucursalAsignada[];
   viewer: ViewerInfo;
 }
 
@@ -75,6 +78,7 @@ const tipoLabel: Record<TipoSolicitud, string> = {
 export default function AprobacionesClient({
   solicitudes,
   vehiculos,
+  sucursalesAsignadas,
   viewer,
 }: AprobacionesClientProps) {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
@@ -89,19 +93,24 @@ export default function AprobacionesClient({
   const esAdmin = viewer.rol === 'administrador';
   const esJefeLocal = viewer.rol === 'jefe_local';
 
+  const sucursalesJefeLocal = useMemo(
+    () => new Set(sucursalesAsignadas.map((s) => s.id)),
+    [sucursalesAsignadas]
+  );
+
   const pendientesAprobar = useMemo(() => {
     let lista = solicitudes.filter((s) => s.estado === 'pendiente_aprobacion');
     if (esJefeLocal) {
-      if (viewer.sucursal_id === null) return [];
-      lista = lista.filter((s) => s.sucursal === viewer.sucursal_id);
+      if (sucursalesJefeLocal.size === 0) return [];
+      lista = lista.filter((s) => sucursalesJefeLocal.has(s.sucursal));
     }
     return lista;
-  }, [solicitudes, esJefeLocal, viewer.sucursal_id]);
+  }, [solicitudes, esJefeLocal, sucursalesJefeLocal]);
 
   function puedoRechazar(sol: SolicitudLista): boolean {
     if (esAdmin) return true;
     if (esJefeLocal)
-      return viewer.sucursal_id !== null && sol.sucursal === viewer.sucursal_id;
+      return sucursalesJefeLocal.size > 0 && sucursalesJefeLocal.has(sol.sucursal);
     return false;
   }
 
@@ -169,7 +178,7 @@ export default function AprobacionesClient({
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Aprobaciones</h1>
         <p className="text-sm text-neutral-500">
-          Aprobar o rechazar solicitudes pendientes de aprobación de tu sucursal.
+          Aprobar o rechazar solicitudes pendientes de aprobación de tus sucursales.
         </p>
       </div>
 

@@ -9,17 +9,18 @@ import type {
 } from '@/types/traslado.types';
 
 /**
- * Traslados internos: mueven VEHÍCULOS YA VENDIDOS entre sucursales.
+ * Traslados internos: mueven vehículos entre sucursales (sin restricción de
+ * estado de venta: cualquier vehículo del sistema puede trasladarse).
  *
  * Diferencias clave respecto de una solicitud normal:
- *  - el vehículo NO cambia de `disponibilidad` (sigue `vendido`)
+ *  - el vehículo NO cambia de `disponibilidad` (conserva su estado original)
  *  - al recepcionar, `vehiculo.ubicacion` pasa a ser la sucursal destino
- *  - el slot se reserva en destino al crear y se libera al recepcionar
+ *  - NO validan capacidad de slots del destino (solo informativos)
  *  - el JL destino solo puede recepcionar: no existe acción de rechazo
  *
- * Toda la lógica de slots y de movimiento de vehículos vive en triggers de BD
- * (migración `20260928_traslado_interno.sql`); este servicio solo valida
- * permisos/estado y escribe las filas.
+ * Los contadores de slots y el movimiento de vehículos viven en triggers de BD
+ * (migraciones `20260928_traslado_interno.sql` y `20260930_desactivar_validacion_slots.sql`);
+ * este servicio solo valida permisos/estado y escribe las filas.
  */
 const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
   fecha_despacho, fecha_recepcion, observacion, created_at, updated_at,
@@ -100,8 +101,9 @@ function mapTraslado(row: TrasladoRawRow): TrasladoInterno {
 
 export class TrasladoService {
   /**
-   * Crea un traslado interno con los vehículos indicados (ya vendidos).
-   * Los slots del destino se reservan vía trigger `tr_reservar_slots_traslado_vehiculo`.
+   * Crea un traslado interno con los vehículos indicados.
+   * No valida capacidad de slots del destino, ni restringe el estado de venta
+   * del vehículo (cualquier vehículo puede trasladarse).
    */
   static async crearTraslado(
     input: CreateTrasladoInput,
@@ -120,22 +122,12 @@ export class TrasladoService {
 
       const { data: sucursales, error: sucError } = await admin
         .from('sucursal')
-        .select('id, nombre, slots, slots_ocupados')
+        .select('id')
         .in('id', [input.origen_id, input.destino_id]);
 
       if (sucError) return { success: false, error: sucError.message };
       if (!sucursales || sucursales.length !== 2) {
         return { success: false, error: 'La sucursal de origen o destino no existe.' };
-      }
-
-      const destino = sucursales.find((s) => s.id === input.destino_id)!;
-      const disponibles =
-        (destino.slots ?? 0) - (destino.slots_ocupados ?? 0);
-      if (destino.slots !== null && disponibles < vehiculosIds.length) {
-        return {
-          success: false,
-          error: `La sucursal destino "${destino.nombre ?? input.destino_id}" solo tiene ${Math.max(disponibles, 0)} slot(s) disponible(s) y se solicitan ${vehiculosIds.length}.`,
-        };
       }
 
       const { data: vendedor, error: userError } = await admin
@@ -149,25 +141,6 @@ export class TrasladoService {
         return { success: false, error: 'Solo Logística o el Administrador pueden crear traslados.' };
       }
       if (vendedor.activo === false) return { success: false, error: 'El usuario está inactivo.' };
-
-      const { data: vendidos, error: vendError } = await admin
-        .from('solicitud_vehiculo')
-        .select('vehiculo_id, disponibilidad')
-        .in('vehiculo_id', vehiculosIds)
-        .eq('disponibilidad', 'vendido');
-
-      const vendidosSet = new Set(
-        ((vendidos || []) as unknown as Array<{ vehiculo_id: string }>).map((v) => v.vehiculo_id)
-      );
-      if (vendError) return { success: false, error: vendError.message };
-
-      const noVendidos = vehiculosIds.filter((id) => !vendidosSet.has(id));
-      if (noVendidos.length > 0) {
-        return {
-          success: false,
-          error: `Solo se pueden trasladar vehículos ya vendidos (${noVendidos.length} seleccionado(s) no cumplen la condición).`,
-        };
-      }
 
       const { data: enTraslado, error: trasError } = await admin
         .from('traslado_interno_vehiculo')

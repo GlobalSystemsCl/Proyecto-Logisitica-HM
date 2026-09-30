@@ -257,7 +257,7 @@ export default function SolicitudesClient({
       if (vehiculoMarca && v.marca !== vehiculoMarca) return false;
       if (vehiculoSucursal !== '' && v.ubicacion !== vehiculoSucursal) return false;
       if (term) {
-        const patente = v.patente.toLowerCase().includes(term);
+        const patente = (v.patente || '').toLowerCase().includes(term);
         const chasis = (v.chasis || '').toLowerCase().includes(term);
         if (!patente && !chasis) return false;
       }

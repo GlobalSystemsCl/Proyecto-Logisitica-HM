@@ -486,16 +486,21 @@ describe('SolicitudesService.createSolicitud', () => {
     expect(res.error).toBe('Uno o más vehículos seleccionados ya están reservados en otra solicitud activa.');
   });
 
-  it('should_rechazar_slots_insuficientes_en_destino', async () => {
-    admin.results.solicitud_vehiculo = [fila([])];
-    admin.results.sucursal = [fila({ slots: 2, slots_ocupados: 2 })];
+  it('should_crear_solicitud_aunque_destino_este_sin_slots_disponibles', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud_vehiculo = [fila([]), fila(null)];
+    admin.results.solicitud = [fila({ id: 's-sin-slots' }), fila(rawRow({ id: 's-sin-slots' }))];
+    spyRegistrarAuditoria();
+
     const res = await SolicitudesService.createSolicitud(
       { sucursal: 1, sucursal_destino: 2, tipo_solicitud: 'venta' },
       ['v-1'],
       USUARIO_ID
     );
-    expect(res.success).toBe(false);
-    expect(res.error).toMatch(/No hay slots disponibles en la sucursal destino. Disponibles: 0, solicitados: 1/);
+
+    expect(res.success).toBe(true);
+    expect(res.solicitud?.id).toBe('s-sin-slots');
+    expect(admin.callsTo('sucursal')).toHaveLength(0);
   });
 
   it('should_rechazar_si_falla_la_verificacion_de_disponibilidad', async () => {
@@ -1396,20 +1401,23 @@ describe('SolicitudesService.agregarVehiculo', () => {
     expect(res.error).toBe('Ese vehículo ya está reservado en otra solicitud activa.');
   });
 
-  it('should_rechazar_slots_insuficientes_en_destino', async () => {
+  it('should_agregar_vehiculo_aunque_destino_este_sin_slots_disponibles', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.solicitud = [fila(minimo())];
-    admin.results.solicitud_vehiculo = [filaConCount(3)];
-    admin.results.sucursal = [fila({ slots: 3, slots_ocupados: 2 })];
+    admin.results.solicitud_vehiculo = [fila([]), fila({ id: 'sv-nuevo' })];
+    const auditoria = spyRegistrarAuditoria();
+
     const res = await SolicitudesService.agregarVehiculo('s-1', 'v-1', USUARIO_ID);
-    expect(res.success).toBe(false);
-    expect(res.error).toBe('No hay slots disponibles en la sucursal destino. Disponibles: 1.');
+
+    expect(res).toEqual({ success: true });
+    expect(auditoria).toHaveBeenCalled();
+    expect(admin.callsTo('sucursal')).toHaveLength(0);
   });
 
   it('should_reservar_vehiculo_y_auditar', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.solicitud = [fila(minimo())];
-    admin.results.solicitud_vehiculo = [filaConCount(1), fila([]), fila({ id: 'sv-nuevo' })];
-    admin.results.sucursal = [fila({ slots: 5, slots_ocupados: 1 })];
+    admin.results.solicitud_vehiculo = [fila([]), fila({ id: 'sv-nuevo' })];
     const auditoria = spyRegistrarAuditoria();
 
     const res = await SolicitudesService.agregarVehiculo('s-1', 'v-1', USUARIO_ID);
