@@ -35,9 +35,10 @@ import {
   reordenarColaAction,
   sacarDeColaAction,
 } from '@/app/actions/solicitudes.actions';
-import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
+import { SolicitudLista, TipoSolicitud, VehiculoAsociado } from '@/types/solicitud.types';
 import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
+import { nombreVehiculoConAnio } from '@/lib/vehiculo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
 
@@ -467,6 +468,25 @@ function getEncargadoNombre(sol: SolicitudLista): string | null {
   return null;
 }
 
+// Identificación del vehículo: patente (si existe), marca modelo año y chasis.
+function LineaVehiculo({ v }: { v: VehiculoAsociado }) {
+  const patente = v.patente?.trim();
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+      {patente ? (
+        <>
+          <span className="font-semibold text-neutral-900">{patente}</span>
+          <span className="text-neutral-400">·</span>
+        </>
+      ) : null}
+      <span className="font-semibold text-neutral-900">{nombreVehiculoConAnio(v)}</span>
+      <span className="text-neutral-400">·</span>
+      <span className="text-neutral-500 font-mono text-[11px]">{v.chasis}</span>
+    </div>
+  );
+}
+
 function SolicitudCard({
   id,
   sol,
@@ -527,19 +547,11 @@ function SolicitudCard({
           {sol.vehiculos.length > 0 ? (
             <div className="mt-2 space-y-1.5">
               {sol.vehiculos.map((v) => (
-                <div
-                  key={v.solicitud_vehiculo_id}
-                  className="flex items-center gap-2 text-xs"
-                >
-                  <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                  <span className="font-semibold text-neutral-900">{v.patente}</span>
-                  <span className="text-neutral-400">·</span>
-                  <span className="text-neutral-500 font-mono text-[11px]">{v.chasis}</span>
-                </div>
+                <LineaVehiculo key={v.solicitud_vehiculo_id} v={v} />
               ))}
             </div>
           ) : (
-            <p className="mt-1 text-xs text-neutral-400">Sin vehículos</p>
+            <p className="mt-1 text-xs text-neutral-400">Sin vehículos asignados</p>
           )}
 
           <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
@@ -627,12 +639,7 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
           {sol.vehiculos.length > 0 && (
             <div className="mt-2 space-y-1">
               {sol.vehiculos.map((v) => (
-                <div key={v.solicitud_vehiculo_id} className="flex items-center gap-2 text-xs">
-                  <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                  <span className="font-semibold text-neutral-900">{v.patente}</span>
-                  <span className="text-neutral-400">·</span>
-                  <span className="text-neutral-500 font-mono text-[11px]">{v.chasis}</span>
-                </div>
+                <LineaVehiculo key={v.solicitud_vehiculo_id} v={v} />
               ))}
             </div>
           )}

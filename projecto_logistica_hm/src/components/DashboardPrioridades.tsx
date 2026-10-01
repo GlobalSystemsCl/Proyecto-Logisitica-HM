@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { AlertCircle, ArrowRight, Flag, ListOrdered } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { formatFecha } from '@/lib/fechas';
+import { etiquetaVehiculo } from '@/lib/vehiculo';
 
 /** Máximo de solicitudes que se listan antes de remitir a la cola completa. */
 export const MAX_FILAS_PRIORIDADES = 8;
@@ -170,7 +171,8 @@ export default function DashboardPrioridades({
                   sol.tipo_solicitud === 'venta'
                     ? sol.sucursal_destino_nombre || `#${sol.sucursal_destino}`
                     : sol.titulo_evento || sol.direccion_evento || 'Evento';
-                const patente = sol.vehiculos[0]?.patente;
+                const vehiculo = sol.vehiculos[0];
+                const etiqueta = vehiculo ? etiquetaVehiculo(vehiculo) : null;
 
                 return (
                   <li key={sol.id}>
@@ -184,11 +186,11 @@ export default function DashboardPrioridades({
                           {sol.posicion_prioridad}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="flex items-center gap-2 text-sm font-bold text-neutral-900">
-                            {patente ? (
-                              <span className="font-mono">{patente}</span>
+                          <p className="flex flex-wrap items-center gap-x-2 text-sm font-bold text-neutral-900">
+                            {etiqueta ? (
+                              <span className="truncate">{etiqueta}</span>
                             ) : (
-                              <span className="text-neutral-400">Sin vehículo</span>
+                              <span className="font-normal text-neutral-400">Sin vehículo</span>
                             )}
                             <span className="font-sans text-xs font-medium text-neutral-500">
                               → {destino}
