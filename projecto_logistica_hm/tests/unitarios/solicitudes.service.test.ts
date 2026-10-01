@@ -469,6 +469,45 @@ describe('SolicitudesService.createSolicitud', () => {
     expect(res.error).toBe('Uno o más vehículos seleccionados ya están reservados en otra solicitud activa.');
   });
 
+  it('should_auditar_la_delegacion_when_hay_ejecutivo', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud_vehiculo = [fila([]), fila(null)];
+    admin.results.solicitud = [fila({ id: 's-delegada' }), fila(rawRow({ id: 's-delegada' }))];
+    const spy = spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.createSolicitud(
+      { sucursal: 1, sucursal_destino: 2, tipo_solicitud: 'venta', ejecutivo_id: 'e-9', jefe_local_id: 'jefe-1' },
+      ['v-1'],
+      'jefe-1'
+    );
+
+    expect(res.success).toBe(true);
+    expect(spy).toHaveBeenCalledWith(
+      'jefe-1',
+      'solicitud',
+      's-delegada',
+      'delegacion',
+      null,
+      { ejecutivo_id: 'e-9', jefe_local_id: 'jefe-1' }
+    );
+  });
+
+  it('should_no_auditar_delegacion_when_el_jefe_se_queda_con_la_solicitud', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud_vehiculo = [fila([]), fila(null)];
+    admin.results.solicitud = [fila({ id: 's-sin-delegar' }), fila(rawRow({ id: 's-sin-delegar' }))];
+    const spy = spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.createSolicitud(
+      { sucursal: 1, sucursal_destino: 2, tipo_solicitud: 'venta', ejecutivo_id: null, jefe_local_id: 'jefe-1' },
+      ['v-1'],
+      'jefe-1'
+    );
+
+    expect(res.success).toBe(true);
+    expect(spy.mock.calls.some((c) => c[3] === 'delegacion')).toBe(false);
+  });
+
   it('should_crear_solicitud_aunque_destino_este_sin_slots_disponibles', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.solicitud_vehiculo = [fila([]), fila(null)];
@@ -1356,6 +1395,66 @@ describe('SolicitudesService.getEjecutivosPorSucursal', () => {
     admin.results.usuario = [errorResult('boom')];
     const res = await SolicitudesService.getEjecutivosPorSucursal(3);
     expect(res).toEqual([]);
+  });
+});
+
+describe('SolicitudesService.validarEjecutivoDelegable', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** Ejecutivo por defecto: rol correcto, activo y de la sucursal 3. */
+  function ejecutivo(overrides: Record<string, unknown> = {}) {
+    return fila({ id: 'e-1', rol: 'ejecutivo', activo: true, sucursal_id: 3, ...overrides });
+  }
+
+  it('should_devolver_null_when_ejecutivo_es_delegable', async () => {
+    admin.results.usuario = [ejecutivo()];
+    const res = await SolicitudesService.validarEjecutivoDelegable('e-1', 3);
+    expect(res).toBeNull();
+    expect(admin.callsTo('usuario')).toContainEqual(['eq', 'id', 'e-1']);
+  });
+
+  it('should_rechazar_when_el_ejecutivo_no_existe', async () => {
+    admin.results.usuario = [fila(null)];
+    const res = await SolicitudesService.validarEjecutivoDelegable('fantasma', 3);
+    expect(res).toBe('El ejecutivo seleccionado no existe.');
+  });
+
+  it('should_rechazar_when_el_rol_no_es_ejecutivo', async () => {
+    admin.results.usuario = [ejecutivo({ rol: 'logistica' })];
+    const res = await SolicitudesService.validarEjecutivoDelegable('e-1', 3);
+    expect(res).toMatch(/rol Ejecutivo/);
+  });
+
+  it('should_rechazar_when_el_ejecutivo_esta_inactivo', async () => {
+    admin.results.usuario = [ejecutivo({ activo: false })];
+    const res = await SolicitudesService.validarEjecutivoDelegable('e-1', 3);
+    expect(res).toBe('El ejecutivo seleccionado está inactivo.');
+  });
+
+  it('should_rechazar_when_el_ejecutivo_es_de_otra_sucursal', async () => {
+    admin.results.usuario = [ejecutivo({ sucursal_id: 9 })];
+    const res = await SolicitudesService.validarEjecutivoDelegable('e-1', 3);
+    expect(res).toMatch(/sucursal de origen/);
+  });
+
+  it('should_rechazar_when_el_ejecutivo_no_tiene_sucursal', async () => {
+    admin.results.usuario = [ejecutivo({ sucursal_id: null })];
+    const res = await SolicitudesService.validarEjecutivoDelegable('e-1', 3);
+    expect(res).toMatch(/sucursal de origen/);
+  });
+
+  it('should_devolver_error_cuando_falla_la_consulta', async () => {
+    admin.results.usuario = [errorResult('boom')];
+    const res = await SolicitudesService.validarEjecutivoDelegable('e-1', 3);
+    expect(res).toBe('No se pudo verificar el ejecutivo seleccionado.');
   });
 });
 

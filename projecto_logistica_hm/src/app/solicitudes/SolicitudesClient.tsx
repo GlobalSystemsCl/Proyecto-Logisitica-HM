@@ -18,6 +18,7 @@ import {
   BellRing,
   UserCheck,
   Paperclip,
+  Truck,
 } from 'lucide-react';
 import {
   createSolicitudAction,
@@ -197,13 +198,10 @@ export default function SolicitudesClient({
   const [direccionEvento, setDireccionEvento] = useState('');
   const [tituloEvento, setTituloEvento] = useState('');
   const [ejecutivoSel, setEjecutivoSel] = useState('');
-  const [ejecutivosDisponibles, setEjecutivosDisponibles] = useState<Array<{ id: string; nombre: string; apellido: string }>>([]);
-  const [prevSucursalSel, setPrevSucursalSel] = useState(sucursalSel);
-  if (prevSucursalSel !== sucursalSel) {
-    setPrevSucursalSel(sucursalSel);
-    setEjecutivoSel('');
-    setEjecutivosDisponibles([]);
-  }
+  const [ejecutivosPorOrigen, setEjecutivosPorOrigen] = useState<{
+    origen: number;
+    lista: Array<{ id: string; nombre: string; apellido: string }>;
+  } | null>(null);
 
   const [vehiculoSearch, setVehiculoSearch] = useState('');
   const [vehiculoMarca, setVehiculoMarca] = useState('');
@@ -286,6 +284,19 @@ export default function SolicitudesClient({
     if (ids.length === 0 && viewer.sucursal_id !== null) return [viewer.sucursal_id];
     return ids;
   }, [viewer.rol, viewer.sucursal_id, sucursales_asignadas]);
+
+  /**
+   * Opciones del selector "Origen de solicitud". El Jefe de Local solo puede
+   * crear desde las sucursales que administra (`sucursalesVisibles`); el
+   * administrador ve todas. El servidor lo revalida en `createSolicitudAction`
+   * con `validarSucursalJefeLocal`, esto solo evita ofrecer lo que no corresponde.
+   */
+  const sucursalesOrigen = useMemo(() => {
+    if (viewer.rol !== 'jefe_local') return sucursales;
+    if (!sucursalesVisibles || sucursalesVisibles.length === 0) return [];
+    const set = new Set(sucursalesVisibles);
+    return sucursales.filter((s) => set.has(s.id));
+  }, [viewer.rol, sucursales, sucursalesVisibles]);
 
   const visibles = useMemo(() => {
     if (esAdmin || esLogistica || esEjecutivo) return solicitudes;
@@ -388,16 +399,40 @@ export default function SolicitudesClient({
     return () => clearTimeout(t);
   }, [feedback]);
 
+  /**
+   * Candidatos a delegación. La regla de negocio es "ejecutivos de la sucursal
+   * origen", así que se recargan cada vez que cambia el origen. El servidor
+   * además valida que el jefe pueda operar esa sucursal y que el ejecutivo sea
+   * delegable; esta lista es solo la superficie de UI.
+   *
+   * Se guarda junto al `origen` que la produjo para que una respuesta lenta de
+   * una sucursal anterior nunca se muestre bajo la sucursal actual.
+   */
   useEffect(() => {
     if (!esJefeLocal) return;
+    const origen = Number(sucursalSel);
+    if (!Number.isInteger(origen) || origen <= 0) return;
     let cancelled = false;
     async function load() {
-      const data = await getEjecutivosPorSucursalAction(null);
-      if (!cancelled) setEjecutivosDisponibles(data);
+      const lista = await getEjecutivosPorSucursalAction(origen);
+      if (!cancelled) setEjecutivosPorOrigen({ origen, lista });
     }
     load();
-    return () => { cancelled = true; };
-  }, [esJefeLocal]);
+    return () => {
+      cancelled = true;
+    };
+  }, [esJefeLocal, sucursalSel]);
+
+  /**
+   * Solo se exponen los ejecutivos descargados para la sucursal origen
+   * seleccionada. Con `origen` sin elegir no hay candidatos, y el aviso de
+   * "sin ejecutivos" no se muestra hasta que la carga termine.
+   */
+  const origenDelegacion = Number(sucursalSel);
+  const origenValido = Number.isInteger(origenDelegacion) && origenDelegacion > 0;
+  const delegationCargada =
+    esJefeLocal && origenValido && ejecutivosPorOrigen?.origen === origenDelegacion;
+  const ejecutivosDelegables = delegationCargada ? ejecutivosPorOrigen.lista : [];
 
   /** Carga los cooldowns de insistencia del Ejecutivo (solo para el botón Insistir). */
   useEffect(() => {
@@ -963,7 +998,7 @@ export default function SolicitudesClient({
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   >
                     <option value="">Selecciona una sucursal...</option>
-                    {sucursales.map((suc) => (
+                    {sucursalesOrigen.map((suc) => (
                       <option key={suc.id} value={String(suc.id)}>{suc.nombre}</option>
                     ))}
                   </select>
@@ -1082,10 +1117,20 @@ export default function SolicitudesClient({
                     className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                   >
                     <option value="">Sin ejecutivo — Yo me encargo</option>
-                    {ejecutivosDisponibles.map((ej) => (
+                    {ejecutivosDelegables.map((ej) => (
                       <option key={ej.id} value={ej.id}>{ej.nombre} {ej.apellido}</option>
                     ))}
                   </select>
+                  {esJefeLocal && !origenValido && (
+                    <p className="text-[11px] text-neutral-500">
+                      Elige el origen para ver a quién puedes delegar.
+                    </p>
+                  )}
+                  {delegationCargada && ejecutivosDelegables.length === 0 && (
+                    <p className="text-[11px] text-neutral-500">
+                      No hay ejecutivos activos en esta sucursal: te encargas tú.
+                    </p>
+                  )}
                 </div>
               )}
 

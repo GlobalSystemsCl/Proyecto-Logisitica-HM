@@ -115,10 +115,14 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
       }
       ejecutivoId = profile.id;
     } else if (profile.rol === 'jefe_local') {
-      if (profile.sucursal_id === null || profile.sucursal_id === undefined) {
-        return { success: false, error: 'No tienes una sucursal asignada.' };
-      }
+      const errorSucursal = await validarSucursalJefeLocal(profile, sucursal);
+      if (errorSucursal) return { success: false, error: errorSucursal };
       if (data.ejecutivo_id) {
+        const errorDelegacion = await SolicitudesService.validarEjecutivoDelegable(
+          data.ejecutivo_id,
+          sucursal
+        );
+        if (errorDelegacion) return { success: false, error: errorDelegacion };
         ejecutivoId = data.ejecutivo_id;
       }
     }
@@ -503,8 +507,34 @@ export async function getUsuarioDetalleAction(usuarioId: string): Promise<Usuari
   }
 }
 
-export async function getEjecutivosPorSucursalAction(sucursalId: number | null) {
-  return SolicitudesService.getEjecutivosPorSucursal(sucursalId);
+/**
+ * Lista los candidatos a Ejecutivo para delegar una solicitud.
+ *
+ * Sin este guard cualquier usuario autenticado (incluido un ejecutivo) podía
+ * enumerar todos los ejecutivos de la empresa. Solo el Jefe de Local (dentro de
+ * su alcance) y el administrador pueden consultarla.
+ */
+export async function getEjecutivosPorSucursalAction(sucursalId: number | null): Promise<
+  Array<{ id: string; nombre: string; apellido: string }>
+> {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
+      return [];
+    }
+
+    if (profile.rol === 'jefe_local' && sucursalId !== null && sucursalId !== undefined) {
+      const errorSucursal = await validarSucursalJefeLocal(profile, sucursalId);
+      if (errorSucursal) return [];
+    }
+
+    return await SolicitudesService.getEjecutivosPorSucursal(sucursalId);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    console.error('Error en getEjecutivosPorSucursalAction:', msg);
+    return [];
+  }
 }
 
 export async function calendarizarSolicitudAction(solicitudId: string, fechaDespacho: string) {
@@ -565,26 +595,6 @@ export async function despacharSolicitudAction(solicitudId: string) {
 
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud despachada.' };
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
-  }
-}
-
-/** Logística confirma el inicio efectivo de la ruta: despachada -> en tránsito. */
-export async function iniciarTransitoSolicitudAction(solicitudId: string) {
-  try {
-    const profile = await getProfileOrThrow();
-
-    if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
-      return { success: false, error: 'No tienes permisos para iniciar el tránsito de solicitudes.' };
-    }
-
-    const result = await SolicitudesService.iniciarTransitoSolicitud(solicitudId, profile.id);
-    if (!result.success) return { success: false, error: result.error };
-
-    revalidarSolicitudes();
-    return { success: true, message: 'Solicitud en tránsito.' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Error inesperado';
     return { success: false, error: msg };

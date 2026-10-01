@@ -682,6 +682,15 @@ export class SolicitudesService {
         });
       }
 
+      // La delegación del jefe de local es la única traza de "quién creó y a
+      // quién se le entregó": `solicitud` no tiene columna `created_by`.
+      if (input.ejecutivo_id) {
+        await this.registrarAuditoria(usuarioId, 'solicitud', solicitudId, 'delegacion', null, {
+          ejecutivo_id: input.ejecutivo_id,
+          jefe_local_id: input.jefe_local_id ?? null,
+        });
+      }
+
       const observacion = input.observacion?.trim();
       if (observacion) {
         const { error: obsError } = await admin.from('observacion').insert({
@@ -1444,6 +1453,60 @@ export class SolicitudesService {
     } catch (err) {
       console.error('Error en getEjecutivosPorSucursal:', err);
       return [];
+    }
+  }
+
+  /**
+   * Regla de negocio de la delegación: el Jefe de Local solo puede delegar una
+   * solicitud a un ejecutivo de la MISMA sucursal de origen, y ese ejecutivo
+   * debe existir, tener rol `ejecutivo` y estar activo.
+   *
+   * Devuelve `null` cuando la delegación es válida, o el mensaje de error que
+   * debe mostrarse al usuario. Nunca lanza: un fallo de BD se traduce a un
+   * mensaje para que el action pueda cortar la creación con seguridad.
+   */
+  static async validarEjecutivoDelegable(
+    ejecutivoId: string,
+    sucursalOrigenId: number
+  ): Promise<string | null> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('usuario')
+        .select('id, rol, activo, sucursal_id')
+        .eq('id', ejecutivoId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('Error en validarEjecutivoDelegable:', error);
+        return 'No se pudo verificar el ejecutivo seleccionado.';
+      }
+
+      if (!data) return 'El ejecutivo seleccionado no existe.';
+
+      const fila = data as unknown as {
+        id: string;
+        rol: string | null;
+        activo: boolean | null;
+        sucursal_id: number | null;
+      };
+
+      if (fila.rol !== 'ejecutivo') {
+        return 'Solo puedes delegar solicitudes a usuarios con rol Ejecutivo.';
+      }
+
+      if (!fila.activo) {
+        return 'El ejecutivo seleccionado está inactivo.';
+      }
+
+      if (fila.sucursal_id !== sucursalOrigenId) {
+        return 'Solo puedes delegar a ejecutivos de la sucursal de origen de la solicitud.';
+      }
+
+      return null;
+    } catch (err) {
+      console.error('Error inesperado en validarEjecutivoDelegable:', err);
+      return 'No se pudo verificar el ejecutivo seleccionado.';
     }
   }
 

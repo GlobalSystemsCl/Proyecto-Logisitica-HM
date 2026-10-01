@@ -135,6 +135,7 @@ function getTimelineInfo(accion: string): { label: string; dotClass: string; tex
     agregar_vehiculo: { label: 'Vehículo agregado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     quitar_vehiculo: { label: 'Vehículo retirado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     observacion: { label: 'Observación', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
+    delegacion: { label: 'Delegada', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
     subir_documento: { label: 'Documento subido', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     eliminar_documento: { label: 'Documento eliminado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
   };
@@ -195,6 +196,8 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
     }
     case 'eliminar_documento':
       return 'Documento eliminado';
+    case 'delegacion':
+      return 'El Jefe de Local delego la solicitud en un Ejecutivo';
     default:
       return null;
   }
