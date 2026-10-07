@@ -9,6 +9,7 @@ vi.mock('@/services/email.service', () => ({
 }));
 
 const { UsersService } = await import('@/services/users.service');
+const { validarPassword } = await import('@/lib/validaciones');
 
 describe('UsersService', () => {
   beforeEach(() => {
@@ -19,27 +20,36 @@ describe('UsersService', () => {
   afterEach(() => {});
 
   describe('approveUser', () => {
-    it('should_approve_user_in_db_and_update_auth_metadata', async () => {
+    it('should_approve_and_activate_user_and_lift_auth_ban', async () => {
       admin.results.usuario = [fila({ id: 'u-1' })];
 
       const res = await UsersService.approveUser('u-1');
 
       expect(res).toEqual({ success: true });
       const update = admin.callsTo('usuario').find((c) => c[0] === 'update');
-      expect(update?.[1]).toMatchObject({ aprobado: true });
+      // Brecha 003: aprobado y activo van juntos (CHECK usuario_no_aprobado_inactivo).
+      expect(update?.[1]).toEqual({ aprobado: true, activo: true });
       expect(admin.callsTo('usuario')).toContainEqual(['eq', 'id', 'u-1']);
-      expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u-1', {
-        user_metadata: { aprobado: true },
-      });
+      expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u-1', { ban_duration: 'none' });
     });
 
-    it('should_return_error_when_db_update_fails', async () => {
+    it('should_not_write_approval_in_user_metadata', async () => {
+      admin.results.usuario = [fila({ id: 'u-1' })];
+
+      await UsersService.approveUser('u-1');
+
+      const llamadas = admin.auth.admin.updateUserById.mock.calls as Array<[string, Record<string, unknown>]>;
+      expect(llamadas.some(([, attrs]) => 'user_metadata' in attrs)).toBe(false);
+    });
+
+    it('should_return_generic_error_when_db_update_fails', async () => {
       admin.results.usuario = [{ data: null, error: { message: 'no existe columna' } }];
 
       const res = await UsersService.approveUser('u-1');
 
       expect(res.success).toBe(false);
-      expect(res.error).toBe('no existe columna');
+      expect(res.error).toMatch(/^No se pudo autorizar al usuario\./);
+      expect(res.error).not.toContain('columna');
       expect(admin.auth.admin.updateUserById).not.toHaveBeenCalled();
     });
 
@@ -53,7 +63,7 @@ describe('UsersService', () => {
       expect(admin.auth.admin.updateUserById).not.toHaveBeenCalled();
     });
 
-    it('should_return_error_when_auth_metadata_update_fails', async () => {
+    it('should_succeed_even_when_auth_unban_fails', async () => {
       admin.results.usuario = [fila({ id: 'u-1' })];
       admin.auth.admin.updateUserById.mockResolvedValue({
         data: {},
@@ -62,8 +72,85 @@ describe('UsersService', () => {
 
       const res = await UsersService.approveUser('u-1');
 
+      expect(res).toEqual({ success: true });
+    });
+  });
+
+  describe('generateTempPassword', () => {
+    it('should_generate_16_chars_meeting_password_policy', () => {
+      for (let i = 0; i < 50; i++) {
+        const pass = UsersService.generateTempPassword();
+        expect(pass).toHaveLength(16);
+        expect(validarPassword(pass)).toBeNull();
+      }
+    });
+
+    it('should_not_use_predictable_prefix_nor_repeat_values', () => {
+      const valores = new Set(Array.from({ length: 200 }, () => UsersService.generateTempPassword()));
+      expect(valores.size).toBe(200);
+      expect([...valores].every((v) => !v.startsWith('HM-'))).toBe(true);
+    });
+  });
+
+  describe('toggleUserStatus', () => {
+    afterEach(() => {
+      vi.unstubAllEnvs();
+    });
+
+    it('should_reject_when_admin_tries_to_deactivate_itself', async () => {
+      const res = await UsersService.toggleUserStatus('u-1', false, 'u-1');
       expect(res.success).toBe(false);
-      expect(res.error).toBe('User not found');
+      expect(admin.callsTo('usuario')).toHaveLength(0);
+    });
+
+    it('should_deactivate_and_ban_user_in_auth', async () => {
+      admin.results.usuario = [fila({ email: 'a@test.com', aprobado: true }), fila(null)];
+
+      const res = await UsersService.toggleUserStatus('u-2', false, 'u-1');
+
+      expect(res).toEqual({ success: true });
+      expect(admin.callsTo('usuario')).toContainEqual(['update', { activo: false }]);
+      expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u-2', { ban_duration: '876000h' });
+    });
+
+    it('should_reactivate_and_lift_ban_in_auth', async () => {
+      admin.results.usuario = [fila({ email: 'a@test.com', aprobado: true }), fila(null)];
+
+      const res = await UsersService.toggleUserStatus('u-2', true, 'u-1');
+
+      expect(res).toEqual({ success: true });
+      expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u-2', { ban_duration: 'none' });
+    });
+
+    it('should_reject_activation_when_account_is_not_approved', async () => {
+      admin.results.usuario = [fila({ email: 'a@test.com', aprobado: false })];
+
+      const res = await UsersService.toggleUserStatus('u-2', true, 'u-1');
+
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/aún no está autorizada/);
+      expect(admin.callsTo('usuario').some((c) => c[0] === 'update')).toBe(false);
+    });
+
+    it('should_protect_principal_admin_configured_by_env', async () => {
+      vi.stubEnv('ADMIN_PRINCIPAL_EMAIL', 'jefe@empresa.cl');
+      admin.results.usuario = [fila({ email: 'Jefe@Empresa.cl', aprobado: true })];
+
+      const res = await UsersService.toggleUserStatus('u-2', false, 'u-1');
+
+      expect(res).toEqual({
+        success: false,
+        error: 'La cuenta del Administrador Principal no puede ser desactivada.',
+      });
+    });
+
+    it('should_still_succeed_when_auth_ban_fails', async () => {
+      admin.results.usuario = [fila({ email: 'a@test.com', aprobado: true }), fila(null)];
+      admin.auth.admin.updateUserById.mockResolvedValue({ data: {}, error: { message: 'x' } });
+
+      const res = await UsersService.toggleUserStatus('u-2', false, 'u-1');
+
+      expect(res).toEqual({ success: true });
     });
   });
 
@@ -85,10 +172,66 @@ describe('UsersService', () => {
       });
 
       expect(res.success).toBe(true);
+      // Brecha 002: el rol no viaja en user_metadata; lo fija el upsert.
       const metadata = admin.auth.admin.createUser.mock.calls[0][0].user_metadata;
-      expect(metadata).toMatchObject({ aprobado: true });
+      expect(metadata).toEqual({ nombre: 'Ana', apellido: 'Díaz' });
       const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
-      expect(upsert?.[1]).toMatchObject({ aprobado: true });
+      expect(upsert?.[1]).toMatchObject({ aprobado: true, activo: true, rol: 'administrador' });
+    });
+
+    it('should_not_return_temp_password_when_email_was_sent', async () => {
+      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-2' })];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-2' } }, error: null });
+
+      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo' });
+
+      expect(res.emailSent).toBe(true);
+      expect(res.tempPassword).toBeUndefined();
+    });
+
+    it('should_return_temp_password_when_email_failed', async () => {
+      const { EmailService } = await import('@/services/email.service');
+      vi.mocked(EmailService.sendUserCredentialsEmail).mockResolvedValueOnce({ success: false, error: 'x' });
+      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-2' })];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-2' } }, error: null });
+
+      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo' });
+
+      expect(res.emailSent).toBe(false);
+      expect(res.tempPassword).toHaveLength(16);
+    });
+
+    it('should_reject_weak_custom_password', async () => {
+      const res = await UsersService.createUser(
+        { nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo' },
+        'debil'
+      );
+
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/al menos 10 caracteres/);
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+    });
+
+    it('should_reject_names_with_html', async () => {
+      const res = await UsersService.createUser({
+        nombre: '<b>Ana</b>',
+        apellido: 'Díaz',
+        email: 'a@test.com',
+        rol: 'ejecutivo',
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('El nombre contiene caracteres no permitidos.');
+    });
+
+    it('should_return_generic_error_when_profile_upsert_fails', async () => {
+      admin.results.usuario = [{ data: null, error: null }, { data: null, error: { message: 'column "aprobado" does not exist' } }];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-2' } }, error: null });
+
+      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo' });
+
+      expect(res.success).toBe(false);
+      expect(res.error).not.toContain('aprobado');
     });
 
     it('should_assign_all_branches_as_manager_when_role_is_jefe_local', async () => {
