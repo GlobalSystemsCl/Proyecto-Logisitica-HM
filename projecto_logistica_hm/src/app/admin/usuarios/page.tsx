@@ -3,6 +3,7 @@ import { UsersService } from '@/services/users.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
+import { getAdminPrincipalEmail } from '@/lib/auth/admin-principal';
 import UsersTableClient from './UsersTableClient';
 import PageHeader from '@/components/PageHeader';
 
@@ -42,6 +43,7 @@ export default async function AdminUsuariosPage() {
           sucursales={sucursales}
           zonas={zonas}
           currentAdminId={profile.id}
+          adminPrincipalEmail={getAdminPrincipalEmail()}
         />
       </main>
     </div>

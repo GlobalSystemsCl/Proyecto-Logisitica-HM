@@ -13,6 +13,8 @@ import { UserRole } from '@/types/auth.types';
 import { DisponibilidadVehiculo } from '@/types/sucursal.types';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
+import { mensajeErrorUsuario } from '@/lib/errores';
+import { validarContenidoArchivo } from '@/lib/archivos';
 
 /**
  * Estados en los que el vehículo sigue RESERVADO (no puede moverse a otra
@@ -49,23 +51,15 @@ const ESTADOS_INSISTIBLES = [
   'calendarizada',
 ];
 
+/** Respuesta cuando otro usuario cambió la solicitud entre la lectura y la escritura. */
+export const MENSAJE_CONFLICTO_ESTADO =
+  'La solicitud cambió de estado mientras realizabas la acción. Recarga la página e inténtalo de nuevo.';
+
 /** Cooldown para la insistencia del Ejecutivo: 24 horas. */
 export const COOLDOWN_INSISTENCIA_HORAS = 24;
 
 const BUCKET_DOCUMENTOS = 'solicitud-documentos';
 const MAX_TAMANO_DOCUMENTO = 10 * 1024 * 1024;
-const MIMES_DOCUMENTOS = new Set([
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain',
-  'text/csv',
-  'application/zip',
-]);
 
 interface SolicitudRawRow {
   id: string;
@@ -481,9 +475,26 @@ export class SolicitudesService {
     if (zonaIds.length === 0) return [];
 
     const admin = createAdminClient();
+
+    // Brecha 024: el filtro por zona se hace en la BD (antes se traían todas
+    // las solicitudes y se filtraban en memoria).
+    const { data: sucursales, error: sucError } = await admin
+      .from('sucursal')
+      .select('id')
+      .in('zona_id', zonaIds);
+
+    if (sucError) {
+      console.error('Error al obtener las sucursales de las zonas:', sucError);
+      return [];
+    }
+
+    const sucursalIds = ((sucursales || []) as Array<{ id: number }>).map((s) => s.id);
+    if (sucursalIds.length === 0) return [];
+
     const { data, error } = await admin
       .from('solicitud')
       .select(SOLICITUD_SELECT)
+      .in('sucursal', sucursalIds)
       .order('fecha_creacion', { ascending: false });
 
     if (error) {
@@ -491,10 +502,7 @@ export class SolicitudesService {
       return [];
     }
 
-    const zonaSet = new Set<number>(zonaIds);
-    return ((data || []) as unknown as SolicitudRawRow[])
-      .map(mapRow)
-      .filter((s) => s.sucursal_zona_id !== null && zonaSet.has(s.sucursal_zona_id));
+    return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
   }
 
   static async getVehiculosInventario(): Promise<VehiculoInventario[]> {
@@ -558,7 +566,7 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('solicitud')
-        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, tipo_solicitud, posicion_prioridad, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_inicio_transito')
+        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, logistica_id, tipo_solicitud, posicion_prioridad, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_inicio_transito')
         .eq('id', id)
         .maybeSingle();
 
@@ -636,7 +644,7 @@ export class SolicitudesService {
       if (reservasError) {
         return {
           success: false,
-          error: `No se pudo verificar la disponibilidad de los vehículos: ${reservasError.message}`,
+          error: mensajeErrorUsuario(reservasError, 'No se pudo verificar la disponibilidad de los vehículos.'),
         };
       }
 
@@ -654,7 +662,7 @@ export class SolicitudesService {
         .single();
 
       if (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       }
 
       const solicitudId = (data as unknown as { id: string }).id;
@@ -671,7 +679,7 @@ export class SolicitudesService {
         await admin.from('solicitud').delete().eq('id', solicitudId);
         return {
           success: false,
-          error: `No se pudo reservar los vehículos: ${svError.message}`,
+          error: mensajeErrorUsuario(svError, 'No se pudo reservar los vehículos.'),
         };
       }
 
@@ -707,8 +715,7 @@ export class SolicitudesService {
       const solicitud = await this.getSolicitudCompleta(solicitudId);
       return { success: true, solicitud: solicitud || undefined };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al crear la solicitud';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al crear la solicitud') };
     }
   }
 
@@ -750,12 +757,8 @@ export class SolicitudesService {
         siguiente = (items[items.length - 1]?.posicion_prioridad ?? 0) + 1;
       }
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({ estado: 'priorizada', posicion_prioridad: siguiente })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'priorizada', posicion_prioridad: siguiente });
+      if (errEstado) return { success: false, error: errEstado };
 
       await this.registrarAuditoria(
         userId,
@@ -768,8 +771,7 @@ export class SolicitudesService {
 
       return { success: true, posicion: siguiente };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al priorizar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al priorizar') };
     }
   }
 
@@ -792,23 +794,37 @@ export class SolicitudesService {
 
       const { data: filas, error: selError } = await admin
         .from('solicitud')
-        .select('id, estado')
+        .select('id, estado, sucursal')
         .in('id', orden);
 
-      if (selError) return { success: false, error: selError.message };
+      if (selError) return { success: false, error: mensajeErrorUsuario(selError, 'No se pudo completar la operación.') };
 
       if (!filas || filas.length !== orden.length) {
         return { success: false, error: 'Algunas solicitudes del orden no existen.' };
       }
 
-      const mapeo = new Map<string, string>((filas as Array<{ id: string; estado: string }>).map((f) => [f.id, f.estado]));
+      const filasTipadas = filas as Array<{ id: string; estado: string; sucursal: number }>;
+      const mapeo = new Map<string, string>(filasTipadas.map((f) => [f.id, f.estado]));
       for (const id of orden) {
         if (mapeo.get(id) !== 'priorizada') {
           return { success: false, error: 'Solo solicitudes priorizadas pueden reordenarse en la cola.' };
         }
       }
 
+      // Brecha 008: todas las solicitudes deben ser de la sucursal indicada.
+      if (filasTipadas.some((f) => f.sucursal !== sucursalId)) {
+        return { success: false, error: 'Solo puedes reordenar solicitudes de la cola de esta sucursal.' };
+      }
+
+      // El orden debe contener exactamente la cola actual (sin omitir ni agregar).
       const ant = await this.getColaPriorizada(sucursalId);
+      const colaActual = new Set(ant.map((c) => c.id));
+      if (colaActual.size !== orden.length || orden.some((id) => !colaActual.has(id))) {
+        return {
+          success: false,
+          error: 'La cola cambió mientras la ordenabas. Recarga la página e inténtalo de nuevo.',
+        };
+      }
 
       const err = await SolicitudesService.reescribirCola(
         admin,
@@ -817,19 +833,26 @@ export class SolicitudesService {
       );
       if (err) return { success: false, error: err };
 
-      await this.registrarAuditoria(
-        userId,
-        'solicitud_cola',
-        `sucursal_${sucursalId}`,
-        'reorden_cola',
-        ant,
-        orden.map((id) => ({ id, posicion_prioridad: orden.indexOf(id) + 1 }))
-      );
+      // Brecha 018: auditoria.entidad_id es uuid. Antes se usaba
+      // `sucursal_<id>` y el insert fallaba siempre en silencio. Ahora se
+      // registra un movimiento por cada solicitud que cambió de posición.
+      const posicionAnterior = new Map(ant.map((c) => [c.id, c.posicion_prioridad]));
+      for (const [i, id] of orden.entries()) {
+        const anterior = posicionAnterior.get(id) ?? null;
+        if (anterior === i + 1) continue;
+        await this.registrarAuditoria(
+          userId,
+          'solicitud',
+          id,
+          'reorden_cola',
+          { posicion_prioridad: anterior },
+          { posicion_prioridad: i + 1, sucursal: sucursalId }
+        );
+      }
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al reordenar la cola';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al reordenar la cola') };
     }
   }
 
@@ -866,11 +889,8 @@ export class SolicitudesService {
       nuevoOrden.splice(posicion - 1, 0, id);
 
       // Marcar el nuevo item como priorizada (la posición la asigna la reescritura)
-      const { error: eEstado } = await admin
-        .from('solicitud')
-        .update({ estado: 'priorizada' })
-        .eq('id', id);
-      if (eEstado) return { success: false, error: eEstado.message };
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'priorizada' });
+      if (errEstado) return { success: false, error: errEstado };
 
       const errReesc = await SolicitudesService.reescribirCola(
         admin,
@@ -890,8 +910,7 @@ export class SolicitudesService {
 
       return { success: true, posicion };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al priorizar en posición';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al priorizar en posición') };
     }
   }
 
@@ -908,12 +927,8 @@ export class SolicitudesService {
         return { success: false, error: 'Solo las solicitudes priorizadas pueden salir de la cola.' };
       }
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({ estado: 'aprobada', posicion_prioridad: null })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'aprobada', posicion_prioridad: null });
+      if (errEstado) return { success: false, error: errEstado };
 
       const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
       if (errReesc) return { success: false, error: errReesc };
@@ -929,8 +944,63 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al sacar de la cola';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al sacar de la cola') };
+    }
+  }
+
+  /**
+   * Brecha 010: aplica el cambio solo si la solicitud sigue en `estadoEsperado`
+   * (el estado leído y validado antes). Si otro usuario la cambió entretanto,
+   * PostgREST devuelve 0 filas y se informa un conflicto en lugar de aplicar
+   * una transición sobre un estado distinto.
+   */
+  private static async actualizarSiEstado(
+    admin: ReturnType<typeof createAdminClient>,
+    id: string,
+    estadoEsperado: string,
+    cambios: Record<string, unknown>
+  ): Promise<string | null> {
+    const { data, error } = await admin
+      .from('solicitud')
+      .update(cambios)
+      .eq('id', id)
+      .eq('estado', estadoEsperado)
+      .select('id');
+
+    if (error) return mensajeErrorUsuario(error, 'No se pudo actualizar la solicitud.');
+    if (Array.isArray(data) && data.length === 0) return MENSAJE_CONFLICTO_ESTADO;
+    return null;
+  }
+
+  /** Solicitud a la que pertenece un documento (para los guards de acceso). */
+  static async getSolicitudIdDeDocumento(documentoId: string): Promise<string | null> {
+    try {
+      const admin = createAdminClient();
+      const { data } = await admin
+        .from('solicitud_documento')
+        .select('solicitud_id')
+        .eq('id', documentoId)
+        .maybeSingle();
+      return (data as { solicitud_id: string } | null)?.solicitud_id ?? null;
+    } catch (err) {
+      console.error('Error en getSolicitudIdDeDocumento:', err);
+      return null;
+    }
+  }
+
+  /** Solicitud a la que pertenece una reserva solicitud_vehiculo. */
+  static async getSolicitudIdDeReserva(solicitudVehiculoId: string): Promise<string | null> {
+    try {
+      const admin = createAdminClient();
+      const { data } = await admin
+        .from('solicitud_vehiculo')
+        .select('solicitud_id')
+        .eq('id', solicitudVehiculoId)
+        .maybeSingle();
+      return (data as { solicitud_id: string } | null)?.solicitud_id ?? null;
+    } catch (err) {
+      console.error('Error en getSolicitudIdDeReserva:', err);
+      return null;
     }
   }
 
@@ -968,14 +1038,14 @@ export class SolicitudesService {
       .from('solicitud')
       .update({ posicion_prioridad: null })
       .in('id', ids);
-    if (eNull) return eNull.message;
+    if (eNull) return mensajeErrorUsuario(eNull, 'No se pudo actualizar la cola de prioridades.');
 
     for (const p of posiciones) {
       const { error: ePos } = await admin
         .from('solicitud')
         .update({ posicion_prioridad: p.pos })
         .eq('id', p.id);
-      if (ePos) return ePos.message;
+      if (ePos) return mensajeErrorUsuario(ePos, 'No se pudo actualizar la cola de prioridades.');
     }
     return null;
   }
@@ -991,7 +1061,7 @@ export class SolicitudesService {
       .eq('sucursal', sucursalId)
       .neq('estado', 'priorizada')
       .not('posicion_prioridad', 'is', null);
-    if (eJunk) return eJunk.message;
+    if (eJunk) return mensajeErrorUsuario(eJunk, 'No se pudo actualizar la cola de prioridades.');
 
     const cola = await SolicitudesService.getColaPriorizada(sucursalId);
     if (cola.length === 0) return null;
@@ -1013,12 +1083,12 @@ export class SolicitudesService {
         };
       }
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({ estado: 'cancelada', motivo_cancelacion: motivo.trim(), posicion_prioridad: null })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
+        estado: 'cancelada',
+        motivo_cancelacion: motivo.trim(),
+        posicion_prioridad: null,
+      });
+      if (errEstado) return { success: false, error: errEstado };
 
       if (actual.posicion_prioridad !== null) {
         const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
@@ -1028,12 +1098,11 @@ export class SolicitudesService {
       await this.registrarAuditoria(userId, 'solicitud', id, 'CAMBIO_ESTADO', { estado: actual.estado }, { estado: 'cancelada', motivo: motivo.trim() });
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al cancelar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al cancelar') };
     }
   }
 
-  static async eliminarSolicitud(id: string): Promise<{ success: boolean; error?: string }> {
+  static async eliminarSolicitud(id: string, userId?: string): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
@@ -1049,7 +1118,16 @@ export class SolicitudesService {
       }
 
       const { error } = await admin.from('solicitud').delete().eq('id', id);
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
+
+      // Brecha 018: la eliminación física también queda auditada.
+      if (userId) {
+        await this.registrarAuditoria(userId, 'solicitud', id, 'eliminacion', {
+          estado: actual.estado,
+          sucursal: actual.sucursal,
+          ejecutivo_id: actual.ejecutivo_id,
+        }, null);
+      }
 
       if (actual.posicion_prioridad !== null) {
         const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
@@ -1058,8 +1136,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al eliminar') };
     }
   }
 
@@ -1090,22 +1167,17 @@ export class SolicitudesService {
 
       const ahora = new Date().toISOString();
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'aprobada',
           fecha_limite: fechaEntrega,
           fecha_confirmacion: ahora,
-        })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+        });
+      if (errEstado) return { success: false, error: errEstado };
 
       await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada', fecha_entrega: fechaEntrega, fecha_confirmacion: ahora });
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al aprobar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al aprobar') };
     }
   }
 
@@ -1126,12 +1198,8 @@ export class SolicitudesService {
         return { success: false, error: 'El motivo de rechazo debe tener al menos 5 caracteres.' };
       }
 
-      const { error: updateError } = await admin
-        .from('solicitud')
-        .update({ estado: 'rechazada' })
-        .eq('id', id);
-
-      if (updateError) return { success: false, error: updateError.message };
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'rechazada' });
+      if (errEstado) return { success: false, error: errEstado };
 
       const { error: obsError } = await admin.from('observacion').insert({
         solicitud_id: id,
@@ -1146,8 +1214,7 @@ export class SolicitudesService {
       await this.registrarAuditoria(userId, 'solicitud', id, 'rechazo', { estado: actual.estado }, { estado: 'rechazada', motivo: motivo.trim() });
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al rechazar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al rechazar') };
     }
   }
 
@@ -1169,11 +1236,10 @@ export class SolicitudesService {
         observacion: texto.trim(),
       });
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al agregar observación';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al agregar observación') };
     }
   }
 
@@ -1265,9 +1331,9 @@ export class SolicitudesService {
         if (a.tamano > MAX_TAMANO_DOCUMENTO) {
           return { success: false, error: `El archivo "${a.nombre}" supera el máximo de 10 MB.` };
         }
-        if (!MIMES_DOCUMENTOS.has(a.tipo)) {
-          return { success: false, error: `El tipo del archivo "${a.nombre}" no está permitido.` };
-        }
+        // Brecha 023: MIME declarado, extensión y contenido real deben coincidir.
+        const errorContenido = validarContenidoArchivo(a.nombre, a.tipo, a.buffer);
+        if (errorContenido) return { success: false, error: errorContenido };
       }
 
       const subidos: string[] = [];
@@ -1280,7 +1346,7 @@ export class SolicitudesService {
             contentType: a.tipo,
             upsert: false,
           });
-          if (eSub) throw new Error(eSub.message);
+          if (eSub) throw eSub;
           subidos.push(ruta);
 
           const { error: eRow } = await admin.from('solicitud_documento').insert({
@@ -1291,7 +1357,7 @@ export class SolicitudesService {
             ruta_storage: ruta,
             subido_por: usuarioId,
           });
-          if (eRow) throw new Error(eRow.message);
+          if (eRow) throw eRow;
 
           await this.registrarAuditoria(usuarioId, 'solicitud', solicitudId, 'subir_documento', null, {
             nombre_archivo: a.nombre,
@@ -1303,12 +1369,10 @@ export class SolicitudesService {
         if (subidos.length) {
           await admin.storage.from(BUCKET_DOCUMENTOS).remove(subidos);
         }
-        const msg = err instanceof Error ? err.message : 'Error al subir los documentos';
-        return { success: false, error: msg };
+        return { success: false, error: mensajeErrorUsuario(err, 'Error al subir los documentos') };
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al subir documentos';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al subir documentos') };
     }
   }
 
@@ -1369,10 +1433,10 @@ export class SolicitudesService {
       }
 
       const { error: eRem } = await admin.storage.from(BUCKET_DOCUMENTOS).remove([doc.ruta_storage]);
-      if (eRem) return { success: false, error: eRem.message };
+      if (eRem) return { success: false, error: mensajeErrorUsuario(eRem, 'No se pudo completar la operación.') };
 
       const { error: eDel } = await admin.from('solicitud_documento').delete().eq('id', documentoId);
-      if (eDel) return { success: false, error: eDel.message };
+      if (eDel) return { success: false, error: mensajeErrorUsuario(eDel, 'No se pudo completar la operación.') };
 
       await this.registrarAuditoria(usuarioId, 'solicitud', doc.solicitud_id, 'eliminar_documento', {
         id: doc.id,
@@ -1381,8 +1445,7 @@ export class SolicitudesService {
       }, null);
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar el documento';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al eliminar el documento') };
     }
   }
 
@@ -1393,22 +1456,23 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const { data: doc, error: eDoc } = await admin
         .from('solicitud_documento')
-        .select('ruta_storage')
+        .select('ruta_storage, nombre_archivo')
         .eq('id', documentoId)
         .single();
       if (eDoc || !doc) return { success: false, error: 'El documento no existe.' };
 
+      // Brecha 023: forzar descarga como adjunto (Content-Disposition: attachment).
       const { data: sign, error: eSign } = await admin.storage
         .from(BUCKET_DOCUMENTOS)
-        .createSignedUrl(doc.ruta_storage, 300);
+        .createSignedUrl(doc.ruta_storage, 300, { download: doc.nombre_archivo || true });
       if (eSign || !sign?.signedUrl) {
-        return { success: false, error: eSign?.message || 'No se pudo generar el enlace de descarga.' };
+        if (eSign) console.error('Error al firmar la descarga:', eSign);
+        return { success: false, error: 'No se pudo generar el enlace de descarga.' };
       }
 
       return { success: true, url: sign.signedUrl };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al generar la descarga';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al generar la descarga') };
     }
   }
 
@@ -1546,7 +1610,7 @@ export class SolicitudesService {
         .select('id')
         .single();
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
 
       await this.registrarAuditoria(
         usuarioId,
@@ -1558,8 +1622,7 @@ export class SolicitudesService {
       );
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al reservar vehículo';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al reservar vehículo') };
     }
   }
 
@@ -1595,7 +1658,7 @@ export class SolicitudesService {
       }
 
       const { error } = await admin.from('solicitud_vehiculo').delete().eq('id', solicitudVehiculoId);
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
 
       await this.registrarAuditoria(
         usuarioId,
@@ -1607,15 +1670,15 @@ export class SolicitudesService {
       );
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al liberar vehículo';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al liberar vehículo') };
     }
   }
 
   static async calendarizarSolicitud(
     id: string,
     fechaDespacho: string,
-    usuarioId: string
+    usuarioId: string,
+    rolActor?: UserRole
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
@@ -1636,18 +1699,16 @@ export class SolicitudesService {
         return { success: false, error: 'No puedes programar el traslado en una fecha anterior a hoy.' };
       }
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'calendarizada',
           fecha_tentativa_despacho: fechaDespacho,
-          logistica_id: usuarioId,
+          // Brecha 008: se conserva el encargado ya asignado y un Jefe de Local
+          // no queda registrado como encargado de Logística.
+          logistica_id: actual.logistica_id ?? (rolActor === 'jefe_local' ? null : usuarioId),
           // Al calendarizar sale de la cola: libera el slot de prioridad
           posicion_prioridad: null,
-        })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+        });
+      if (errEstado) return { success: false, error: errEstado };
 
       // Compactar la cola restante (1..N) al liberarse el slot
       const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
@@ -1668,8 +1729,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al calendarizar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al calendarizar') };
     }
   }
 
@@ -1690,17 +1750,13 @@ export class SolicitudesService {
       const cola = await this.getColaPriorizada(actual.sucursal);
       const siguiente = (cola[cola.length - 1]?.posicion_prioridad ?? 0) + 1;
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'priorizada',
           posicion_prioridad: siguiente,
           fecha_tentativa_despacho: null,
           logistica_id: null,
-        })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+        });
+      if (errEstado) return { success: false, error: errEstado };
 
       await this.registrarAuditoria(
         usuarioId,
@@ -1713,8 +1769,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al descalendarizar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al descalendarizar') };
     }
   }
 
@@ -1739,18 +1794,14 @@ export class SolicitudesService {
 
       const ahora = new Date().toISOString();
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'en_transito',
           fecha_despacho: ahora,
           fecha_inicio_transito: ahora,
           // Libera el slot de la cola: en tránsito ya no compite por prioridad
           posicion_prioridad: null,
-        })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+        });
+      if (errEstado) return { success: false, error: errEstado };
 
       // Compactar la cola restante (1..N) al liberarse el slot
       const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
@@ -1767,8 +1818,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al despachar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al despachar') };
     }
   }
 
@@ -1786,16 +1836,12 @@ export class SolicitudesService {
         return { success: false, error: 'Solo las solicitudes En Tránsito pueden volver a Calendarizadas.' };
       }
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'calendarizada',
           fecha_despacho: null,
           posicion_prioridad: null,
-        })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+        });
+      if (errEstado) return { success: false, error: errEstado };
 
       await this.registrarAuditoria(
         usuarioId,
@@ -1808,8 +1854,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al cancelar el despacho';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al cancelar el despacho') };
     }
   }
 
@@ -1849,17 +1894,13 @@ export class SolicitudesService {
 
       const ahora = new Date().toISOString();
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'entregada',
           fecha_entrega: ahora,
           fecha_recepcion: ahora,
           posicion_prioridad: null,
-        })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+        });
+      if (errEstado) return { success: false, error: errEstado };
 
       await this.registrarAuditoria(
         usuarioId,
@@ -1872,8 +1913,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al recibir';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al recibir') };
     }
   }
 
@@ -1906,16 +1946,12 @@ export class SolicitudesService {
         }
       }
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'finalizada',
           fecha_entrega_cliente: new Date().toISOString(),
           posicion_prioridad: null,
-        })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+        });
+      if (errEstado) return { success: false, error: errEstado };
 
       await this.registrarAuditoria(
         usuarioId,
@@ -1928,8 +1964,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al finalizar';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al finalizar') };
     }
   }
 
@@ -1978,12 +2013,8 @@ export class SolicitudesService {
         return { success: false, error: 'El encargado indicado está inactivo.' };
       }
 
-      const { error } = await admin
-        .from('solicitud')
-        .update({ estado: 'asignada', logistica_id: logisticaId })
-        .eq('id', id);
-
-      if (error) return { success: false, error: error.message };
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'asignada', logistica_id: logisticaId });
+      if (errEstado) return { success: false, error: errEstado };
 
       await this.registrarAuditoria(
         usuarioId ?? logisticaId,
@@ -1996,8 +2027,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al asignar el encargado';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al asignar el encargado') };
     }
   }
 
@@ -2055,7 +2085,7 @@ export class SolicitudesService {
         mensaje: texto && texto.length > 0 ? texto : null,
       });
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
 
       await admin.from('observacion').insert({
         solicitud_id: id,
@@ -2074,8 +2104,7 @@ export class SolicitudesService {
 
       return { success: true, proxima_insistencia_en_h: COOLDOWN_INSISTENCIA_HORAS };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al insistir';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al insistir') };
     }
   }
 

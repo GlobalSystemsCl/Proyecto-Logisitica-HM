@@ -185,7 +185,9 @@ describe('VehiculoService', () => {
       ];
       const res = await VehiculoService.createVehiculo(inputBase());
       expect(res.success).toBe(false);
-      expect(res.error).toBe('Error al crear el vehículo: violación de FK');
+      // Brecha 020: el detalle de la BD no llega al usuario.
+      expect(res.error).toMatch(/^Error al crear el vehículo\. \(código de soporte [A-Z0-9]+\)$/);
+      expect(res.error).not.toContain('violación de FK');
     });
 
     it('should_return_error_when_supabase_throws', async () => {
@@ -195,7 +197,8 @@ describe('VehiculoService', () => {
       const res = await VehiculoService.createVehiculo(inputBase());
       spy.mockRestore();
       expect(res.success).toBe(false);
-      expect(res.error).toBe('conexión caída');
+      expect(res.error).toMatch(/^Error inesperado/);
+      expect(res.error).not.toContain('conexión caída');
     });
   });
 
@@ -316,7 +319,8 @@ describe('VehiculoService', () => {
       admin.results.vehiculo = [{ data: null, error: { message: 'no existe' } }];
       const res = await VehiculoService.updateVehiculo('veh-1', { marca: 'Kia' });
       expect(res.success).toBe(false);
-      expect(res.error).toBe('Error al actualizar: no existe');
+      expect(res.error).toMatch(/^Error al actualizar el vehículo\./);
+      expect(res.error).not.toContain('no existe');
     });
   });
 
@@ -347,7 +351,8 @@ describe('VehiculoService', () => {
       admin.results.vehiculo = [{ data: null, error: { message: 'FK violation' } }];
       const res = await VehiculoService.deleteVehiculo('veh-1');
       expect(res.success).toBe(false);
-      expect(res.error).toBe('Error al eliminar: FK violation');
+      expect(res.error).toMatch(/^Error al eliminar el vehículo\./);
+      expect(res.error).not.toContain('FK violation');
     });
   });
 

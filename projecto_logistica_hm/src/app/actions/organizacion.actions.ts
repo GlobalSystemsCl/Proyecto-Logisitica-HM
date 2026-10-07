@@ -1,15 +1,14 @@
 'use server';
 
-import { AuthService } from '@/services/auth.service';
+import { requireProfile, requireRole } from '@/lib/auth/guards';
+import { mensajeErrorUsuario } from '@/lib/errores';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { CreateMarcaInput, UpdateMarcaInput } from '@/types/vehiculo.types';
 import { revalidatePath } from 'next/cache';
 
 async function verifyAdminPermission() {
-  const profile = await AuthService.getCurrentUserProfile();
-  if (!profile || profile.rol !== 'administrador' || !profile.activo) {
-    throw new Error('Acceso no autorizado. Se requieren permisos de Administrador.');
-  }
+  const profile = await requireProfile();
+  requireRole(profile, ['administrador'], 'Acceso no autorizado. Se requieren permisos de Administrador.');
   return profile;
 }
 
@@ -28,7 +27,7 @@ export async function createZonaAction(nombre: string) {
     revalidatePath('/admin/zonas');
     return { success: true, message: `Zona "${nombre.trim()}" creada exitosamente.` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -44,7 +43,7 @@ export async function updateZonaAction(id: number, nombre: string) {
     revalidatePath('/admin/zonas');
     return { success: true, message: `Zona "${nombre.trim()}" actualizada exitosamente.` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -60,7 +59,7 @@ export async function deleteZonaAction(id: number) {
     revalidatePath('/admin/zonas');
     return { success: true, message: 'Zona eliminada exitosamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -79,7 +78,7 @@ export async function createMarcaAction(input: CreateMarcaInput) {
     revalidatePath('/admin/marcas');
     return { success: true, message: `Marca "${input.nombre.trim()}" creada exitosamente.` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -94,7 +93,7 @@ export async function updateMarcaAction(id: number, input: UpdateMarcaInput) {
     revalidatePath('/admin/marcas');
     return { success: true, message: 'Marca actualizada exitosamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -109,7 +108,7 @@ export async function deleteMarcaAction(id: number) {
     revalidatePath('/admin/marcas');
     return { success: true, message: 'Marca eliminada exitosamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }

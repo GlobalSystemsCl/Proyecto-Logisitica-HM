@@ -6,6 +6,8 @@ import {
   UpdateSucursalInput,
   VehiculoAsociado,
 } from '@/types/sucursal.types';
+import { mensajeErrorUsuario } from '@/lib/errores';
+import { escaparPatronLike } from '@/lib/busqueda';
 
 interface SolicitudRawRow {
   id: string;
@@ -158,7 +160,7 @@ export class SucursalesService {
       const { data: existing } = await admin
         .from('sucursal')
         .select('id, nombre')
-        .ilike('nombre', input.nombre.trim());
+        .ilike('nombre', escaparPatronLike(input.nombre.trim()));
 
       if (existing && existing.length > 0) {
         return {
@@ -179,12 +181,12 @@ export class SucursalesService {
         .single();
 
       if (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       }
 
       return { success: true, sucursal: data as Sucursal };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al crear la sucursal';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al crear la sucursal');
       return { success: false, error: msg };
     }
   }
@@ -201,7 +203,7 @@ export class SucursalesService {
         const { data: existing } = await admin
           .from('sucursal')
           .select('id')
-          .ilike('nombre', input.nombre.trim())
+          .ilike('nombre', escaparPatronLike(input.nombre.trim()))
           .neq('id', id);
 
         if (existing && existing.length > 0) {
@@ -226,59 +228,82 @@ export class SucursalesService {
         .single();
 
       if (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       }
 
       return { success: true, sucursal: data as Sucursal };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al actualizar la sucursal';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al actualizar la sucursal');
       return { success: false, error: msg };
     }
   }
 
+  /**
+   * Elimina una sucursal solo si nada depende de ella (brecha 016).
+   *
+   * Antes la FK `solicitud.sucursal` era ON DELETE CASCADE: borrar la sucursal
+   * borraba sus solicitudes (incluidas ventas finalizadas), observaciones,
+   * reservas y metadatos de documentos, y dejaba archivos huérfanos en Storage.
+   * Ahora la FK es RESTRICT y aquí se valida antes cada dependencia para dar un
+   * mensaje claro.
+   */
   static async deleteSucursal(id: number): Promise<{
     success: boolean;
-    solicitudesEliminadas?: number;
     error?: string;
   }> {
     try {
       const admin = createAdminClient();
 
-      const { count: usuariosAsignados, error: usuariosError } = await admin
+      const dependencias: Array<{ cantidad: number | null; mensaje: string }> = [];
+
+      const { count: usuarios, error: eUsuarios } = await admin
         .from('usuario')
         .select('id', { count: 'exact', head: true })
         .eq('sucursal_id', id);
+      if (eUsuarios) return { success: false, error: mensajeErrorUsuario(eUsuarios, 'No se pudo verificar la sucursal.') };
+      dependencias.push({ cantidad: usuarios, mensaje: 'usuario(s) con esta sucursal asignada' });
 
-      if (usuariosError) {
-        return { success: false, error: usuariosError.message };
-      }
-
-      if ((usuariosAsignados || 0) > 0) {
-        return {
-          success: false,
-          error: `No se puede eliminar: hay ${usuariosAsignados} usuario(s) con esta sucursal asignada. Reasígnalos primero desde Gestión de Usuarios.`,
-        };
-      }
-
-      const { count: solicitudes, error: solicitudesError } = await admin
+      const { count: solicitudes, error: eSolicitudes } = await admin
         .from('solicitud')
         .select('id', { count: 'exact', head: true })
-        .eq('sucursal', id);
+        .or(`sucursal.eq.${id},sucursal_destino.eq.${id}`);
+      if (eSolicitudes) return { success: false, error: mensajeErrorUsuario(eSolicitudes, 'No se pudo verificar la sucursal.') };
+      dependencias.push({ cantidad: solicitudes, mensaje: 'solicitud(es) de origen o destino' });
 
-      if (solicitudesError) {
-        return { success: false, error: solicitudesError.message };
+      const { count: vehiculos, error: eVehiculos } = await admin
+        .from('vehiculo')
+        .select('id', { count: 'exact', head: true })
+        .eq('ubicacion', id);
+      if (eVehiculos) return { success: false, error: mensajeErrorUsuario(eVehiculos, 'No se pudo verificar la sucursal.') };
+      dependencias.push({ cantidad: vehiculos, mensaje: 'vehículo(s) ubicados en ella' });
+
+      const { count: traslados, error: eTraslados } = await admin
+        .from('traslado_interno')
+        .select('id', { count: 'exact', head: true })
+        .or(`origen_id.eq.${id},destino_id.eq.${id}`);
+      if (eTraslados) return { success: false, error: mensajeErrorUsuario(eTraslados, 'No se pudo verificar la sucursal.') };
+      dependencias.push({ cantidad: traslados, mensaje: 'traslado(s) interno(s)' });
+
+      const bloqueos = dependencias
+        .filter((d) => (d.cantidad || 0) > 0)
+        .map((d) => `${d.cantidad} ${d.mensaje}`);
+
+      if (bloqueos.length > 0) {
+        return {
+          success: false,
+          error: `No se puede eliminar la sucursal: tiene ${bloqueos.join(', ')}. Reasigna o cierra esos registros primero.`,
+        };
       }
 
       const { error: deleteError } = await admin.from('sucursal').delete().eq('id', id);
 
       if (deleteError) {
-        return { success: false, error: deleteError.message };
+        return { success: false, error: mensajeErrorUsuario(deleteError, 'No se pudo eliminar la sucursal.') };
       }
 
-      return { success: true, solicitudesEliminadas: solicitudes || 0 };
+      return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar la sucursal';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al eliminar la sucursal') };
     }
   }
 }

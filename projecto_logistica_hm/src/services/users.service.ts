@@ -2,18 +2,35 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { CreateUserInput, UpdateUserInput, UserProfile, UsuarioDetalle, UsuarioSucursalAsignada, UsuarioZonaAsignada } from '@/types/auth.types';
 import { EmailService } from '@/services/email.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { randomInt } from 'crypto';
+import { validarCampoTexto, validarPassword } from '@/lib/validaciones';
+import { esAdminPrincipal } from '@/lib/auth/admin-principal';
+import { mensajeErrorUsuario } from '@/lib/errores';
 
 export class UsersService {
   /**
-   * Genera una contraseña provisoria segura de 10 caracteres
+   * Genera una contraseña provisoria de 16 caracteres con un generador
+   * criptográfico (brecha 013; antes: prefijo fijo + 7 caracteres con
+   * Math.random). Incluye siempre mayúscula, minúscula y número para cumplir
+   * la política de `validarPassword`.
    */
   static generateTempPassword(): string {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$';
-    let pass = 'HM-';
-    for (let i = 0; i < 7; i++) {
-      pass += chars.charAt(Math.floor(Math.random() * chars.length));
+    const mayusculas = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const minusculas = 'abcdefghijkmnpqrstuvwxyz';
+    const numeros = '23456789';
+    const simbolos = '!@#$%*-_';
+    const todos = mayusculas + minusculas + numeros + simbolos;
+    const elegir = (set: string) => set.charAt(randomInt(set.length));
+
+    const chars = [elegir(mayusculas), elegir(minusculas), elegir(numeros)];
+    while (chars.length < 16) chars.push(elegir(todos));
+
+    // Mezcla Fisher-Yates para que los obligatorios no queden al inicio.
+    for (let i = chars.length - 1; i > 0; i--) {
+      const j = randomInt(i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
     }
-    return pass;
+    return chars.join('');
   }
 
   /**
@@ -117,7 +134,18 @@ export class UsersService {
     try {
       const admin = createAdminClient();
       const cleanEmail = input.email.trim().toLowerCase();
-      const tempPassword = customPassword?.trim() || this.generateTempPassword();
+
+      const errorNombre =
+        validarCampoTexto(input.nombre, 'nombre', 100) || validarCampoTexto(input.apellido, 'apellido', 100);
+      if (errorNombre) return { success: false, error: errorNombre };
+
+      // Brecha 013: la contraseña elegida por el admin cumple la misma política.
+      const custom = customPassword?.trim();
+      if (custom) {
+        const errorPassword = validarPassword(custom);
+        if (errorPassword) return { success: false, error: errorPassword };
+      }
+      const tempPassword = custom || this.generateTempPassword();
 
       // 1. Verificar si ya existe en la base de datos
       const { data: existing } = await admin
@@ -138,19 +166,17 @@ export class UsersService {
         email: cleanEmail,
         password: tempPassword,
         email_confirm: true,
+        // Brecha 002: el rol no viaja en user_metadata; lo fija el upsert siguiente.
         user_metadata: {
           nombre: input.nombre.trim(),
           apellido: input.apellido.trim(),
-          rol: input.rol,
-          aprobado: true,
-          requiere_cambio_clave: true,
         },
       });
 
       if (createError) {
         return {
           success: false,
-          error: `Error al crear el usuario en Auth: ${createError.message}`,
+          error: mensajeErrorUsuario(createError, 'Error al crear el usuario.'),
         };
       }
 
@@ -181,7 +207,10 @@ export class UsersService {
         console.error('Error al insertar en public.usuario:', dbError);
         return {
           success: false,
-          error: `Usuario creado en Auth pero falló el registro en base de datos: ${dbError.message}`,
+          error: mensajeErrorUsuario(
+            dbError,
+            'El usuario se creó, pero no se pudo completar su perfil. Revísalo en la lista de usuarios.'
+          ),
         };
       }
 
@@ -200,14 +229,15 @@ export class UsersService {
         role: input.rol,
       });
 
+      // Brecha 013: la contraseña solo vuelve al navegador si el correo falló.
       return {
         success: true,
         user: userProfile as UserProfile,
-        tempPassword,
+        tempPassword: emailResult.success ? undefined : tempPassword,
         emailSent: emailResult.success,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al crear usuario';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al crear usuario');
       return { success: false, error: msg };
     }
   }
@@ -239,13 +269,10 @@ export class UsersService {
       // Actualizar en Supabase Auth
       const { error: authError } = await admin.auth.admin.updateUserById(userId, {
         password: tempPassword,
-        user_metadata: {
-          requiere_cambio_clave: true,
-        },
       });
 
       if (authError) {
-        return { success: false, error: authError.message };
+        return { success: false, error: mensajeErrorUsuario(authError, 'No se pudo completar la operación.') };
       }
 
       // Marcar en public.usuario que debe cambiar la clave al ingresar
@@ -259,7 +286,7 @@ export class UsersService {
         .eq('id', userId);
 
       if (dbError) {
-        return { success: false, error: dbError.message };
+        return { success: false, error: mensajeErrorUsuario(dbError, 'No se pudo completar la operación.') };
       }
 
       // Enviar correo con las nuevas credenciales vía Brevo
@@ -272,19 +299,19 @@ export class UsersService {
 
       return {
         success: true,
-        tempPassword,
+        tempPassword: emailResult.success ? undefined : tempPassword,
         emailSent: emailResult.success,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al resetear contraseña';
+      const msg = mensajeErrorUsuario(err, 'Error al resetear contraseña');
       return { success: false, error: msg };
     }
   }
 
   /**
    * Autoriza a un usuario autoregistrado para que pueda ingresar al sistema.
-   * Actualiza el perfil y los metadatos de auth (para que el middleware y el
-   * JWT de próximos logins queden marcados como aprobados).
+   * Lo marca aprobado y activo (brecha 003). El middleware y las funciones de
+   * RLS leen ese estado desde public.usuario, no desde user_metadata.
    */
   static async approveUser(userId: string): Promise<{
     success: boolean;
@@ -295,26 +322,25 @@ export class UsersService {
 
       const { data, error } = await admin
         .from('usuario')
-        .update({ aprobado: true })
+        .update({ aprobado: true, activo: true })
         .eq('id', userId)
         .select('id')
         .single();
 
       if (error || !data) {
-        return { success: false, error: error?.message || 'No se pudo autorizar al usuario.' };
+        return {
+          success: false,
+          error: error ? mensajeErrorUsuario(error, 'No se pudo autorizar al usuario.') : 'No se pudo autorizar al usuario.',
+        };
       }
 
-      const { error: authError } = await admin.auth.admin.updateUserById(userId, {
-        user_metadata: { aprobado: true },
-      });
-
-      if (authError) {
-        return { success: false, error: authError.message };
-      }
+      // Por si la cuenta tenía un bloqueo previo en Auth.
+      const { error: authError } = await admin.auth.admin.updateUserById(userId, { ban_duration: 'none' });
+      if (authError) console.error('No se pudo quitar el bloqueo en Auth al aprobar:', authError);
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al autorizar usuario';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al autorizar usuario');
       return { success: false, error: msg };
     }
   }
@@ -338,14 +364,21 @@ export class UsersService {
 
       const { data: targetUser } = await admin
         .from('usuario')
-        .select('email')
+        .select('email, aprobado')
         .eq('id', userId)
         .single();
 
-      if (targetUser?.email.toLowerCase() === 'maic.hernandez.dev@gmail.com' && !activo) {
+      if (esAdminPrincipal(targetUser?.email) && !activo) {
         return {
           success: false,
           error: 'La cuenta del Administrador Principal no puede ser desactivada.',
+        };
+      }
+
+      if (activo && targetUser?.aprobado === false) {
+        return {
+          success: false,
+          error: 'La cuenta aún no está autorizada. Usa la opción "Autorizar" para habilitarla.',
         };
       }
 
@@ -355,12 +388,22 @@ export class UsersService {
         .eq('id', userId);
 
       if (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
+      }
+
+      // Brecha 009: bloquear en Supabase Auth para que no pueda renovar la
+      // sesión ni operar contra Auth. El middleware ya corta el acceso a la app
+      // en el siguiente request; esto cubre el uso directo de la API de Auth.
+      const { error: banError } = await admin.auth.admin.updateUserById(userId, {
+        ban_duration: activo ? 'none' : '876000h',
+      });
+      if (banError) {
+        console.error('No se pudo actualizar el bloqueo en Auth:', banError);
       }
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al cambiar estado del usuario';
+      const msg = mensajeErrorUsuario(err, 'Error al cambiar estado del usuario');
       return { success: false, error: msg };
     }
   }
@@ -375,6 +418,11 @@ export class UsersService {
   }> {
     try {
       const admin = createAdminClient();
+
+      const errorNombre =
+        (input.nombre !== undefined && validarCampoTexto(input.nombre, 'nombre', 100)) ||
+        (input.apellido !== undefined && validarCampoTexto(input.apellido, 'apellido', 100));
+      if (errorNombre) return { success: false, error: errorNombre };
 
       const updateData: Partial<UserProfile> = {};
       if (input.nombre !== undefined) updateData.nombre = input.nombre.trim();
@@ -393,14 +441,13 @@ export class UsersService {
         .single();
 
       if (error) {
-        return { success: false, error: error.message };
+        return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       }
 
       await admin.auth.admin.updateUserById(userId, {
         user_metadata: {
           nombre: updateData.nombre,
           apellido: updateData.apellido,
-          rol: updateData.rol,
         },
       });
 
@@ -440,7 +487,7 @@ export class UsersService {
 
       return { success: true, user: data as UserProfile };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al actualizar usuario';
+      const msg = mensajeErrorUsuario(err, 'Error al actualizar usuario');
       return { success: false, error: msg };
     }
   }

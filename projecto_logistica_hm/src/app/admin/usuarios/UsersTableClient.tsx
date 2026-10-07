@@ -28,6 +28,8 @@ interface Props {
   users: UserProfile[];
   sucursales: Sucursal[];
   zonas: Zona[];
+  /** Correo del administrador principal (ADMIN_PRINCIPAL_EMAIL), o null si no está configurado. */
+  adminPrincipalEmail: string | null;
   currentAdminId: string;
 }
 
@@ -101,7 +103,9 @@ function MultiCheckSelector({
   );
 }
 
-export default function UsersTableClient({ users, sucursales, zonas, currentAdminId }: Props) {
+export default function UsersTableClient({ users, sucursales, zonas, currentAdminId, adminPrincipalEmail }: Props) {
+  const esAdminPrincipal = (email: string) =>
+    adminPrincipalEmail !== null && email.toLowerCase() === adminPrincipalEmail;
   const [isHydrated, setIsHydrated] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('todos');
@@ -210,7 +214,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   };
 
   const handleToggleStatus = (userId: string, currentStatus: boolean, email: string) => {
-    if (email.toLowerCase() === 'maic.hernandez.dev@gmail.com' && currentStatus) {
+    if (esAdminPrincipal(email) && currentStatus) {
       alert('La cuenta del Administrador Principal no puede ser desactivada.');
       return;
     }
@@ -541,7 +545,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                     label: user.rol,
                     color: 'bg-neutral-100 text-neutral-700 border-neutral-200',
                   };
-                  const isMainAdmin = user.email.toLowerCase() === 'maic.hernandez.dev@gmail.com';
+                  const isMainAdmin = esAdminPrincipal(user.email);
 
                   return (
                     <tr

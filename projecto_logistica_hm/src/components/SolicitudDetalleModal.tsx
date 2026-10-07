@@ -264,7 +264,7 @@ export default function SolicitudDetalleModal({
       const [obs, audit, detalleResp, docs] = await Promise.all([
         getObservacionesAction(solicitud.id),
         getAuditoriaAction(solicitud.id),
-        responsableId ? getUsuarioDetalleAction(responsableId) : Promise.resolve(null),
+        responsableId ? getUsuarioDetalleAction(responsableId, solicitud.id) : Promise.resolve(null),
         getDocumentosSolicitudAction(solicitud.id),
       ]);
       if (!cancelled) {

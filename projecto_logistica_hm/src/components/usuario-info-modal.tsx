@@ -194,7 +194,7 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
                 </span>
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Teléfono</p>
-                  <p className="text-sm font-semibold text-neutral-900">{data.telefono || 'Sin registrar'}</p>
+                  <p className="text-sm font-semibold text-neutral-900">{data.contacto_oculto ? 'No disponible' : data.telefono || 'Sin registrar'}</p>
                 </div>
               </div>
               <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 flex items-center gap-3">
@@ -203,7 +203,7 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
                 </span>
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Correo electrónico</p>
-                  <p className="text-sm font-semibold text-neutral-900 break-all">{data.email}</p>
+                  <p className="text-sm font-semibold text-neutral-900 break-all">{data.contacto_oculto ? 'No disponible' : data.email}</p>
                 </div>
               </div>
               <div className="bg-neutral-50 border border-neutral-200 rounded-xl px-4 py-3 flex items-center gap-3">

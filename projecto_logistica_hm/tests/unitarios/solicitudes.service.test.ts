@@ -95,7 +95,7 @@ function archivo(overrides: Record<string, unknown> = {}) {
     nombre: 'documento.pdf',
     tipo: 'application/pdf',
     tamano: 1024,
-    buffer: new ArrayBuffer(8),
+    buffer: new TextEncoder().encode('%PDF-1.7 prueba').buffer,
     ...overrides,
   };
 }
@@ -529,7 +529,8 @@ describe('SolicitudesService.createSolicitud', () => {
     admin.results.solicitud_vehiculo = [errorResult('sin conexión')];
     const res = await SolicitudesService.createSolicitud({ sucursal: 1, tipo_solicitud: 'venta' }, ['v-1'], USUARIO_ID);
     expect(res.success).toBe(false);
-    expect(res.error).toMatch(/No se pudo verificar la disponibilidad de los vehículos: sin conexión/);
+    expect(res.error).toMatch(/^No se pudo verificar la disponibilidad de los vehículos\./);
+    expect(res.error).not.toContain('sin conexión');
   });
 
   it('should_revertir_solicitud_si_falla_la_reserva_de_vehiculos', async () => {
@@ -545,7 +546,8 @@ describe('SolicitudesService.createSolicitud', () => {
       USUARIO_ID
     );
     expect(res.success).toBe(false);
-    expect(res.error).toMatch(/No se pudo reservar los vehículos: viola unique/);
+    expect(res.error).toMatch(/^No se pudo reservar los vehículos\./);
+    expect(res.error).not.toContain('viola unique');
     const del = admin.callsTo('solicitud').find((c) => c[0] === 'delete');
     expect(del).toBeDefined();
     expect(admin.callsTo('solicitud')).toContainEqual(['eq', 'id', 's-x']);
@@ -624,7 +626,9 @@ describe('SolicitudesService.priorizarSolicitud', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.solicitud = [fila(minimo()), fila([]), errorResult('boom')];
     const res = await SolicitudesService.priorizarSolicitud('s-1', USUARIO_ID);
-    expect(res).toEqual({ success: false, error: 'boom' });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/código de soporte/);
+    expect(res.error).not.toContain('boom');
   });
 });
 
@@ -672,8 +676,8 @@ describe('SolicitudesService.reordenarCola', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.solicitud = [
       fila([
-        { id: 'a', estado: 'priorizada' },
-        { id: 'b', estado: 'priorizada' },
+        { id: 'a', estado: 'priorizada', sucursal: 1 },
+        { id: 'b', estado: 'priorizada', sucursal: 1 },
       ]),
       fila([
         { id: 'a', posicion_prioridad: 1 },
@@ -687,7 +691,45 @@ describe('SolicitudesService.reordenarCola', () => {
 
     const res = await SolicitudesService.reordenarCola(1, ['b', 'a'], USUARIO_ID);
     expect(res).toEqual({ success: true });
-    expect(auditoria).toHaveBeenCalledWith(expect.anything(), 'solicitud_cola', 'sucursal_1', 'reorden_cola', expect.anything(), expect.anything());
+    // Brecha 018: un registro por solicitud movida, con entidad_id uuid válido.
+    expect(auditoria).toHaveBeenCalledWith(
+      USUARIO_ID, 'solicitud', 'b', 'reorden_cola', { posicion_prioridad: 2 }, { posicion_prioridad: 1, sucursal: 1 }
+    );
+    expect(auditoria).toHaveBeenCalledWith(
+      USUARIO_ID, 'solicitud', 'a', 'reorden_cola', { posicion_prioridad: 1 }, { posicion_prioridad: 2, sucursal: 1 }
+    );
+    expect(auditoria).not.toHaveBeenCalledWith(
+      expect.anything(), 'solicitud_cola', expect.anything(), expect.anything(), expect.anything(), expect.anything()
+    );
+  });
+
+  it('should_rechazar_ids_de_otra_sucursal', async () => {
+    admin.results.solicitud = [
+      fila([
+        { id: 'a', estado: 'priorizada', sucursal: 1 },
+        { id: 'x', estado: 'priorizada', sucursal: 2 },
+      ]),
+    ];
+    const res = await SolicitudesService.reordenarCola(1, ['x', 'a'], USUARIO_ID);
+    expect(res).toEqual({
+      success: false,
+      error: 'Solo puedes reordenar solicitudes de la cola de esta sucursal.',
+    });
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
+  });
+
+  it('should_rechazar_orden_que_no_coincide_con_la_cola_actual', async () => {
+    admin.results.solicitud = [
+      fila([{ id: 'a', estado: 'priorizada', sucursal: 1 }]),
+      fila([
+        { id: 'a', posicion_prioridad: 1 },
+        { id: 'b', posicion_prioridad: 2 },
+      ]),
+    ];
+    const res = await SolicitudesService.reordenarCola(1, ['a'], USUARIO_ID);
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/La cola cambió/);
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
   });
 });
 
@@ -795,7 +837,9 @@ describe('SolicitudesService.sacarDeCola', () => {
   it('should_devolver_error_de_bd_al_actualizar', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'priorizada' })), errorResult('boom')];
     const res = await SolicitudesService.sacarDeCola('s-1', USUARIO_ID);
-    expect(res).toEqual({ success: false, error: 'boom' });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/código de soporte/);
+    expect(res.error).not.toContain('boom');
   });
 });
 
@@ -912,7 +956,9 @@ describe('SolicitudesService.eliminarSolicitud', () => {
   it('should_devolver_error_de_bd_al_eliminar', async () => {
     admin.results.solicitud = [fila(minimo()), errorResult('boom')];
     const res = await SolicitudesService.eliminarSolicitud('s-1');
-    expect(res).toEqual({ success: false, error: 'boom' });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/código de soporte/);
+    expect(res.error).not.toContain('boom');
   });
 });
 
@@ -1038,7 +1084,9 @@ describe('SolicitudesService.agregarObservacion', () => {
   it('should_devolver_error_de_bd', async () => {
     admin.results.observacion = [errorResult('boom')];
     const res = await SolicitudesService.agregarObservacion('s-1', USUARIO_ID, 'ok');
-    expect(res).toEqual({ success: false, error: 'boom' });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/código de soporte/);
+    expect(res.error).not.toContain('boom');
   });
 });
 
@@ -1153,6 +1201,20 @@ describe('SolicitudesService.subirDocumentos', () => {
     expect(res.error).toBe('El tipo del archivo "documento.pdf" no está permitido.');
   });
 
+  it('should_rechazar_cuando_el_contenido_no_coincide_con_el_tipo', async () => {
+    admin.results.solicitud = [fila(minimo())];
+    const exe = new Uint8Array([0x4d, 0x5a, 0x90, 0x00]).buffer;
+    const res = await SolicitudesService.subirDocumentos('s-1', USUARIO_ID, [archivo({ buffer: exe })]);
+    expect(res.error).toBe('El contenido del archivo "documento.pdf" no corresponde a su tipo.');
+    expect(admin.callsTo(BUCKET)).toHaveLength(0);
+  });
+
+  it('should_rechazar_cuando_la_extension_no_coincide_con_el_tipo', async () => {
+    admin.results.solicitud = [fila(minimo())];
+    const res = await SolicitudesService.subirDocumentos('s-1', USUARIO_ID, [archivo({ nombre: 'virus.exe' })]);
+    expect(res.error).toBe('La extensión del archivo "virus.exe" no corresponde a su tipo.');
+  });
+
   it('should_subir_e_insertar_registro', async () => {
     admin.results.solicitud = [fila(minimo())];
     admin.results[BUCKET] = [fila(null)];
@@ -1190,7 +1252,7 @@ describe('SolicitudesService.subirDocumentos', () => {
 
     const res = await SolicitudesService.subirDocumentos('s-1', USUARIO_ID, [archivo()]);
     expect(res.success).toBe(false);
-    expect(res.error).toBe('viola unique');
+    expect(res.error).toMatch(/^Error al subir los documentos/);
 
     const remove = admin.callsTo(BUCKET).find((c) => c[0] === 'remove');
     expect(remove).toBeDefined();
@@ -1306,11 +1368,11 @@ describe('SolicitudesService.getURLDescarga', () => {
   });
 
   it('should_generar_url_firmada', async () => {
-    admin.results.solicitud_documento = [fila({ ruta_storage: 'ruta/1' })];
+    admin.results.solicitud_documento = [fila({ ruta_storage: 'ruta/1', nombre_archivo: 'contrato.pdf' })];
     admin.results[BUCKET] = [fila({ signedUrl: 'https://cdn/archivo.pdf' })];
     const res = await SolicitudesService.getURLDescarga('d-1');
     expect(res).toEqual({ success: true, url: 'https://cdn/archivo.pdf' });
-    expect(admin.callsTo(BUCKET)).toContainEqual(['createSignedUrl', 'ruta/1', 300]);
+    expect(admin.callsTo(BUCKET)).toContainEqual(['createSignedUrl', 'ruta/1', 300, { download: 'contrato.pdf' }]);
   });
 
   it('should_devolver_error_si_falla_la_firma', async () => {
@@ -1318,7 +1380,7 @@ describe('SolicitudesService.getURLDescarga', () => {
     admin.results[BUCKET] = [errorResult('no firmado')];
     const res = await SolicitudesService.getURLDescarga('d-1');
     expect(res.success).toBe(false);
-    expect(res.error).toBe('no firmado');
+    expect(res.error).toBe('No se pudo generar el enlace de descarga.');
   });
 });
 
@@ -1519,7 +1581,9 @@ describe('SolicitudesService.agregarVehiculo', () => {
     admin.results.solicitud = [fila(minimo({ tipo_solicitud: 'evento' }))];
     admin.results.solicitud_vehiculo = [fila([]), errorResult('boom')];
     const res = await SolicitudesService.agregarVehiculo('s-1', 'v-1', USUARIO_ID);
-    expect(res).toEqual({ success: false, error: 'boom' });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/código de soporte/);
+    expect(res.error).not.toContain('boom');
   });
 });
 
@@ -1718,7 +1782,9 @@ describe('SolicitudesService.despacharSolicitud', () => {
   it('should_devolver_error_de_bd', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'calendarizada' })), errorResult('boom')];
     const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID);
-    expect(res).toEqual({ success: false, error: 'boom' });
+    expect(res.success).toBe(false);
+    expect(res.error).toMatch(/código de soporte/);
+    expect(res.error).not.toContain('boom');
   });
 });
 

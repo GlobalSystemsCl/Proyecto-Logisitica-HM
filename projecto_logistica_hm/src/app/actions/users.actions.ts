@@ -1,15 +1,14 @@
 'use server';
 
-import { AuthService } from '@/services/auth.service';
+import { requireProfile, requireRole } from '@/lib/auth/guards';
+import { mensajeErrorUsuario } from '@/lib/errores';
 import { UsersService } from '@/services/users.service';
 import { CreateUserInput, UserRole } from '@/types/auth.types';
 import { revalidatePath } from 'next/cache';
 
 async function verifyAdminPermission() {
-  const profile = await AuthService.getCurrentUserProfile();
-  if (!profile || profile.rol !== 'administrador' || !profile.activo) {
-    throw new Error('Acceso no autorizado. Se requieren permisos de Administrador.');
-  }
+  const profile = await requireProfile();
+  requireRole(profile, ['administrador'], 'Acceso no autorizado. Se requieren permisos de Administrador.');
   return profile;
 }
 
@@ -68,7 +67,7 @@ export async function createUserAction(data: CreateUserData) {
       emailSent: result.emailSent,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -85,7 +84,7 @@ export async function toggleUserStatusAction(userId: string, nuevoEstado: boolea
     revalidatePath('/admin/usuarios');
     return { success: true };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error al cambiar estado';
+    const msg = mensajeErrorUsuario(err, 'Error al cambiar estado');
     return { success: false, error: msg };
   }
 }
@@ -102,7 +101,7 @@ export async function approveUserAction(userId: string) {
     revalidatePath('/admin/usuarios');
     return { success: true, message: 'Usuario autorizado para ingresar al sistema.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error al autorizar usuario';
+    const msg = mensajeErrorUsuario(err, 'Error al autorizar usuario');
     return { success: false, error: msg };
   }
 }
@@ -127,7 +126,7 @@ export async function resetUserPasswordAction(userId: string, email: string) {
       emailSent: result.emailSent,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error al generar nueva contraseña';
+    const msg = mensajeErrorUsuario(err, 'Error al generar nueva contraseña');
     return { success: false, error: msg };
   }
 }
@@ -172,7 +171,7 @@ export async function updateUserAction(data: UpdateUserData) {
     revalidatePath('/admin/zonas');
     return { success: true, message: 'Usuario actualizado exitosamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }

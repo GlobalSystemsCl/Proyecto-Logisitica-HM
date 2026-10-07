@@ -1,14 +1,13 @@
 'use server';
 
-import { AuthService } from '@/services/auth.service';
+import { requireProfile, requireRole } from '@/lib/auth/guards';
+import { mensajeErrorUsuario } from '@/lib/errores';
 import { SucursalesService } from '@/services/sucursales.service';
 import { revalidatePath } from 'next/cache';
 
 async function verifyAdminPermission() {
-  const profile = await AuthService.getCurrentUserProfile();
-  if (!profile || profile.rol !== 'administrador' || !profile.activo) {
-    throw new Error('Acceso no autorizado. Se requieren permisos de Administrador.');
-  }
+  const profile = await requireProfile();
+  requireRole(profile, ['administrador'], 'Acceso no autorizado. Se requieren permisos de Administrador.');
   return profile;
 }
 
@@ -55,7 +54,7 @@ export async function createSucursalAction(data: SucursalFormData) {
     revalidatePath('/admin/zonas');
     return { success: true, message: `Sucursal "${nombre}" creada exitosamente.` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -90,7 +89,7 @@ export async function updateSucursalAction(id: number, data: SucursalFormData) {
     revalidatePath('/admin/zonas');
     return { success: true, message: `Sucursal "${nombre}" actualizada exitosamente.` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -106,16 +105,9 @@ export async function deleteSucursalAction(id: number) {
     }
 
     revalidatePath('/admin/sucursales');
-    return {
-      success: true,
-      message:
-        result.solicitudesEliminadas && result.solicitudesEliminadas > 0
-          ? `Sucursal eliminada junto con ${result.solicitudesEliminadas} solicitud(es) asociada(s).`
-          : 'Sucursal eliminada exitosamente.',
-      solicitudesEliminadas: result.solicitudesEliminadas,
-    };
+    return { success: true, message: 'Sucursal eliminada exitosamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }

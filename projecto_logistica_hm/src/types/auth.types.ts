@@ -48,6 +48,8 @@ export interface UsuarioDetalle {
   sucursales?: UsuarioSucursalAsignada[];
   zonas?: UsuarioZonaAsignada[];
   created_at: string;
+  /** true cuando email y teléfono se omitieron por falta de relación (brecha 006). */
+  contacto_oculto?: boolean;
 }
 
 export const ROL_LABEL: Record<UserRole, string> = {

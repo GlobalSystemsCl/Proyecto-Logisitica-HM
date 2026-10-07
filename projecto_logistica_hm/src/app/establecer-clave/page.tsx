@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react';
 import { updatePasswordAction } from '@/app/actions/auth.actions';
 import { Lock, KeyRound, Eye, EyeOff, AlertCircle, Check, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { PASSWORD_MIN_LENGTH, requisitosPassword } from '@/lib/validaciones';
 
 export default function EstablecerClavePage() {
   const [state, formAction, isPending] = useActionState(updatePasswordAction, null);
@@ -10,11 +11,12 @@ export default function EstablecerClavePage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  const hasMinLength = password.length >= 8;
-  const hasNumber = /\d/.test(password);
-  const hasUppercase = /[A-Z]/.test(password);
+  const requisitos = requisitosPassword(password);
+  const hasMinLength = requisitos.longitud;
+  const hasNumber = requisitos.numero;
+  const hasMixedCase = requisitos.mayuscula && requisitos.minuscula;
   const passwordsMatch = password.length > 0 && password === confirmPassword;
-  const isValid = hasMinLength && passwordsMatch;
+  const isValid = hasMinLength && hasNumber && hasMixedCase && passwordsMatch;
 
   return (
     <div className="min-h-screen flex flex-col justify-center items-center bg-neutral-100 px-4 py-12 sm:px-6 lg:px-8 text-neutral-900">
@@ -72,7 +74,7 @@ export default function EstablecerClavePage() {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder={`Mínimo ${PASSWORD_MIN_LENGTH} caracteres`}
                   className="block w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
                 <button
@@ -123,7 +125,7 @@ export default function EstablecerClavePage() {
                   <div className="w-3.5 h-3.5 rounded-full border border-neutral-300" />
                 )}
                 <span className={hasMinLength ? 'text-neutral-900' : ''}>
-                  Mínimo 8 caracteres
+                  Mínimo {PASSWORD_MIN_LENGTH} caracteres
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -133,7 +135,17 @@ export default function EstablecerClavePage() {
                   <div className="w-3.5 h-3.5 rounded-full border border-neutral-300" />
                 )}
                 <span className={hasNumber ? 'text-neutral-900' : ''}>
-                  Contiene al menos un número (recomendado)
+                  Contiene al menos un número
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {hasMixedCase ? (
+                  <Check className="w-3.5 h-3.5 text-neutral-900" />
+                ) : (
+                  <div className="w-3.5 h-3.5 rounded-full border border-neutral-300" />
+                )}
+                <span className={hasMixedCase ? 'text-neutral-900' : ''}>
+                  Contiene mayúsculas y minúsculas
                 </span>
               </div>
               <div className="flex items-center gap-2">

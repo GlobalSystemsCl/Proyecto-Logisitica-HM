@@ -1,19 +1,18 @@
 'use server';
 
-import { AuthService } from '@/services/auth.service';
+import { requireProfile, requireRole } from '@/lib/auth/guards';
+import { mensajeErrorUsuario } from '@/lib/errores';
 import { VehiculoService } from '@/services/vehiculo.service';
 import { CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
 import { revalidatePath } from 'next/cache';
 
 async function verifyVehiculoPermission() {
-  const profile = await AuthService.getCurrentUserProfile();
-  if (!profile || !profile.activo) {
-    throw new Error('Acceso no autorizado. Se requiere una cuenta activa.');
-  }
-  const allowedRoles = ['administrador', 'jefe_local', 'logistica', 'operaciones'];
-  if (!allowedRoles.includes(profile.rol)) {
-    throw new Error('No tienes permisos para gestionar vehículos.');
-  }
+  const profile = await requireProfile();
+  requireRole(
+    profile,
+    ['administrador', 'jefe_local', 'logistica', 'operaciones'],
+    'No tienes permisos para gestionar vehículos.'
+  );
   return profile;
 }
 
@@ -46,7 +45,7 @@ export async function createVehiculoAction(data: CreateVehiculoInput) {
       vehiculo: result.vehiculo,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -68,7 +67,7 @@ export async function updateVehiculoAction(id: string, data: UpdateVehiculoInput
       vehiculo: result.vehiculo,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -96,7 +95,7 @@ export async function deleteVehiculoAction(id: string) {
       message: 'Vehículo eliminado exitosamente.',
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -133,7 +132,7 @@ export async function importVehiculosAction(data: ImportVehiculosData) {
       marcasProcesadas: result.marcasProcesadas,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }

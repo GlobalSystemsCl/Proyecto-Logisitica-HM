@@ -2,6 +2,8 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { UsuarioSucursalAsignada, UsuarioZonaAsignada } from '@/types/auth.types';
 import { Zona } from '@/types/sucursal.types';
 import { Marca, CreateMarcaInput, UpdateMarcaInput, VehiculoConDisponibilidad } from '@/types/vehiculo.types';
+import { mensajeErrorUsuario } from '@/lib/errores';
+import { escaparPatronLike } from '@/lib/busqueda';
 
 /**
  * Servicio de ORGANIZACION (DEV 1).
@@ -49,7 +51,7 @@ export class OrganizacionService {
       const { data: existing } = await admin
         .from('zona')
         .select('id')
-        .ilike('nombre', clean)
+        .ilike('nombre', escaparPatronLike(clean))
         .maybeSingle();
 
       if (existing) {
@@ -62,10 +64,10 @@ export class OrganizacionService {
         .select()
         .single();
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       return { success: true, zona: data as Zona };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al crear la zona';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al crear la zona');
       return { success: false, error: msg };
     }
   }
@@ -79,7 +81,7 @@ export class OrganizacionService {
       const { data: existing } = await admin
         .from('zona')
         .select('id')
-        .ilike('nombre', clean)
+        .ilike('nombre', escaparPatronLike(clean))
         .neq('id', id)
         .maybeSingle();
 
@@ -94,10 +96,10 @@ export class OrganizacionService {
         .select()
         .single();
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       return { success: true, zona: data as Zona };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al actualizar la zona';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al actualizar la zona');
       return { success: false, error: msg };
     }
   }
@@ -119,10 +121,10 @@ export class OrganizacionService {
       }
 
       const { error } = await admin.from('zona').delete().eq('id', id);
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar la zona';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al eliminar la zona');
       return { success: false, error: msg };
     }
   }
@@ -176,10 +178,10 @@ export class OrganizacionService {
         .select()
         .single();
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       return { success: true, marca: data as Marca };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al crear la marca';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al crear la marca');
       return { success: false, error: msg };
     }
   }
@@ -213,10 +215,10 @@ export class OrganizacionService {
         .select()
         .single();
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       return { success: true, marca: data as Marca };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al actualizar la marca';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al actualizar la marca');
       return { success: false, error: msg };
     }
   }
@@ -225,10 +227,10 @@ export class OrganizacionService {
     try {
       const admin = createAdminClient();
       const { error } = await admin.from('marca').delete().eq('id', id);
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar la marca';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al eliminar la marca');
       return { success: false, error: msg };
     }
   }

@@ -1,7 +1,8 @@
 'use server';
 
+import { requireProfile } from '@/lib/auth/guards';
+import { mensajeErrorUsuario } from '@/lib/errores';
 import { revalidarSolicitudes } from '@/lib/rutas';
-import { AuthService } from '@/services/auth.service';
 import { TrasladoService } from '@/services/traslado.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
@@ -9,11 +10,7 @@ import { UserProfile } from '@/types/auth.types';
 import type { CreateTrasladoInput } from '@/types/traslado.types';
 
 async function getProfileOrThrow(): Promise<UserProfile> {
-  const profile = await AuthService.getCurrentUserProfile();
-  if (!profile || !profile.activo) {
-    throw new Error('Sesión inválida o usuario inactivo.');
-  }
-  return profile;
+  return requireProfile();
 }
 
 function esLogistica(profile: UserProfile): boolean {
@@ -41,7 +38,7 @@ export async function crearTrasladoAction(
     revalidarSolicitudes();
     return { success: true, message: 'Traslado interno creado.', traslado: result.traslado };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -61,7 +58,7 @@ export async function despacharTrasladoAction(trasladoId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Traslado despachado.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }
@@ -84,7 +81,7 @@ export async function recibirTrasladoAction(trasladoId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Traslado recepcionado en destino.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
 }

@@ -777,9 +777,9 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                 <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>
-                    Se eliminarán también{' '}
-                    <strong>{solicitudesPorSucursal.get(deleteTarget.id)!.length} solicitud(es)</strong> cuyo
-                    origen es esta sucursal (eliminación en cascada).
+                    Esta sucursal tiene{' '}
+                    <strong>{solicitudesPorSucursal.get(deleteTarget.id)!.length} solicitud(es)</strong> de
+                    origen: no se puede eliminar mientras existan.
                   </span>
                 </div>
               )}

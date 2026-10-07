@@ -1,9 +1,120 @@
+import { cache } from 'react';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { UserProfile } from '@/types/auth.types';
-import { validarCampoTexto, validarEmailFormato, validarPasswordRegistro } from '@/lib/validaciones';
+import { validarCampoTexto, validarEmailFormato, validarPassword } from '@/lib/validaciones';
+import { mensajeErrorUsuario } from '@/lib/errores';
+import { esAdminPrincipal } from '@/lib/auth/admin-principal';
+import { getAppUrl } from '@/lib/env';
 
-const ADMIN_PRINCIPAL_EMAIL = 'maic.hernandez.dev@gmail.com';
+export const MAX_INTENTOS_FALLIDOS = 5;
+export const MINUTOS_BLOQUEO = 15;
+
+/**
+ * Brecha 012: el mismo mensaje para correo inexistente, contraseña errónea y
+ * cuenta bloqueada, para no revelar qué correos son cuentas del sistema.
+ */
+export const MENSAJE_LOGIN_FALLIDO =
+  `Credenciales inválidas. Tras ${MAX_INTENTOS_FALLIDOS} intentos fallidos el acceso se bloquea por ${MINUTOS_BLOQUEO} minutos.`;
+export const MENSAJE_PENDIENTE_APROBACION =
+  'Tu cuenta aún no ha sido autorizada por un administrador. Espera la aprobación para poder ingresar al sistema.';
+export const MENSAJE_CUENTA_DESACTIVADA =
+  'Esta cuenta ha sido desactivada por el administrador. Contacta a soporte o a tu jefatura.';
+
+type FilaUsuario = UserProfile & { intentos_fallidos?: number | null };
+
+/**
+ * Perfil del usuario autenticado. Envuelto en `React.cache` (brecha 024): en
+ * una misma petición de servidor las páginas, layouts y actions que lo piden
+ * reutilizan el resultado en vez de repetir 3 consultas cada vez.
+ */
+const getCurrentUserProfileCached = cache(async (): Promise<UserProfile | null> => {
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
+
+    if (userError || !user) {
+      return null;
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('usuario')
+      .select('*, sucursal:sucursal_id(nombre)')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError || !profile) {
+      // Brechas 025 y 002: un perfil faltante nunca se crea como administrador.
+      // Se registra como ejecutivo pendiente de aprobación (inactivo) para que
+      // un administrador lo revise, y no se concede acceso.
+      const admin = createAdminClient();
+      const { error: insertError } = await admin.from('usuario').upsert(
+        {
+          id: user.id,
+          email: user.email!.toLowerCase(),
+          nombre: user.user_metadata?.nombre || 'Usuario',
+          apellido: user.user_metadata?.apellido || '',
+          rol: 'ejecutivo',
+          activo: false,
+          aprobado: false,
+          requiere_cambio_clave: false,
+        },
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+
+      if (insertError) {
+        console.error('Error al registrar perfil faltante:', insertError);
+      }
+      return null;
+    }
+
+    const sucursal = profile.sucursal as
+      | { nombre: string | null }
+      | Array<{ nombre: string | null }>
+      | null;
+
+    const [sucursalesRes, zonasRes] = await Promise.all([
+      supabase
+        .from('sucursal')
+        .select('id, nombre')
+        .eq('usuario_id', user.id),
+      supabase
+        .from('usuario_zona')
+        .select('zona_id, zona:zona_id(id, nombre)')
+        .eq('usuario_id', user.id),
+    ]);
+
+    const sucursales = (sucursalesRes.data || []).map((row: { id: number; nombre: string | null }) => ({
+      id: row.id,
+      nombre: row.nombre,
+    }));
+    const zonas = (zonasRes.data || []).map(
+      (row: {
+        zona_id: number;
+        zona: Array<{ id: number; nombre: string }> | { id: number; nombre: string } | null;
+      }) => {
+        const z = Array.isArray(row.zona) ? row.zona[0] : row.zona;
+        return {
+          id: row.zona_id,
+          nombre: z?.nombre ?? '',
+        };
+      }
+    );
+
+    return {
+      ...profile,
+      sucursal_nombre: Array.isArray(sucursal) ? sucursal[0]?.nombre ?? null : sucursal?.nombre ?? null,
+      sucursales,
+      zonas,
+    } as UserProfile;
+  } catch (error) {
+    console.error('Error en getCurrentUserProfile:', error);
+    return null;
+  }
+});
 
 export class AuthService {
   /**
@@ -31,6 +142,9 @@ export class AuthService {
         return { success: false, error: 'El nombre y el apellido son obligatorios.' };
       }
 
+      const errorNombre = validarCampoTexto(nombre, 'nombre', 100) || validarCampoTexto(apellido, 'apellido', 100);
+      if (errorNombre) return { success: false, error: errorNombre };
+
       const telefono = data.telefono?.trim() || null;
 
       const admin = createAdminClient();
@@ -46,117 +160,26 @@ export class AuthService {
         .single();
 
       if (updateError) {
-        return { success: false, error: updateError.message };
+        return { success: false, error: mensajeErrorUsuario(updateError, 'No se pudo actualizar el perfil.') };
       }
 
       return { success: true, profile: updated as UserProfile };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al actualizar el perfil.';
-      console.error('Error en updateProfile:', err);
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al actualizar el perfil.') };
     }
   }
 
   /**
-   * Obtiene el perfil del usuario autenticado actualmente
+   * Obtiene el perfil del usuario autenticado actualmente.
+   * Devuelve `null` si no hay sesión o si la sesión no tiene perfil.
    */
-  static async getCurrentUserProfile(): Promise<UserProfile | null> {
-    try {
-      const supabase = await createClient();
-      const {
-        data: { user },
-        error: userError,
-      } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        return null;
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from('usuario')
-        .select('*, sucursal:sucursal_id(nombre)')
-        .eq('id', user.id)
-        .single();
-
-      if (profileError || !profile) {
-        // Si no existe perfil en la tabla usuario pero sí en auth, crear o sincronizar
-        const admin = createAdminClient();
-        const isAdminEmail = user.email?.toLowerCase() === 'maic.hernandez.dev@gmail.com';
-        const newProfile = {
-          id: user.id,
-          email: user.email!,
-          nombre: user.user_metadata?.nombre || (isAdminEmail ? 'Maic' : 'Usuario'),
-          apellido: user.user_metadata?.apellido || (isAdminEmail ? 'Hernández' : ''),
-          rol: isAdminEmail ? 'administrador' : 'ejecutivo',
-          activo: true,
-          aprobado: user.user_metadata?.aprobado ?? true,
-          requiere_cambio_clave: false,
-        };
-
-        const { data: inserted, error: insertError } = await admin
-          .from('usuario')
-          .upsert(newProfile)
-          .select()
-          .single();
-
-        if (insertError) {
-          console.error('Error al sincronizar perfil de usuario:', insertError);
-          return null;
-        }
-
-        return inserted as UserProfile;
-      }
-
-      const sucursal = profile.sucursal as
-        | { nombre: string | null }
-        | Array<{ nombre: string | null }>
-        | null;
-
-      const [sucursalesRes, zonasRes] = await Promise.all([
-        supabase
-          .from('sucursal')
-          .select('id, nombre')
-          .eq('usuario_id', user.id),
-        supabase
-          .from('usuario_zona')
-          .select('zona_id, zona:zona_id(id, nombre)')
-          .eq('usuario_id', user.id),
-      ]);
-
-      const sucursales = (sucursalesRes.data || []).map((row: { id: number; nombre: string | null }) => ({
-        id: row.id,
-        nombre: row.nombre,
-      }));
-      const zonas = (zonasRes.data || []).map(
-        (row: {
-          zona_id: number;
-          zona: Array<{ id: number; nombre: string }> | { id: number; nombre: string } | null;
-        }) => {
-          const z = Array.isArray(row.zona) ? row.zona[0] : row.zona;
-          return {
-            id: row.zona_id,
-            nombre: z?.nombre ?? '',
-          };
-        }
-      );
-
-      return {
-        ...profile,
-        sucursal_nombre: Array.isArray(sucursal) ? sucursal[0]?.nombre ?? null : sucursal?.nombre ?? null,
-        sucursales,
-        zonas,
-      } as UserProfile;
-    } catch (error) {
-      console.error('Error en getCurrentUserProfile:', error);
-      return null;
-    }
-  }
+  static getCurrentUserProfile = getCurrentUserProfileCached;
 
   /**
-   * Registro autogestionado (ruta /registro). Siempre crea el usuario con rol
-   * 'ejecutivo'. El perfil public.usuario lo crea el trigger on_auth_user_created;
-   * se fuerza confirmacion de email para que el usuario pueda iniciar sesion de
-   * inmediato (intranet interna).
+   * Registro autogestionado (ruta /registro). Crea al usuario como 'ejecutivo'
+   * inactivo y no aprobado: no puede usar el sistema hasta que un
+   * administrador lo autorice (brecha 003). El rol nunca se toma del cliente
+   * (brecha 002).
    */
   static async register(data: {
     nombre: string;
@@ -180,12 +203,12 @@ export class AuthService {
       const errorEmail = validarEmailFormato(data.email);
       if (errorEmail) return { success: false, error: errorEmail };
 
-      const errorPassword = validarPasswordRegistro(data.password);
+      const errorPassword = validarPassword(data.password);
       if (errorPassword) return { success: false, error: errorPassword };
 
       // El administrador principal no puede autoregistrarse: su cuenta la
-      // crea el administrador vía panel (o el seed). Evita escalar a rol admin.
-      if (cleanEmail === ADMIN_PRINCIPAL_EMAIL) {
+      // crea el administrador vía panel (o el seed).
+      if (esAdminPrincipal(cleanEmail)) {
         return {
           success: false,
           error: 'El correo del Administrador Principal no puede registrarse de forma autónoma.',
@@ -223,8 +246,6 @@ export class AuthService {
             nombre: data.nombre.trim(),
             apellido: data.apellido.trim(),
             sucursal_id: sucursalId,
-            aprobado: false,
-            requiere_cambio_clave: false,
           },
         },
       });
@@ -241,7 +262,7 @@ export class AuthService {
         if (already) {
           return { success: false, error: 'Ya existe un usuario registrado con ese correo.' };
         }
-        return { success: false, error: signUpError.message };
+        return { success: false, error: mensajeErrorUsuario(signUpError, 'No se pudo crear la cuenta.') };
       }
 
       if (!authData.user) {
@@ -251,27 +272,64 @@ export class AuthService {
       // Confirmar email y asegurar el perfil base en public.usuario
       await admin.auth.admin.updateUserById(authData.user.id, { email_confirm: true });
 
-      await admin.from('usuario').upsert({
+      const { error: perfilError } = await admin.from('usuario').upsert({
         id: authData.user.id,
         email: cleanEmail,
         nombre: data.nombre.trim(),
         apellido: data.apellido.trim(),
         rol: 'ejecutivo',
-        activo: true,
+        activo: false,
         aprobado: false,
         requiere_cambio_clave: false,
         sucursal_id: sucursalId,
       });
 
+      if (perfilError) {
+        return {
+          success: false,
+          error: mensajeErrorUsuario(perfilError, 'No se pudo completar el registro. Contacta al administrador.'),
+        };
+      }
+
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al registrar usuario';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al registrar usuario') };
     }
   }
 
   /**
-   * Inicia sesión validando estado activo y protección contra intentos excesivos
+   * Incrementa el contador de intentos fallidos de forma atómica (brechas 010
+   * y 012) con la RPC `fn_registrar_intento_fallido`. Si la RPC aún no existe
+   * en la BD, usa la actualización anterior (no atómica) para no romper el login.
+   */
+  static async registrarIntentoFallido(
+    admin: ReturnType<typeof createAdminClient>,
+    usuario: FilaUsuario
+  ): Promise<void> {
+    const { error } = await admin.rpc('fn_registrar_intento_fallido', {
+      p_usuario_id: usuario.id,
+      p_max_intentos: MAX_INTENTOS_FALLIDOS,
+      p_minutos_bloqueo: MINUTOS_BLOQUEO,
+    });
+
+    if (!error) return;
+
+    console.error('RPC fn_registrar_intento_fallido no disponible, usando respaldo:', error);
+    const nextAttempts = (usuario.intentos_fallidos || 0) + 1;
+    await admin
+      .from('usuario')
+      .update({
+        intentos_fallidos: nextAttempts,
+        bloqueado_hasta:
+          nextAttempts >= MAX_INTENTOS_FALLIDOS
+            ? new Date(Date.now() + MINUTOS_BLOQUEO * 60 * 1000).toISOString()
+            : null,
+      })
+      .eq('id', usuario.id);
+  }
+
+  /**
+   * Inicia sesión validando bloqueo por intentos, aprobación y estado activo.
    */
   static async signIn(email: string, password: string): Promise<{
     success: boolean;
@@ -282,42 +340,16 @@ export class AuthService {
     const admin = createAdminClient();
     const cleanEmail = email.trim().toLowerCase();
 
-    // 1. Consultar estado en la tabla usuario
+    // 1. Bloqueo temporal: no se intenta la contraseña mientras dure.
     const { data: existingUser } = await admin
       .from('usuario')
       .select('*')
       .eq('email', cleanEmail)
       .single();
 
-    if (existingUser) {
-      // Verificar si la cuenta está desactivada
-      if (existingUser.activo === false) {
-        return {
-          success: false,
-          error: 'Esta cuenta ha sido desactivada por el administrador. Contacta a soporte o a tu jefatura.',
-        };
-      }
-
-      // Verificar si la cuenta está pendiente de aprobación
-      if (existingUser.aprobado === false) {
-        return {
-          success: false,
-          error: 'Tu cuenta aún no ha sido autorizada por un administrador. Espera la aprobación para poder ingresar al sistema.',
-        };
-      }
-
-      // Verificar si la cuenta está bloqueada temporalmente por intentos excesivos
-      if (existingUser.bloqueado_hasta) {
-        const lockTime = new Date(existingUser.bloqueado_hasta).getTime();
-        const now = Date.now();
-        if (lockTime > now) {
-          const remainingMinutes = Math.ceil((lockTime - now) / (1000 * 60));
-          return {
-            success: false,
-            error: `Cuenta bloqueada temporalmente por múltiples intentos fallidos. Intenta nuevamente en ${remainingMinutes} minuto(s).`,
-          };
-        }
-      }
+    const usuarioPrevio = existingUser as FilaUsuario | null;
+    if (usuarioPrevio?.bloqueado_hasta && new Date(usuarioPrevio.bloqueado_hasta).getTime() > Date.now()) {
+      return { success: false, error: MENSAJE_LOGIN_FALLIDO };
     }
 
     // 2. Intentar autenticar con Supabase Auth
@@ -327,114 +359,65 @@ export class AuthService {
       password,
     });
 
-    if (error) {
-      // Manejar intento fallido
-      if (existingUser) {
-        const nextAttempts = (existingUser.intentos_fallidos || 0) + 1;
-        let bloqueadoHasta: string | null = null;
-
-        if (nextAttempts >= 5) {
-          // Bloquear por 15 minutos tras 5 intentos
-          const lockDate = new Date(Date.now() + 15 * 60 * 1000);
-          bloqueadoHasta = lockDate.toISOString();
-        }
-
-        await admin
-          .from('usuario')
-          .update({
-            intentos_fallidos: nextAttempts,
-            bloqueado_hasta: bloqueadoHasta,
-          })
-          .eq('id', existingUser.id);
-
-        if (nextAttempts >= 5) {
-          return {
-            success: false,
-            error: 'Has superado el límite de 5 intentos fallidos. Tu cuenta ha sido bloqueada por 15 minutos por seguridad.',
-          };
-        }
-
-        const remainingAttempts = 5 - nextAttempts;
-        return {
-          success: false,
-          error: `Credenciales inválidas. Te quedan ${remainingAttempts} intento(s) antes del bloqueo temporal.`,
-        };
+    if (error || !data.user) {
+      if (usuarioPrevio) {
+        await AuthService.registrarIntentoFallido(admin, usuarioPrevio);
       }
-
-      return {
-        success: false,
-        error: 'Credenciales inválidas. Verifica tu correo y contraseña.',
-      };
+      return { success: false, error: MENSAJE_LOGIN_FALLIDO };
     }
 
-    if (!data.user) {
-      return {
-        success: false,
-        error: 'No se pudo iniciar sesión. Intenta nuevamente.',
-      };
-    }
-
-    // 3. Obtener o asegurar perfil del usuario autenticado
-    let profile: UserProfile | null = null;
+    // 3. Perfil del usuario autenticado. El estado de la cuenta solo se revela
+    //    a quien ya demostró conocer la contraseña.
     const { data: userProfile } = await admin
       .from('usuario')
       .select('*')
       .eq('id', data.user.id)
       .single();
 
-    if (!userProfile) {
-      const isAdmin = cleanEmail === 'maic.hernandez.dev@gmail.com';
-      const { data: created } = await admin
-        .from('usuario')
-        .upsert({
+    const profile = userProfile as UserProfile | null;
+
+    if (!profile) {
+      // Brecha 025: sin perfil nunca se concede acceso ni rol administrador.
+      await admin.from('usuario').upsert(
+        {
           id: data.user.id,
           email: cleanEmail,
-          nombre: data.user.user_metadata?.nombre || (isAdmin ? 'Maic' : 'Usuario'),
-          apellido: data.user.user_metadata?.apellido || (isAdmin ? 'Hernández' : ''),
-          rol: isAdmin ? 'administrador' : 'ejecutivo',
-          activo: true,
-          aprobado: isAdmin ? true : (data.user.user_metadata?.aprobado ?? true),
+          nombre: data.user.user_metadata?.nombre || 'Usuario',
+          apellido: data.user.user_metadata?.apellido || '',
+          rol: 'ejecutivo',
+          activo: false,
+          aprobado: false,
           requiere_cambio_clave: false,
-          intentos_fallidos: 0,
-          bloqueado_hasta: null,
-        })
-        .select()
-        .single();
-      profile = created as UserProfile;
-    } else {
-      profile = userProfile as UserProfile;
-      // Resetear contador de intentos fallidos
-      await admin
-        .from('usuario')
-        .update({
-          intentos_fallidos: 0,
-          bloqueado_hasta: null,
-        })
-        .eq('id', data.user.id);
+        },
+        { onConflict: 'id', ignoreDuplicates: true }
+      );
+      await supabase.auth.signOut();
+      return { success: false, error: MENSAJE_PENDIENTE_APROBACION };
     }
 
-    // Verificar si sigue activo
-    if (profile && !profile.activo) {
+    if (profile.aprobado === false) {
       await supabase.auth.signOut();
-      return {
-        success: false,
-        error: 'Esta cuenta ha sido desactivada por el administrador.',
-      };
+      return { success: false, error: MENSAJE_PENDIENTE_APROBACION };
     }
 
-    // Verificar si está pendiente de aprobación
-    if (profile && profile.aprobado === false) {
+    if (!profile.activo) {
       await supabase.auth.signOut();
-      return {
-        success: false,
-        error: 'Tu cuenta aún no ha sido autorizada por un administrador. Espera la aprobación para poder ingresar al sistema.',
-      };
+      return { success: false, error: MENSAJE_CUENTA_DESACTIVADA };
     }
+
+    // Resetear contador de intentos fallidos
+    await admin
+      .from('usuario')
+      .update({
+        intentos_fallidos: 0,
+        bloqueado_hasta: null,
+      })
+      .eq('id', data.user.id);
 
     return {
       success: true,
-      profile: profile || undefined,
-      requiresPasswordChange: profile?.requiere_cambio_clave,
+      profile,
+      requiresPasswordChange: profile.requiere_cambio_clave,
     };
   }
 
@@ -447,7 +430,10 @@ export class AuthService {
   }
 
   /**
-   * Envía correo de recuperación de contraseña
+   * Envía correo de recuperación de contraseña.
+   *
+   * Brecha 012: la respuesta es la misma exista o no la cuenta, y una cuenta
+   * desactivada o no aprobada simplemente no recibe el correo.
    */
   static async sendPasswordResetEmail(email: string, redirectToUrl?: string): Promise<{
     success: boolean;
@@ -457,35 +443,35 @@ export class AuthService {
       const supabase = await createClient();
       const cleanEmail = email.trim().toLowerCase();
 
-      // Verificar si el usuario existe y está activo
       const admin = createAdminClient();
       const { data: user } = await admin
         .from('usuario')
-        .select('activo')
+        .select('activo, aprobado')
         .eq('email', cleanEmail)
         .single();
 
-      if (user && !user.activo) {
-        return {
-          success: false,
-          error: 'No se puede restablecer la contraseña de una cuenta desactivada. Contacta al administrador.',
-        };
+      const fila = user as { activo: boolean; aprobado?: boolean } | null;
+      if (!fila || !fila.activo || fila.aprobado === false) {
+        return { success: true };
       }
 
-      const redirect = redirectToUrl || `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/auth/callback?next=/establecer-clave`;
+      const redirect = redirectToUrl || `${getAppUrl()}/auth/callback?next=/establecer-clave`;
 
       const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo: redirect,
       });
 
       if (error) {
-        return { success: false, error: error.message };
+        console.error('Error al enviar el correo de recuperación:', error);
+        return { success: false, error: 'No se pudo enviar el correo en este momento. Intenta más tarde.' };
       }
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al enviar correo de recuperación';
-      return { success: false, error: msg };
+      return {
+        success: false,
+        error: mensajeErrorUsuario(err, 'Error inesperado al enviar correo de recuperación'),
+      };
     }
   }
 
@@ -497,11 +483,9 @@ export class AuthService {
     error?: string;
   }> {
     try {
-      if (newPassword.length < 8) {
-        return {
-          success: false,
-          error: 'La contraseña debe tener al menos 8 caracteres.',
-        };
+      const errorPolitica = validarPassword(newPassword);
+      if (errorPolitica) {
+        return { success: false, error: errorPolitica };
       }
 
       const supabase = await createClient();
@@ -522,7 +506,13 @@ export class AuthService {
       });
 
       if (updateError) {
-        return { success: false, error: updateError.message };
+        if (updateError.code === 'same_password') {
+          return { success: false, error: 'La nueva contraseña debe ser distinta de la anterior.' };
+        }
+        if (updateError.code === 'weak_password') {
+          return { success: false, error: 'La contraseña es demasiado débil o aparece en filtraciones conocidas.' };
+        }
+        return { success: false, error: mensajeErrorUsuario(updateError, 'No se pudo actualizar la contraseña.') };
       }
 
       // Marcar que ya no requiere cambio de clave
@@ -538,8 +528,7 @@ export class AuthService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al actualizar la contraseña.';
-      return { success: false, error: msg };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error al actualizar la contraseña.') };
     }
   }
 }

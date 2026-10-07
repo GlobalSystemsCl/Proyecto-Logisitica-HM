@@ -3,7 +3,7 @@
 import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
-import { validarCampoTexto, validarEmailFormato, validarPasswordRegistro } from '@/lib/validaciones';
+import { validarCampoTexto, validarEmailFormato, validarPassword } from '@/lib/validaciones';
 
 export interface UpdateProfileState {
   success?: boolean;
@@ -74,7 +74,7 @@ export async function registerAction(
     return { success: false, error: 'Debes seleccionar tu sucursal.' };
   }
 
-  const errorPassword = validarPasswordRegistro(password);
+  const errorPassword = validarPassword(password);
   if (errorPassword) return { success: false, error: errorPassword };
 
   if (password !== confirmPassword) {
@@ -152,7 +152,7 @@ export async function requestPasswordResetAction(prevState: unknown, formData: F
 
   return {
     success: true,
-    message: 'Te hemos enviado un correo con el enlace para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.',
+    message: 'Si el correo corresponde a una cuenta activa, te enviaremos un enlace para restablecer tu contraseña. Revisa tu bandeja de entrada o spam.',
   };
 }
 
@@ -174,11 +174,9 @@ export async function updatePasswordAction(prevState: unknown, formData: FormDat
     };
   }
 
-  if (password.length < 8) {
-    return {
-      success: false,
-      error: 'La contraseña debe tener al menos 8 caracteres.',
-    };
+  const errorPassword = validarPassword(password);
+  if (errorPassword) {
+    return { success: false, error: errorPassword };
   }
 
   const result = await AuthService.updatePassword(password);

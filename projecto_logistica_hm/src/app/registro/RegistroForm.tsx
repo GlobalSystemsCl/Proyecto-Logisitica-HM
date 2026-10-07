@@ -164,9 +164,9 @@ export default function RegistroForm({ sucursales }: Props) {
                   type={showPassword ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={10}
                   maxLength={72}
-                  placeholder="Mínimo 8 caracteres"
+                  placeholder="Mínimo 10 caracteres, con mayúscula, minúscula y número"
                   className="block w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
                 <button
@@ -192,7 +192,7 @@ export default function RegistroForm({ sucursales }: Props) {
                   type={showConfirm ? 'text' : 'password'}
                   autoComplete="new-password"
                   required
-                  minLength={8}
+                  minLength={10}
                   maxLength={72}
                   placeholder="Repite tu contraseña"
                   className="block w-full pl-10 pr-10 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"

@@ -1,3 +1,6 @@
+import { escapeHtml } from '@/lib/html';
+import { getAppUrl } from '@/lib/env';
+
 export interface SendCredentialsParams {
   toEmail: string;
   recipientName: string;
@@ -21,7 +24,7 @@ export class EmailService {
       const apiKey = process.env.BREVO_API_KEY;
       const senderEmail = process.env.BREVO_SENDER_EMAIL || 'globalsystemschile@gmail.com';
       const senderName = process.env.BREVO_SENDER_NAME || 'H.Motores - Gestión de Vehículos';
-      const appUrl = params.loginUrl || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000/login';
+      const appUrl = escapeHtml(params.loginUrl || `${getAppUrl()}/login`);
 
       if (!apiKey) {
         console.warn('⚠️ BREVO_API_KEY no está configurada.');
@@ -35,7 +38,11 @@ export class EmailService {
         logistica: 'Logística',
       };
 
-      const rolFormat = roleLabels[params.role] || params.role;
+      // Brecha 022: todo dato interpolado en el HTML se escapa.
+      const rolFormat = escapeHtml(roleLabels[params.role] || params.role);
+      const nombre = escapeHtml(params.recipientName);
+      const correo = escapeHtml(params.toEmail);
+      const clave = escapeHtml(params.tempPassword);
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -58,7 +65,7 @@ export class EmailService {
             <!-- Contenido principal -->
             <tr>
               <td style="padding: 35px 30px;">
-                <h2 style="color: #171717; font-size: 20px; font-weight: 700; margin: 0 0 12px 0;">¡Hola, ${params.recipientName}!</h2>
+                <h2 style="color: #171717; font-size: 20px; font-weight: 700; margin: 0 0 12px 0;">¡Hola, ${nombre}!</h2>
                 <p style="color: #525252; font-size: 14px; line-height: 1.6; margin: 0 0 25px 0;">
                   Se ha creado tu cuenta corporativa para acceder a la plataforma interna de gestión y traslado de vehículos de H.Motores.
                 </p>
@@ -72,7 +79,7 @@ export class EmailService {
                           <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Correo Electrónico:</td>
                         </tr>
                         <tr>
-                          <td style="padding: 0 0 14px 0; color: #2563eb; font-size: 15px; font-weight: 700; font-family: monospace;">${params.toEmail}</td>
+                          <td style="padding: 0 0 14px 0; color: #2563eb; font-size: 15px; font-weight: 700; font-family: monospace;">${correo}</td>
                         </tr>
                         <tr>
                           <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Rol Asignado:</td>
@@ -84,7 +91,7 @@ export class EmailService {
                           <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Contraseña Provisoria de Acceso:</td>
                         </tr>
                         <tr>
-                          <td style="padding: 0 0 4px 0; color: #d97706; font-size: 20px; font-weight: 800; letter-spacing: 2px; font-family: monospace;">${params.tempPassword}</td>
+                          <td style="padding: 0 0 4px 0; color: #d97706; font-size: 20px; font-weight: 800; letter-spacing: 2px; font-family: monospace;">${clave}</td>
                         </tr>
                       </table>
                     </td>
@@ -174,8 +181,8 @@ export class EmailService {
         messageId: responseData.messageId,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al conectar con la API de Brevo';
-      console.error('❌ Excepción en EmailService:', msg);
+      const msg = 'Error al conectar con la API de Brevo';
+      console.error('❌ Excepción en EmailService:', err);
       return { success: false, error: msg };
     }
   }

@@ -7,6 +7,8 @@ import type {
   TrasladoInterno,
   VehiculosParaTrasladoResult,
 } from '@/types/traslado.types';
+import { mensajeErrorUsuario } from '@/lib/errores';
+import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
 
 /**
  * Traslados internos: mueven vehículos ENTRE SUCURSALES (solo movimiento de
@@ -136,7 +138,7 @@ export class TrasladoService {
         .select('id')
         .in('id', [input.origen_id, input.destino_id]);
 
-      if (sucError) return { success: false, error: sucError.message };
+      if (sucError) return { success: false, error: mensajeErrorUsuario(sucError, 'No se pudo completar la operación.') };
       if (!sucursales || sucursales.length !== 2) {
         return { success: false, error: 'La sucursal de origen o destino no existe.' };
       }
@@ -210,7 +212,7 @@ export class TrasladoService {
         .single();
 
       if (insertError || !traslado) {
-        return { success: false, error: insertError?.message ?? 'No se pudo crear el traslado.' };
+        return { success: false, error: insertError ? mensajeErrorUsuario(insertError, 'No se pudo crear el traslado.') : 'No se pudo crear el traslado.' };
       }
 
       const trasladoId = (traslado as { id: string }).id;
@@ -222,7 +224,7 @@ export class TrasladoService {
       if (vehError) {
         // rollback: el traslado se crea sin vehículos, se elimina
         await admin.from('traslado_interno').delete().eq('id', trasladoId);
-        return { success: false, error: vehError.message };
+        return { success: false, error: mensajeErrorUsuario(vehError, 'No se pudo completar la operación.') };
       }
 
       await SolicitudesService.registrarAuditoria(
@@ -242,7 +244,7 @@ export class TrasladoService {
       const creado = await TrasladoService.getTrasladoById(trasladoId);
       return { success: true, traslado: creado ?? undefined };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al crear el traslado';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al crear el traslado');
       return { success: false, error: msg };
     }
   }
@@ -274,7 +276,7 @@ export class TrasladoService {
         .update({ estado: 'en_transito', fecha_despacho: ahora })
         .eq('id', trasladoId);
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
 
       await SolicitudesService.registrarAuditoria(
         logisticaId,
@@ -287,7 +289,7 @@ export class TrasladoService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al despachar el traslado';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al despachar el traslado');
       return { success: false, error: msg };
     }
   }
@@ -337,7 +339,7 @@ export class TrasladoService {
         .update({ estado: 'recepcionado', fecha_recepcion: ahora })
         .eq('id', trasladoId);
 
-      if (error) return { success: false, error: error.message };
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
 
       await SolicitudesService.registrarAuditoria(
         jefeLocalId,
@@ -350,7 +352,7 @@ export class TrasladoService {
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al recepcionar el traslado';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al recepcionar el traslado');
       return { success: false, error: msg };
     }
   }
@@ -473,8 +475,11 @@ export class TrasladoService {
         query = query.eq('marca', opciones.marca);
       }
       if (filtro) {
-        const seguro = filtro.replace(/%/g, '');
-        query = query.or(`patente.ilike.%${seguro}%,chasis.ilike.%${seguro}%`);
+        // Brecha 021: solo alfanuméricos y guiones; nada que altere el .or().
+        const seguro = sanitizarTerminoBusqueda(filtro);
+        if (seguro) {
+          query = query.or(`patente.ilike.%${seguro}%,chasis.ilike.%${seguro}%`);
+        }
       }
 
       const { data, error, count } = await query

@@ -2,6 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { Vehiculo, VehiculoConDisponibilidad, CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
 import { OrganizacionService } from '@/services/organizacion.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { mensajeErrorUsuario } from '@/lib/errores';
 
 export class VehiculoService {
   /**
@@ -267,7 +268,7 @@ export class VehiculoService {
         console.error('Error al crear vehículo:', error);
         return {
           success: false,
-          error: `Error al crear el vehículo: ${error.message}`,
+          error: mensajeErrorUsuario(error, 'Error al crear el vehículo.'),
         };
       }
 
@@ -276,7 +277,7 @@ export class VehiculoService {
         vehiculo: data as Vehiculo,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al crear vehículo';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al crear vehículo');
       return { success: false, error: msg };
     }
   }
@@ -388,12 +389,12 @@ export class VehiculoService {
 
       if (error) {
         console.error('Error al actualizar vehículo:', error);
-        return { success: false, error: `Error al actualizar: ${error.message}` };
+        return { success: false, error: mensajeErrorUsuario(error, 'Error al actualizar el vehículo.') };
       }
 
       return { success: true, vehiculo: data as Vehiculo };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al actualizar vehículo';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al actualizar vehículo');
       return { success: false, error: msg };
     }
   }
@@ -430,12 +431,12 @@ export class VehiculoService {
 
       if (error) {
         console.error('Error al eliminar vehículo:', error);
-        return { success: false, error: `Error al eliminar: ${error.message}` };
+        return { success: false, error: mensajeErrorUsuario(error, 'Error al eliminar el vehículo.') };
       }
 
       return { success: true };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar vehículo';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al eliminar vehículo');
       return { success: false, error: msg };
     }
   }
@@ -586,7 +587,7 @@ export class VehiculoService {
         const { error } = await admin.from('vehiculo').insert(lote);
         if (error) {
           errores += lote.length;
-          erroresDetalle.push(error.message);
+          erroresDetalle.push(mensajeErrorUsuario(error, `Error al importar el lote ${i / 500 + 1}.`));
         }
       }
 
@@ -602,7 +603,7 @@ export class VehiculoService {
           `${errores} errores${erroresDetalle.length > 0 ? ` (${erroresDetalle.slice(0, 5).join('; ')})` : ''}.`,
       };
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error inesperado al importar vehículos';
+      const msg = mensajeErrorUsuario(err, 'Error inesperado al importar vehículos');
       return { success: false, error: msg };
     }
   }

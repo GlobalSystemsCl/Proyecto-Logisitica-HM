@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { decidirAcceso, type EstadoCuenta } from '@/lib/auth/acceso';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -32,31 +33,36 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const path = request.nextUrl.pathname;
-  const isAuthRoute = path === '/login' || path === '/recuperar-clave' || path === '/auth/callback' || path === '/registro';
-  const isSetupRoute = path === '/establecer-clave';
 
-  // Si está autenticado pero pendiente de autorización, no puede usar el sistema
-  if (user && user.user_metadata?.aprobado === false && !isAuthRoute && !isSetupRoute && path !== '/') {
+  // Estado real de la cuenta desde public.usuario (la policy SELECT permite
+  // leer la fila propia). No se usa user_metadata: lo controla el usuario.
+  let cuenta: EstadoCuenta | null = null;
+  if (user) {
+    const { data } = await supabase
+      .from('usuario')
+      .select('activo, aprobado, requiere_cambio_clave')
+      .eq('id', user.id)
+      .maybeSingle();
+    cuenta = (data as EstadoCuenta | null) ?? null;
+  }
+
+  const decision = decidirAcceso(path, Boolean(user), cuenta);
+
+  if (decision.cerrarSesion) {
     await supabase.auth.signOut();
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    url.searchParams.set('error', 'pendiente_aprobacion');
-    return NextResponse.redirect(url);
   }
 
-  // Si no está autenticado y la ruta no es pública, redirigir a /login
-  if (!user && !isAuthRoute && !isSetupRoute && path !== '/') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
+  if (decision.accion === 'continuar') {
+    return supabaseResponse;
   }
 
-  // Si está autenticado y trata de entrar a /login o /recuperar-clave, redirigir a /dashboard
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
-  }
+  const url = request.nextUrl.clone();
+  url.pathname = decision.destino;
+  url.search = '';
+  if (decision.error) url.searchParams.set('error', decision.error);
 
-  return supabaseResponse;
+  const redirect = NextResponse.redirect(url);
+  // Conservar las cookies de sesión que haya renovado o borrado Supabase.
+  supabaseResponse.cookies.getAll().forEach((cookie) => redirect.cookies.set(cookie));
+  return redirect;
 }

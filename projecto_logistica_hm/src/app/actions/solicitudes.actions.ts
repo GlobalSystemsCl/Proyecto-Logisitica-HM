@@ -1,6 +1,5 @@
 'use server';
 
-import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { UsersService } from '@/services/users.service';
@@ -8,14 +7,14 @@ import { UserProfile, UsuarioDetalle } from '@/types/auth.types';
 import { TipoSolicitud } from '@/types/solicitud.types';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
 import { revalidarSolicitudes } from '@/lib/rutas';
-
-async function getProfileOrThrow(): Promise<UserProfile> {
-  const profile = await AuthService.getCurrentUserProfile();
-  if (!profile || !profile.activo) {
-    throw new Error('Sesión inválida o usuario inactivo.');
-  }
-  return profile;
-}
+import { mensajeErrorUsuario } from '@/lib/errores';
+import {
+  requireDocumentoAccess,
+  requireProfile,
+  requireSolicitudAccess,
+  requireSolicitudVehiculoAccess,
+} from '@/lib/auth/guards';
+import { ocultarContacto, puedeVerContacto } from '@/lib/auth/contacto';
 
 /**
  * Dev 2 — Validación multi-sucursal del Jefe Local.
@@ -62,7 +61,7 @@ export interface CreateSolicitudData {
 
 export async function createSolicitudAction(data: CreateSolicitudData) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'ejecutivo' && profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
       return { success: false, error: 'No tienes permisos para crear solicitudes.' };
@@ -180,14 +179,13 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
           : 'Solicitud creada. Pendiente de aprobación por el Jefe de Local.',
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function aprobarSolicitudAction(id: string, fecha: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
       return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden aprobar.' };
@@ -214,14 +212,13 @@ export async function aprobarSolicitudAction(id: string, fecha: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud aprobada exitosamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function rechazarSolicitudAction(id: string, motivo: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'jefe_local' && profile.rol !== 'administrador') {
       return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden rechazar.' };
@@ -247,14 +244,13 @@ export async function rechazarSolicitudAction(id: string, motivo: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud rechazada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function priorizarSolicitudAction(id: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
       return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden priorizar.' };
@@ -276,14 +272,13 @@ export async function priorizarSolicitudAction(id: string) {
     revalidarSolicitudes();
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function priorizarEnPosicionAction(id: string, posicion: number) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
       return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden priorizar.' };
@@ -305,14 +300,13 @@ export async function priorizarEnPosicionAction(id: string, posicion: number) {
     revalidarSolicitudes();
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function reordenarColaAction(sucursalId: number, orden: string[]) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
       return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden reordenar la cola.' };
@@ -331,14 +325,13 @@ export async function reordenarColaAction(sucursalId: number, orden: string[]) {
     revalidarSolicitudes();
     return { success: true, message: 'Cola de prioridades actualizada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function sacarDeColaAction(id: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
       return { success: false, error: 'Solo el Jefe de Local o un Administrador pueden sacar de la cola.' };
@@ -360,21 +353,20 @@ export async function sacarDeColaAction(id: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud sacada de la cola de prioridades.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function cancelarSolicitudAction(id: string, motivo: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (!motivo || motivo.trim().length < 5) {
       return { success: false, error: 'El motivo de cancelación es obligatorio (mínimo 5 caracteres).' };
     }
 
-    const solicitud = await SolicitudesService.getSolicitudById(id);
-    if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
+    // Brecha 008: logística solo cancela dentro de sus zonas (antes, cualquiera).
+    const solicitud = await requireSolicitudAccess(profile, id);
 
     const esEncargado =
       profile.rol === 'administrador' ||
@@ -393,14 +385,13 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud cancelada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function eliminarSolicitudAction(id: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     const solicitud = await SolicitudesService.getSolicitudById(id);
     if (!solicitud) return { success: false, error: 'Solicitud no encontrada.' };
@@ -415,24 +406,25 @@ export async function eliminarSolicitudAction(id: string) {
       return { success: false, error: 'No tienes permisos para eliminar esta solicitud.' };
     }
 
-    const result = await SolicitudesService.eliminarSolicitud(id);
+    const result = await SolicitudesService.eliminarSolicitud(id, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud eliminada definitivamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function agregarVehiculoAction(solicitudId: string, vehiculoId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local' && profile.rol !== 'logistica') {
       return { success: false, error: 'No tienes permisos para gestionar vehículos.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.agregarVehiculo(solicitudId, vehiculoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -440,18 +432,19 @@ export async function agregarVehiculoAction(solicitudId: string, vehiculoId: str
     revalidarSolicitudes();
     return { success: true, message: 'Vehículo reservado para esta solicitud.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function quitarVehiculoAction(solicitudVehiculoId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local' && profile.rol !== 'logistica') {
       return { success: false, error: 'No tienes permisos para gestionar vehículos.' };
     }
+
+    await requireSolicitudVehiculoAccess(profile, solicitudVehiculoId);
 
     const result = await SolicitudesService.quitarVehiculo(solicitudVehiculoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -459,18 +452,19 @@ export async function quitarVehiculoAction(solicitudVehiculoId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Reserva retirada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function agregarObservacionAction(solicitudId: string, texto: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (!texto || texto.trim().length < 1) {
       return { success: false, error: 'La observación no puede estar vacía.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.agregarObservacion(solicitudId, profile.id, texto);
     if (!result.success) return { success: false, error: result.error };
@@ -478,31 +472,64 @@ export async function agregarObservacionAction(solicitudId: string, texto: strin
     revalidarSolicitudes();
     return { success: true, message: 'Observación agregada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
+/** Brecha 004: antes no verificaba sesión ni alcance (endpoint público). */
 export async function getObservacionesAction(solicitudId: string) {
-  return SolicitudesService.getObservaciones(solicitudId);
+  try {
+    const profile = await requireProfile();
+    await requireSolicitudAccess(profile, solicitudId);
+    return await SolicitudesService.getObservaciones(solicitudId);
+  } catch {
+    return [];
+  }
 }
 
+/** Brecha 004: antes no verificaba sesión ni alcance (endpoint público). */
 export async function getAuditoriaAction(solicitudId: string) {
-  return SolicitudesService.getAuditoria(solicitudId);
+  try {
+    const profile = await requireProfile();
+    await requireSolicitudAccess(profile, solicitudId);
+    return await SolicitudesService.getAuditoria(solicitudId);
+  } catch {
+    return [];
+  }
 }
 
 /**
  * Devuelve el detalle de contacto de un usuario (nombre, rol, sucursal,
  * teléfono y correo) para tarjetas y popups de datos de usuario.
+ *
+ * Brecha 006: email y teléfono solo se entregan si hay relación de trabajo
+ * (ver `puedeVerContacto`). Si se indica `solicitudId` y el usuario consultado
+ * participa en esa solicitud (a la que quien consulta tiene acceso), también.
  */
-export async function getUsuarioDetalleAction(usuarioId: string): Promise<UsuarioDetalle | null> {
+export async function getUsuarioDetalleAction(
+  usuarioId: string,
+  solicitudId?: string
+): Promise<UsuarioDetalle | null> {
   try {
-    await getProfileOrThrow();
+    const profile = await requireProfile();
     if (!usuarioId) return null;
-    return await UsersService.getUsuarioDetalleById(usuarioId);
+
+    const detalle = await UsersService.getUsuarioDetalleById(usuarioId);
+    if (!detalle) return null;
+
+    let participante = false;
+    if (solicitudId) {
+      try {
+        const sol = await requireSolicitudAccess(profile, solicitudId);
+        participante = [sol.ejecutivo_id, sol.jefe_local_id, sol.logistica_id].includes(usuarioId);
+      } catch {
+        participante = false;
+      }
+    }
+
+    return puedeVerContacto(profile, detalle, participante) ? detalle : ocultarContacto(detalle);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error al obtener datos del usuario';
-    console.error('Error en getUsuarioDetalleAction:', msg);
+    console.error('Error en getUsuarioDetalleAction:', err);
     return null;
   }
 }
@@ -518,7 +545,7 @@ export async function getEjecutivosPorSucursalAction(sucursalId: number | null):
   Array<{ id: string; nombre: string; apellido: string }>
 > {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
       return [];
@@ -539,7 +566,7 @@ export async function getEjecutivosPorSucursalAction(sucursalId: number | null):
 
 export async function calendarizarSolicitudAction(solicitudId: string, fechaDespacho: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'logistica' && profile.rol !== 'jefe_local') {
       return { success: false, error: 'No tienes permisos para calendarizar solicitudes.' };
@@ -552,24 +579,32 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
       return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
     }
 
-    const result = await SolicitudesService.calendarizarSolicitud(solicitudId, fechaDespacho, profile.id);
+    await requireSolicitudAccess(profile, solicitudId);
+
+    const result = await SolicitudesService.calendarizarSolicitud(
+      solicitudId,
+      fechaDespacho,
+      profile.id,
+      profile.rol
+    );
     if (!result.success) return { success: false, error: result.error };
 
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud calendarizada exitosamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function descalendarizarSolicitudAction(solicitudId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'logistica' && profile.rol !== 'jefe_local') {
       return { success: false, error: 'No tienes permisos para descalendarizar solicitudes.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.descalendarizarSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -577,18 +612,19 @@ export async function descalendarizarSolicitudAction(solicitudId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud devuelta a priorizada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function despacharSolicitudAction(solicitudId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
       return { success: false, error: 'No tienes permisos para despachar solicitudes.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.despacharSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -596,18 +632,19 @@ export async function despacharSolicitudAction(solicitudId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud despachada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function cancelarDespachoSolicitudAction(solicitudId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
       return { success: false, error: 'No tienes permisos para cancelar el despacho de solicitudes.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.cancelarDespacharSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -615,18 +652,19 @@ export async function cancelarDespachoSolicitudAction(solicitudId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Despacho cancelado: la solicitud volvió a Calendarizada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function recibirSolicitudAction(solicitudId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'jefe_local') {
       return { success: false, error: 'No tienes permisos para recibir solicitudes.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.recibirSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -634,18 +672,19 @@ export async function recibirSolicitudAction(solicitudId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud recibida en destino.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 export async function finalizarSolicitudAction(solicitudId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol === 'logistica') {
       return { success: false, error: 'No tienes permisos para finalizar solicitudes.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.finalizarSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
@@ -653,8 +692,7 @@ export async function finalizarSolicitudAction(solicitudId: string) {
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud finalizada.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
@@ -670,11 +708,13 @@ export async function finalizarSolicitudAction(solicitudId: string) {
  */
 export async function asignarEncargadoAction(solicitudId: string, logisticaId?: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
       return { success: false, error: 'Solo Logística o el Administrador pueden asignar el encargado.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const encargadoId = logisticaId && logisticaId.trim() !== '' ? logisticaId.trim() : profile.id;
     const result = await SolicitudesService.asignarEncargadoLogistica(solicitudId, encargadoId, profile.id);
@@ -683,8 +723,7 @@ export async function asignarEncargadoAction(solicitudId: string, logisticaId?: 
     revalidarSolicitudes();
     return { success: true, message: 'Encargado de solicitud asignado.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
@@ -693,7 +732,7 @@ export async function getEncargadosLogisticaAction(): Promise<
   Array<{ id: string; nombre: string; apellido: string; sucursal_nombre: string | null }>
 > {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
     if (profile.rol !== 'administrador' && profile.rol !== 'logistica') return [];
 
     const usuarios = await UsersService.getUsers();
@@ -717,11 +756,13 @@ export async function getEncargadosLogisticaAction(): Promise<
 /** El Ejecutivo insiste para desbloquear el avance de su solicitud. */
 export async function insistirSolicitudAction(solicitudId: string, mensaje?: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
 
     if (profile.rol !== 'ejecutivo') {
       return { success: false, error: 'Solo el Ejecutivo puede insistir sobre una solicitud.' };
     }
+
+    await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.insistirSolicitud(solicitudId, profile.id, mensaje);
     if (!result.success) {
@@ -739,15 +780,14 @@ export async function insistirSolicitudAction(solicitudId: string, mensaje?: str
       horas_restantes: result.proxima_insistencia_en_h ?? null,
     };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
 /** Horas restantes de cooldown del Ejecutivo para una solicitud (`null` = puede). */
 export async function getCooldownInsistenciaAction(solicitudId: string) {
   try {
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
     if (profile.rol !== 'ejecutivo') return { horas_restantes: null, ultima: null };
     return await SolicitudesService.getCooldownInsistencia(solicitudId, profile.id);
   } catch {
@@ -758,16 +798,19 @@ export async function getCooldownInsistenciaAction(solicitudId: string) {
 /** Historial de insistencias de una solicitud. */
 export async function getInsistenciasAction(solicitudId: string) {
   try {
-    await getProfileOrThrow();
+    const profile = await requireProfile();
+    await requireSolicitudAccess(profile, solicitudId);
     return await SolicitudesService.getInsistencias(solicitudId);
   } catch {
     return [];
   }
 }
 
-export async function subirDocumentosSolicitudAction(solicitudId: string, formData: FormData) {  try {
+export async function subirDocumentosSolicitudAction(solicitudId: string, formData: FormData) {
+  try {
     if (!solicitudId) return { success: false, error: 'Solicitud inválida.' };
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
+    await requireSolicitudAccess(profile, solicitudId);
 
     const archivos = formData.getAll('archivos') as File[];
     if (!archivos.length) return { success: false, error: 'No se seleccionaron archivos.' };
@@ -786,14 +829,14 @@ export async function subirDocumentosSolicitudAction(solicitudId: string, formDa
 
     return { success: true, message: 'Documentos subidos correctamente.' };
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado al subir documentos';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al subir documentos') };
   }
 }
 
 export async function getDocumentosSolicitudAction(solicitudId: string) {
   try {
-    await getProfileOrThrow();
+    const profile = await requireProfile();
+    await requireSolicitudAccess(profile, solicitudId);
     return await SolicitudesService.getDocumentos(solicitudId);
   } catch {
     return [];
@@ -803,21 +846,22 @@ export async function getDocumentosSolicitudAction(solicitudId: string) {
 export async function eliminarDocumentoSolicitudAction(documentoId: string) {
   try {
     if (!documentoId) return { success: false, error: 'Documento inválido.' };
-    const profile = await getProfileOrThrow();
+    const profile = await requireProfile();
+    // Brecha 006: además del rol, alcance sobre la solicitud del documento.
+    await requireDocumentoAccess(profile, documentoId);
     return await SolicitudesService.eliminarDocumento(documentoId, profile.id, profile.rol);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado al eliminar el documento';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al eliminar el documento') };
   }
 }
 
 export async function descargarDocumentoSolicitudAction(documentoId: string) {
   try {
     if (!documentoId) return { success: false, error: 'Documento inválido.' };
-    await getProfileOrThrow();
+    const profile = await requireProfile();
+    await requireDocumentoAccess(profile, documentoId);
     return await SolicitudesService.getURLDescarga(documentoId);
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : 'Error inesperado al generar la descarga';
-    return { success: false, error: msg };
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al generar la descarga') };
   }
 }
