@@ -518,7 +518,7 @@ Orden sugerido (detalle en cada brecha):
 |---|---|---|
 | 1 | Las correcciones se aplicarán **directamente en producción** | No hay ambiente de staging intermedio. Cada cambio de BD (policies, triggers, columnas) debe ir con script de rollback y respaldo previo |
 | 2 | **Aún no se ejecutan tests, build ni lint** | Se mantiene el carácter de solo lectura de esta auditoría |
-| 3 | Por ahora **solo se documenta** lo que hay que hacer | Ninguna brecha se corrige en esta etapa; el detalle de cada corrección está en `docs/brecha-NNN-*.md` |
+| 3 | Por ahora **solo se documenta** lo que hay que hacer | Ninguna brecha se corrige en esta etapa; el detalle de cada corrección está en `auditoria/brechas/brecha-NNN-*.md` |
 | 4 | La documentación se versiona en una **rama separada** (`auditoria/2026-10-07`) | No se mezcla con `main` hasta revisión |
 
 ## 27. Estado actual del sistema
