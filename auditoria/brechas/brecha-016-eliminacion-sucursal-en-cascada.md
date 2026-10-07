@@ -1,7 +1,7 @@
 # Brecha 016 — Eliminar una sucursal borra físicamente sus solicitudes y deja archivos huérfanos
 
 ## Estado
-Pendiente
+Corregida en código; migración lista, **pendiente de aplicar en producción**
 
 ## Severidad
 Medium
@@ -52,3 +52,22 @@ FK con cascada en una relación que debería ser de restricción. Sin soft delet
 
 ## Criterios de aceptación
 - Ninguna operación de sucursal elimina solicitudes ni documentos.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- Migración: `solicitud_sucursal_fkey` pasa de `ON DELETE CASCADE` a `ON DELETE RESTRICT` (se conserva `ON UPDATE CASCADE`).
+- `SucursalesService.deleteSucursal` revisa todas las dependencias antes de borrar: usuarios con la sucursal asignada, solicitudes de origen **o destino**, vehículos ubicados en ella y traslados internos de origen o destino. Si hay alguna, responde con un mensaje que las enumera. Un error de FK se traduce a un mensaje claro.
+- La action y la UI de sucursales ya no anuncian el borrado "junto con N solicitudes": ahora avisan que no se puede eliminar mientras existan.
+
+### Archivos
+- `projecto_logistica_hm/supabase/migrations/20261007120400_brecha_016_fk_sucursal_restrict.sql` (+ rollback)
+- `src/services/sucursales.service.ts`, `src/app/actions/sucursales.actions.ts`, `src/app/admin/sucursales/SucursalesTableClient.tsx`
+
+### Tests
+- `tests/unitarios/sucursales.service.test.ts` (6 casos; el service no tenía tests).
+
+### Pendiente / decisión de negocio
+- Soft delete de sucursales (`activa`, `deleted_at`) para poder "cerrar" una sucursal con historial.

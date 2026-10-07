@@ -1,7 +1,7 @@
 # Brecha 009 — Usuarios desactivados conservan la sesión; el cambio de clave obligatorio no se impone
 
 ## Estado
-Pendiente
+Corregida
 
 ## Severidad
 Medium
@@ -52,3 +52,23 @@ El estado de la cuenta vive en `public.usuario` y no se refleja en Auth. Las ver
 ## Criterios de aceptación
 - Un usuario desactivado pierde el acceso en el siguiente request.
 - Nadie usa el sistema con una contraseña temporal.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- **Desactivación:** `UsersService.toggleUserStatus` bloquea al usuario en Supabase Auth (`ban_duration: '876000h'`), lo que impide renovar la sesión y operar contra Auth. Al reactivar, quita el bloqueo (`'none'`).
+- **Middleware:** en cada petición lee `activo`, `aprobado` y `requiere_cambio_clave` desde `public.usuario`. Una cuenta desactivada pierde el acceso en el siguiente request: se cierra la sesión y se redirige a `/login?error=account_deactivated`. Esto además corrige un bucle de redirección que ya existía (dashboard → `/login` → dashboard con la sesión viva).
+- **Contraseña temporal:** con `requiere_cambio_clave` cualquier ruta redirige a `/establecer-clave`. `requireProfile` rechaza todas las Server Actions hasta que se cambie la clave.
+
+### Archivos
+- `src/lib/auth/acceso.ts`, `src/lib/supabase/middleware.ts`, `src/lib/auth/guards.ts`, `src/services/users.service.ts`
+
+### Tests
+- `acceso.test.ts` (desactivado, no aprobado, sin perfil, cambio de clave, sin bucle en `/login`).
+- `users.service.test.ts`: bloqueo y desbloqueo en Auth.
+- `guards.test.ts`: `should_throw_when_temporary_password_must_be_changed`.
+
+### Nota
+- El middleware hace una consulta indexada por PK en cada petición autenticada. Con el volumen actual es despreciable. Si crece, se puede sincronizar el estado en `app_metadata`.

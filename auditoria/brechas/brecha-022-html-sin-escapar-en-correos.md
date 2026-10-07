@@ -1,7 +1,7 @@
 # Brecha 022 — HTML sin escapar en correos transaccionales
 
 ## Estado
-Pendiente
+Corregida
 
 ## Severidad
 Low
@@ -38,3 +38,18 @@ Helper + test + aplicación en la plantilla.
 
 ## Criterios de aceptación
 - Ningún dato de usuario aparece sin escapar en el HTML del correo.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `EmailService.sendUserCredentialsEmail` escapa con `escapeHtml` todo valor interpolado: nombre, correo, rol, contraseña y URL.
+- `validarCampoTexto` rechaza `<` y `>`. Se aplica a nombre y apellido en el registro, el perfil y la creación o edición de usuarios por el admin.
+- El enlace del correo usa `getAppUrl()` + `/login`.
+
+### Archivos
+- `src/lib/html.ts`, `src/services/email.service.ts`, `src/lib/validaciones.ts`, `src/services/auth.service.ts`, `src/services/users.service.ts`
+
+### Tests
+- `html.test.ts` y `email.service.test.ts`: `should_escape_html_when_recipient_name_contains_tags`, con `fetch` mockeado.

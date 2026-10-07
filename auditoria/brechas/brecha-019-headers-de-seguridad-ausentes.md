@@ -1,7 +1,7 @@
 # Brecha 019 — Headers de seguridad HTTP ausentes
 
 ## Estado
-Pendiente
+Corregida (CSP en modo Report-Only)
 
 ## Severidad
 Low
@@ -52,3 +52,20 @@ Además, reducir `bodySizeLimit` al mínimo necesario (10 MB de documento + over
 
 ## Criterios de aceptación
 - Las cabeceras están presentes en todas las rutas; securityheaders.com con nota ≥ A.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `next.config.ts` aplica a todas las rutas: `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`, `Strict-Transport-Security` (2 años, includeSubDomains), `Permissions-Policy` y `Content-Security-Policy-Report-Only`.
+- `poweredByHeader: false` (oculta `X-Powered-By: Next.js`).
+- Las cabeceras viven en `src/config/security-headers.ts` para poder testearlas.
+
+### Tests
+- `tests/unitarios/security-headers.test.ts`.
+
+### Pendiente
+1. Revisar en producción la consola del navegador (violaciones de CSP reportadas) y pasar la clave a `Content-Security-Policy` con nonces.
+2. Validar con securityheaders.com.
+3. `bodySizeLimit` sigue en 15 MB, porque se suben varios archivos de hasta 10 MB por petición. Valorar URLs firmadas de subida directa a Storage.

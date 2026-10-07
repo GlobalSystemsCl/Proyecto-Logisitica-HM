@@ -1,7 +1,7 @@
 # Brecha 004 — Server Actions sin verificación de autenticación
 
 ## Estado
-Pendiente
+Corregida
 
 ## Severidad
 High
@@ -61,3 +61,20 @@ No hay un guard centralizado: cada action implementa (o no) su verificación. Es
 ## Criterios de aceptación
 - Ninguna action exportada devuelve datos sin sesión válida.
 - El test de inventario pasa y falla si se agrega una action sin guard.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `getObservacionesAction` y `getAuditoriaAction` exigen sesión válida (`requireProfile`) y alcance sobre la solicitud (`requireSolicitudAccess`). Sin sesión o sin acceso devuelven una lista vacía, sin llegar al service.
+- Nuevo módulo central `src/lib/auth/guards.ts`: `requireProfile`, `requireRole`, `requireSolicitudAccess`, `requireDocumentoAccess` y `requireSolicitudVehiculoAccess`. La regla de visibilidad (`puedeAccederSolicitud`) es la misma de `getSolicitudesFiltradas`, más los participantes asignados.
+- Test de inventario: recorre todas las funciones exportadas de `src/app/actions/*.ts` y falla si alguna no invoca un guard (salvo una lista explícita de actions públicas de autenticación), o si una action de solicitudes que recibe un ID no verifica el alcance.
+
+### Archivos
+- `src/lib/auth/guards.ts`, `src/app/actions/solicitudes.actions.ts` y las demás actions (usan los guards).
+
+### Tests
+- `tests/unitarios/guards.test.ts` (27 casos).
+- `tests/unitarios/actions-inventario.test.ts`.
+- `tests/unitarios/solicitudes.actions.test.ts`: `should_return_empty_without_querying_when_there_is_no_session`, `should_return_empty_when_solicitud_belongs_to_another_ejecutivo`.

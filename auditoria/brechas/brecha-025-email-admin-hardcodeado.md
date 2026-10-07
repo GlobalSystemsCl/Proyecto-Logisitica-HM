@@ -1,7 +1,7 @@
 # Brecha 025 — Email del administrador principal hardcodeado en código y en la base de datos
 
 ## Estado
-Pendiente
+Corregida en código; trigger corregido en la migración **pendiente de aplicar**
 
 ## Severidad
 Informational
@@ -50,3 +50,25 @@ Constante única → flag en BD → limpieza del trigger.
 
 ## Criterios de aceptación
 - El email no aparece en el código ni en las funciones SQL.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- El correo del administrador principal ya no está en el código: se configura con la variable de entorno de servidor `ADMIN_PRINCIPAL_EMAIL`, leída en un solo módulo (`src/lib/auth/admin-principal.ts`). Solo sirve para impedir que esa cuenta se desactive o se autoregistre; **nunca otorga rol ni permisos**.
+- Se eliminó la autoasignación de rol administrador en `getCurrentUserProfile` y `signIn`. Un perfil faltante se registra como `ejecutivo` inactivo y pendiente de aprobación, y no se concede acceso.
+- El trigger `handle_new_auth_user` ya no compara el email (migración de la brecha 002).
+- `UsersTableClient` recibe el correo como prop desde el servidor.
+- `scripts/seed-admin.mjs` usa `SEED_ADMIN_EMAIL`.
+
+### Archivos
+- `src/lib/auth/admin-principal.ts`, `src/services/auth.service.ts`, `src/services/users.service.ts`
+- `src/app/admin/usuarios/page.tsx`, `src/app/admin/usuarios/UsersTableClient.tsx`, `scripts/seed-admin.mjs`
+
+### Tests
+- `admin-principal.test.ts`, `users.service.test.ts` (`should_protect_principal_admin_configured_by_env`), `auth.service.test.ts` (`should_never_create_administrador_for_principal_email`).
+
+### Pendiente (responsable)
+1. Definir `ADMIN_PRINCIPAL_EMAIL` en las variables de entorno del hosting. Si falta, simplemente no hay cuenta protegida contra desactivación.
+2. Migrar el administrador principal a un correo corporativo con MFA.

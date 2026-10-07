@@ -1,7 +1,7 @@
 # Brecha 002 — El trigger de registro toma el rol desde metadatos controlados por el usuario
 
 ## Estado
-Pendiente
+Corregida en código; migración lista, **pendiente de aplicar en producción**
 
 ## Severidad
 Critical
@@ -63,3 +63,26 @@ Se confía en `raw_user_meta_data` (dato del cliente) para un atributo de seguri
 ## Criterios de aceptación
 - Ningún usuario puede obtener un rol distinto de `ejecutivo` (o pendiente) por signup.
 - El admin sigue creando usuarios de cualquier rol.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `handle_new_auth_user` reescrita: **nunca** lee `rol`, `activo` ni `aprobado` de `raw_user_meta_data`. Todo perfil creado por el trigger es `ejecutivo`, inactivo y no aprobado. La sucursal del registro solo se acepta si existe. `ON CONFLICT (id) DO NOTHING` (ya no reactiva usuarios). `search_path = ''` y nombres calificados. Los errores quedan en el log de Postgres (`RAISE LOG`) en lugar de ocultarse.
+- Se eliminó el email del administrador principal del trigger (brecha 025).
+- `UsersService.createUser` ya no envía el rol en `user_metadata`: el rol real lo fija el upsert posterior con service_role.
+- `AuthService.register` ya no envía `aprobado` ni otros atributos de seguridad en los metadatos del signUp.
+
+### Archivos
+- `projecto_logistica_hm/supabase/migrations/20261007120100_brecha_002_003_025_registro_y_aprobacion.sql` (+ rollback)
+- `projecto_logistica_hm/src/services/auth.service.ts`, `src/services/users.service.ts`
+
+### Tests
+- `tests/unitarios/auth.service.test.ts`: `should_never_send_role_or_approval_in_signup_metadata`, `should_create_profile_as_inactive_pending_ejecutivo`.
+- `tests/unitarios/users.service.test.ts`: `should_create_admin_user_as_pre_approved` (el rol no viaja en metadatos).
+
+### Pendiente (responsable)
+1. Aplicar la migración **antes** de desplegar el código.
+2. Ejecutar la consulta de auditoría incluida en la migración: cuentas con rol distinto de `ejecutivo` y el rol que traían en sus metadatos.
+3. Decidir si el registro público es necesario. Si no lo es, desactivar "Allow new users to sign up" en Supabase Auth.

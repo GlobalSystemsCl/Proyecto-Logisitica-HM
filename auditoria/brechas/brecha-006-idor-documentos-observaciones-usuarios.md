@@ -1,7 +1,7 @@
 # Brecha 006 — IDOR en documentos, observaciones, insistencias y datos de usuarios
 
 ## Estado
-Pendiente
+Corregida
 
 ## Severidad
 High
@@ -58,3 +58,28 @@ Falta un control de acceso a nivel de objeto reutilizable. Solo se verifica el r
 
 ## Criterios de aceptación
 - Ninguna action devuelve ni modifica datos de una solicitud fuera del alcance del usuario.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+| Action | Control agregado |
+|---|---|
+| `getDocumentosSolicitudAction`, `subirDocumentosSolicitudAction`, `agregarObservacionAction`, `getInsistenciasAction` | `requireSolicitudAccess` |
+| `descargarDocumentoSolicitudAction`, `eliminarDocumentoSolicitudAction` | `requireDocumentoAccess`: resuelve la solicitud del documento y aplica el mismo alcance |
+| `getUsuarioDetalleAction` | Email y teléfono solo con relación de trabajo (ver abajo) |
+
+- Contacto de usuarios (`src/lib/auth/contacto.ts`): nombre, rol y sucursal siguen visibles para cualquier usuario activo, porque se usan en historial y listados. El email y el teléfono solo se entregan si quien consulta es administrador o el propio usuario, si el consultado participa en una solicitud a la que quien consulta tiene acceso (`SolicitudDetalleModal` ahora envía el `solicitudId`), si comparten sucursal o zona, o si el consultado es administrador, jefe de local o logística (roles de coordinación). En los demás casos la UI muestra "No disponible".
+
+### Archivos
+- `src/app/actions/solicitudes.actions.ts`, `src/lib/auth/guards.ts`, `src/lib/auth/contacto.ts`
+- `src/components/SolicitudDetalleModal.tsx`, `src/components/usuario-info-modal.tsx`, `src/types/auth.types.ts` (`contacto_oculto`)
+- `src/services/solicitudes.service.ts`: `getSolicitudIdDeDocumento`, `getSolicitudIdDeReserva`
+
+### Tests
+- `tests/unitarios/solicitudes.actions.test.ts` (descarga, listado y comentarios sobre solicitudes ajenas; contacto oculto).
+- `tests/unitarios/contacto.test.ts`, `tests/unitarios/guards.test.ts`.
+
+### Decisión tomada por defecto (confirmar)
+- La regla de contacto descrita arriba. Si el negocio prefiere un directorio abierto entre empleados, basta con devolver siempre `detalle` en `getUsuarioDetalleAction`.

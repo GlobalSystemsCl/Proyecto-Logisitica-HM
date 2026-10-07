@@ -1,7 +1,7 @@
 # Brecha 013 — Contraseñas temporales débiles, expuestas al navegador y política de contraseñas inconsistente
 
 ## Estado
-Pendiente
+Corregida
 
 ## Severidad
 Medium
@@ -54,3 +54,24 @@ Generador ad hoc y retorno de la contraseña pensado como plan B cuando el corre
 ## Criterios de aceptación
 - No se devuelven contraseñas al cliente cuando el correo se envió.
 - Toda contraseña nueva cumple una única política.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `generateTempPassword`: 16 caracteres con `crypto.randomInt`, siempre con mayúscula, minúscula y número, y mezcla Fisher-Yates. Se eliminaron `Math.random` y el prefijo fijo `HM-`.
+- La contraseña temporal **solo vuelve al navegador si el correo falló** (`createUser`, `resetUserPassword`).
+- Política única en `src/lib/validaciones.ts` (`validarPassword`, `requisitosPassword`): 10 a 72 caracteres, con mayúscula, minúscula y número. Se aplica en registro, establecer clave (action y service), creación de usuarios por el admin (contraseña personalizada) y en la UI de `/establecer-clave` y `/registro`.
+
+### Archivos
+- `src/services/users.service.ts`, `src/lib/validaciones.ts`, `src/app/actions/auth.actions.ts`, `src/services/auth.service.ts`
+- `src/app/establecer-clave/page.tsx`, `src/app/registro/RegistroForm.tsx`
+
+### Tests
+- `users.service.test.ts`: `should_generate_16_chars_meeting_password_policy`, `should_not_return_temp_password_when_email_was_sent`, `should_return_temp_password_when_email_failed`, `should_reject_weak_custom_password`.
+- `validaciones.test.ts`: `validarPassword` y `requisitosPassword`.
+
+### Pendiente (opcional)
+- Reemplazar las contraseñas temporales por enlaces de invitación de Supabase (`inviteUserByEmail`).
+- Replicar la política en Supabase Auth (ver brecha 012).

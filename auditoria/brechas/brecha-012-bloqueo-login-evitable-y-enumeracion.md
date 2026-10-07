@@ -1,7 +1,7 @@
 # Brecha 012 — Bloqueo por intentos fallidos evitable, enumeración de cuentas y sin rate limiting
 
 ## Estado
-Pendiente
+Parcial: código corregido; **falta configuración en el dashboard de Supabase**
 
 ## Severidad
 Medium
@@ -56,3 +56,30 @@ Control de seguridad implementado en la capa de aplicación para un recurso (Aut
 ## Criterios de aceptación
 - La fuerza bruta directa contra Auth está limitada por CAPTCHA y rate limits.
 - No es posible distinguir cuentas existentes por los mensajes.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- **Sin enumeración de cuentas:** el login responde siempre con el mismo mensaje para correo inexistente, contraseña errónea y cuenta bloqueada. El estado "desactivada" o "pendiente" solo se revela a quien ya validó la contraseña. La recuperación responde igual exista o no la cuenta, y una cuenta inactiva no recibe correo.
+- **Bloqueo sin probar la contraseña:** mientras dure el bloqueo, no se llama a Supabase Auth.
+- **Contador atómico:** RPC `fn_registrar_intento_fallido` (incremento y bloqueo en una sentencia, solo ejecutable por service_role). Si la RPC aún no existe, se usa la actualización anterior como respaldo.
+
+### Archivos
+- `src/services/auth.service.ts` (`MENSAJE_LOGIN_FALLIDO`, `registrarIntentoFallido`), `src/app/actions/auth.actions.ts`
+- `projecto_logistica_hm/supabase/migrations/20261007120600_brecha_012_intentos_fallidos_atomico.sql` (+ rollback)
+
+### Tests
+- `auth.service.test.ts`: `should_return_same_message_when_user_does_not_exist_or_password_is_wrong`, `should_not_try_password_and_return_generic_message_when_account_is_locked`, `should_increment_attempts_atomically_through_rpc_on_failure`, `should_report_success_without_sending_when_account_does_not_exist`.
+
+### Pendiente (responsable, en el dashboard de Supabase)
+1. Authentication → Attack Protection: activar **Leaked password protection** (el advisor la reporta desactivada).
+2. Authentication → Policies: política de contraseñas igual a la de la app (mínimo 10, mayúscula, minúscula y número).
+3. CAPTCHA (Turnstile o hCaptcha) en signup, signin y recover. Requiere además integrar el widget en los formularios.
+4. Revisar los rate limits de Auth.
+5. MFA (TOTP) para administradores.
+
+### Pendiente (código)
+- Rate limiting por IP en las actions públicas (requiere almacenamiento compartido, por ejemplo Upstash Ratelimit).
+- El bloqueo de 5 intentos sigue permitiendo que un tercero bloquee cuentas ajenas durante 15 minutos. Es inherente al bloqueo por cuenta; el CAPTCHA lo mitiga.

@@ -1,7 +1,7 @@
 # Brecha 015 — Esquema de base de datos sin migraciones versionadas
 
 ## Estado
-Pendiente
+Parcial
 
 ## Severidad
 Medium
@@ -49,3 +49,19 @@ Cambios de esquema hechos directamente en el dashboard o SQL editor de Supabase.
 ## Criterios de aceptación
 - El esquema completo se puede recrear desde el repositorio.
 - Cada corrección de esta auditoría queda como una migración con nombre y fecha.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- Se creó `projecto_logistica_hm/supabase/` con:
+  - `migrations/`: 7 migraciones con fecha, una por grupo de brechas;
+  - `rollback/`: reversión de cada una;
+  - `scripts/00_respaldo_antes_de_migrar.sql`: exporta policies, funciones, triggers, grants y FKs actuales;
+  - `README.md`: orden de aplicación y procedimiento.
+
+### Pendiente (responsable)
+1. `supabase link` + `supabase db pull` para generar la migración base del esquema completo (requiere la contraseña de la BD y Docker).
+2. `supabase gen types typescript` para que el typecheck detecte columnas inexistentes.
+3. CI con Supabase local que aplique las migraciones desde cero (brecha 017).

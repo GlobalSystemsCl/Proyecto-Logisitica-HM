@@ -1,7 +1,7 @@
 # Brecha 026 — Dependencias y variables de entorno: elementos sin uso, faltantes o duplicados
 
 ## Estado
-Pendiente
+Parcial
 
 ## Severidad
 Informational
@@ -52,3 +52,26 @@ Limpieza de package.json → validación de env → rotación de claves → sepa
 
 ## Criterios de aceptación
 - Sin dependencias sin uso; todas las variables requeridas validadas; los tests no pueden tocar producción.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- Se eliminó la dependencia `claude` (`npm uninstall claude`), que no se usaba en ningún archivo.
+- `NEXT_PUBLIC_APP_URL`: `src/lib/env.ts` (`getAppUrl`) falla de forma explícita en producción si falta, en lugar de generar enlaces a `localhost`. Se usa en la recuperación de contraseña y en el correo de credenciales.
+- `tests/setup-env.ts` ya no carga `.env.local`: los tests no pueden tocar producción (punto 6).
+- `npm audit` ejecutado. Ver la brecha 027: Next.js tenía vulnerabilidades críticas y se actualizó. `npm audit fix` (sin `--force`) corrigió `brace-expansion` y `source-map-js`.
+
+### Tests
+- `env.test.ts`.
+
+### Pendiente
+1. **Responsable:** definir `NEXT_PUBLIC_APP_URL` y `ADMIN_PRINCIPAL_EMAIL` en el hosting.
+2. **Responsable:** migrar a las claves nuevas de Supabase (`PUBLISHABLE_KEY` / `SECRET_KEY`), desactivar las legacy y eliminar los fallbacks `||` del código.
+3. **Responsable:** quitar `BREVO_SMTP_*` de `.env.local` y del hosting (no se usan).
+4. Vulnerabilidades restantes, solo en herramientas de desarrollo (no llegan a producción):
+   - `vitest` / `tinypool` (crítica): requiere vitest 5 (major);
+   - `eslint-config-next` / `micromatch` (alta).
+   Actualizarlas en un cambio aparte y verificar la suite.
+5. Dependabot o Renovate.

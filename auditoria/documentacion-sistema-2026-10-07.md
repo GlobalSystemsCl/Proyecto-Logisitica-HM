@@ -472,6 +472,7 @@ Resumen de controles existentes:
 | 022 | HTML sin escapar en correos | Low |
 | 023 | Validación de archivos basada en MIME del cliente | Low |
 | 025 | Email del admin principal hardcodeado en código y trigger | Informational |
+| 027 | Next.js 16.3.2 con vulnerabilidades críticas de ejecución remota de código (detectada en la fase de corrección con `npm audit`) | Critical |
 
 ## 22. Problemas de arquitectura
 
@@ -503,6 +504,8 @@ Con los volúmenes actuales (13 solicitudes, 2.261 vehículos) no hay problemas 
 - Dependencia `claude` sin uso.
 - Documentación de testing desactualizada; script `test:integration` roto.
 - Componentes y services muy grandes.
+- `src/middleware.ts` usa la convención obsoleta de Next 16 (renombrada a `proxy.ts`). Funciona; migrar con el codemod oficial.
+- La lista de sucursales de `/registro` se genera en el build (página estática): una sucursal nueva no aparece hasta el siguiente despliegue.
 
 ## 26. Recomendaciones
 
@@ -520,13 +523,49 @@ Orden sugerido (detalle en cada brecha):
 | 2 | **Aún no se ejecutan tests, build ni lint** | Se mantiene el carácter de solo lectura de esta auditoría |
 | 3 | Por ahora **solo se documenta** lo que hay que hacer | Ninguna brecha se corrige en esta etapa; el detalle de cada corrección está en `auditoria/brechas/brecha-NNN-*.md` |
 | 4 | La documentación se versiona en una **rama separada** (`auditoria/2026-10-07`) | No se mezcla con `main` hasta revisión |
+| 5 | **Proceder con la corrección de las brechas** y documentarla en cada archivo | Correcciones en la rama `fix/brechas-auditoria-2026-10-07`, creada desde `auditoria/2026-10-07`. Reemplaza las decisiones 2 y 3 |
+
+Notas de la fase de corrección:
+- **Decisión 1 (producción directa):** desde la sesión de corrección no hubo permiso para consultar ni modificar la base de producción. Los cambios de BD quedaron como migraciones versionadas con respaldo y rollback, listas para que el responsable las aplique (ver `plan-despliegue-correcciones-2026-10-07.md`).
+- **Tests:** se ejecutaron solo localmente (unitarios con mocks, typecheck, lint y build). Antes de ejecutarlos se aisló `tests/setup-env.ts` para que no pudiera usar las credenciales de producción (brecha 026).
 
 ## 27. Estado actual del sistema
 
-- Funcional para los flujos operativos principales de solicitudes y traslados (según el código; no se ejecutó).
-- **No apto para exposición pública** mientras existan las brechas 001 y 002: cualquier persona puede registrarse y obtener el rol administrador.
-- Aprobación de cuentas no operativa.
-- Ninguna brecha se ha solucionado aún. Todas están en estado **Pendiente**.
+Actualizado tras la fase de corrección (2026-10-07). El código corregido está en la rama `fix/brechas-auditoria-2026-10-07`; **no está desplegado** y las migraciones **no están aplicadas** en producción.
+
+- Mientras no se apliquen las migraciones 001/002 y se despliegue el código, producción sigue expuesta a las brechas 001 y 002 (escalamiento a administrador) y a la 027 (Next.js vulnerable).
+- Verificación local de la rama: 699 tests unitarios en verde (eran 521), `tsc --noEmit` sin errores, ESLint sin errores, `next build` correcto y `npm audit --omit=dev` con 0 vulnerabilidades.
+- Pasos de despliegue y acciones del responsable: [`plan-despliegue-correcciones-2026-10-07.md`](plan-despliegue-correcciones-2026-10-07.md).
+
+| Brecha | Severidad | Estado |
+|---|---|---|
+| 001 Escalamiento vía UPDATE usuario | Critical | Código listo · migración pendiente de aplicar |
+| 002 Rol desde metadatos del registro | Critical | Código listo · migración pendiente de aplicar |
+| 027 Next.js vulnerable | Critical | Corregida · pendiente de desplegar |
+| 003 Columna `aprobado` inexistente | High | Código listo · migración pendiente de aplicar |
+| 004 Actions sin autenticación | High | Corregida |
+| 005 RLS permisivo | High | Código listo · migración pendiente de aplicar |
+| 006 IDOR | High | Corregida |
+| 007 Contraseña en el seed | High | Parcial · **rotar la contraseña (responsable)** |
+| 008 Alcance sucursal/zona | Medium | Corregida (reglas por defecto a confirmar) |
+| 009 Sesión de desactivados / cambio de clave | Medium | Corregida |
+| 010 Concurrencia | Medium | Parcial (transiciones y doble reserva; faltan RPC transaccionales) |
+| 011 Slots desincronizados | Medium | Pendiente (requiere acceso a BD) |
+| 012 Bloqueo de login / enumeración | Medium | Parcial · falta configuración en el dashboard de Supabase |
+| 013 Contraseñas temporales | Medium | Corregida |
+| 014 Funciones SECURITY DEFINER | Medium | Parcial · migración pendiente de aplicar |
+| 015 Esquema sin migraciones | Medium | Parcial (migraciones de corrección; falta la base) |
+| 016 Borrado en cascada de sucursal | Medium | Código listo · migración pendiente de aplicar |
+| 017 Cobertura de tests | Medium | Parcial (unitarios y actions; faltan RLS e integración) |
+| 018 Auditoría y notificaciones | Low | Parcial (requiere decisión de diseño) |
+| 019 Headers de seguridad | Low | Corregida (CSP en Report-Only) |
+| 020 Errores internos / `next` | Low | Corregida |
+| 021 Inyección en filtros | Low | Corregida (índice único pendiente) |
+| 022 HTML en correos | Low | Corregida |
+| 023 Validación de archivos | Low | Corregida |
+| 024 Rendimiento | Low | Parcial (cache de perfil, filtro por zona e índices; falta paginación) |
+| 025 Email del admin hardcodeado | Informational | Código listo · requiere `ADMIN_PRINCIPAL_EMAIL` y la migración |
+| 026 Dependencias y variables de entorno | Informational | Parcial (acciones del responsable en el hosting) |
 
 ## 28. Historial de cambios
 
@@ -534,3 +573,4 @@ Orden sugerido (detalle en cada brecha):
 |---|---|---|
 | 2026-10-07 | Creación del documento: auditoría inicial de solo lectura, 26 brechas documentadas | Claude (auditoría asistida) |
 | 2026-10-07 | Registro de decisiones del responsable (sección 26) | Claude (auditoría asistida) |
+| 2026-10-07 | Fase de corrección: código, migraciones y tests en `fix/brechas-auditoria-2026-10-07`; sección "Solución aplicada" en cada brecha; nueva brecha 027; estado actualizado (sección 27) y plan de despliegue | Claude (auditoría asistida) |

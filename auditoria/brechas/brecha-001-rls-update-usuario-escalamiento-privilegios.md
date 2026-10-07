@@ -1,7 +1,7 @@
 # Brecha 001 — Escalamiento a administrador por la policy UPDATE de `usuario`
 
 ## Estado
-Pendiente
+Corregida en código; migración lista, **pendiente de aplicar en producción**
 
 ## Severidad
 Critical
@@ -66,3 +66,26 @@ La policy se diseñó para que el usuario editara su perfil (nombre, teléfono),
 - Un usuario no administrador no puede modificar ninguna columna sensible de su fila por la API REST.
 - `get_advisors` no reporta nuevos problemas.
 - Los flujos de perfil y gestión de usuarios siguen funcionando.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- Se retiran a `anon` todos los privilegios sobre las tablas de `public` y a `authenticated` los de INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES y TRIGGER. `authenticated` conserva solo SELECT (las policies siguen filtrando filas). Se verificó en el código que la app no escribe con el cliente anon: todas las escrituras usan service_role y el cliente con sesión solo lee `usuario`, `sucursal` y `usuario_zona`.
+- Default privileges: las tablas nuevas no nacen con escritura pública.
+- Trigger `tr_proteger_columnas_usuario` (defensa en profundidad): un usuario no administrador no puede cambiar `rol`, `activo`, `requiere_cambio_clave`, `intentos_fallidos`, `bloqueado_hasta`, `sucursal_id`, `email` ni `id`, ni insertar perfiles, aunque alguien vuelva a conceder privilegios. service_role (sin `auth.uid()`) no se ve afectado.
+- Policies de `usuario`: UPDATE e INSERT solo para administradores, con `WITH CHECK`; todas pasan de `{public}` a `{authenticated}`.
+
+### Archivos
+- `projecto_logistica_hm/supabase/migrations/20261007120000_brecha_001_005_permisos_escritura.sql`
+- `projecto_logistica_hm/supabase/rollback/20261007120000_brecha_001_005_permisos_escritura.sql`
+
+### Verificación
+- La migración incluye la consulta de verificación: `anon` sin privilegios y `authenticated` solo con SELECT.
+- No se pudieron ejecutar tests contra la base: este entorno no tiene acceso a producción. Los tests SQL por rol quedan en la brecha 017.
+
+### Pendiente (responsable)
+1. Ejecutar `supabase/scripts/00_respaldo_antes_de_migrar.sql` y guardar los resultados.
+2. Aplicar la migración (ver `projecto_logistica_hm/supabase/README.md`).
+3. Auditoría post-incidente: revisar `auth.audit_log_entries` y los logs de PostgREST (PATCH a `/rest/v1/usuario`) y confirmar que los 2 administradores actuales son legítimos (consulta 8 del script de respaldo).

@@ -1,7 +1,7 @@
 # Brecha 005 — RLS permisivo en `solicitud`, `solicitud_vehiculo` y `vehiculo`
 
 ## Estado
-Pendiente
+Corregida en código; migración lista, **pendiente de aplicar en producción**
 
 ## Severidad
 High
@@ -61,3 +61,19 @@ Como la aplicación no escribe estas tablas con el cliente anon (No encontrado e
 ## Criterios de aceptación
 - Ningún rol no administrador puede escribir en `solicitud`, `solicitud_vehiculo` o `vehiculo` vía REST.
 - La aplicación funciona igual que antes.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- Resuelto con la misma migración que la 001: `authenticated` ya no tiene INSERT, UPDATE ni DELETE en ninguna tabla de `public`. Ningún rol puede escribir `solicitud`, `solicitud_vehiculo` ni `vehiculo` por la API REST.
+- Defensa en profundidad: `solicitud_update_participantes`, `sv_insert_logistica`, `sv_update_logistica`, `vehiculo_update_gestores` y `vehiculo_insert_gestores` pasan a exigir `es_administrador()` en `USING` y `WITH CHECK`. Si una policy no existe con ese nombre, se informa con NOTICE y la migración continúa.
+- Además, el trigger `tr_validar_reserva_unica_vehiculo` (brecha 010) valida en la BD que no se reserve un vehículo vendido ni uno ya reservado.
+
+### Archivos
+- `projecto_logistica_hm/supabase/migrations/20261007120000_brecha_001_005_permisos_escritura.sql` (+ rollback)
+
+### Pendiente
+- Alinear la policy SELECT de `solicitud` para Jefe de Local con la regla de la app (principal + encargadas, todos los estados). Es una inconsistencia de lectura, no una fuga, y requiere la definición actual de la policy (ver respaldo).
+- Tests RLS por rol con Supabase local (brecha 017).

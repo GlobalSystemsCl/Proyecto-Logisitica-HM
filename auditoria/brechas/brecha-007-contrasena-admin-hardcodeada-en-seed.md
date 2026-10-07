@@ -1,7 +1,7 @@
 # Brecha 007 — Contraseña del administrador principal hardcodeada en el script de seed
 
 ## Estado
-Pendiente
+Parcial: script corregido; **la rotación de la contraseña la debe hacer el responsable**
 
 ## Severidad
 High
@@ -48,3 +48,24 @@ Script de bootstrap escrito para desarrollo, con credenciales embebidas en lugar
 ## Criterios de aceptación
 - Ninguna contraseña literal en el repositorio.
 - La contraseña actual del administrador principal no coincide con la del historial.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `scripts/seed-admin.mjs` ya no contiene credenciales:
+  - el correo se lee de `SEED_ADMIN_EMAIL`;
+  - la contraseña sale de `SEED_ADMIN_PASSWORD` (mínimo 12 caracteres) o se genera aleatoria con `crypto.randomBytes` (24 caracteres);
+  - la contraseña no se imprime salvo con el flag explícito `--mostrar-clave`;
+  - la cuenta queda con `requiere_cambio_clave = true` y `aprobado = true`;
+  - el rol ya no viaja en `user_metadata`.
+
+### Archivos
+- `projecto_logistica_hm/scripts/seed-admin.mjs`
+
+### Pendiente (responsable) — urgente
+1. **Rotar ya la contraseña del administrador principal** desde `/perfil`, desde `/recuperar-clave` o con "Restablecer contraseña" en `/admin/usuarios`. La contraseña anterior sigue en el historial de git (y en el remoto de GitHub): debe considerarse comprometida.
+2. Rotar también la de cualquier cuenta creada con el script anterior.
+3. Activar MFA para administradores en Supabase Auth.
+4. Opcional: detección de secretos en CI (gitleaks).

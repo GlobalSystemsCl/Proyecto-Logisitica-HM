@@ -1,7 +1,7 @@
 # Brecha 017 — Cobertura de tests insuficiente para seguridad y base de datos
 
 ## Estado
-Pendiente
+Parcial
 
 ## Severidad
 Medium
@@ -60,3 +60,23 @@ Esta brecha es en sí la definición de los tests faltantes. Mínimo:
 ## Criterios de aceptación
 - Cada brecha corregida tiene al menos un test que falla antes y pasa después.
 - `npm run test:integration` ejecuta tests reales.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- **Aislamiento de producción:** `tests/setup-env.ts` ya no carga `.env.local`, que tiene la service_role de producción. Usa valores ficticios apuntando a un host inexistente, así que un test que olvide un mock no puede tocar datos reales (también cierra el punto 6 de la brecha 026).
+- **Tests nuevos (16 archivos, 147 casos; la suite pasa de 521 a 699 tests):**
+  - Server Actions: `solicitudes.actions.test.ts` (alcance y contacto) y `actions-inventario.test.ts`, que falla si una action exportada no llama a un guard.
+  - Guards: `guards.test.ts`, `acceso.test.ts` (middleware), `contacto.test.ts`.
+  - Services: `sucursales.service.test.ts` (no tenía tests), `email.service.test.ts` (no tenía tests), `solicitudes.brechas.test.ts`.
+  - Utilidades: `errores`, `archivos`, `busqueda`, `html`, `env`, `redireccion`, `admin-principal`, `security-headers`.
+- Se corrigieron los tests que validaban comportamiento inexistente (`aprobado` en metadatos, errores crudos de BD).
+- Resultado: **36 archivos y 699 tests en verde**, `tsc --noEmit` sin errores, ESLint sin errores (6 advertencias ya existentes) y `next build` correcto.
+
+### Pendiente
+- Tests de RLS, triggers e integración con Supabase local (`supabase start` + pgTAP o Vitest con JWT por rol). Requieren Docker y la migración base (brecha 015).
+- `package.json` define `test:integration` sobre `tests/integracion`, que no existe.
+- Actualizar `tests/documentacion_testing.md`.
+- CI (lint + typecheck + unit) en cada PR.

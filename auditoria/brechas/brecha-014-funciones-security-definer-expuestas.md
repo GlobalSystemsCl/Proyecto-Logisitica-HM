@@ -1,7 +1,7 @@
 # Brecha 014 — Funciones SECURITY DEFINER expuestas y `search_path` mutable
 
 ## Estado
-Pendiente
+Parcial: migración lista, **pendiente de aplicar**; 2 puntos requieren el código actual de las funciones
 
 ## Severidad
 Medium
@@ -52,3 +52,24 @@ Exposición menor de información (asignaciones de sucursal) y superficie de ata
 ## Criterios de aceptación
 - Advisors de seguridad sin WARN para funciones.
 - Flujo completo funcionando.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios (migración)
+- Recorre `pg_proc` (las firmas no están versionadas) y para cada función de `public` que no pertenezca a una extensión:
+  - revoca EXECUTE a `PUBLIC` y `anon`;
+  - en funciones de trigger y event trigger, revoca EXECUTE también a `authenticated`;
+  - mantiene EXECUTE para `authenticated` en las demás, porque las policies RLS las usan;
+  - fija `search_path = public, pg_temp` donde no esté definido.
+- Default privileges: las funciones nuevas no se crean con EXECUTE para PUBLIC ni anon.
+- `handle_new_auth_user` (brecha 002) ya usa `search_path = ''`.
+
+### Archivos
+- `projecto_logistica_hm/supabase/migrations/20261007120200_brecha_014_funciones_security_definer.sql` (+ rollback)
+
+### Pendiente
+1. `usuario_tiene_sucursal`: un usuario autenticado todavía puede consultar las asignaciones de otro. Crear una versión pública basada en `auth.uid()` y otra interna para las policies.
+2. `es_administrador`, `tiene_rol` y `usuario_activo`: cambiar `COALESCE(v_activo, true)` a `false`.
+3. Después de aplicar: revisar los advisors 0011, 0028 y 0029 y hacer una prueba de humo de cada trigger (crear, cancelar y finalizar una solicitud de prueba).

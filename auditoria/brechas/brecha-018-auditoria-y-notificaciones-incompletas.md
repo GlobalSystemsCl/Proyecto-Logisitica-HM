@@ -1,7 +1,7 @@
 # Brecha 018 — Auditoría best-effort y sistema de notificaciones sin implementar
 
 ## Estado
-Pendiente
+Parcial
 
 ## Severidad
 Low
@@ -50,3 +50,23 @@ Auditoría implementada en dos lugares a medias; desajuste de tipos.
 
 ## Criterios de aceptación
 - Todo cambio de estado, sea cual sea su origen, queda auditado con su actor.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `reordenarCola`: el registro con `entidad_id = 'sucursal_<id>'` (no es un uuid) fallaba siempre en silencio. Ahora se registra un movimiento `reorden_cola` por cada solicitud que cambió de posición, con su uuid, la posición anterior y la nueva.
+- `eliminarSolicitud` registra la eliminación física (`accion = 'eliminacion'`, con estado, sucursal y ejecutivo) y el actor.
+
+### Archivos
+- `src/services/solicitudes.service.ts`, `src/app/actions/solicitudes.actions.ts`
+
+### Tests
+- `solicitudes.service.test.ts`: `should_reescribir_cola_y_auditar`.
+- `solicitudes.brechas.test.ts`: `should_audit_deletion_with_actor_when_user_is_given`.
+
+### Pendiente / decisión de diseño
+1. Elegir una sola fuente de auditoría (triggers en BD con el actor vía `set_config`, o la app) y permitir `usuario_id` NULL para acciones de sistema.
+2. Auditar las acciones administrativas sobre usuarios, sucursales, zonas y marcas. Las sucursales y zonas tienen ID numérico: requiere ampliar `entidad_id` a `text` o una columna aparte.
+3. Notificaciones: implementarlas (triggers + UI) o eliminar las funciones `notificar_*`, la tabla y el enum.

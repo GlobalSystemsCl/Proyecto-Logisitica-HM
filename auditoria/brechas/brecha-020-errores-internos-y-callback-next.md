@@ -1,7 +1,7 @@
 # Brecha 020 — Mensajes de error internos expuestos y parámetro `next` sin lista blanca
 
 ## Estado
-Pendiente
+Corregida
 
 ## Severidad
 Low
@@ -46,3 +46,20 @@ Helper + reemplazo progresivo por service.
 
 ## Criterios de aceptación
 - Ningún mensaje al cliente contiene texto de error de Postgres o PostgREST.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- Nuevo `src/lib/errores.ts`:
+  - `ErrorUsuario`: mensajes propios, se muestran tal cual;
+  - `mensajeErrorUsuario(err, fallback)`: traduce los códigos de Postgres conocidos (23505, 23503, 23502, 23514, 22P02, 42501), muestra el mensaje de negocio de nuestros triggers (P0001) y, para el resto, registra el detalle en el servidor y devuelve el mensaje de respaldo con un **código de soporte** que también queda en el log.
+- Se aplicó en todos los services y actions: ya no se devuelve `error.message` de Postgres, PostgREST, Storage ni Auth.
+- `/auth/callback`: lista blanca para `next` (`/establecer-clave` y `/dashboard`), en `src/lib/redireccion.ts`.
+
+### Tests
+- `errores.test.ts`, `redireccion.test.ts` y los tests de services que verifican que el detalle interno no llega al usuario.
+
+### Pendiente
+- Logger estructurado con redacción de campos sensibles (hoy `console.error`).

@@ -1,7 +1,7 @@
 # Brecha 021 — Inyección en filtros PostgREST (`.or()` con texto del usuario) y `ilike` sin escape
 
 ## Estado
-Pendiente
+Corregida (índice único pendiente)
 
 ## Severidad
 Low
@@ -43,3 +43,20 @@ Helper `sanitizarBusqueda` con tests + reemplazo en los 5 puntos.
 
 ## Criterios de aceptación
 - Ningún texto de usuario se interpola sin sanear en `.or()` ni en `.ilike()`.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `TrasladoService.getVehiculosParaTraslado`: el término de búsqueda pasa por `sanitizarTerminoBusqueda`, que deja solo alfanuméricos y guiones (máximo 30), porque patente y chasis lo son. Ya no se pueden inyectar condiciones en `.or()`.
+- Validaciones de nombre único en sucursales y zonas: `escaparPatronLike` escapa `\`, `%` y `_`, así que "Zona_1" ya no coincide con "ZonaX1".
+
+### Archivos
+- `src/lib/busqueda.ts`, `src/services/traslado.service.ts`, `src/services/sucursales.service.ts`, `src/services/organizacion.service.ts`
+
+### Tests
+- `tests/unitarios/busqueda.test.ts`.
+
+### Pendiente
+- Índice único `lower(nombre)` en `sucursal` y `zona`. Antes hay que revisar si hoy existen duplicados.

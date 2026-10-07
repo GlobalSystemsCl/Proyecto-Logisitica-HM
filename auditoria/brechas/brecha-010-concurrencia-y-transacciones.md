@@ -1,7 +1,7 @@
 # Brecha 010 — Condiciones de carrera y operaciones multi-paso sin transacción
 
 ## Estado
-Pendiente
+Parcial
 
 ## Severidad
 Medium
@@ -55,3 +55,24 @@ PostgREST no ofrece transacciones multi-statement desde el cliente, y la lógica
 ## Criterios de aceptación
 - Imposible reservar un vehículo dos veces aun con concurrencia.
 - Ninguna transición se aplica sobre un estado distinto del validado.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+1. **Transiciones condicionadas al estado (paso 1):** las 13 transiciones de `SolicitudesService` (priorizar, priorizar en posición, sacar de cola, cancelar, aprobar, rechazar, calendarizar, descalendarizar, despachar, cancelar despacho, recibir, finalizar y asignar encargado) usan el helper `actualizarSiEstado`: `UPDATE … WHERE id = ? AND estado = <estado validado>`. Si otro usuario cambió la solicitud entretanto, se responde con un conflicto ("La solicitud cambió de estado… recarga") en lugar de aplicar una transición incompatible.
+2. **Doble reserva (paso 2):** trigger `tr_validar_reserva_unica_vehiculo` en `solicitud_vehiculo` con `pg_advisory_xact_lock` por vehículo. Rechaza reservar un vehículo ya reservado en otra solicitud activa o ya vendido, también con concurrencia.
+3. **Contador de intentos de login:** RPC atómica `fn_registrar_intento_fallido` (ver brecha 012).
+4. **Reordenamiento de cola:** exige que el orden coincida con la cola actual, lo que detecta reordenamientos simultáneos.
+
+### Archivos
+- `src/services/solicitudes.service.ts` (`actualizarSiEstado`, `MENSAJE_CONFLICTO_ESTADO`)
+- `projecto_logistica_hm/supabase/migrations/20261007120300_brecha_010_bloqueo_doble_reserva.sql` (+ rollback)
+- `projecto_logistica_hm/supabase/migrations/20261007120600_brecha_012_intentos_fallidos_atomico.sql` (+ rollback)
+
+### Tests
+- `solicitudes.brechas.test.ts`: `should_filter_update_by_the_state_that_was_validated`, `should_return_conflict_when_no_row_was_updated`, `should_return_business_message_when_trigger_rejects_with_P0001`.
+
+### Pendiente
+- Paso 3: RPCs transaccionales para `createSolicitud` + vehículos, `crearTraslado` y `reordenarCola` en una sola sentencia. Requiere tests de BD (brecha 017).

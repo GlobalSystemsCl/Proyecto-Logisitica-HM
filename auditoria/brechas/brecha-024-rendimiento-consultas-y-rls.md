@@ -1,7 +1,7 @@
 # Brecha 024 — Consultas sin paginación, filtrado en memoria y RLS no optimizado
 
 ## Estado
-Pendiente
+Parcial
 
 ## Severidad
 Low
@@ -55,3 +55,24 @@ Diseño inicial sin paginación; filtros que no se pueden expresar fácilmente c
 ## Criterios de aceptación
 - Advisors de rendimiento sin WARN.
 - Listados con tiempo constante respecto al total de registros.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `AuthService.getCurrentUserProfile` envuelto en `React.cache`: en una misma petición, páginas, layouts y actions reutilizan el perfil en lugar de repetir 3 consultas cada vez.
+- `getSolicitudesPorZonas` (logística): el filtro por zona se hace en la BD (`sucursal.zona_id IN … → solicitud.sucursal IN …`) en lugar de traer todas las solicitudes y filtrarlas en memoria.
+- Migración con índices para las FKs más usadas en filtros: `solicitud(ejecutivo_id)`, `(jefe_local_id)`, `(logistica_id)`, `observacion(solicitud_id)`, `solicitud_vehiculo(vehiculo_id)`, `usuario(sucursal_id)`.
+
+### Archivos
+- `src/services/auth.service.ts`, `src/services/solicitudes.service.ts`
+- `projecto_logistica_hm/supabase/migrations/20261007120500_brecha_024_indices_fk.sql` (+ rollback)
+
+### Tests
+- `solicitudes.brechas.test.ts`: `should_filter_by_zone_branches_in_the_database` y casos borde.
+
+### Pendiente
+- Paginación del historial (`AuditoriaService.getAuditoria`) y de los listados (cambia la UX de las tablas).
+- `(select auth.uid())` en las 19 policies del advisor `auth_rls_initplan`, y las 6 FKs restantes sin índice. Requiere la definición actual de cada policy (ver respaldo).
+- Reordenar la cola en una sola sentencia (brecha 010, paso 3).

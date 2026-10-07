@@ -1,7 +1,7 @@
 # Brecha 008 — Alcance por sucursal o zona incompleto en acciones de Jefe de Local y Logística
 
 ## Estado
-Pendiente
+Corregida (con reglas por defecto a confirmar con el negocio)
 
 ## Severidad
 Medium
@@ -57,3 +57,28 @@ Verificaciones de rol copiadas action por action, sin un guard de alcance común
 
 ## Criterios de aceptación
 - Ninguna acción mutante opera fuera del alcance definido para el rol.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+| Action | Antes | Ahora |
+|---|---|---|
+| `reordenarColaAction` | Aceptaba IDs de cualquier sucursal | El service exige que todos los IDs sean de la sucursal indicada y que el orden contenga exactamente la cola actual |
+| `agregarVehiculoAction` / `quitarVehiculoAction` | Solo rol | Rol + alcance sobre la solicitud (`requireSolicitudAccess` / `requireSolicitudVehiculoAccess`). Vehículo vendido: lo rechaza el trigger de BD (brecha 010) |
+| `calendarizar` / `descalendarizar` / `despachar` / `cancelarDespacho` / `asignarEncargado` / `recibir` / `finalizar` | Solo rol | Rol + alcance |
+| `cancelarSolicitudAction` | Cualquier logística cancelaba cualquier solicitud | Logística solo dentro de sus zonas |
+| `calendarizarSolicitud` | Sobrescribía `logistica_id` con el actor, aunque fuera Jefe de Local | Conserva el encargado ya asignado; un Jefe de Local no queda registrado como encargado de logística |
+
+### Archivos
+- `src/app/actions/solicitudes.actions.ts`, `src/services/solicitudes.service.ts`
+
+### Tests
+- `solicitudes.service.test.ts`: `should_rechazar_ids_de_otra_sucursal`, `should_rechazar_orden_que_no_coincide_con_la_cola_actual`.
+- `solicitudes.brechas.test.ts`: reglas de `logistica_id` al calendarizar.
+- `solicitudes.actions.test.ts`: cancelación de logística dentro y fuera de su zona.
+
+### Pendiente / a confirmar con el negocio
+- `asignarEncargadoAction`: validar que el encargado elegido tenga la zona de la solicitud.
+- Confirmar las reglas por defecto anteriores (por ejemplo, si un Jefe de Local debe poder calendarizar).

@@ -1,7 +1,7 @@
 # Brecha 003 — Aprobación de cuentas: la columna `aprobado` no existe en la base de datos
 
 ## Estado
-Pendiente
+Corregida en código; migración lista, **pendiente de aplicar en producción**
 
 ## Severidad
 High
@@ -72,3 +72,30 @@ Cambio de código (Dev 2, ~sept-2026) sin la migración correspondiente. El esqu
 ## Criterios de aceptación
 - Un autoregistrado no puede usar el sistema hasta que un admin lo apruebe, haga lo que haga con sus metadatos.
 - El admin crea usuarios sin errores y el correo se envía.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- Migración: columna `usuario.aprobado boolean not null default false`; los usuarios existentes quedan aprobados.
+- Invariante nuevo `CHECK (aprobado OR NOT activo)`: una cuenta no aprobada siempre está inactiva. Así `usuario_activo()`, `tiene_rol()` y `es_administrador()`, que ya filtran por `activo`, bloquean también a los no aprobados en toda la RLS, sin reescribirlas.
+- Registro (`AuthService.register`): perfil `ejecutivo`, `activo=false`, `aprobado=false`; se verifica el error del upsert.
+- Aprobación (`UsersService.approveUser`): `aprobado=true` y `activo=true` en una sola actualización; quita cualquier bloqueo en Auth.
+- `toggleUserStatus` no permite activar una cuenta sin aprobar.
+- Middleware: ya no usa `user_metadata.aprobado` (modificable por el propio usuario). Lee `activo`, `aprobado` y `requiere_cambio_clave` desde `public.usuario` y cierra la sesión si la cuenta no puede operar (`src/lib/auth/acceso.ts`, función pura con tests).
+- `signIn`: revela "pendiente de aprobación" solo después de validar la contraseña, y cierra la sesión.
+- Guards de actions (`requireProfile`): rechazan cuentas no aprobadas.
+
+### Archivos
+- `projecto_logistica_hm/supabase/migrations/20261007120100_brecha_002_003_025_registro_y_aprobacion.sql` (+ rollback)
+- `src/lib/auth/acceso.ts`, `src/lib/supabase/middleware.ts`, `src/lib/auth/guards.ts`
+- `src/services/auth.service.ts`, `src/services/users.service.ts`
+
+### Tests
+- `tests/unitarios/acceso.test.ts` (17 casos de la decisión de acceso).
+- `auth.service.test.ts`: registro pendiente, login de no aprobado.
+- `users.service.test.ts`: `should_approve_and_activate_user_and_lift_auth_ban`, `should_reject_activation_when_account_is_not_approved`.
+
+### Pendiente (responsable)
+- **Orden de despliegue:** aplicar la migración antes del código. Si el código llega primero, el middleware no encuentra la columna y cierra todas las sesiones.

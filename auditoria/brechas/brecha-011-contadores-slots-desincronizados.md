@@ -1,7 +1,7 @@
 # Brecha 011 — Contadores de slots desincronizados
 
 ## Estado
-Pendiente
+Pendiente (requiere acceso a la base de datos)
 
 ## Severidad
 Medium
@@ -59,3 +59,19 @@ Mezcla de contadores incrementales y recálculo; triggers solapados en cancelaci
 
 ## Criterios de aceptación
 - La consulta de comparación devuelve diferencia 0 en todas las sucursales después de cualquier operación.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Motivo
+La corrección necesita la definición exacta de `fn_recalcular_slots_ocupados` y de los triggers incrementales, que no están versionados (brecha 015). Desde este entorno no se pudo leer la base de producción, porque el acceso fue bloqueado por permisos. Escribir triggers a ciegas sobre contadores en producción es riesgoso.
+
+### Avance indirecto
+- El cierre de la escritura directa (brecha 005) y las transiciones condicionadas (brecha 010) eliminan dos de las causas probables de desajuste.
+
+### Próximos pasos
+1. Con el respaldo (`00_respaldo_antes_de_migrar.sql`, consulta 2), versionar las funciones de slots.
+2. Script de recálculo único de `slots_ocupados` y `slots_reservados` para las 6 sucursales.
+3. Unificar en un solo trigger de recálculo completo y eliminar el `disponibilidad()` duplicado.
+4. Test que compare `ESTADOS_ACTIVOS_RESERVA` con la lista SQL.

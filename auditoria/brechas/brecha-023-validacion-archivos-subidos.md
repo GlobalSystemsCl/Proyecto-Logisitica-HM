@@ -1,7 +1,7 @@
 # Brecha 023 — Validación de archivos subidos basada en el MIME declarado por el cliente
 
 ## Estado
-Pendiente
+Corregida
 
 ## Severidad
 Low
@@ -46,3 +46,22 @@ Validación de contenido en `subirDocumentos` + test + cambio de la descarga.
 
 ## Criterios de aceptación
 - Solo se almacenan archivos cuyo contenido coincide con un tipo permitido.
+
+## Solución aplicada (2026-10-07)
+
+**Rama:** `fix/brechas-auditoria-2026-10-07`
+
+### Cambios
+- `src/lib/archivos.ts`: `validarContenidoArchivo` exige que el MIME declarado, la extensión y la firma binaria (magic bytes) coincidan:
+  - PDF `%PDF-`, PNG, JPEG, WEBP (`RIFF…WEBP`);
+  - Office OOXML y ZIP `PK\x03\x04`;
+  - texto y CSV sin bytes NUL y sin firmas de ejecutables (MZ, ELF).
+- `subirDocumentos` lo aplica antes de subir nada a Storage.
+- `getURLDescarga` firma la URL con `download: <nombre original>`, lo que fuerza `Content-Disposition: attachment`.
+
+### Tests
+- `archivos.test.ts` (11 casos) y `solicitudes.service.test.ts`: `should_rechazar_cuando_el_contenido_no_coincide_con_el_tipo`, `should_rechazar_cuando_la_extension_no_coincide_con_el_tipo`, `should_generar_url_firmada`.
+
+### Pendiente (opcional / decisión)
+- Retirar `application/zip` de la lista si no es imprescindible.
+- Antivirus asíncrono.
