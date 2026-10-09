@@ -264,12 +264,14 @@ export function CancelarTransitoModal({
 interface ReprogramarModalProps {
   subtitulo?: string;
   fechaActual: string | null;
+  /** Fecha precargada (por ejemplo, el día al que se arrastró la tarjeta). */
+  fechaPropuesta?: string | null;
   onCerrar: () => void;
   onConfirmar: (nuevaFecha: string, motivo: string) => Promise<string | null>;
 }
 
-export function ReprogramarModal({ subtitulo, fechaActual, onCerrar, onConfirmar }: ReprogramarModalProps) {
-  const [fecha, setFecha] = useState(fechaActual ? fechaActual.slice(0, 10) : '');
+export function ReprogramarModal({ subtitulo, fechaActual, fechaPropuesta, onCerrar, onConfirmar }: ReprogramarModalProps) {
+  const [fecha, setFecha] = useState((fechaPropuesta ?? fechaActual ?? '').slice(0, 10));
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);

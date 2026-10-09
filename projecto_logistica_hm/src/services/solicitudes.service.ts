@@ -197,6 +197,34 @@ export interface SolicitudMinima {
   fecha_inicio_transito: string | null;
 }
 
+/**
+ * R16: filtros opcionales de los listados por rol. Sin opciones, los listados
+ * se comportan como siempre.
+ */
+export interface OpcionesListado {
+  /** Solo estos estados. */
+  estados?: readonly string[];
+  /** Fecha de despacho programada (`fecha_tentativa_despacho`) desde/hasta, `YYYY-MM-DD` inclusive. */
+  programadasDesde?: string;
+  programadasHasta?: string;
+}
+
+type ConsultaFiltrable = {
+  in(columna: string, valores: readonly unknown[]): ConsultaFiltrable;
+  gte(columna: string, valor: unknown): ConsultaFiltrable;
+  lte(columna: string, valor: unknown): ConsultaFiltrable;
+};
+
+// Sin restricción genérica: los tipos de supabase-js son demasiado profundos
+// para compararlos con `ConsultaFiltrable` (TS2589). La forma es la misma.
+function aplicarOpcionesListado<T>(consulta: T, o: OpcionesListado): T {
+  let q = consulta as unknown as ConsultaFiltrable;
+  if (o.estados && o.estados.length > 0) q = q.in('estado', o.estados);
+  if (o.programadasDesde) q = q.gte('fecha_tentativa_despacho', o.programadasDesde);
+  if (o.programadasHasta) q = q.lte('fecha_tentativa_despacho', `${o.programadasHasta}T23:59:59.999Z`);
+  return q as T;
+}
+
 export class SolicitudesService {
   static async getUsuarioRolSucursal(
     admin: SupabaseClient,
@@ -304,12 +332,10 @@ export class SolicitudesService {
     }
   }
 
-  static async getSolicitudes(): Promise<SolicitudLista[]> {
+  static async getSolicitudes(opciones: OpcionesListado = {}): Promise<SolicitudLista[]> {
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
-        .from('solicitud')
-        .select(SOLICITUD_SELECT)
+      const { data, error } = await aplicarOpcionesListado(admin.from('solicitud').select(SOLICITUD_SELECT), opciones)
         .order('fecha_creacion', { ascending: false });
 
       if (error) {
@@ -385,6 +411,36 @@ export class SolicitudesService {
   }
 
   /**
+   * R16/R17: cantidad de reprogramaciones por solicitud, leída de la auditoría
+   * (`accion = 'recalendarizacion'`). Solo incluye las que tienen alguna.
+   */
+  static async getConteoReprogramaciones(solicitudIds: string[]): Promise<Record<string, number>> {
+    const ids = [...new Set(solicitudIds.filter(Boolean))];
+    if (ids.length === 0) return {};
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('auditoria')
+        .select('entidad_id')
+        .eq('entidad', 'solicitud')
+        .eq('accion', 'recalendarizacion')
+        .in('entidad_id', ids);
+      if (error) {
+        console.error('Error al contar reprogramaciones:', error);
+        return {};
+      }
+      const conteo: Record<string, number> = {};
+      for (const fila of (data ?? []) as Array<{ entidad_id: string }>) {
+        conteo[fila.entidad_id] = (conteo[fila.entidad_id] ?? 0) + 1;
+      }
+      return conteo;
+    } catch (err) {
+      console.error('Error en getConteoReprogramaciones:', err);
+      return {};
+    }
+  }
+
+  /**
    * R13: solicitudes en tránsito que deben recibirse en las sucursales
    * indicadas. La sucursal de recepción es el destino (venta) o, en eventos
    * sin destino, la sucursal de origen. `null` = todas (administrador); una
@@ -427,24 +483,25 @@ export class SolicitudesService {
    */
   static async getSolicitudesFiltradas(
     userId: string,
-    rol: UserRole
+    rol: UserRole,
+    opciones: OpcionesListado = {}
   ): Promise<SolicitudLista[]> {
     try {
       if (rol === 'operaciones') return [];
 
       if (rol === 'ejecutivo') {
-        return await this.getSolicitudesPorEjecutivo(userId);
+        return await this.getSolicitudesPorEjecutivo(userId, opciones);
       }
 
       if (rol === 'jefe_local') {
-        return await this.getSolicitudesPorJefeLocal(userId);
+        return await this.getSolicitudesPorJefeLocal(userId, opciones);
       }
 
       if (rol === 'logistica') {
-        return await this.getSolicitudesPorZonas(userId);
+        return await this.getSolicitudesPorZonas(userId, opciones);
       }
 
-      return await this.getSolicitudes();
+      return await this.getSolicitudes(opciones);
     } catch (err) {
       console.error('Error en getSolicitudesFiltradas:', err);
       return [];
@@ -452,13 +509,12 @@ export class SolicitudesService {
   }
 
   /** Ejecutivo: únicamente las solicitudes que él mismo creó. */
-  private static async getSolicitudesPorEjecutivo(userId: string): Promise<SolicitudLista[]> {
+  private static async getSolicitudesPorEjecutivo(userId: string, opciones: OpcionesListado = {}): Promise<SolicitudLista[]> {
     const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('solicitud')
-      .select(SOLICITUD_SELECT)
-      .eq('ejecutivo_id', userId)
-      .order('fecha_creacion', { ascending: false });
+    const { data, error } = await aplicarOpcionesListado(
+      admin.from('solicitud').select(SOLICITUD_SELECT).eq('ejecutivo_id', userId),
+      opciones
+    ).order('fecha_creacion', { ascending: false });
 
     if (error) {
       console.error('Error al listar solicitudes del ejecutivo:', error);
@@ -472,18 +528,20 @@ export class SolicitudesService {
    * sucursales asignadas (principal + las que encabeza como encargado). Una
    * sucursal sin asignar deja al usuario sin alcance.
    */
-  private static async getSolicitudesPorJefeLocal(userId: string): Promise<SolicitudLista[]> {
+  private static async getSolicitudesPorJefeLocal(userId: string, opciones: OpcionesListado = {}): Promise<SolicitudLista[]> {
     const sucursales = await OrganizacionService.getUserAssignedBranches(userId);
     const ids = sucursales.map((s) => s.id).filter((id) => typeof id === 'number');
 
     if (ids.length === 0) return [];
 
     const admin = createAdminClient();
-    const { data, error } = await admin
-      .from('solicitud')
-      .select(SOLICITUD_SELECT)
-      .or(`sucursal.in.(${ids.join(',')}),sucursal_destino.in.(${ids.join(',')})`)
-      .order('fecha_creacion', { ascending: false });
+    const { data, error } = await aplicarOpcionesListado(
+      admin
+        .from('solicitud')
+        .select(SOLICITUD_SELECT)
+        .or(`sucursal.in.(${ids.join(',')}),sucursal_destino.in.(${ids.join(',')})`),
+      opciones
+    ).order('fecha_creacion', { ascending: false });
 
     if (error) {
       console.error('Error al listar solicitudes del jefe de local:', error);
@@ -496,7 +554,7 @@ export class SolicitudesService {
    * Logística: solo ve las solicitudes cuya sucursal origen pertenece a una de
    * sus zonas. Sin zonas asignadas -> lista vacía (antes veía todas).
    */
-  private static async getSolicitudesPorZonas(userId: string): Promise<SolicitudLista[]> {
+  private static async getSolicitudesPorZonas(userId: string, opciones: OpcionesListado = {}): Promise<SolicitudLista[]> {
     const zonas = await OrganizacionService.getUserZones(userId);
     const zonaIds = zonas.map((z) => z.id).filter((id) => typeof id === 'number');
 
@@ -519,11 +577,10 @@ export class SolicitudesService {
     const sucursalIds = ((sucursales || []) as Array<{ id: number }>).map((s) => s.id);
     if (sucursalIds.length === 0) return [];
 
-    const { data, error } = await admin
-      .from('solicitud')
-      .select(SOLICITUD_SELECT)
-      .in('sucursal', sucursalIds)
-      .order('fecha_creacion', { ascending: false });
+    const { data, error } = await aplicarOpcionesListado(
+      admin.from('solicitud').select(SOLICITUD_SELECT).in('sucursal', sucursalIds),
+      opciones
+    ).order('fecha_creacion', { ascending: false });
 
     if (error) {
       console.error('Error al listar solicitudes de logística:', error);

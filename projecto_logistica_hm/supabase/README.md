@@ -36,6 +36,7 @@ Aplicar **antes** de desplegar el código de esa rama, en este orden:
 |---|---|---|---|
 | 8 | `20261009110000_req_estado_traslado_cancelado.sql` | R8 | Bajo: agrega el valor `cancelado` al enum (va solo, fuera de transacción) |
 | 9 | `20261009120000_req_traslados_cancelacion_recepcion.sql` | R8, R13, R14 | Bajo: columnas nuevas, trigger de 1 vehículo por traslado nuevo y funciones de cancelación |
+| 10 | `20261009130000_req_indices_calendario_reportes.sql` | R16, R17 | Bajo: solo índices |
 
 Después de aplicar la 9, ejecutar su "Verificación posterior". En particular,
 tras la primera cancelación de una solicitud en tránsito, comprobar que los

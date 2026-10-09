@@ -277,3 +277,53 @@ describe('getSolicitudesPendientesAprobacion con alcance de administrador', () =
     expect(admin.callsTo('solicitud')).toContainEqual(['in', 'sucursal', [4]]);
   });
 });
+
+describe('getSolicitudesFiltradas con opciones de calendario (R16)', () => {
+  it('should_filter_by_states_and_scheduled_range_for_admin', async () => {
+    admin.results.solicitud = [fila([])];
+
+    await SolicitudesService.getSolicitudesFiltradas('adm', 'administrador', {
+      estados: ['calendarizada', 'en_transito'],
+      programadasDesde: '2026-10-05',
+      programadasHasta: '2026-10-11',
+    });
+
+    const llamadas = admin.callsTo('solicitud');
+    expect(llamadas).toContainEqual(['in', 'estado', ['calendarizada', 'en_transito']]);
+    expect(llamadas).toContainEqual(['gte', 'fecha_tentativa_despacho', '2026-10-05']);
+    expect(llamadas).toContainEqual(['lte', 'fecha_tentativa_despacho', '2026-10-11T23:59:59.999Z']);
+  });
+
+  it('should_apply_options_inside_the_executive_scope', async () => {
+    admin.results.solicitud = [fila([])];
+    await SolicitudesService.getSolicitudesFiltradas('e-1', 'ejecutivo', { estados: ['priorizada'] });
+    const llamadas = admin.callsTo('solicitud');
+    expect(llamadas).toContainEqual(['eq', 'ejecutivo_id', 'e-1']);
+    expect(llamadas).toContainEqual(['in', 'estado', ['priorizada']]);
+  });
+
+  it('should_not_add_filters_without_options', async () => {
+    admin.results.solicitud = [fila([])];
+    await SolicitudesService.getSolicitudesFiltradas('adm', 'administrador');
+    expect(admin.callsTo('solicitud').some((c) => ['in', 'gte', 'lte'].includes(c[0]))).toBe(false);
+  });
+});
+
+describe('getConteoReprogramaciones (R16/R17)', () => {
+  it('should_count_rescheduling_audit_rows_per_solicitud', async () => {
+    admin.results.auditoria = [fila([{ entidad_id: 'a' }, { entidad_id: 'a' }, { entidad_id: 'b' }])];
+
+    const res = await SolicitudesService.getConteoReprogramaciones(['a', 'b', 'c', 'a']);
+
+    expect(res).toEqual({ a: 2, b: 1 });
+    expect(admin.callsTo('auditoria')).toContainEqual(['eq', 'accion', 'recalendarizacion']);
+    expect(admin.callsTo('auditoria')).toContainEqual(['in', 'entidad_id', ['a', 'b', 'c']]);
+  });
+
+  it('should_return_empty_without_ids_or_on_error', async () => {
+    expect(await SolicitudesService.getConteoReprogramaciones([])).toEqual({});
+    expect(admin.callsTo('auditoria')).toHaveLength(0);
+    admin.results.auditoria = [errorResult('x')];
+    expect(await SolicitudesService.getConteoReprogramaciones(['a'])).toEqual({});
+  });
+});
