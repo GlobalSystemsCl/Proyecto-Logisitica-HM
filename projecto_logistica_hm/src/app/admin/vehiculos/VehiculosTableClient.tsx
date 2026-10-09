@@ -10,6 +10,7 @@ import {
   contarPorDisponibilidad,
   filtrarVehiculos,
   hayFiltrosActivos,
+  FILTRO_EN_TRANSITO,
 } from '@/lib/filtrosVehiculos';
 import {
   createVehiculoAction,
@@ -643,8 +644,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
               >
                 <option value={FILTRO_TODAS}>Todos</option>
                 <option value="liberado">Disponibles</option>
-                <option value="reservado">En Uso</option>
-                <option value="vendido">Vendidos</option>
+                <option value="reservado">Reservados</option>
+                <option value={FILTRO_EN_TRANSITO}>En tránsito</option>
+                <option value="vendido">Vendidos (entregados al cliente)</option>
               </select>
             </div>
 
@@ -797,6 +799,14 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                       <td className="py-3.5 px-4 text-xs text-neutral-600">
                         {isSold ? (
                           <span className="text-neutral-400">—</span>
+                        ) : vehiculo.en_transito_hacia ? (
+                          <span
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-sky-50 text-sky-800 border border-sky-200"
+                            title={`Sale de ${vehiculo.ubicacion_nombre ?? 'sin sucursal'}`}
+                          >
+                            <Truck className="w-3 h-3" />
+                            En camino a {vehiculo.en_transito_hacia}
+                          </span>
                         ) : vehiculo.ubicacion != null ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-100 text-neutral-900 border border-neutral-200">
                             <Car className="w-3 h-3" />

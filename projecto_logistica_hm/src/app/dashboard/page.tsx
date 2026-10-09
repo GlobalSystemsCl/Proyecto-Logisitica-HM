@@ -9,7 +9,8 @@ import { ROL_LABEL } from '@/types/auth.types';
 import type { SlotSucursalResumen } from '@/lib/slots';
 import PageHeader from '@/components/PageHeader';
 import DashboardCardGrid from '@/components/DashboardCardGrid';
-import DashboardPrioridades from '@/components/DashboardPrioridades';
+import DashboardJefeLocal from '@/components/DashboardJefeLocal';
+import { TrasladoService } from '@/services/traslado.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,15 +57,17 @@ export default async function DashboardPage() {
     ? await SucursalesService.getSlotsPorSucursales(sucursalesAsignadas)
     : [];
 
-  const prioridades =
-    rol === 'jefe_local'
-      ? await SolicitudesService.getSolicitudesPriorizadasPorSucursales(sucursalesAsignadas)
-      : [];
-
-  const pendientesAprobar =
-    rol === 'jefe_local' || rol === 'administrador'
-      ? (await SolicitudesService.getSolicitudesPendientesAprobacion(sucursalesAsignadas)).length
-      : 0;
+  // R3 + R11: panel de pendientes del Jefe de Local (el administrador ve todas las sucursales).
+  const vePanel = rol === 'jefe_local' || rol === 'administrador';
+  const alcance = rol === 'administrador' ? null : sucursalesAsignadas;
+  const [pendientesAprobar, recepcionesSolicitudes, recepcionesTraslados, porPriorizar] = vePanel
+    ? await Promise.all([
+        SolicitudesService.getSolicitudesPendientesAprobacion(alcance),
+        SolicitudesService.getRecepcionesPendientes(alcance),
+        TrasladoService.getTrasladosEnTransitoHacia(alcance),
+        SolicitudesService.getSolicitudesPorPriorizar(alcance),
+      ])
+    : [[], [], [], []];
 
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-neutral-900 flex flex-col">
@@ -101,8 +104,13 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {(rol === 'jefe_local' || rol === 'administrador') && (
-          <DashboardPrioridades solicitudes={prioridades} porAprobar={pendientesAprobar} />
+        {vePanel && (
+          <DashboardJefeLocal
+            pendientesAprobar={pendientesAprobar}
+            recepcionesSolicitudes={recepcionesSolicitudes}
+            recepcionesTraslados={recepcionesTraslados}
+            porPriorizar={porPriorizar}
+          />
         )}
 
         <div className="space-y-5">

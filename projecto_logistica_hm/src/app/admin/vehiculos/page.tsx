@@ -23,11 +23,14 @@ export default async function AdminVehiculosPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const [vehiculos, marcas, sucursales] = await Promise.all([
+  const [vehiculosBase, marcas, sucursales, enTransito] = await Promise.all([
     VehiculoService.getVehiculos(),
     VehiculoService.getMarcas(),
     SucursalesService.getSucursales(),
+    VehiculoService.getDestinosEnTransito(),
   ]);
+  // R2: marca los vehículos que van en camino y hacia dónde.
+  const vehiculos = vehiculosBase.map((v) => ({ ...v, en_transito_hacia: enTransito[v.id] ?? null }));
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">

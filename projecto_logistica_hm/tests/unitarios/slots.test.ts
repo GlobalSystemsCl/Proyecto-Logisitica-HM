@@ -6,6 +6,10 @@ import {
   resumenSlots,
   slotsLibres,
   textoSlots,
+  capacidadExtra,
+  capacidadTotal,
+  estadoCapacidad,
+  extraLibres,
   type SlotSucursalResumen,
 } from '@/lib/slots';
 
@@ -53,7 +57,7 @@ describe('nombreSucursal', () => {
 
 describe('textoSlots', () => {
   it('should_format_free_over_total', () => {
-    expect(textoSlots(sucursal({ slots: 12, slots_ocupados: 4, slots_reservados: 1 }))).toBe('7/12');
+    expect(textoSlots(sucursal({ slots: 12, slots_ocupados: 4, slots_reservados: 1 }))).toBe('7/12 (+3 extra)');
   });
 
   it('should_format_zero_when_capacity_is_null', () => {
@@ -104,6 +108,9 @@ describe('resumenSlots', () => {
       criticidad: 'ok',
       porcentajeOcupacion: 0,
       sucursalesCriticas: [],
+      totalExtra: 0,
+      extraLibres: 0,
+      sucursalesExcedidas: [],
     });
   });
 
@@ -138,3 +145,68 @@ describe('ordenarPorDisponibilidad', () => {
     expect(input.map((s) => s.nombre)).toEqual(['A', 'B']);
   });
 });
+
+describe('capacidadExtra (R5)', () => {
+  it('should_round_twenty_percent_up_to_an_integer', () => {
+    expect(capacidadExtra(sucursal({ slots: 10 }))).toBe(2);
+    expect(capacidadExtra(sucursal({ slots: 3 }))).toBe(1);
+    expect(capacidadExtra(sucursal({ slots: 11 }))).toBe(3);
+    expect(capacidadExtra(sucursal({ slots: 1 }))).toBe(1);
+  });
+
+  it('should_be_zero_when_capacity_is_zero_or_null', () => {
+    expect(capacidadExtra(sucursal({ slots: 0 }))).toBe(0);
+    expect(capacidadExtra(sucursal({ slots: null }))).toBe(0);
+  });
+
+  it('should_add_extra_to_real_capacity', () => {
+    expect(capacidadTotal(sucursal({ slots: 10 }))).toBe(12);
+  });
+});
+
+describe('extraLibres (R5)', () => {
+  it('should_keep_all_extra_free_while_real_slots_are_available', () => {
+    expect(extraLibres(sucursal({ slots: 10, slots_ocupados: 4 }))).toBe(2);
+  });
+
+  it('should_discount_extra_in_use', () => {
+    expect(extraLibres(sucursal({ slots: 10, slots_ocupados: 9, slots_reservados: 2 }))).toBe(1);
+  });
+
+  it('should_never_be_negative', () => {
+    expect(extraLibres(sucursal({ slots: 10, slots_ocupados: 20 }))).toBe(0);
+  });
+});
+
+describe('estadoCapacidad (R5)', () => {
+  it('should_be_disponible_while_real_slots_remain', () => {
+    expect(estadoCapacidad(sucursal({ slots: 10, slots_ocupados: 9 }))).toBe('disponible');
+  });
+
+  it('should_be_usando_extra_from_full_real_capacity_up_to_total', () => {
+    expect(estadoCapacidad(sucursal({ slots: 10, slots_ocupados: 10 }))).toBe('usando_extra');
+    expect(estadoCapacidad(sucursal({ slots: 10, slots_ocupados: 11, slots_reservados: 1 }))).toBe('usando_extra');
+  });
+
+  it('should_be_excedido_when_extra_is_also_full', () => {
+    expect(estadoCapacidad(sucursal({ slots: 10, slots_ocupados: 13 }))).toBe('excedido');
+  });
+
+  it('should_handle_branches_without_declared_capacity', () => {
+    expect(estadoCapacidad(sucursal({ slots: 0 }))).toBe('sin_capacidad');
+    expect(estadoCapacidad(sucursal({ slots: 0, slots_ocupados: 2 }))).toBe('excedido');
+  });
+});
+
+describe('resumenSlots con capacidad extra (R5)', () => {
+  it('should_sum_extra_and_list_exceeded_branches', () => {
+    const res = resumenSlots([
+      sucursal({ nombre: 'A', slots: 10, slots_ocupados: 13 }),
+      sucursal({ nombre: 'B', slots: 3, slots_ocupados: 1 }),
+    ]);
+    expect(res.totalExtra).toBe(3);
+    expect(res.extraLibres).toBe(1);
+    expect(res.sucursalesExcedidas).toEqual(['A']);
+  });
+});
+

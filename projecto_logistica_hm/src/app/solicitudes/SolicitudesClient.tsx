@@ -51,6 +51,7 @@ import {
 } from '@/lib/filtroSolicitudes';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import PanelEjecutivo from '@/components/PanelEjecutivo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
 /**
@@ -152,6 +153,8 @@ interface SolicitudesClientProps {
   viewer: ViewerInfo;
   /** Sucursal principal + las que encabeza como encargado (`sucursal.usuario_id`). */
   sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
+  /** Grupo de la tabla seleccionado al entrar (`?grupo=` desde los paneles). */
+  grupoInicial?: GrupoFiltroSolicitud;
 }
 
 function getEncargadoId(sol: SolicitudLista): string | null {
@@ -170,10 +173,11 @@ export default function SolicitudesClient({
   vehiculos,
   viewer,
   sucursales_asignadas = [],
+  grupoInicial = 'todas',
 }: SolicitudesClientProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
-  const [grupoActivo, setGrupoActivo] = useState<GrupoFiltroSolicitud>('todas');
+  const [grupoActivo, setGrupoActivo] = useState<GrupoFiltroSolicitud>(grupoInicial);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -630,8 +634,23 @@ export default function SolicitudesClient({
         </div>
       )}
 
+      {/* R12: panel del Ejecutivo con un contenedor por acción */}
+      {esEjecutivo && (
+        <PanelEjecutivo
+          solicitudes={solicitudes}
+          onCrearNueva={
+            puedeCrear
+              ? () => {
+                  resetCreateForm();
+                  setIsCreateOpen(true);
+                }
+              : undefined
+          }
+        />
+      )}
+
       {/* Metric Cards: hacen de acceso directo al filtro de cada grupo */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div id="lista" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 scroll-mt-6">
         <button
           type="button"
           onClick={() => activarGrupo('todas')}

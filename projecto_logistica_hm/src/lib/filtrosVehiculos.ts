@@ -4,6 +4,8 @@ import { VehiculoConDisponibilidad } from '@/types/vehiculo.types';
 export const FILTRO_TODAS = 'todas';
 /** Valor del filtro de ubicación para los vehículos sin sucursal asignada (en viaje / container). */
 export const FILTRO_EN_VIAJE = 'en_viaje';
+/** R2: valor del filtro de estado para los vehículos que van en camino a otra sucursal. */
+export const FILTRO_EN_TRANSITO = 'en_transito';
 
 export interface FiltrosVehiculos {
   busqueda: string;
@@ -73,12 +75,17 @@ export function coincideUbicacion(ubicacion: number | null, filtro: string): boo
   return ubicacion === id;
 }
 
-/** Indica si el estado de disponibilidad del vehículo pasa el filtro. */
+/**
+ * Indica si el estado de disponibilidad del vehículo pasa el filtro.
+ * `en_transito` (R2) selecciona los vehículos que van en camino.
+ */
 export function coincideDisponibilidad(
   estado: VehiculoConDisponibilidad['estado_disponibilidad'],
   filtro: string,
+  enTransitoHacia: string | null = null,
 ): boolean {
   if (filtro === FILTRO_TODAS) return true;
+  if (filtro === FILTRO_EN_TRANSITO) return enTransitoHacia !== null;
   return estado === filtro;
 }
 
@@ -102,7 +109,7 @@ export function filtrarVehiculos(
   return vehiculos.filter((v) => {
     if (!coincideBusqueda(v, filtros.busqueda)) return false;
     if (filtros.marca !== FILTRO_TODAS && v.marca !== filtros.marca) return false;
-    if (!coincideDisponibilidad(v.estado_disponibilidad, filtros.disponibilidad)) return false;
+    if (!coincideDisponibilidad(v.estado_disponibilidad, filtros.disponibilidad, v.en_transito_hacia ?? null)) return false;
     if (!coincideUbicacion(v.ubicacion, filtros.ubicacion)) return false;
     return coincideRangoFecha(aFechaLocal(v.created_at), filtros.fechaDesde, filtros.fechaHasta);
   });

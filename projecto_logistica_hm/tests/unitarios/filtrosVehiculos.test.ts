@@ -12,6 +12,7 @@ import {
   filtrarVehiculos,
   hayFiltrosActivos,
   type FiltrosVehiculos,
+  FILTRO_EN_TRANSITO,
 } from '@/lib/filtrosVehiculos';
 import type { VehiculoConDisponibilidad } from '@/types/vehiculo.types';
 
@@ -243,5 +244,17 @@ describe('hayFiltrosActivos', () => {
 
   it('should_return_true_when_only_a_date_bound_is_set', () => {
     expect(hayFiltrosActivos(filtros({ fechaHasta: '2026-03-31' }))).toBe(true);
+  });
+});
+
+describe('filtro en tránsito (R2)', () => {
+  it('should_match_only_vehicles_with_transit_destination', () => {
+    expect(coincideDisponibilidad('reservado', FILTRO_EN_TRANSITO, 'Norte')).toBe(true);
+    expect(coincideDisponibilidad('reservado', FILTRO_EN_TRANSITO, null)).toBe(false);
+  });
+
+  it('should_keep_previous_behaviour_for_other_filters', () => {
+    expect(coincideDisponibilidad('reservado', 'reservado', 'Norte')).toBe(true);
+    expect(coincideDisponibilidad('liberado', 'todas')).toBe(true);
   });
 });

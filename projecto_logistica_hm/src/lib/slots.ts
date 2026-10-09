@@ -33,10 +33,25 @@ export interface ResumenSlots {
   porcentajeOcupacion: number;
   /** Sucursal sin ningún slot libre, si existe. */
   sucursalesCriticas: string[];
+  /** R5: suma de los slots extra (20 %) y de los extra todavía libres. */
+  totalExtra: number;
+  extraLibres: number;
+  /** R5: sucursales que ya superaron también la capacidad extra. */
+  sucursalesExcedidas: string[];
 }
 
 /** Porcentaje a partir del cual se considera que hay que prestar atención. */
 export const UMBRAL_ATENCION = 0.2;
+
+/**
+ * R5: cada sucursal tiene un 20 % extra sobre su capacidad real para
+ * estacionar fuera de los slots oficiales (acera, espacios no oficiales).
+ * Se redondea siempre hacia arriba a un entero: 3 slots dan 1 extra, 10 dan 2.
+ * Es solo un aviso: superar la capacidad no bloquea ninguna operación.
+ */
+export const PORCENTAJE_SLOTS_EXTRA = 0.2;
+
+export type EstadoCapacidad = 'disponible' | 'usando_extra' | 'excedido' | 'sin_capacidad';
 
 function aNumero(valor: number | null | undefined): number {
   return typeof valor === 'number' && Number.isFinite(valor) ? valor : 0;
@@ -54,6 +69,50 @@ export function slotsLibres(sucursal: SlotSucursalResumen): number {
   return Math.max(total - ocupados - reservados, 0);
 }
 
+/** Slots extra de una sucursal: 20 % de la capacidad real, redondeado hacia arriba. */
+export function capacidadExtra(sucursal: SlotSucursalResumen): number {
+  return Math.ceil(aNumero(sucursal.slots) * PORCENTAJE_SLOTS_EXTRA);
+}
+
+/** Capacidad real más la extra. */
+export function capacidadTotal(sucursal: SlotSucursalResumen): number {
+  return aNumero(sucursal.slots) + capacidadExtra(sucursal);
+}
+
+/** Slots en uso: ocupados más reservados. */
+export function usoSlots(sucursal: SlotSucursalResumen): number {
+  return aNumero(sucursal.slots_ocupados) + aNumero(sucursal.slots_reservados);
+}
+
+/** Extras todavía libres (nunca negativo). */
+export function extraLibres(sucursal: SlotSucursalResumen): number {
+  const real = aNumero(sucursal.slots);
+  return Math.max(capacidadTotal(sucursal) - Math.max(usoSlots(sucursal), real), 0);
+}
+
+/**
+ * Estado de la capacidad:
+ *  - `disponible`: quedan slots reales libres
+ *  - `usando_extra`: la capacidad real está completa y se usan (o quedan) extras
+ *  - `excedido`: se superó también la capacidad extra
+ *  - `sin_capacidad`: la sucursal no tiene slots declarados ni vehículos
+ */
+export function estadoCapacidad(sucursal: SlotSucursalResumen): EstadoCapacidad {
+  const real = aNumero(sucursal.slots);
+  const uso = usoSlots(sucursal);
+  if (real === 0) return uso > 0 ? 'excedido' : 'sin_capacidad';
+  if (uso < real) return 'disponible';
+  if (uso <= capacidadTotal(sucursal)) return 'usando_extra';
+  return 'excedido';
+}
+
+export const ETIQUETA_ESTADO_CAPACIDAD: Record<EstadoCapacidad, string> = {
+  disponible: 'Disponible',
+  usando_extra: 'Usando slots extra',
+  excedido: 'Capacidad excedida',
+  sin_capacidad: 'Sin capacidad declarada',
+};
+
 /** Nombre legible de la sucursal, con respaldo cuando el nombre es nulo. */
 export function nombreSucursal(sucursal: SlotSucursalResumen): string {
   const nombre = sucursal.nombre?.trim();
@@ -67,7 +126,10 @@ export function resumenSlots(sucursales: SlotSucursalResumen[] | null | undefine
   let libres = 0;
   let total = 0;
   let ocupados = 0;
+  let totalExtra = 0;
+  let libresExtra = 0;
   const sucursalesCriticas: string[] = [];
+  const sucursalesExcedidas: string[] = [];
 
   for (const sucursal of lista) {
     const libresSucursal = slotsLibres(sucursal);
@@ -77,6 +139,11 @@ export function resumenSlots(sucursales: SlotSucursalResumen[] | null | undefine
     if (libresSucursal === 0) {
       sucursalesCriticas.push(nombreSucursal(sucursal));
     }
+    totalExtra += capacidadExtra(sucursal);
+    libresExtra += extraLibres(sucursal);
+    if (aNumero(sucursal.slots) > 0 && estadoCapacidad(sucursal) === 'excedido') {
+      sucursalesExcedidas.push(nombreSucursal(sucursal));
+    }
   }
 
   const porcentajeOcupacion = total > 0 ? Math.round((ocupados / total) * 100) : 0;
@@ -84,12 +151,24 @@ export function resumenSlots(sucursales: SlotSucursalResumen[] | null | undefine
   const criticidad: CriticidadSlots =
     total === 0 ? 'ok' : libres === 0 ? 'critico' : proporcionLibre < UMBRAL_ATENCION ? 'atencion' : 'ok';
 
-  return { libres, total, ocupados, criticidad, porcentajeOcupacion, sucursalesCriticas };
+  return {
+    libres,
+    total,
+    ocupados,
+    criticidad,
+    porcentajeOcupacion,
+    sucursalesCriticas,
+    totalExtra,
+    extraLibres: libresExtra,
+    sucursalesExcedidas,
+  };
 }
 
-/** Texto "3/10" de una sucursal: libres sobre capacidad. */
+/** Texto "3/10 (+2 extra)" de una sucursal: libres sobre capacidad real, y extras libres. */
 export function textoSlots(sucursal: SlotSucursalResumen): string {
-  return `${slotsLibres(sucursal)}/${aNumero(sucursal.slots)}`;
+  const base = `${slotsLibres(sucursal)}/${aNumero(sucursal.slots)}`;
+  const extra = capacidadExtra(sucursal);
+  return extra > 0 ? `${base} (+${extraLibres(sucursal)} extra)` : base;
 }
 
 /**

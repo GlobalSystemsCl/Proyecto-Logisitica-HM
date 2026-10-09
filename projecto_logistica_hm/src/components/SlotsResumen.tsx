@@ -63,7 +63,7 @@ export default function SlotsResumen({ sucursales }: SlotsResumenProps) {
     <div className="relative group/slots hidden sm:block">
       <Link
         href="/logistica/slots"
-        title={`${resumen.libres} de ${resumen.total} slots libres`}
+        title={`${resumen.libres} de ${resumen.total} slots libres (+${resumen.extraLibres} extra)`}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors"
       >
         <LayoutGrid className="w-4 h-4 shrink-0 text-neutral-500" />
@@ -97,8 +97,13 @@ export default function SlotsResumen({ sucursales }: SlotsResumenProps) {
           ))}
         </ul>
         {resumen.sucursalesCriticas.length > 0 && (
-          <p className="mt-2 border-t border-neutral-100 px-2 pt-2 text-xs font-medium text-red-700">
-            Sin disponibilidad: {resumen.sucursalesCriticas.join(', ')}
+          <p className="mt-2 border-t border-neutral-100 px-2 pt-2 text-xs font-medium text-amber-700">
+            Sin slots reales libres: {resumen.sucursalesCriticas.join(', ')}
+          </p>
+        )}
+        {resumen.sucursalesExcedidas.length > 0 && (
+          <p className="mt-1 px-2 text-xs font-medium text-red-700">
+            Capacidad extra excedida: {resumen.sucursalesExcedidas.join(', ')}
           </p>
         )}
       </div>

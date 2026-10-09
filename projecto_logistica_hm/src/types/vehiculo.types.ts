@@ -16,6 +16,8 @@ export interface VehiculoConDisponibilidad extends Vehiculo {
   estado_disponibilidad: 'reservado' | 'liberado' | 'vendido';
   solicitud_id: string | null;
   ubicacion_nombre?: string | null;
+  /** R2: destino si el vehículo va en camino (solicitud o traslado interno en tránsito). */
+  en_transito_hacia?: string | null;
 }
 
 export interface CreateVehiculoInput {

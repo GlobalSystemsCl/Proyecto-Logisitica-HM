@@ -638,3 +638,34 @@ describe('VehiculoService.getVehiculoById', () => {
     expect(await VehiculoService.getVehiculoById('veh-y')).toBeNull();
   });
 });
+
+describe('VehiculoService.getDestinosEnTransito (R2)', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_map_vehicles_in_transit_to_their_destination', async () => {
+    admin.results.solicitud_vehiculo = [
+      fila([
+        { vehiculo_id: 'v1', solicitud: { titulo_evento: null, destino: { nombre: 'Norte' }, origen: { nombre: 'Centro' } } },
+        { vehiculo_id: 'v2', solicitud: { titulo_evento: 'Feria', destino: null, origen: { nombre: 'Centro' } } },
+      ]),
+    ];
+    admin.results.traslado_interno_vehiculo = [fila([{ vehiculo_id: 'v3', traslado: { destino: [{ nombre: 'Sur' }] } }])];
+
+    const res = await VehiculoService.getDestinosEnTransito();
+
+    expect(res).toEqual({ v1: 'Norte', v2: 'Feria', v3: 'Sur' });
+    expect(admin.callsTo('solicitud_vehiculo')).toContainEqual(['eq', 'solicitud.estado', 'en_transito']);
+    expect(admin.callsTo('traslado_interno_vehiculo')).toContainEqual(['eq', 'traslado.estado', 'en_transito']);
+  });
+
+  it('should_return_partial_result_when_one_query_fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud_vehiculo = [{ data: null, error: { message: 'x' } }];
+    admin.results.traslado_interno_vehiculo = [fila([{ vehiculo_id: 'v3', traslado: { destino: { nombre: 'Sur' } } }])];
+
+    expect(await VehiculoService.getDestinosEnTransito()).toEqual({ v3: 'Sur' });
+  });
+});

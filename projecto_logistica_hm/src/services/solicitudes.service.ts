@@ -329,20 +329,18 @@ export class SolicitudesService {
    * de local (`estado = 'pendiente_aprobacion'`). Alimenta el contador "Por
    * aprobar" del dashboard.
    *
-   * `sucursalIds` vacío significa "sin alcance" y devuelve lista vacía.
+   * `sucursalIds` vacío significa "sin alcance" y devuelve lista vacía;
+   * `null` significa todas las sucursales (administrador).
    */
-  static async getSolicitudesPendientesAprobacion(sucursalIds: number[]): Promise<SolicitudLista[]> {
-    const ids = (sucursalIds || []).filter((id) => typeof id === 'number');
-    if (ids.length === 0) return [];
+  static async getSolicitudesPendientesAprobacion(sucursalIds: number[] | null): Promise<SolicitudLista[]> {
+    const ids = sucursalIds === null ? null : sucursalIds.filter((id) => typeof id === 'number');
+    if (ids !== null && ids.length === 0) return [];
 
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
-        .from('solicitud')
-        .select(SOLICITUD_SELECT)
-        .eq('estado', 'pendiente_aprobacion')
-        .in('sucursal', ids)
-        .order('fecha_creacion', { ascending: true });
+      let query = admin.from('solicitud').select(SOLICITUD_SELECT).eq('estado', 'pendiente_aprobacion');
+      if (ids !== null) query = query.in('sucursal', ids);
+      const { data, error } = await query.order('fecha_creacion', { ascending: true });
 
       if (error) {
         console.error('Error al listar las solicitudes pendientes de aprobación:', error);
@@ -357,38 +355,31 @@ export class SolicitudesService {
   }
 
   /**
-   * Cola de prioridad de las sucursales indicadas (`estado = 'priorizada'`,
-   * con posición asignada), ordenada por posición ascendente: la 1 es la más
-   * urgente. Es la lectura que consume el resumen del dashboard del jefe de
-   * local, por lo que devuelve la cola **completa** (el corte a 8 elementos es
-   * solo visual, en la UI).
-   *
-   * `sucursalIds` vacío significa "sin alcance" y devuelve lista vacía.
+   * R11: solicitudes aprobadas que todavía no entran a la cola de prioridad de
+   * su sucursal, de la fecha límite de entrega propuesta más próxima a la más
+   * lejana. `null` = todas (administrador); una lista vacía = sin alcance.
    */
-  static async getSolicitudesPriorizadasPorSucursales(
-    sucursalIds: number[]
-  ): Promise<SolicitudLista[]> {
-    const ids = (sucursalIds || []).filter((id) => typeof id === 'number');
-    if (ids.length === 0) return [];
+  static async getSolicitudesPorPriorizar(sucursalIds: number[] | null): Promise<SolicitudLista[]> {
+    const ids = sucursalIds === null ? null : sucursalIds.filter((id) => typeof id === 'number');
+    if (ids !== null && ids.length === 0) return [];
 
     try {
       const admin = createAdminClient();
-      const { data, error } = await admin
+      let query = admin
         .from('solicitud')
         .select(SOLICITUD_SELECT)
-        .eq('estado', 'priorizada')
-        .not('posicion_prioridad', 'is', null)
-        .or(`sucursal.in.(${ids.join(',')}),sucursal_destino.in.(${ids.join(',')})`)
-        .order('posicion_prioridad', { ascending: true });
+        .eq('estado', 'aprobada')
+        .is('posicion_prioridad', null);
+      if (ids !== null) query = query.in('sucursal', ids);
+      const { data, error } = await query.order('fecha_limite', { ascending: true, nullsFirst: false });
 
       if (error) {
-        console.error('Error al listar la cola de prioridades:', error);
+        console.error('Error al listar las solicitudes por priorizar:', error);
         return [];
       }
-
       return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
     } catch (err) {
-      console.error('Error en getSolicitudesPriorizadasPorSucursales:', err);
+      console.error('Error en getSolicitudesPorPriorizar:', err);
       return [];
     }
   }

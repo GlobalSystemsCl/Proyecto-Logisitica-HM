@@ -234,3 +234,46 @@ describe('getRecepcionesPendientes', () => {
     expect(await SolicitudesService.getRecepcionesPendientes([1])).toEqual([]);
   });
 });
+
+describe('getSolicitudesPorPriorizar (R11)', () => {
+  it('should_list_approved_without_position_of_the_branches', async () => {
+    admin.results.solicitud = [fila([])];
+
+    await SolicitudesService.getSolicitudesPorPriorizar([1, 3]);
+
+    const llamadas = admin.callsTo('solicitud');
+    expect(llamadas).toContainEqual(['eq', 'estado', 'aprobada']);
+    expect(llamadas).toContainEqual(['is', 'posicion_prioridad', null]);
+    expect(llamadas).toContainEqual(['in', 'sucursal', [1, 3]]);
+  });
+
+  it('should_not_filter_by_branch_for_admin_and_skip_query_without_scope', async () => {
+    admin.results.solicitud = [fila([])];
+    await SolicitudesService.getSolicitudesPorPriorizar(null);
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'in')).toBe(false);
+
+    admin.reset();
+    expect(await SolicitudesService.getSolicitudesPorPriorizar([])).toEqual([]);
+    expect(admin.callsTo('solicitud')).toHaveLength(0);
+  });
+
+  it('should_return_empty_when_query_fails', async () => {
+    admin.results.solicitud = [errorResult('caída')];
+    expect(await SolicitudesService.getSolicitudesPorPriorizar([1])).toEqual([]);
+  });
+});
+
+describe('getSolicitudesPendientesAprobacion con alcance de administrador', () => {
+  it('should_list_all_branches_when_scope_is_null', async () => {
+    admin.results.solicitud = [fila([])];
+    await SolicitudesService.getSolicitudesPendientesAprobacion(null);
+    expect(admin.callsTo('solicitud')).toContainEqual(['eq', 'estado', 'pendiente_aprobacion']);
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'in')).toBe(false);
+  });
+
+  it('should_filter_by_branches_when_given', async () => {
+    admin.results.solicitud = [fila([])];
+    await SolicitudesService.getSolicitudesPendientesAprobacion([4]);
+    expect(admin.callsTo('solicitud')).toContainEqual(['in', 'sucursal', [4]]);
+  });
+});

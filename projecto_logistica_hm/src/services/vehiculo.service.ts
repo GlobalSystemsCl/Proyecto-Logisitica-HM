@@ -137,6 +137,60 @@ export class VehiculoService {
   /**
    * Verifica la disponibilidad de un vehículo específico
    */
+  /**
+   * R2: vehículos que van en camino, con el nombre de su destino. Incluye las
+   * solicitudes en tránsito y los traslados internos en tránsito. Devuelve un
+   * objeto `vehiculo_id -> destino` (serializable para el cliente).
+   */
+  static async getDestinosEnTransito(): Promise<Record<string, string>> {
+    const destinos: Record<string, string> = {};
+    try {
+      const admin = createAdminClient();
+      const [solicitudes, traslados] = await Promise.all([
+        admin
+          .from('solicitud_vehiculo')
+          .select(
+            'vehiculo_id, solicitud!inner(estado, titulo_evento, destino:sucursal!solicitud_sucursal_destino_fkey(nombre), origen:sucursal!solicitud_sucursal_fkey(nombre))'
+          )
+          .eq('disponibilidad', 'reservado')
+          .eq('solicitud.estado', 'en_transito'),
+        admin
+          .from('traslado_interno_vehiculo')
+          .select('vehiculo_id, traslado:traslado_interno!inner(estado, destino:sucursal!traslado_interno_destino_id_fkey(nombre))')
+          .eq('disponibilidad', 'reservado')
+          .eq('traslado.estado', 'en_transito'),
+      ]);
+
+      if (solicitudes.error) console.error('Error al consultar solicitudes en tránsito:', solicitudes.error);
+      if (traslados.error) console.error('Error al consultar traslados en tránsito:', traslados.error);
+
+      type Nombre = { nombre: string | null } | Array<{ nombre: string | null }> | null;
+      const nombre = (n: Nombre) => (Array.isArray(n) ? n[0]?.nombre : n?.nombre) ?? null;
+      const uno = <T,>(x: T | T[] | null): T | null => (Array.isArray(x) ? x[0] ?? null : x);
+
+      for (const fila of (solicitudes.data ?? []) as Array<{
+        vehiculo_id: string;
+        solicitud: { titulo_evento: string | null; destino: Nombre; origen: Nombre } | Array<{ titulo_evento: string | null; destino: Nombre; origen: Nombre }> | null;
+      }>) {
+        const sol = uno(fila.solicitud);
+        if (!sol) continue;
+        destinos[fila.vehiculo_id] = nombre(sol.destino) ?? sol.titulo_evento ?? nombre(sol.origen) ?? 'Destino sin nombre';
+      }
+      for (const fila of (traslados.data ?? []) as Array<{
+        vehiculo_id: string;
+        traslado: { destino: Nombre } | Array<{ destino: Nombre }> | null;
+      }>) {
+        const t = uno(fila.traslado);
+        if (!t) continue;
+        destinos[fila.vehiculo_id] = nombre(t.destino) ?? 'Destino sin nombre';
+      }
+      return destinos;
+    } catch (err) {
+      console.error('Error en getDestinosEnTransito:', err);
+      return destinos;
+    }
+  }
+
   /** Fila del vehículo tal como está en la BD (para auditar el "antes"). */
   static async getVehiculoById(id: string): Promise<Vehiculo | null> {
     try {
