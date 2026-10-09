@@ -3,6 +3,9 @@
 import { requireProfile, requireRole } from '@/lib/auth/guards';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { VehiculoService } from '@/services/vehiculo.service';
+import { SolicitudesService } from '@/services/solicitudes.service';
+import { accionCambioVehiculo, diferenciasVehiculo, resumenVehiculo } from '@/lib/auditoriaVehiculo';
+import { randomUUID } from 'crypto';
 import { CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
 import { revalidatePath } from 'next/cache';
 
@@ -16,9 +19,23 @@ async function verifyVehiculoPermission() {
   return profile;
 }
 
+/**
+ * R2: registra en la auditoría un cambio del inventario con su autor. Es
+ * best-effort como el resto de la auditoría: un fallo no revierte la operación.
+ */
+async function auditarVehiculo(
+  usuarioId: string,
+  entidadId: string,
+  accion: string,
+  anterior: unknown,
+  nuevo: unknown
+): Promise<void> {
+  await SolicitudesService.registrarAuditoria(usuarioId, 'vehiculo', entidadId, accion, anterior, nuevo);
+}
+
 export async function createVehiculoAction(data: CreateVehiculoInput) {
   try {
-    await verifyVehiculoPermission();
+    const profile = await verifyVehiculoPermission();
 
     if (
       !data.chasis?.trim() ||
@@ -38,6 +55,10 @@ export async function createVehiculoAction(data: CreateVehiculoInput) {
       return { success: false, error: result.error };
     }
 
+    if (result.vehiculo?.id) {
+      await auditarVehiculo(profile.id, result.vehiculo.id, 'creacion', null, resumenVehiculo(result.vehiculo));
+    }
+
     revalidatePath('/admin/vehiculos');
     return {
       success: true,
@@ -52,12 +73,18 @@ export async function createVehiculoAction(data: CreateVehiculoInput) {
 
 export async function updateVehiculoAction(id: string, data: UpdateVehiculoInput) {
   try {
-    await verifyVehiculoPermission();
+    const profile = await verifyVehiculoPermission();
 
+    const anterior = await VehiculoService.getVehiculoById(id);
     const result = await VehiculoService.updateVehiculo(id, data);
 
     if (!result.success) {
       return { success: false, error: result.error };
+    }
+
+    const cambios = diferenciasVehiculo(anterior, result.vehiculo);
+    if (cambios) {
+      await auditarVehiculo(profile.id, id, accionCambioVehiculo(cambios), cambios.anterior, cambios.nuevo);
     }
 
     revalidatePath('/admin/vehiculos');
@@ -83,11 +110,14 @@ export async function deleteVehiculoAction(id: string) {
       };
     }
 
+    const anterior = await VehiculoService.getVehiculoById(id);
     const result = await VehiculoService.deleteVehiculo(id);
 
     if (!result.success) {
       return { success: false, error: result.error };
     }
+
+    await auditarVehiculo(profile.id, id, 'eliminacion', resumenVehiculo(anterior), null);
 
     revalidatePath('/admin/vehiculos');
     return {
@@ -107,7 +137,7 @@ export interface ImportVehiculosData {
 
 export async function importVehiculosAction(data: ImportVehiculosData) {
   try {
-    await verifyVehiculoPermission();
+    const profile = await verifyVehiculoPermission();
 
     if (!data.csv?.trim()) {
       return { success: false, error: 'Debes pegar o subir el contenido CSV del stock.' };
@@ -120,6 +150,14 @@ export async function importVehiculosAction(data: ImportVehiculosData) {
     if (!result.success && !result.importados) {
       return { success: false, error: result.error || result.mensaje || 'Error al importar.' };
     }
+
+    // Un registro por importación (no uno por vehículo, para no saturar la auditoría).
+    await auditarVehiculo(profile.id, randomUUID(), 'importacion', null, {
+      total: result.total ?? 0,
+      importados: result.importados ?? 0,
+      duplicados: result.duplicados ?? 0,
+      errores: result.errores ?? 0,
+    });
 
     revalidatePath('/admin/vehiculos');
     return {

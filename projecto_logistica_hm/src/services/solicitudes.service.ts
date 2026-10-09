@@ -16,6 +16,12 @@ import { esFechaAnteriorAHoy } from '@/lib/fechas';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { validarContenidoArchivo } from '@/lib/archivos';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
+import {
+  textoObservacionRecepcion,
+  validarMotivoCancelacion,
+  validarRecepcion,
+  type DatosRecepcion,
+} from '@/lib/recepcion';
 
 /**
  * Estados en los que el vehículo sigue RESERVADO (no puede moverse a otra
@@ -383,6 +389,36 @@ export class SolicitudesService {
       return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
     } catch (err) {
       console.error('Error en getSolicitudesPriorizadasPorSucursales:', err);
+      return [];
+    }
+  }
+
+  /**
+   * R13: solicitudes en tránsito que deben recibirse en las sucursales
+   * indicadas. La sucursal de recepción es el destino (venta) o, en eventos
+   * sin destino, la sucursal de origen. `null` = todas (administrador); una
+   * lista vacía = sin alcance. Ordenadas por fecha límite de entrega propuesta.
+   */
+  static async getRecepcionesPendientes(sucursalIds: number[] | null): Promise<SolicitudLista[]> {
+    const ids = sucursalIds === null ? null : sucursalIds.filter((id) => Number.isInteger(id));
+    if (ids !== null && ids.length === 0) return [];
+
+    try {
+      const admin = createAdminClient();
+      let query = admin.from('solicitud').select(SOLICITUD_SELECT).eq('estado', 'en_transito');
+      if (ids !== null) {
+        const lista = ids.join(',');
+        query = query.or(`sucursal_destino.in.(${lista}),and(sucursal_destino.is.null,sucursal.in.(${lista}))`);
+      }
+      const { data, error } = await query.order('fecha_limite', { ascending: true, nullsFirst: false });
+
+      if (error) {
+        console.error('Error al listar las recepciones pendientes:', error);
+        return [];
+      }
+      return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
+    } catch (err) {
+      console.error('Error en getRecepcionesPendientes:', err);
       return [];
     }
   }
@@ -1877,10 +1913,14 @@ export class SolicitudesService {
    */
   static async recibirSolicitud(
     id: string,
-    usuarioId: string
+    usuarioId: string,
+    recepcion?: DatosRecepcion
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
+
+      const errorRecepcion = validarRecepcion(recepcion);
+      if (errorRecepcion) return { success: false, error: errorRecepcion };
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
@@ -1913,18 +1953,139 @@ export class SolicitudesService {
         });
       if (errEstado) return { success: false, error: errEstado };
 
+      // R13: la recepción queda registrada con sus novedades.
+      const textoRecepcion = textoObservacionRecepcion(recepcion);
+      if (textoRecepcion) {
+        const { error: obsError } = await admin.from('observacion').insert({
+          solicitud_id: id,
+          usuario_id: usuarioId,
+          observacion: textoRecepcion,
+        });
+        if (obsError) console.error('Error al guardar la observación de recepción:', obsError);
+      }
+
       await this.registrarAuditoria(
         usuarioId,
         'solicitud',
         id,
         'entrega',
         { estado: actual.estado, fecha_entrega: null },
-        { estado: 'entregada', fecha_entrega: ahora, fecha_recepcion: ahora }
+        {
+          estado: 'entregada',
+          fecha_entrega: ahora,
+          fecha_recepcion: ahora,
+          con_novedades: recepcion?.conNovedades ?? false,
+          observacion: recepcion?.observacion?.trim() || null,
+        }
       );
 
       return { success: true };
     } catch (err: unknown) {
       return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al recibir') };
+    }
+  }
+
+  /**
+   * R7/R16: Logística cambia la fecha de despacho de una solicitud ya
+   * calendarizada sin sacarla de ese estado. La fecha anterior, la nueva y el
+   * motivo quedan en la auditoría (`accion = 'recalendarizacion'`), que es la
+   * fuente de las métricas de recalendarizaciones.
+   */
+  static async recalendarizarSolicitud(
+    id: string,
+    nuevaFecha: string,
+    usuarioId: string,
+    motivo?: string | null
+  ): Promise<{ success: boolean; fechaAnterior?: string | null; error?: string }> {
+    try {
+      const admin = createAdminClient();
+
+      if (!nuevaFecha || isNaN(Date.parse(nuevaFecha))) {
+        return { success: false, error: 'La nueva fecha de despacho no es válida.' };
+      }
+      if (esFechaAnteriorAHoy(nuevaFecha)) {
+        return { success: false, error: 'No puedes programar el traslado en una fecha anterior a hoy.' };
+      }
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'calendarizada') {
+        return { success: false, error: 'Solo las solicitudes Calendarizadas pueden reprogramarse.' };
+      }
+
+      const fechaAnterior = actual.fecha_tentativa_despacho;
+      if (fechaAnterior && fechaAnterior.slice(0, 10) === nuevaFecha.slice(0, 10)) {
+        return { success: false, error: 'La nueva fecha es igual a la fecha programada.' };
+      }
+
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
+        fecha_tentativa_despacho: nuevaFecha,
+      });
+      if (errEstado) return { success: false, error: errEstado };
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'recalendarizacion',
+        { fecha_tentativa_despacho: fechaAnterior },
+        { fecha_tentativa_despacho: nuevaFecha, motivo: motivo?.trim() || null }
+      );
+
+      return { success: true, fechaAnterior };
+    } catch (err: unknown) {
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al reprogramar') };
+    }
+  }
+
+  /**
+   * R8: Logística cancela una solicitud en tránsito por una eventualidad.
+   * La función SQL `fn_cancelar_solicitud_en_transito` lo hace en una sola
+   * transacción: estado `cancelada` con el motivo, reservas liberadas y el
+   * vehículo en la ubicación indicada (`null` = sin ubicación, p. ej. en ruta).
+   */
+  static async cancelarEnTransito(
+    id: string,
+    motivo: string,
+    ubicacionId: number | null,
+    usuarioId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const errorMotivo = validarMotivoCancelacion(motivo);
+      if (errorMotivo) return { success: false, error: errorMotivo };
+
+      const actual = await this.getSolicitudById(id);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (actual.estado !== 'en_transito') {
+        return { success: false, error: 'Solo las solicitudes En Tránsito pueden cancelarse con esta acción.' };
+      }
+
+      const admin = createAdminClient();
+      const { error } = await admin.rpc('fn_cancelar_solicitud_en_transito', {
+        p_solicitud_id: id,
+        p_usuario_id: usuarioId,
+        p_motivo: motivo.trim(),
+        p_ubicacion: ubicacionId,
+      });
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo cancelar el traslado.') };
+
+      if (actual.posicion_prioridad !== null) {
+        const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+        if (errReesc) console.error('No se pudo compactar la cola tras cancelar en tránsito:', errReesc);
+      }
+
+      await this.registrarAuditoria(
+        usuarioId,
+        'solicitud',
+        id,
+        'cancelacion_transito',
+        { estado: 'en_transito' },
+        { estado: 'cancelada', motivo: motivo.trim(), ubicacion: ubicacionId }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al cancelar el traslado') };
     }
   }
 

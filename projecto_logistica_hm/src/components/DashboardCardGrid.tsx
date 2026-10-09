@@ -16,6 +16,7 @@ import {
   History,
   LayoutGrid,
   ListOrdered,
+  PackageCheck,
   Truck,
   User,
   UserRound,
@@ -68,6 +69,8 @@ function renderIcono(nombre: string, className: string) {
       return <LayoutGrid className={className} />;
     case 'ListOrdered':
       return <ListOrdered className={className} />;
+    case 'PackageCheck':
+      return <PackageCheck className={className} />;
     case 'Truck':
       return <Truck className={className} />;
     case 'User':

@@ -24,9 +24,10 @@ export default async function LogisticaCalendarizacionesPage() {
   }
 
   const sucursalesAsignadas = await OrganizacionService.getUserAssignedBranches(profile.id);
-  const [solicitudes, slotsSucursales] = await Promise.all([
+  const [solicitudes, slotsSucursales, todasLasSucursales] = await Promise.all([
     SolicitudesService.getSolicitudesFiltradas(profile.id, profile.rol),
     SucursalesService.getSlotsPorSucursales(sucursalesAsignadas.map((s) => s.id)),
+    SucursalesService.getSucursales(),
   ]);
 
   return (
@@ -56,6 +57,7 @@ export default async function LogisticaCalendarizacionesPage() {
             sucursal_id: profile.sucursal_id ?? null,
           }}
           sucursales_asignadas={sucursalesAsignadas}
+          sucursales={todasLasSucursales.map((s) => ({ id: s.id, nombre: s.nombre ?? null }))}
         />
       </main>
     </div>

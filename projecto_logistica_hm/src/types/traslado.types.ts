@@ -4,7 +4,7 @@ import type { DisponibilidadVehiculo } from './sucursal.types';
  * Estados de `public.traslado_interno` (enum PostgreSQL `estado_traslado`).
  * Nomenclatura UI: Pendiente -> En tránsito -> Recepcionado.
  */
-export type EstadoTraslado = 'pendiente' | 'en_transito' | 'recepcionado';
+export type EstadoTraslado = 'pendiente' | 'en_transito' | 'recepcionado' | 'cancelado';
 
 /**
  * Un traslado interno mueve vehículos en estado `liberado` entre sucursales
@@ -39,6 +39,13 @@ export interface TrasladoInterno {
   observacion: string | null;
   created_at: string;
   updated_at: string;
+  /** R8: motivo y fecha de la cancelación en tránsito. */
+  motivo_cancelacion: string | null;
+  fecha_cancelacion: string | null;
+  /** R13: registro de la recepción en destino. */
+  recepcion_con_novedades: boolean | null;
+  observacion_recepcion: string | null;
+  /** R14: los traslados nuevos llevan un solo vehículo; los históricos pueden tener varios. */
   vehiculos: TrasladoVehiculo[];
 }
 

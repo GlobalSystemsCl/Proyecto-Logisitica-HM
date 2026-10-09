@@ -15,6 +15,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import {
+  cancelarTrasladoAction,
   crearTrasladoAction,
   despacharTrasladoAction,
   recibirTrasladoAction,
@@ -28,6 +29,8 @@ import {
 import { Sucursal } from '@/types/sucursal.types';
 import { Marca } from '@/types/vehiculo.types';
 import { formatFecha } from '@/lib/fechas';
+import { CancelarTransitoModal, RecepcionModal } from '@/components/ModalesTraslado';
+import type { DatosRecepcion } from '@/lib/recepcion';
 
 const PAGE_SIZE = 12;
 
@@ -35,6 +38,7 @@ const estadoConfig: Record<TrasladoInterno['estado'], { label: string; color: st
   pendiente: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
   en_transito: { label: 'En tránsito', color: 'bg-neutral-700 text-white border-neutral-700' },
   recepcionado: { label: 'Recepcionado', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  cancelado: { label: 'Cancelado', color: 'bg-red-50 text-red-700 border-red-200' },
 };
 
 interface TrasladosClientProps {
@@ -58,7 +62,9 @@ export default function TrasladosClient({
 }: TrasladosClientProps) {
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
-  const [filtro, setFiltro] = useState<'todos' | 'pendiente' | 'en_transito' | 'recepcionado'>('todos');
+  const [filtro, setFiltro] = useState<'todos' | TrasladoInterno['estado']>('todos');
+  const [recibirTarget, setRecibirTarget] = useState<TrasladoInterno | null>(null);
+  const [cancelarTarget, setCancelarTarget] = useState<TrasladoInterno | null>(null);
   const [detalle, setDetalle] = useState<TrasladoInterno | null>(null);
 
   // Formulario de creación
@@ -102,12 +108,11 @@ export default function TrasladosClient({
 
   const toggleVehiculo = (id: string) => {
     if (cargandoVehiculos) return;
-    setSeleccionados((prev) =>
-      prev.includes(id) ? prev.filter((v) => v !== id) : [...prev, id]
-    );
+    // R14: cada traslado interno lleva un solo vehículo.
+    setSeleccionados((prev) => (prev.includes(id) ? [] : [id]));
   };
 
-  const puedeCrear = esOperador && origen !== '' && destino !== '' && seleccionados.length > 0;
+  const puedeCrear = esOperador && origen !== '' && destino !== '' && seleccionados.length === 1;
 
   const handleBusqueda = (valor: string) => {
     setBusqueda(valor);
@@ -129,7 +134,7 @@ export default function TrasladosClient({
 
   const handleCrear = async () => {
     if (!puedeCrear) {
-      setFeedback({ tipo: 'error', mensaje: 'Selecciona origen, destino y al menos un vehículo.' });
+      setFeedback({ tipo: 'error', mensaje: 'Selecciona origen, destino y el vehículo a trasladar.' });
       return;
     }
     const input: CreateTrasladoInput = {
@@ -167,18 +172,25 @@ export default function TrasladosClient({
     }
   };
 
-  const handleRecibir = async (id: string) => {
-    setLoading(id);
-    try {
-      const result = await recibirTrasladoAction(id);
-      if (!result.success) {
-        setFeedback({ tipo: 'error', mensaje: result.error ?? 'Error al recepcionar.' });
-      } else {
-        setFeedback({ tipo: 'success', mensaje: result.message ?? 'Traslado recepcionado.' });
-      }
-    } finally {
-      setLoading(null);
-    }
+  const confirmarRecepcion = async (t: TrasladoInterno, datos: DatosRecepcion): Promise<string | null> => {
+    const result = await recibirTrasladoAction(t.id, datos);
+    if (!result.success) return result.error ?? 'Error al recepcionar.';
+    setRecibirTarget(null);
+    setFeedback({ tipo: 'success', mensaje: result.message ?? 'Traslado recepcionado.' });
+    return null;
+  };
+
+  const confirmarCancelacion = async (
+    t: TrasladoInterno,
+    motivo: string,
+    ubicacionId: number | null
+  ): Promise<string | null> => {
+    const result = await cancelarTrasladoAction(t.id, motivo, ubicacionId);
+    if (!result.success) return result.error ?? 'No se pudo cancelar el traslado.';
+    setCancelarTarget(null);
+    setDetalle(null);
+    setFeedback({ tipo: 'success', mensaje: result.message ?? 'Traslado cancelado.' });
+    return null;
   };
 
   return (
@@ -205,6 +217,7 @@ export default function TrasladosClient({
             <option value="pendiente">Pendientes</option>
             <option value="en_transito">En tránsito</option>
             <option value="recepcionado">Recepcionados</option>
+            <option value="cancelado">Cancelados</option>
           </select>
           {esOperador && (
             <button
@@ -277,7 +290,7 @@ export default function TrasladosClient({
           <div className="mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
               <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                Vehículos ({seleccionados.length} seleccionado(s))
+                Vehículo a trasladar {seleccionados.length === 1 ? '(1 seleccionado)' : '(elige uno)'}
               </p>
             </div>
             <div className="flex flex-col lg:flex-row gap-2 mb-3">
@@ -417,6 +430,8 @@ export default function TrasladosClient({
               t.estado === 'en_transito' &&
               (viewerRol === 'administrador' ||
                 (viewerRol === 'jefe_local' && viewerSucursales.includes(t.destino_id)));
+            // R8: solo Logística cancela un traslado en tránsito.
+            const puedeCancelar = t.estado === 'en_transito' && viewerRol === 'logistica';
             return (
               <div
                 key={t.id}
@@ -470,13 +485,26 @@ export default function TrasladosClient({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleRecibir(t.id);
+                          setRecibirTarget(t);
                         }}
                         disabled={loading === t.id}
                         className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         {loading === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <PackageCheck className="w-3 h-3" />}
                         Recepcionar
+                      </button>
+                    )}
+                    {puedeCancelar && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCancelarTarget(t);
+                        }}
+                        disabled={loading === t.id}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                        Cancelar
                       </button>
                     )}
                   </div>
@@ -491,6 +519,16 @@ export default function TrasladosClient({
                   {t.fecha_recepcion && (
                     <p className="text-xs text-neutral-500">
                       <span className="font-semibold">Recepción:</span> {formatFecha(t.fecha_recepcion)}
+                      {t.recepcion_con_novedades && (
+                        <span className="ml-2 px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 font-semibold">
+                          Con novedades
+                        </span>
+                      )}
+                    </p>
+                  )}
+                  {t.estado === 'cancelado' && t.motivo_cancelacion && (
+                    <p className="text-xs text-red-700">
+                      <span className="font-semibold">Cancelado:</span> {t.motivo_cancelacion}
                     </p>
                   )}
                   <p className="mt-2 flex items-center justify-between text-xs font-semibold text-neutral-600">
@@ -535,6 +573,26 @@ export default function TrasladosClient({
                 {detalle.observacion && (
                   <p className="mt-1 text-xs text-neutral-500 italic">“{detalle.observacion}”</p>
                 )}
+                {detalle.estado === 'cancelado' && (
+                  <p className="mt-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    <span className="font-semibold">Cancelado {detalle.fecha_cancelacion ? `el ${formatFecha(detalle.fecha_cancelacion)}` : ''}:</span>{' '}
+                    {detalle.motivo_cancelacion ?? 'Sin motivo registrado.'}
+                  </p>
+                )}
+                {detalle.estado === 'recepcionado' && (detalle.recepcion_con_novedades || detalle.observacion_recepcion) && (
+                  <p
+                    className={`mt-2 text-xs rounded-lg px-3 py-2 border ${
+                      detalle.recepcion_con_novedades
+                        ? 'text-amber-800 bg-amber-50 border-amber-200'
+                        : 'text-neutral-700 bg-neutral-50 border-neutral-200'
+                    }`}
+                  >
+                    <span className="font-semibold">
+                      Recepción {detalle.recepcion_con_novedades ? 'con novedades' : 'sin novedades'}:
+                    </span>{' '}
+                    {detalle.observacion_recepcion ?? '—'}
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setDetalle(null)}
@@ -576,6 +634,25 @@ export default function TrasladosClient({
             </div>
           </div>
         </div>
+      )}
+      {recibirTarget && (
+        <RecepcionModal
+          titulo="Recepcionar traslado"
+          subtitulo={`${recibirTarget.origen_nombre ?? ''} → ${recibirTarget.destino_nombre ?? ''}`}
+          onCerrar={() => setRecibirTarget(null)}
+          onConfirmar={(datos) => confirmarRecepcion(recibirTarget, datos)}
+        />
+      )}
+
+      {cancelarTarget && (
+        <CancelarTransitoModal
+          titulo="Cancelar traslado interno"
+          subtitulo={`${cancelarTarget.origen_nombre ?? ''} → ${cancelarTarget.destino_nombre ?? ''}`}
+          sucursales={sucursales.map((suc) => ({ id: suc.id, nombre: suc.nombre ?? null }))}
+          ubicacionInicial={cancelarTarget.origen_id}
+          onCerrar={() => setCancelarTarget(null)}
+          onConfirmar={(motivo, ubicacion) => confirmarCancelacion(cancelarTarget, motivo, ubicacion)}
+        />
       )}
     </div>
   );

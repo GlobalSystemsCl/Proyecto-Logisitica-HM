@@ -619,3 +619,22 @@ function vehiculoRow(solicitudId?: string, disponibilidad?: string) {
     updated_at: '2026-01-02',
   };
 }
+
+describe('VehiculoService.getVehiculoById', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_return_vehicle_row_when_it_exists', async () => {
+    admin.results.vehiculo = [fila({ id: 'veh-1', ubicacion: 2 })];
+    expect(await VehiculoService.getVehiculoById('veh-1')).toEqual({ id: 'veh-1', ubicacion: 2 });
+    expect(admin.callsTo('vehiculo')).toContainEqual(['eq', 'id', 'veh-1']);
+  });
+
+  it('should_return_null_when_vehicle_does_not_exist_or_query_fails', async () => {
+    admin.results.vehiculo = [fila(null), { data: null, error: { message: 'x' } }];
+    expect(await VehiculoService.getVehiculoById('veh-x')).toBeNull();
+    expect(await VehiculoService.getVehiculoById('veh-y')).toBeNull();
+  });
+});

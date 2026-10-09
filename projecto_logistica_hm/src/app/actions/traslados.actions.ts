@@ -8,6 +8,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { UserProfile } from '@/types/auth.types';
 import type { CreateTrasladoInput } from '@/types/traslado.types';
+import type { DatosRecepcion } from '@/lib/recepcion';
 
 async function getProfileOrThrow(): Promise<UserProfile> {
   return requireProfile();
@@ -67,7 +68,7 @@ export async function despacharTrasladoAction(trasladoId: string) {
  * El JL de la sucursal destino recepciona el traslado.
  * No existe acción de rechazo: el JL solo puede recepcionar.
  */
-export async function recibirTrasladoAction(trasladoId: string) {
+export async function recibirTrasladoAction(trasladoId: string, recepcion?: DatosRecepcion) {
   try {
     const profile = await getProfileOrThrow();
 
@@ -75,11 +76,33 @@ export async function recibirTrasladoAction(trasladoId: string) {
       return { success: false, error: 'No tienes permisos para recepcionar traslados.' };
     }
 
-    const result = await TrasladoService.recibirTraslado(trasladoId, profile.id);
+    const result = await TrasladoService.recibirTraslado(trasladoId, profile.id, recepcion);
     if (!result.success) return { success: false, error: result.error };
 
     revalidarSolicitudes();
     return { success: true, message: 'Traslado recepcionado en destino.' };
+  } catch (err: unknown) {
+    const msg = mensajeErrorUsuario(err, 'Error inesperado');
+    return { success: false, error: msg };
+  }
+}
+
+/**
+ * R8: Logística cancela un traslado interno en tránsito con un motivo e indica
+ * dónde queda el vehículo (`null` = sin ubicación asignada).
+ */
+export async function cancelarTrasladoAction(trasladoId: string, motivo: string, ubicacionId: number | null) {
+  try {
+    const profile = await getProfileOrThrow();
+    if (profile.rol !== 'logistica') {
+      return { success: false, error: 'Solo Logística puede cancelar un traslado en tránsito.' };
+    }
+
+    const result = await TrasladoService.cancelarTraslado(trasladoId, profile.id, motivo, ubicacionId);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidarSolicitudes();
+    return { success: true, message: 'Traslado cancelado. Se registró el motivo y la ubicación del vehículo.' };
   } catch (err: unknown) {
     const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };

@@ -91,6 +91,21 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     ],
   },
   {
+    clave: 'recepciones',
+    href: '/solicitudes/recepciones',
+    icono: 'PackageCheck',
+    grupo: 'gestion',
+    orden: 25,
+    tituloAdmin: 'Recepciones',
+    tituloPorRol: { jefe_local: 'Recepciones' },
+    descripcion:
+      'Vehículos en camino a tus sucursales: marca la llegada y registra si llegaron con novedades.',
+    acciones: [
+      'Recibir solicitudes y traslados internos en tránsito',
+      'Registrar novedades y adjuntar fotos de la recepción',
+    ],
+  },
+  {
     clave: 'prioridades',
     href: '/solicitudes/prioridades',
     icono: 'ListOrdered',

@@ -207,11 +207,15 @@ describe('TrasladoService', () => {
 
       const res = await TrasladoService.crearTraslado(
         { origen_id: 1, destino_id: 2 },
-        ['veh-1', 'veh-2', 'veh-3'],
+        ['veh-1'],
         'log-1'
       );
 
       expect(res.success).toBe(true);
+      expect(admin.callsTo('traslado_interno_vehiculo')).toContainEqual([
+        'insert',
+        [{ traslado_id: 't-1', vehiculo_id: 'veh-1' }],
+      ]);
       expect(res.traslado?.id).toBe('t-1');
       expect(JSON.stringify(admin.callsTo('sucursal'))).not.toContain('slots');
       expect(admin.callsTo('solicitud_vehiculo').length).toBeGreaterThan(0);
@@ -226,12 +230,12 @@ describe('TrasladoService', () => {
 
       const res = await TrasladoService.crearTraslado(
         { origen_id: 1, destino_id: 2 },
-        ['veh-1', 'veh-2'],
+        ['veh-2'],
         'log-1'
       );
 
       expect(res.success).toBe(false);
-      expect(res.error).toContain('liberado');
+      expect(res.error).toBe('Solo los vehículos disponibles pueden trasladarse.');
       expect(admin.callsTo('traslado_interno').filter((c) => c[0] === 'insert')).toHaveLength(0);
     });
 
@@ -243,13 +247,156 @@ describe('TrasladoService', () => {
 
       const res = await TrasladoService.crearTraslado(
         { origen_id: 1, destino_id: 2 },
-        ['veh-1', 'veh-2'],
+        ['veh-2'],
         'log-1'
       );
 
       expect(res.success).toBe(false);
-      expect(res.error).toContain('liberado');
+      expect(res.error).toBe('Solo los vehículos disponibles pueden trasladarse.');
       expect(admin.callsTo('traslado_interno').filter((c) => c[0] === 'insert')).toHaveLength(0);
+    });
+  });
+
+  describe('crearTraslado: un vehículo por traslado (R14)', () => {
+    it('should_reject_when_more_than_one_vehicle_is_selected', async () => {
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2 }, ['veh-1', 'veh-2'], 'log-1');
+      expect(res).toEqual({ success: false, error: 'Cada traslado interno lleva un solo vehículo.' });
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
+    });
+
+    it('should_reject_when_no_vehicle_is_selected', async () => {
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2 }, [], 'log-1');
+      expect(res).toEqual({ success: false, error: 'Debes seleccionar el vehículo del traslado.' });
+    });
+  });
+
+  describe('cancelarTraslado (R8)', () => {
+    it('should_cancel_through_rpc_when_user_is_the_assigned_logistica', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado({ estado: 'en_transito' }))];
+      const auditoria = vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
+
+      const res = await TrasladoService.cancelarTraslado('t-1', 'log-1', 'Camión en panne', 1);
+
+      expect(res).toEqual({ success: true });
+      expect(admin.rpc).toHaveBeenCalledWith('fn_cancelar_traslado_interno', {
+        p_traslado_id: 't-1',
+        p_usuario_id: 'log-1',
+        p_motivo: 'Camión en panne',
+        p_ubicacion: 1,
+      });
+      expect(auditoria).toHaveBeenCalledWith(
+        'log-1',
+        'traslado_interno',
+        't-1',
+        'cancelacion_transito',
+        { estado: 'en_transito' },
+        { estado: 'cancelado', motivo: 'Camión en panne', ubicacion: 1 }
+      );
+    });
+
+    it('should_allow_logistica_of_the_zone_and_accept_vehicle_without_location', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado({ estado: 'en_transito', logistica_id: 'otro' }))];
+      admin.results.usuario_zona = [fila([{ zona_id: 7, zona: { id: 7, nombre: 'Norte' } }])];
+      admin.results.sucursal = [fila({ id: 1, nombre: 'N', zona_id: 7 }), fila({ id: 2, nombre: 'S', zona_id: 8 })];
+      vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
+
+      const res = await TrasladoService.cancelarTraslado('t-1', 'log-1', 'Accidente en ruta', null);
+
+      expect(res).toEqual({ success: true });
+      expect(admin.rpc).toHaveBeenCalledWith(
+        'fn_cancelar_traslado_interno',
+        expect.objectContaining({ p_ubicacion: null })
+      );
+    });
+
+    it('should_reject_logistica_outside_the_zone', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado({ estado: 'en_transito', logistica_id: 'otro' }))];
+      admin.results.usuario_zona = [fila([{ zona_id: 9, zona: { id: 9, nombre: 'Sur' } }])];
+      admin.results.sucursal = [fila({ id: 1, nombre: 'N', zona_id: 7 }), fila({ id: 2, nombre: 'S', zona_id: 8 })];
+
+      const res = await TrasladoService.cancelarTraslado('t-1', 'log-1', 'Accidente en ruta', null);
+
+      expect(res.success).toBe(false);
+      expect(admin.rpc).not.toHaveBeenCalled();
+    });
+
+    it('should_reject_when_traslado_is_not_in_transit', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado({ estado: 'pendiente' }))];
+      const res = await TrasladoService.cancelarTraslado('t-1', 'log-1', 'Motivo válido', 1);
+      expect(res).toEqual({ success: false, error: 'Solo los traslados en tránsito pueden cancelarse.' });
+    });
+
+    it('should_reject_short_reason_without_querying', async () => {
+      const res = await TrasladoService.cancelarTraslado('t-1', 'log-1', 'no', 1);
+      expect(res.success).toBe(false);
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
+    });
+
+    it('should_return_business_message_when_rpc_fails_with_P0001', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado({ estado: 'en_transito' }))];
+      admin.rpc.mockResolvedValueOnce({
+        data: null,
+        error: { code: 'P0001', message: 'La sucursal indicada como ubicación no existe.' },
+      });
+
+      const res = await TrasladoService.cancelarTraslado('t-1', 'log-1', 'Motivo válido', 99);
+
+      expect(res).toEqual({ success: false, error: 'La sucursal indicada como ubicación no existe.' });
+    });
+  });
+
+  describe('recibirTraslado con registro (R13)', () => {
+    it('should_store_reception_news_and_audit_them', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado({ estado: 'en_transito' })), fila(null)];
+      admin.results.usuario = [fila({ rol: 'administrador' })];
+      const auditoria = vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
+
+      const res = await TrasladoService.recibirTraslado('t-1', 'adm-1', { conNovedades: true, observacion: ' Rayón ' });
+
+      expect(res).toEqual({ success: true });
+      const update = admin.callsTo('traslado_interno').find((c) => c[0] === 'update');
+      expect(update?.[1]).toMatchObject({
+        estado: 'recepcionado',
+        recepcion_con_novedades: true,
+        observacion_recepcion: 'Rayón',
+      });
+      expect(auditoria).toHaveBeenCalledWith(
+        'adm-1',
+        'traslado_interno',
+        't-1',
+        'recepcion',
+        { estado: 'en_transito' },
+        expect.objectContaining({ con_novedades: true, observacion: 'Rayón' })
+      );
+    });
+
+    it('should_reject_news_without_description', async () => {
+      const res = await TrasladoService.recibirTraslado('t-1', 'adm-1', { conNovedades: true });
+      expect(res).toEqual({ success: false, error: 'Describe la novedad con la que llegó el vehículo.' });
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
+    });
+  });
+
+  describe('getTrasladosEnTransitoHacia (R13)', () => {
+    it('should_filter_in_transit_by_destination_branches', async () => {
+      admin.results.traslado_interno = [fila([filaTraslado({ estado: 'en_transito' })])];
+
+      const res = await TrasladoService.getTrasladosEnTransitoHacia([2]);
+
+      expect(res).toHaveLength(1);
+      expect(admin.callsTo('traslado_interno')).toContainEqual(['eq', 'estado', 'en_transito']);
+      expect(admin.callsTo('traslado_interno')).toContainEqual(['in', 'destino_id', [2]]);
+    });
+
+    it('should_return_all_in_transit_for_admin', async () => {
+      admin.results.traslado_interno = [fila([])];
+      await TrasladoService.getTrasladosEnTransitoHacia(null);
+      expect(admin.callsTo('traslado_interno').some((c) => c[0] === 'in')).toBe(false);
+    });
+
+    it('should_return_empty_without_querying_when_there_are_no_branches', async () => {
+      expect(await TrasladoService.getTrasladosEnTransitoHacia([])).toEqual([]);
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
     });
   });
 });

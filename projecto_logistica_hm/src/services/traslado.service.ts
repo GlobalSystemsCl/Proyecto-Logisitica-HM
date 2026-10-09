@@ -9,6 +9,7 @@ import type {
 } from '@/types/traslado.types';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
+import { validarMotivoCancelacion, validarRecepcion, type DatosRecepcion } from '@/lib/recepcion';
 
 /**
  * Traslados internos: mueven vehículos ENTRE SUCURSALES (solo movimiento de
@@ -36,6 +37,7 @@ import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
  */
 const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
   fecha_despacho, fecha_recepcion, observacion, created_at, updated_at,
+  motivo_cancelacion, fecha_cancelacion, recepcion_con_novedades, observacion_recepcion,
   origen:sucursal!traslado_interno_origen_id_fkey(nombre),
   destino:sucursal!traslado_interno_destino_id_fkey(nombre),
   logistica:usuario!traslado_interno_logistica_id_fkey(nombre, apellido),
@@ -55,6 +57,10 @@ interface TrasladoRawRow {
   observacion: string | null;
   created_at: string;
   updated_at: string;
+  motivo_cancelacion?: string | null;
+  fecha_cancelacion?: string | null;
+  recepcion_con_novedades?: boolean | null;
+  observacion_recepcion?: string | null;
   origen: { nombre: string | null } | null;
   destino: { nombre: string | null } | null;
   logistica: { nombre: string; apellido: string } | null;
@@ -94,6 +100,10 @@ function mapTraslado(row: TrasladoRawRow): TrasladoInterno {
     observacion: row.observacion,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    motivo_cancelacion: row.motivo_cancelacion ?? null,
+    fecha_cancelacion: row.fecha_cancelacion ?? null,
+    recepcion_con_novedades: row.recepcion_con_novedades ?? null,
+    observacion_recepcion: row.observacion_recepcion ?? null,
     vehiculos: (row.traslado_interno_vehiculo || [])
       .filter((tv) => tv.vehiculo)
       .map((tv) => ({
@@ -126,8 +136,15 @@ export class TrasladoService {
     try {
       const admin = createAdminClient();
 
-      if (vehiculosIds.length === 0) {
-        return { success: false, error: 'Debes seleccionar al menos un vehículo para el traslado.' };
+      // R14: cada traslado interno mueve un solo vehículo.
+      if (vehiculosIds.length !== 1) {
+        return {
+          success: false,
+          error:
+            vehiculosIds.length === 0
+              ? 'Debes seleccionar el vehículo del traslado.'
+              : 'Cada traslado interno lleva un solo vehículo.',
+        };
       }
       if (input.origen_id === input.destino_id) {
         return { success: false, error: 'El origen y el destino del traslado deben ser distintos.' };
@@ -195,7 +212,7 @@ export class TrasladoService {
       if (noLiberados.size > 0) {
         return {
           success: false,
-          error: 'Solo los vehículos en estado liberado pueden trasladarse.',
+          error: 'Solo los vehículos disponibles pueden trasladarse.',
         };
       }
 
@@ -300,10 +317,14 @@ export class TrasladoService {
    */
   static async recibirTraslado(
     trasladoId: string,
-    jefeLocalId: string
+    jefeLocalId: string,
+    recepcion?: DatosRecepcion
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
+
+      const errorRecepcion = validarRecepcion(recepcion);
+      if (errorRecepcion) return { success: false, error: errorRecepcion };
 
       const actual = await TrasladoService.getTrasladoById(trasladoId);
       if (!actual) return { success: false, error: 'Traslado no encontrado.' };
@@ -336,7 +357,12 @@ export class TrasladoService {
       const ahora = new Date().toISOString();
       const { error } = await admin
         .from('traslado_interno')
-        .update({ estado: 'recepcionado', fecha_recepcion: ahora })
+        .update({
+          estado: 'recepcionado',
+          fecha_recepcion: ahora,
+          recepcion_con_novedades: recepcion?.conNovedades ?? false,
+          observacion_recepcion: recepcion?.observacion?.trim() || null,
+        })
         .eq('id', trasladoId);
 
       if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo completar la operación.') };
@@ -347,13 +373,80 @@ export class TrasladoService {
         trasladoId,
         'recepcion',
         { estado: 'en_transito' },
-        { estado: 'recepcionado', fecha_recepcion: ahora }
+        {
+          estado: 'recepcionado',
+          fecha_recepcion: ahora,
+          con_novedades: recepcion?.conNovedades ?? false,
+          observacion: recepcion?.observacion?.trim() || null,
+        }
       );
 
       return { success: true };
     } catch (err: unknown) {
       const msg = mensajeErrorUsuario(err, 'Error inesperado al recepcionar el traslado');
       return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * R8: Logística cancela un traslado interno en tránsito. Puede hacerlo el
+   * encargado del traslado o un usuario de Logística con la zona del origen o
+   * del destino. La función SQL `fn_cancelar_traslado_interno` lo hace en una
+   * transacción: estado `cancelado`, reserva liberada, vehículo en la
+   * ubicación indicada (`null` = sin ubicación) y slots del destino descontados.
+   */
+  static async cancelarTraslado(
+    trasladoId: string,
+    logisticaId: string,
+    motivo: string,
+    ubicacionId: number | null
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      const errorMotivo = validarMotivoCancelacion(motivo);
+      if (errorMotivo) return { success: false, error: errorMotivo };
+
+      const actual = await TrasladoService.getTrasladoById(trasladoId);
+      if (!actual) return { success: false, error: 'Traslado no encontrado.' };
+      if (actual.estado !== 'en_transito') {
+        return { success: false, error: 'Solo los traslados en tránsito pueden cancelarse.' };
+      }
+
+      if (actual.logistica_id !== logisticaId) {
+        const [zonas, origen, destino] = await Promise.all([
+          OrganizacionService.getUserZones(logisticaId),
+          OrganizacionService.getBranch(actual.origen_id),
+          OrganizacionService.getBranch(actual.destino_id),
+        ]);
+        const misZonas = new Set(zonas.map((z) => z.id));
+        const enMiZona =
+          (origen?.zona_id != null && misZonas.has(origen.zona_id)) ||
+          (destino?.zona_id != null && misZonas.has(destino.zona_id));
+        if (!enMiZona) {
+          return { success: false, error: 'Solo el encargado o Logística de la zona pueden cancelar este traslado.' };
+        }
+      }
+
+      const admin = createAdminClient();
+      const { error } = await admin.rpc('fn_cancelar_traslado_interno', {
+        p_traslado_id: trasladoId,
+        p_usuario_id: logisticaId,
+        p_motivo: motivo.trim(),
+        p_ubicacion: ubicacionId,
+      });
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo cancelar el traslado.') };
+
+      await SolicitudesService.registrarAuditoria(
+        logisticaId,
+        'traslado_interno',
+        trasladoId,
+        'cancelacion_transito',
+        { estado: 'en_transito' },
+        { estado: 'cancelado', motivo: motivo.trim(), ubicacion: ubicacionId }
+      );
+
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al cancelar el traslado') };
     }
   }
 
@@ -396,6 +489,31 @@ export class TrasladoService {
       return ((data || []) as unknown as TrasladoRawRow[]).map(mapTraslado);
     } catch (err) {
       console.error('Error en getTrasladosByDestinoSucursal:', err);
+      return [];
+    }
+  }
+
+  /**
+   * R13: traslados internos en tránsito hacia las sucursales indicadas.
+   * `null` = todas (administrador); una lista vacía = sin alcance.
+   */
+  static async getTrasladosEnTransitoHacia(sucursalIds: number[] | null): Promise<TrasladoInterno[]> {
+    const ids = sucursalIds === null ? null : sucursalIds.filter((id) => Number.isInteger(id));
+    if (ids !== null && ids.length === 0) return [];
+
+    try {
+      const admin = createAdminClient();
+      let query = admin.from('traslado_interno').select(TRASLADO_SELECT).eq('estado', 'en_transito');
+      if (ids !== null) query = query.in('destino_id', ids);
+      const { data, error } = await query.order('fecha_despacho', { ascending: true });
+
+      if (error) {
+        console.error('Error al listar traslados en tránsito:', error);
+        return [];
+      }
+      return ((data || []) as unknown as TrasladoRawRow[]).map(mapTraslado);
+    } catch (err) {
+      console.error('Error en getTrasladosEnTransitoHacia:', err);
       return [];
     }
   }

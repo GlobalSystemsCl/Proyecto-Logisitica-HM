@@ -137,6 +137,19 @@ export class VehiculoService {
   /**
    * Verifica la disponibilidad de un vehículo específico
    */
+  /** Fila del vehículo tal como está en la BD (para auditar el "antes"). */
+  static async getVehiculoById(id: string): Promise<Vehiculo | null> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin.from('vehiculo').select('*').eq('id', id).maybeSingle();
+      if (error || !data) return null;
+      return data as Vehiculo;
+    } catch (err) {
+      console.error('Error en getVehiculoById:', err);
+      return null;
+    }
+  }
+
   static async verificarDisponibilidad(id: string): Promise<{
     reservado: boolean;
     vendido: boolean;

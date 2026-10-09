@@ -98,6 +98,7 @@ describe('config/dashboard-cards', () => {
         'aprobaciones',
         'logistica',
         'prioridades',
+        'recepciones',
         'slots',
         'solicitudes',
         'traslados',

@@ -3,7 +3,16 @@
 import { useState, useMemo, useCallback, DragEvent } from 'react';
 import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, RotateCcw, PackageSearch, PackageCheck, X, CalendarClock, Car } from 'lucide-react';
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
-import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, cancelarDespachoSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
+import {
+  calendarizarSolicitudAction,
+  descalendarizarSolicitudAction,
+  despacharSolicitudAction,
+  cancelarDespachoSolicitudAction,
+  recalendarizarSolicitudAction,
+  cancelarEnTransitoAction,
+} from '@/app/actions/solicitudes.actions';
+import { CancelarTransitoModal, RecepcionModal, ReprogramarModal } from '@/components/ModalesTraslado';
+import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
@@ -17,6 +26,8 @@ interface Props {
     sucursal_id: number | null;
   };
   sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
+  /** Todas las sucursales: ubicación del vehículo al cancelar un traslado en tránsito. */
+  sucursales?: Array<{ id: number; nombre: string | null }>;
 }
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -28,7 +39,10 @@ const tipoLabel: Record<TipoSolicitud, string> = {
   evento: 'Evento',
 };
 
-export default function CalendarizacionesClient({ solicitudes, viewer, sucursales_asignadas = [] }: Props) {
+export default function CalendarizacionesClient({ solicitudes, viewer, sucursales_asignadas = [], sucursales = [] }: Props) {
+  const [recibirTarget, setRecibirTarget] = useState<SolicitudLista | null>(null);
+  const [reprogramarTarget, setReprogramarTarget] = useState<SolicitudLista | null>(null);
+  const [cancelarTarget, setCancelarTarget] = useState<SolicitudLista | null>(null);
   const [mesActual, setMesActual] = useState(new Date().getMonth());
   const [añoActual, setAñoActual] = useState(new Date().getFullYear());
   const [draggedId, setDraggedId] = useState<string | null>(null);
@@ -235,16 +249,38 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
     }
   }, []);
 
-  const handleRecibir = useCallback(async (id: string) => {
-    setLoading(id);
-    try {
-      const result = await recibirSolicitudAction(id);
-      if (!result.success) alert(result.error);
-    } finally {
-      setLoading(null);
-      setRefreshKey((k) => k + 1);
-    }
-  }, []);
+  const confirmarRecepcion = async (
+    sol: SolicitudLista,
+    datos: Parameters<typeof recibirSolicitudConFotos>[1],
+    fotos: File[]
+  ): Promise<string | null> => {
+    const { error, aviso } = await recibirSolicitudConFotos(sol.id, datos, fotos);
+    if (error) return error;
+    setRecibirTarget(null);
+    setRefreshKey((k) => k + 1);
+    if (aviso) alert(aviso);
+    return null;
+  };
+
+  const confirmarReprogramacion = async (sol: SolicitudLista, fecha: string, motivo: string): Promise<string | null> => {
+    const result = await recalendarizarSolicitudAction(sol.id, fecha, motivo);
+    if (!result.success) return result.error ?? 'No se pudo reprogramar.';
+    setReprogramarTarget(null);
+    setRefreshKey((k) => k + 1);
+    return null;
+  };
+
+  const confirmarCancelacion = async (
+    sol: SolicitudLista,
+    motivo: string,
+    ubicacionId: number | null
+  ): Promise<string | null> => {
+    const result = await cancelarEnTransitoAction(sol.id, motivo, ubicacionId);
+    if (!result.success) return result.error ?? 'No se pudo cancelar el traslado.';
+    setCancelarTarget(null);
+    setRefreshKey((k) => k + 1);
+    return null;
+  };
 
   return (
     <div className="space-y-6">
@@ -533,14 +569,36 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
                         Cancelar Despacho
                       </button>
                     )}
+                    {puedeCalendarizar && s.estado === 'en_transito' && (
+                      <button
+                        onClick={() => setCancelarTarget(s)}
+                        disabled={loading === s.id}
+                        title="Cancelar el traslado por una eventualidad"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 border border-red-200 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                        Cancelar traslado
+                      </button>
+                    )}
                     {puedeRecibir(s) && s.estado === 'en_transito' && (
                       <button
-                        onClick={() => handleRecibir(s.id)}
+                        onClick={() => setRecibirTarget(s)}
                         disabled={loading === s.id}
                         className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         <PackageCheck className="w-3 h-3" />
                         Recibido
+                      </button>
+                    )}
+                    {puedeCalendarizar && s.estado === 'calendarizada' && (
+                      <button
+                        onClick={() => setReprogramarTarget(s)}
+                        disabled={loading === s.id}
+                        title="Cambiar la fecha de despacho"
+                        className="flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 border border-blue-200 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                      >
+                        <CalendarClock className="w-3 h-3" />
+                        Reprogramar
                       </button>
                     )}
                     {puedeCalendarizar && s.estado === 'calendarizada' && (
@@ -559,6 +617,36 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
             ))}
           </div>
         </div>
+      )}
+
+      {recibirTarget && (
+        <RecepcionModal
+          titulo="Registrar recepción"
+          subtitulo={`${recibirTarget.sucursal_nombre ?? ''} → ${recibirTarget.sucursal_destino_nombre ?? recibirTarget.titulo_evento ?? ''}`}
+          permitirFotos
+          onCerrar={() => setRecibirTarget(null)}
+          onConfirmar={(datos, fotos) => confirmarRecepcion(recibirTarget, datos, fotos)}
+        />
+      )}
+
+      {reprogramarTarget && (
+        <ReprogramarModal
+          subtitulo={`${reprogramarTarget.sucursal_nombre ?? ''} → ${reprogramarTarget.sucursal_destino_nombre ?? reprogramarTarget.titulo_evento ?? ''}`}
+          fechaActual={reprogramarTarget.fecha_tentativa_despacho}
+          onCerrar={() => setReprogramarTarget(null)}
+          onConfirmar={(fecha, motivo) => confirmarReprogramacion(reprogramarTarget, fecha, motivo)}
+        />
+      )}
+
+      {cancelarTarget && (
+        <CancelarTransitoModal
+          titulo="Cancelar traslado en tránsito"
+          subtitulo={`${cancelarTarget.sucursal_nombre ?? ''} → ${cancelarTarget.sucursal_destino_nombre ?? cancelarTarget.titulo_evento ?? ''}`}
+          sucursales={sucursales}
+          ubicacionInicial={cancelarTarget.sucursal}
+          onCerrar={() => setCancelarTarget(null)}
+          onConfirmar={(motivo, ubicacion) => confirmarCancelacion(cancelarTarget, motivo, ubicacion)}
+        />
       )}
 
       {/* Modal de advertencia: fecha fuera del límite */}

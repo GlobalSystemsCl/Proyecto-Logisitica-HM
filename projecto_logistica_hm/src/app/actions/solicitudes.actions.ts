@@ -11,9 +11,11 @@ import { mensajeErrorUsuario } from '@/lib/errores';
 import {
   requireDocumentoAccess,
   requireProfile,
+  requireRole,
   requireSolicitudAccess,
   requireSolicitudVehiculoAccess,
 } from '@/lib/auth/guards';
+import type { DatosRecepcion } from '@/lib/recepcion';
 import { ocultarContacto, puedeVerContacto } from '@/lib/auth/contacto';
 
 /**
@@ -656,7 +658,7 @@ export async function cancelarDespachoSolicitudAction(solicitudId: string) {
   }
 }
 
-export async function recibirSolicitudAction(solicitudId: string) {
+export async function recibirSolicitudAction(solicitudId: string, recepcion?: DatosRecepcion) {
   try {
     const profile = await requireProfile();
 
@@ -666,11 +668,64 @@ export async function recibirSolicitudAction(solicitudId: string) {
 
     await requireSolicitudAccess(profile, solicitudId);
 
-    const result = await SolicitudesService.recibirSolicitud(solicitudId, profile.id);
+    const result = await SolicitudesService.recibirSolicitud(solicitudId, profile.id, recepcion);
     if (!result.success) return { success: false, error: result.error };
 
     revalidarSolicitudes();
-    return { success: true, message: 'Solicitud recibida en destino.' };
+    return {
+      success: true,
+      message: recepcion?.conNovedades
+        ? 'Solicitud recibida en destino con novedades registradas.'
+        : 'Solicitud recibida en destino.',
+    };
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
+/**
+ * R7/R16: Logística cambia la fecha de una solicitud ya calendarizada.
+ * Solo Logística: es quien programa los traslados.
+ */
+export async function recalendarizarSolicitudAction(
+  solicitudId: string,
+  nuevaFecha: string,
+  motivo?: string | null
+) {
+  try {
+    const profile = await requireProfile();
+    requireRole(profile, ['logistica'], 'Solo Logística puede reprogramar traslados.');
+    await requireSolicitudAccess(profile, solicitudId);
+
+    const result = await SolicitudesService.recalendarizarSolicitud(solicitudId, nuevaFecha, profile.id, motivo);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidarSolicitudes();
+    return { success: true, message: 'Traslado reprogramado.' };
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
+/**
+ * R8: Logística cancela una solicitud en tránsito con un motivo e indica dónde
+ * queda el vehículo (`null` = sin ubicación asignada, por ejemplo en la ruta).
+ */
+export async function cancelarEnTransitoAction(
+  solicitudId: string,
+  motivo: string,
+  ubicacionId: number | null
+) {
+  try {
+    const profile = await requireProfile();
+    requireRole(profile, ['logistica'], 'Solo Logística puede cancelar un traslado en tránsito.');
+    await requireSolicitudAccess(profile, solicitudId);
+
+    const result = await SolicitudesService.cancelarEnTransito(solicitudId, motivo, ubicacionId, profile.id);
+    if (!result.success) return { success: false, error: result.error };
+
+    revalidarSolicitudes();
+    return { success: true, message: 'Traslado cancelado. Se registró el motivo y la ubicación del vehículo.' };
   } catch (err: unknown) {
     return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }

@@ -25,11 +25,21 @@ const accionConfig: Record<string, { label: string; color: string }> = {
   CAMBIO_ESTADO: { label: 'Cambio de Estado', color: 'bg-neutral-900 text-white' },
   ASIGNACION_VEHICULO: { label: 'Asignación Vehículo', color: 'bg-neutral-200 text-neutral-900' },
   CAMBIO_DISPONIBILIDAD_VEHICULO: { label: 'Disponibilidad Vehículo', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  creacion: { label: 'Creación', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  edicion: { label: 'Edición', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  cambio_ubicacion: { label: 'Cambio de ubicación', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+  eliminacion: { label: 'Eliminación', color: 'bg-red-50 text-red-700 border border-red-200' },
+  importacion: { label: 'Importación CSV', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  recalendarizacion: { label: 'Reprogramación', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+  cancelacion_transito: { label: 'Cancelación en tránsito', color: 'bg-red-50 text-red-700 border border-red-200' },
+  recepcion: { label: 'Recepción', color: 'bg-green-50 text-green-700 border border-green-200' },
 };
 
 const entidadConfig: Record<string, { label: string; color: string }> = {
   solicitud: { label: 'Solicitud', color: 'bg-white text-neutral-700 border border-neutral-300' },
   solicitud_vehiculo: { label: 'Vehículo', color: 'bg-neutral-50 text-neutral-600 border border-neutral-200' },
+  vehiculo: { label: 'Inventario de vehículos', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+  traslado_interno: { label: 'Traslado interno', color: 'bg-neutral-50 text-neutral-600 border border-neutral-200' },
 };
 
 const estadoColores: Record<string, string> = {
