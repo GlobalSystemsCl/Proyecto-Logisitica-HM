@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { etiquetaVehiculo, nombreVehiculo, nombreVehiculoConAnio } from '@/lib/vehiculo';
+import { etiquetaVehiculo, nombreVehiculo, nombreVehiculoConAnio, DESCRIPCION_DISPONIBILIDAD, etiquetaDisponibilidad } from '@/lib/vehiculo';
 import type { VehiculoAsociado } from '@/types/solicitud.types';
 
 function vehiculo(overrides: Partial<VehiculoAsociado> = {}): VehiculoAsociado {
@@ -64,5 +64,26 @@ describe('etiquetaVehiculo', () => {
     expect(etiquetaVehiculo(vehiculo({ patente: null, marca: '', modelo: '', chasis: '' }))).toBe(
       null
     );
+  });
+});
+
+describe('etiquetaDisponibilidad', () => {
+  it('should_show_disponible_when_db_state_is_liberado', () => {
+    expect(etiquetaDisponibilidad('liberado')).toBe('Disponible');
+  });
+
+  it('should_show_reservado_and_vendido_labels', () => {
+    expect(etiquetaDisponibilidad('reservado')).toBe('Reservado');
+    expect(etiquetaDisponibilidad('vendido')).toBe('Vendido');
+    expect(DESCRIPCION_DISPONIBILIDAD.vendido).toContain('entregado al cliente');
+  });
+
+  it('should_return_dash_when_state_is_missing', () => {
+    expect(etiquetaDisponibilidad(null)).toBe('—');
+    expect(etiquetaDisponibilidad(undefined)).toBe('—');
+  });
+
+  it('should_return_raw_value_when_state_is_unknown', () => {
+    expect(etiquetaDisponibilidad('en_revision')).toBe('en_revision');
   });
 });

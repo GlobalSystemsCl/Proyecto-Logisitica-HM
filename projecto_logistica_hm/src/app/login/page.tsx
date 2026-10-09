@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { loginAction } from '@/app/actions/auth.actions';
+import { mensajeCuentaDesactivada } from '@/lib/soporte';
 import { Lock, Mail, Eye, EyeOff, AlertCircle, ArrowRight, UserPlus } from 'lucide-react';
 
 function LoginForm() {
@@ -19,7 +20,7 @@ function LoginForm() {
   if (err === 'enlace_expirado' || err === 'auth_callback_failed') {
     paramError = 'El enlace de acceso ha expirado o ya fue utilizado. Por favor solicita uno nuevo al administrador.';
   } else if (err === 'account_deactivated') {
-    paramError = 'Tu cuenta se encuentra desactivada por el administrador.';
+    paramError = mensajeCuentaDesactivada();
   } else if (err === 'unauthorized') {
     paramError = 'No tienes permisos suficientes para acceder a esta sección.';
   } else if (err === 'pendiente_aprobacion') {

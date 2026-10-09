@@ -12,8 +12,8 @@ const {
   AuthService,
   MENSAJE_LOGIN_FALLIDO,
   MENSAJE_PENDIENTE_APROBACION,
-  MENSAJE_CUENTA_DESACTIVADA,
 } = await import('@/services/auth.service');
+const { mensajeCuentaDesactivada } = await import('@/lib/soporte');
 
 const ADMIN_PRINCIPAL = 'principal@empresa.test';
 const CLAVE_VALIDA = 'Secreto2026x';
@@ -46,6 +46,7 @@ describe('AuthService', () => {
     vi.setSystemTime(new Date('2026-01-15T12:00:00Z'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.stubEnv('ADMIN_PRINCIPAL_EMAIL', ADMIN_PRINCIPAL);
+    vi.stubEnv('NEXT_PUBLIC_SOPORTE_EMAIL', 'soporte@empresa.test');
   });
 
   afterEach(() => {
@@ -166,7 +167,8 @@ describe('AuthService', () => {
       admin.results.usuario = [fila(perfil({ activo: false })), fila(perfil({ activo: false }))];
       server.auth.signInWithPassword.mockResolvedValue({ data: { user: authUser() }, error: null });
       const res = await AuthService.signIn('user@test.com', 'pass');
-      expect(res).toEqual({ success: false, error: MENSAJE_CUENTA_DESACTIVADA });
+      expect(res).toEqual({ success: false, error: mensajeCuentaDesactivada() });
+      expect(res.error).toContain('soporte@empresa.test');
       expect(server.auth.signOut).toHaveBeenCalled();
       expect(admin.callsTo('usuario').some((c) => c[0] === 'update')).toBe(false);
     });

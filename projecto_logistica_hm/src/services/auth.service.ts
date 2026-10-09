@@ -6,6 +6,7 @@ import { validarCampoTexto, validarEmailFormato, validarPassword } from '@/lib/v
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { esAdminPrincipal } from '@/lib/auth/admin-principal';
 import { getAppUrl } from '@/lib/env';
+import { mensajeCuentaDesactivada } from '@/lib/soporte';
 
 export const MAX_INTENTOS_FALLIDOS = 5;
 export const MINUTOS_BLOQUEO = 15;
@@ -18,8 +19,6 @@ export const MENSAJE_LOGIN_FALLIDO =
   `Credenciales inválidas. Tras ${MAX_INTENTOS_FALLIDOS} intentos fallidos el acceso se bloquea por ${MINUTOS_BLOQUEO} minutos.`;
 export const MENSAJE_PENDIENTE_APROBACION =
   'Tu cuenta aún no ha sido autorizada por un administrador. Espera la aprobación para poder ingresar al sistema.';
-export const MENSAJE_CUENTA_DESACTIVADA =
-  'Esta cuenta ha sido desactivada por el administrador. Contacta a soporte o a tu jefatura.';
 
 type FilaUsuario = UserProfile & { intentos_fallidos?: number | null };
 
@@ -402,7 +401,7 @@ export class AuthService {
 
     if (!profile.activo) {
       await supabase.auth.signOut();
-      return { success: false, error: MENSAJE_CUENTA_DESACTIVADA };
+      return { success: false, error: mensajeCuentaDesactivada() };
     }
 
     // Resetear contador de intentos fallidos

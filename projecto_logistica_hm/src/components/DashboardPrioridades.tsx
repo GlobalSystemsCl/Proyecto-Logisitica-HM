@@ -3,6 +3,7 @@ import { AlertCircle, ArrowRight, Flag, ListOrdered } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
+import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
 /** Máximo de solicitudes que se listan antes de remitir a la cola completa. */
 export const MAX_FILAS_PRIORIDADES = 8;
@@ -198,7 +199,7 @@ export default function DashboardPrioridades({
                           </p>
                           <p className="truncate text-xs text-neutral-500">
                             {sol.ejecutivo_nombre ? `Solicita ${sol.ejecutivo_nombre}` : 'Sin solicitante'}
-                            {sol.fecha_limite ? ` · Límite ${formatFecha(sol.fecha_limite)}` : ''}
+                            {sol.fecha_limite ? ` · ${ETIQUETA_FECHA_LIMITE}: ${formatFecha(sol.fecha_limite)}` : ''}
                             {sol.vehiculos.length > 1 ? ` · +${sol.vehiculos.length - 1} vehículo(s)` : ''}
                           </p>
                         </div>

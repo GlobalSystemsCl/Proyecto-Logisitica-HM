@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useTransition } from 'react';
 import { VehiculoConDisponibilidad } from '@/types/vehiculo.types';
+import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 import {
   FILTRO_EN_VIAJE,
   FILTRO_TODAS,
@@ -819,12 +820,12 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                         ) : isSold ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white border border-neutral-900">
                             <CheckCircle2 className="w-3 h-3" />
-                            Vendido
+                            <span title={DESCRIPCION_DISPONIBILIDAD.vendido}>{ETIQUETA_DISPONIBILIDAD.vendido}</span>
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-500 border border-neutral-200">
                             <Unlock className="w-3 h-3" />
-                            Disponible
+                            {ETIQUETA_DISPONIBILIDAD.liberado}
                           </span>
                         )}
                       </td>

@@ -33,6 +33,8 @@ import {
 } from '@/types/sucursal.types';
 import { formatFecha } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
+import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -1028,7 +1030,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                         </div>
                         <div>
                           <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
-                            Fecha Límite
+                            {ETIQUETA_FECHA_LIMITE}
                           </p>
                           <p className="text-neutral-900 font-medium">{formatFecha(sol.fecha_limite)}</p>
                         </div>
@@ -1107,16 +1109,16 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                                   </div>
                                 </div>
                                 {v.disponibilidad === 'reservado' ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white shrink-0">
-                                    Reservado
+                                  <span title={DESCRIPCION_DISPONIBILIDAD.reservado} className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white shrink-0">
+                                    {ETIQUETA_DISPONIBILIDAD.reservado}
                                   </span>
                                 ) : v.disponibilidad === 'vendido' ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-green-700 text-white shrink-0">
-                                    Vendido
+                                  <span title={DESCRIPCION_DISPONIBILIDAD.vendido} className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-green-700 text-white shrink-0">
+                                    {ETIQUETA_DISPONIBILIDAD.vendido}
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-500 border border-neutral-300 shrink-0">
-                                    Liberado
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-500 border border-neutral-300 shrink-0" title={DESCRIPCION_DISPONIBILIDAD.liberado}>
+                                    {ETIQUETA_DISPONIBILIDAD.liberado}
                                   </span>
                                 )}
                               </div>

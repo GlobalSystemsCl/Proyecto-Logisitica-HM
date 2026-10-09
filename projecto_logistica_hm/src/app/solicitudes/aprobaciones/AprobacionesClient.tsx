@@ -20,6 +20,7 @@ import { SolicitudLista, EstadoSolicitud, TipoSolicitud, VehiculoInventario } fr
 import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import { hoyISO } from '@/lib/fechas';
+import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -208,7 +209,7 @@ export default function AprobacionesClient({
                       Creada: {formatFecha(sol.fecha_creacion)}
                     </span>
                     {sol.fecha_limite && (
-                      <span>Límite: {formatFecha(sol.fecha_limite)}</span>
+                      <span>{ETIQUETA_FECHA_LIMITE}: {formatFecha(sol.fecha_limite)}</span>
                     )}
                     {getEncargadoNombre(sol) && (
                       <span>Encargado: {getEncargadoNombre(sol)}</span>
@@ -285,7 +286,7 @@ export default function AprobacionesClient({
               propuesto por el ejecutivo: puedes aceptarlo o modificarlo.
             </p>
             <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
-              Fecha limite de Entrega *
+              {ETIQUETA_FECHA_LIMITE} *
             </label>
             <input
               type="date"

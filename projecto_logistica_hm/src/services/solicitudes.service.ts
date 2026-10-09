@@ -15,6 +15,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { validarContenidoArchivo } from '@/lib/archivos';
+import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 
 /**
  * Estados en los que el vehículo sigue RESERVADO (no puede moverse a otra
@@ -1150,13 +1151,13 @@ export class SolicitudesService {
 
       const fechaEntrega = fecha.trim();
       if (!fechaEntrega) {
-        return { success: false, error: 'Debes indicar la fecha de entrega para aprobar la solicitud.' };
+        return { success: false, error: 'Debes indicar la fecha límite de entrega propuesta para aprobar la solicitud.' };
       }
       if (isNaN(Date.parse(fechaEntrega))) {
-        return { success: false, error: 'La fecha de entrega no es válida.' };
+        return { success: false, error: 'La fecha límite de entrega propuesta no es válida.' };
       }
       if (esFechaAnteriorAHoy(fechaEntrega)) {
-        return { success: false, error: 'La fecha de entrega no puede ser anterior al día de hoy.' };
+        return { success: false, error: 'La fecha límite de entrega propuesta no puede ser anterior al día de hoy.' };
       }
 
       const actual = await this.getSolicitudById(id);
@@ -1228,6 +1229,13 @@ export class SolicitudesService {
 
       if (!texto || texto.trim().length < 1) {
         return { success: false, error: 'La observación no puede estar vacía.' };
+      }
+
+      // Una solicitud rechazada o cancelada no admite discusión.
+      const actual = await this.getSolicitudById(solicitudId);
+      if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (!admiteInteraccion(actual.estado)) {
+        return { success: false, error: MENSAJE_SOLICITUD_CERRADA };
       }
 
       const { error } = await admin.from('observacion').insert({
@@ -1325,6 +1333,9 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const existe = await this.getSolicitudById(solicitudId);
       if (!existe) return { success: false, error: 'La solicitud no existe.' };
+      if (!admiteInteraccion(existe.estado)) {
+        return { success: false, error: MENSAJE_SOLICITUD_CERRADA };
+      }
 
       for (const a of archivos) {
         if (a.tamano <= 0) return { success: false, error: `El archivo "${a.nombre}" está vacío.` };

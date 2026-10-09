@@ -78,13 +78,13 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
 
     const fechaLimite = data.fecha_limite?.trim() || null;
     if (fechaLimite && isNaN(Date.parse(fechaLimite))) {
-      return { success: false, error: 'La fecha de entrega no es válida.' };
+      return { success: false, error: 'La fecha límite de entrega propuesta no es válida.' };
     }
     if (fechaLimite && esFechaAnteriorAHoy(fechaLimite)) {
-      return { success: false, error: 'La fecha de entrega no puede ser anterior al día de hoy.' };
+      return { success: false, error: 'La fecha límite de entrega propuesta no puede ser anterior al día de hoy.' };
     }
     if (!fechaLimite) {
-      return { success: false, error: 'Debes indicar la fecha de entrega para la solicitud.' };
+      return { success: false, error: 'Debes indicar la fecha límite de entrega propuesta.' };
     }
 
     if (data.tipo_solicitud === 'venta') {
@@ -192,10 +192,10 @@ export async function aprobarSolicitudAction(id: string, fecha: string) {
     }
 
     if (!fecha || isNaN(Date.parse(fecha))) {
-      return { success: false, error: 'La fecha límite de entrega no es válida.' };
+      return { success: false, error: 'La fecha límite de entrega propuesta no es válida.' };
     }
     if (esFechaAnteriorAHoy(fecha)) {
-      return { success: false, error: 'La fecha límite de entrega no puede ser anterior al día de hoy.' };
+      return { success: false, error: 'La fecha límite de entrega propuesta no puede ser anterior al día de hoy.' };
     }
 
     const solicitud = await SolicitudesService.getSolicitudById(id);

@@ -1,4 +1,5 @@
 import type { VehiculoAsociado } from '@/types/solicitud.types';
+import type { DisponibilidadVehiculo } from '@/types/sucursal.types';
 
 /**
  * Etiquetas legibles de un vehículo asociado a una solicitud, para las listas
@@ -32,4 +33,26 @@ export function etiquetaVehiculo(v: VehiculoAsociado): string | null {
   const nombre = nombreVehiculo(v);
   if (v.patente && v.patente.trim()) return `${v.patente.trim()} · ${nombre}`;
   return nombre || null;
+}
+/**
+ * Estados de un vehículo tal como los ve el usuario. En la BD el estado
+ * disponible se llama `liberado` (lo usan los triggers); en pantalla siempre
+ * es "Disponible". "Vendido" corresponde al vehículo entregado al cliente.
+ */
+export const ETIQUETA_DISPONIBILIDAD: Record<DisponibilidadVehiculo, string> = {
+  liberado: 'Disponible',
+  reservado: 'Reservado',
+  vendido: 'Vendido',
+};
+
+export const DESCRIPCION_DISPONIBILIDAD: Record<DisponibilidadVehiculo, string> = {
+  liberado: 'Disponible para una nueva solicitud o traslado',
+  reservado: 'Reservado en una solicitud activa',
+  vendido: 'Vendido: entregado al cliente',
+};
+
+/** Etiqueta visible del estado; un valor desconocido se muestra tal cual. */
+export function etiquetaDisponibilidad(estado: DisponibilidadVehiculo | string | null | undefined): string {
+  if (!estado) return '—';
+  return ETIQUETA_DISPONIBILIDAD[estado as DisponibilidadVehiculo] ?? estado;
 }

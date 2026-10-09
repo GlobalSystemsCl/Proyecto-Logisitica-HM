@@ -83,9 +83,9 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     tituloAdmin: 'Aprobaciones',
     tituloPorRol: { jefe_local: 'Aprobaciones' },
     descripcion:
-      'Revisión de las solicitudes pendientes: se aprueba con fecha de entrega o se rechaza con un motivo.',
+      'Revisión de las solicitudes pendientes: se aprueba aceptando o ajustando la fecha límite de entrega propuesta, o se rechaza con un motivo.',
     acciones: [
-      'Aprobar solicitudes definiendo la fecha de entrega',
+      'Aprobar solicitudes confirmando la fecha límite de entrega propuesta',
       'Rechazar solicitudes indicando el motivo',
       'Consultar el estado y el motivo de rechazo de tus solicitudes',
     ],

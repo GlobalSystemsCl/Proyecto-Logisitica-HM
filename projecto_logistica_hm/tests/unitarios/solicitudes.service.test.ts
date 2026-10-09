@@ -9,6 +9,7 @@ import {
   type SolicitudMinima,
 } from '@/services/solicitudes.service';
 import type { SolicitudLista } from '@/types/solicitud.types';
+import { MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 
 const admin: SupabaseMock = createSupabaseMock();
 /** El mock cumple el contrato mínimo que el servicio espera de un `SupabaseClient`. */
@@ -974,17 +975,17 @@ describe('SolicitudesService.aprobarSolicitud', () => {
 
   it('should_rechazar_fecha_vacia', async () => {
     const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, '   ');
-    expect(res.error).toBe('Debes indicar la fecha de entrega para aprobar la solicitud.');
+    expect(res.error).toBe('Debes indicar la fecha límite de entrega propuesta para aprobar la solicitud.');
   });
 
   it('should_rechazar_fecha_invalida', async () => {
     const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, 'no-es-fecha');
-    expect(res.error).toBe('La fecha de entrega no es válida.');
+    expect(res.error).toBe('La fecha límite de entrega propuesta no es válida.');
   });
 
   it('should_rechazar_fecha_anterior_a_hoy', async () => {
     const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, '2000-01-01');
-    expect(res.error).toBe('La fecha de entrega no puede ser anterior al día de hoy.');
+    expect(res.error).toBe('La fecha límite de entrega propuesta no puede ser anterior al día de hoy.');
   });
 
   it('should_rechazar_estado_no_pendiente', async () => {
@@ -1074,6 +1075,7 @@ describe('SolicitudesService.agregarObservacion', () => {
   });
 
   it('should_insertar_observacion', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'aprobada' }))];
     admin.results.observacion = [fila(null)];
     const res = await SolicitudesService.agregarObservacion('s-1', USUARIO_ID, '  cliente pidió llamado ');
     expect(res).toEqual({ success: true });
@@ -1081,7 +1083,24 @@ describe('SolicitudesService.agregarObservacion', () => {
     expect(insert?.[1]).toEqual({ solicitud_id: 's-1', usuario_id: USUARIO_ID, observacion: 'cliente pidió llamado' });
   });
 
+  it('should_rechazar_observacion_cuando_la_solicitud_fue_rechazada_o_cancelada', async () => {
+    for (const estado of ['rechazada', 'cancelada'] as const) {
+      admin.reset();
+      admin.results.solicitud = [fila(minimo({ estado }))];
+      const res = await SolicitudesService.agregarObservacion('s-1', USUARIO_ID, 'apelo el rechazo');
+      expect(res).toEqual({ success: false, error: MENSAJE_SOLICITUD_CERRADA });
+      expect(admin.callsTo('observacion')).toHaveLength(0);
+    }
+  });
+
+  it('should_rechazar_observacion_cuando_la_solicitud_no_existe', async () => {
+    admin.results.solicitud = [fila(null)];
+    const res = await SolicitudesService.agregarObservacion('s-x', USUARIO_ID, 'hola');
+    expect(res).toEqual({ success: false, error: 'Solicitud no encontrada.' });
+  });
+
   it('should_devolver_error_de_bd', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'aprobada' }))];
     admin.results.observacion = [errorResult('boom')];
     const res = await SolicitudesService.agregarObservacion('s-1', USUARIO_ID, 'ok');
     expect(res.success).toBe(false);
@@ -1213,6 +1232,13 @@ describe('SolicitudesService.subirDocumentos', () => {
     admin.results.solicitud = [fila(minimo())];
     const res = await SolicitudesService.subirDocumentos('s-1', USUARIO_ID, [archivo({ nombre: 'virus.exe' })]);
     expect(res.error).toBe('La extensión del archivo "virus.exe" no corresponde a su tipo.');
+  });
+
+  it('should_rechazar_documentos_cuando_la_solicitud_fue_rechazada', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'rechazada' }))];
+    const res = await SolicitudesService.subirDocumentos('s-1', USUARIO_ID, [archivo()]);
+    expect(res).toEqual({ success: false, error: MENSAJE_SOLICITUD_CERRADA });
+    expect(admin.callsTo(BUCKET)).toHaveLength(0);
   });
 
   it('should_subir_e_insertar_registro', async () => {

@@ -20,7 +20,7 @@ const CATEGORIAS = [
       },
       {
         p: '¿Cómo funciona la aprobación?',
-        r: 'El Jefe de Local (o el Administrador) aprueba o rechaza la solicitud y define la fecha/hora límite de entrega. Al aprobarse se registra automáticamente la fecha de confirmación.',
+        r: 'El Jefe de Local (o el Administrador) aprueba o rechaza la solicitud y acepta o modifica la fecha límite de entrega propuesta. Al aprobarse se registra automáticamente la fecha de confirmación.',
       },
       {
         p: '¿Puedo cancelar una solicitud?',

@@ -46,6 +46,9 @@ import { ROL_LABEL, UserRole, UsuarioDetalle } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
 import { extraerMotivoRechazo } from '@/lib/motivoRechazo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
+import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
+import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente de aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -220,6 +223,8 @@ interface SolicitudDetalleModalProps {
   puedeGestionarVehiculos: boolean;
   currentUserId: string;
   currentUserRol: UserRole;
+  /** Abre el formulario de nueva solicitud. Se ofrece cuando la solicitud fue rechazada. */
+  onCrearNueva?: () => void;
 }
 
 export default function SolicitudDetalleModal({
@@ -232,6 +237,7 @@ export default function SolicitudDetalleModal({
   puedeGestionarVehiculos,
   currentUserId,
   currentUserRol,
+  onCrearNueva,
 }: SolicitudDetalleModalProps) {
   const [detailTab, setDetailTab] = useState<'info' | 'historial' | 'obs' | 'docs'>('info');
   const [observaciones, setObservaciones] = useState<ObservacionEntry[]>([]);
@@ -409,6 +415,7 @@ export default function SolicitudDetalleModal({
    * observación —solicitudes históricas— se avisa en vez de ocultar el panel.
    */
   const esRechazada = solicitud.estado === 'rechazada';
+  const abierta = admiteInteraccion(solicitud.estado);
   const rechazo = esRechazada ? extraerMotivoRechazo(observaciones) : null;
 
   return (
@@ -492,16 +499,24 @@ export default function SolicitudDetalleModal({
                       <span aria-hidden>·</span>
                       <span>{formatFecha(rechazo.created_at)}</span>
                     </p>
-                    <p className="text-xs text-red-700 mt-3 leading-relaxed">
-                      Si consideras que el motivo no corresponde, revisa la solicitud y
-                      vuelve a enviarla con la información corregida.
-                    </p>
                   </>
                 ) : (
                   <p className="text-base text-red-900 leading-relaxed">
-                    Esta solicitud fue rechazada, pero el motivo no quedó registrado en el
-                    sistema. Comunícate con el Jefe de Local para obtener más detalle.
+                    Esta solicitud fue rechazada, pero el motivo no quedó registrado en el sistema.
                   </p>
+                )}
+                <p className="text-xs text-red-700 mt-3 leading-relaxed">
+                  El rechazo es definitivo y no admite apelación. Si aún necesitas el vehículo,
+                  crea una nueva solicitud.
+                </p>
+                {onCrearNueva && (
+                  <button
+                    type="button"
+                    onClick={onCrearNueva}
+                    className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-red-700 hover:bg-red-800 text-white text-sm font-semibold rounded-xl cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> Crear nueva solicitud
+                  </button>
                 )}
               </div>
             </div>
@@ -671,7 +686,7 @@ export default function SolicitudDetalleModal({
                   <p className="text-sm text-neutral-900 font-medium">{formatFecha(solicitud.fecha_tentativa_despacho)}</p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Fecha/hora límite</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">{ETIQUETA_FECHA_LIMITE}</p>
                   <p className="text-sm text-neutral-900 font-medium">{formatFecha(solicitud.fecha_limite)}</p>
                 </div>
               </div>
@@ -755,11 +770,11 @@ export default function SolicitudDetalleModal({
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {v.disponibilidad === 'reservado' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white">Reservado</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white" title={DESCRIPCION_DISPONIBILIDAD.reservado}>{ETIQUETA_DISPONIBILIDAD.reservado}</span>
                           ) : v.disponibilidad === 'vendido' ? (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-green-700 text-white">Vendido</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-green-700 text-white" title={DESCRIPCION_DISPONIBILIDAD.vendido}>{ETIQUETA_DISPONIBILIDAD.vendido}</span>
                           ) : (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-500 border border-neutral-300">Liberado</span>
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-500 border border-neutral-300" title={DESCRIPCION_DISPONIBILIDAD.liberado}>{ETIQUETA_DISPONIBILIDAD.liberado}</span>
                           )}
                           {PRE_DESPACHO.includes(solicitud.estado) && puedeGestionarVehiculos && (
                             <button
@@ -865,7 +880,7 @@ export default function SolicitudDetalleModal({
                       </p>
                     </div>
                     <div>
-                      <p className="text-[11px] text-neutral-400 font-medium">Fecha/hora límite</p>
+                      <p className="text-[11px] text-neutral-400 font-medium">{ETIQUETA_FECHA_LIMITE}</p>
                       <p className="text-sm font-bold text-neutral-900">
                         {formatFecha(solicitud.fecha_limite) || '—'}
                       </p>
@@ -965,6 +980,9 @@ export default function SolicitudDetalleModal({
               ) : (
                 <p className="text-sm text-neutral-400 italic py-4">Sin observaciones registradas.</p>
               )}
+              {!abierta ? (
+                <p className="text-xs text-neutral-500 pt-2">{MENSAJE_SOLICITUD_CERRADA}</p>
+              ) : (
               <div className="flex items-center gap-2 pt-2">
                 <input
                   type="text"
@@ -983,6 +1001,7 @@ export default function SolicitudDetalleModal({
                   <Plus className="w-4 h-4" /> Agregar
                 </button>
               </div>
+              )}
             </div>
           )}
 
@@ -1003,6 +1022,7 @@ export default function SolicitudDetalleModal({
                   className="hidden"
                   onChange={(e) => handleSubirDocs(e.target.files)}
                 />
+                {abierta && (
                 <button
                   type="button"
                   onClick={() => fileDocRef.current?.click()}
@@ -1012,6 +1032,7 @@ export default function SolicitudDetalleModal({
                   {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
                   Subir documentos
                 </button>
+                )}
               </div>
 
               {documentos.length === 0 ? (

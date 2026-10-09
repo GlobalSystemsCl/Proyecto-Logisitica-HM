@@ -5,6 +5,7 @@ import { Calendar, Clock, ChevronLeft, ChevronRight, Truck, GripVertical, Rotate
 import { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
 import { calendarizarSolicitudAction, descalendarizarSolicitudAction, despacharSolicitudAction, cancelarDespachoSolicitudAction, recibirSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
+import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
 interface Props {
   solicitudes: SolicitudLista[];
@@ -372,7 +373,7 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
                             <div className="mt-2 flex items-center gap-3 text-xs text-neutral-500">
                               <span className="inline-flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
-                                Límite: {formatFecha(s.fecha_limite)}
+                                {ETIQUETA_FECHA_LIMITE}: {formatFecha(s.fecha_limite)}
                               </span>
                             </div>
                           )}
@@ -572,8 +573,8 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
                     <CalendarClock className="w-5 h-5 text-red-700" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-neutral-900">Fecha fuera del límite</h3>
-                    <p className="text-xs text-neutral-500">Estás programando el traslado después de la fecha límite de entrega</p>
+                    <h3 className="font-bold text-neutral-900">Fecha posterior a la propuesta</h3>
+                    <p className="text-xs text-neutral-500">Estás programando el traslado después de la fecha límite de entrega propuesta</p>
                   </div>
                 </div>
               </div>
@@ -590,11 +591,11 @@ export default function CalendarizacionesClient({ solicitudes, viewer, sucursale
                     <p className="font-bold text-neutral-900 mt-0.5">{formatFechaLarga(advertencia.fecha + 'T12:00:00Z')}</p>
                   </div>
                   <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-3">
-                    <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">Fecha límite</p>
+                    <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">{ETIQUETA_FECHA_LIMITE}</p>
                     <p className="font-bold text-red-700 mt-0.5">{sol?.fecha_limite ? formatFechaLarga(sol.fecha_limite) : '—'}</p>
                   </div>
                 </div>
-                <p className="text-xs text-neutral-500">Si confirmas, la solicitud quedará calendarizada en esa fecha aunque supere la fecha límite.</p>
+                <p className="text-xs text-neutral-500">Si confirmas, la solicitud quedará calendarizada en esa fecha aunque supere la fecha límite de entrega propuesta.</p>
               </div>
               <div className="p-5 border-t border-neutral-200 flex flex-col sm:flex-row gap-2 sm:justify-end">
                 <button

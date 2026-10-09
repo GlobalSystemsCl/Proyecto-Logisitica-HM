@@ -51,6 +51,7 @@ import {
 } from '@/lib/filtroSolicitudes';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
 /**
  * Nomenclatura de negocio para los estados.
@@ -813,7 +814,7 @@ export default function SolicitudesClient({
                 <th className="py-3.5 px-4">Encargado</th>
                 <th className="py-3.5 px-4">Tipo</th>
                 <th className="py-3.5 px-4">Creación</th>
-                <th className="py-3.5 px-4">Fecha/hora límite</th>
+                <th className="py-3.5 px-4">{ETIQUETA_FECHA_LIMITE}</th>
                 <th className="py-3.5 px-4 text-right">Acciones</th>
                 <th className="py-3.5 px-4 text-right">Ver</th>
               </tr>
@@ -1019,7 +1020,7 @@ export default function SolicitudesClient({
                   </select>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Fecha/hora límite *</label>
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">{ETIQUETA_FECHA_LIMITE} *</label>
                   <input
                     type="date"
                     required
@@ -1289,7 +1290,7 @@ export default function SolicitudesClient({
                 ) : (
                   <>
                     <Clock className="w-4 h-4 shrink-0 mt-0.5 text-neutral-900" />
-                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y podrá aceptar o modificar la fecha de entrega que indicaste.</span>
+                    <span>La solicitud quedará como <strong>Pendiente de Aprobación</strong>. El Jefe de Local la aprobará y podrá aceptar o modificar la fecha límite de entrega propuesta que indicaste.</span>
                   </>
                 )}
               </div>
@@ -1333,6 +1334,15 @@ export default function SolicitudesClient({
           puedeGestionarVehiculos={PRE_DESPACHO.includes(detailTarget.estado) && puedeGestionar(detailTarget)}
           currentUserId={viewer.id}
           currentUserRol={viewer.rol}
+          onCrearNueva={
+            puedeCrear
+              ? () => {
+                  setDetailTarget(null);
+                  resetCreateForm();
+                  setIsCreateOpen(true);
+                }
+              : undefined
+          }
         />
       )}
 

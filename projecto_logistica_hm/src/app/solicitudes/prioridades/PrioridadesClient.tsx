@@ -40,6 +40,7 @@ import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
 import { nombreVehiculoConAnio } from '@/lib/vehiculo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
+import { colaDeSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
 import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
 
 interface FeedbackState {
@@ -47,19 +48,13 @@ interface FeedbackState {
   message: string;
 }
 
-interface ViewerInfo {
-  id: string;
-  nombre: string;
-  apellido: string;
-  rol: 'administrador' | 'ejecutivo' | 'jefe_local' | 'logistica' | 'operaciones';
-  sucursal_id: number | null;
-}
-
 interface PrioridadesClientProps {
   solicitudes: SolicitudLista[];
-  /** Sucursales del Jefe Local: principal + las que encabeza como encargado. */
+  /**
+   * Sucursales cuya cola puede gestionar el usuario: las del Jefe Local
+   * (principal + las que encabeza) o todas, para el administrador.
+   */
   sucursalesAsignadas: UsuarioSucursalAsignada[];
-  viewer: ViewerInfo;
 }
 
 const tipoLabel: Record<TipoSolicitud, string> = {
@@ -74,7 +69,6 @@ const ZONA_POR_PRIORIZAR = 'zona-por-priorizar';
 export default function PrioridadesClient({
   solicitudes,
   sucursalesAsignadas,
-  viewer,
 }: PrioridadesClientProps) {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -98,40 +92,18 @@ export default function PrioridadesClient({
   const [activeId, setActiveId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
 
-  const esAdmin = viewer.rol === 'administrador';
-  const esJefeLocal = viewer.rol === 'jefe_local';
+  // Priorización por sucursal: cada sucursal tiene su propia cola y se
+  // gestiona por separado (ya no hay una cola mixta de varias sucursales).
+  const resumen = useMemo(
+    () => resumenPrioridadPorSucursal(solicitudes, sucursalesAsignadas),
+    [solicitudes, sucursalesAsignadas]
+  );
+  const [sucursalActiva, setSucursalActiva] = useState<number | null>(() => sucursalInicial(resumen));
 
-  // Sucursales sobre las que el Jefe Local gestiona su cola: TODAS sus
-  // sucursales (principal + las que encabeza como encargado), igual que en
-  // Aprobaciones. El administrador ve todas las sucursales (cola mixta).
-  const sucursalesFiltro = useMemo<Set<number> | null>(() => {
-    if (esAdmin) return null;
-    if (esJefeLocal) return new Set(sucursalesAsignadas.map((s) => s.id));
-    return null;
-  }, [esAdmin, esJefeLocal, sucursalesAsignadas]);
-
-  // Solicitudes priorizadas = cola. Para admin/JL multi-sucursal, agrupar por sucursal.
-  const cola = useMemo(() => {
-    let lista = solicitudes.filter(
-      (s) => s.estado === 'priorizada' && s.posicion_prioridad !== null
-    );
-    if (sucursalesFiltro !== null) {
-      lista = lista.filter((s) => sucursalesFiltro.has(s.sucursal));
-    }
-    return lista.sort(
-      (a, b) => (a.posicion_prioridad ?? 0) - (b.posicion_prioridad ?? 0)
-    );
-  }, [solicitudes, sucursalesFiltro]);
-
-  const porPriorizar = useMemo(() => {
-    let lista = solicitudes.filter(
-      (s) => s.estado === 'aprobada' && s.posicion_prioridad === null
-    );
-    if (sucursalesFiltro !== null) {
-      lista = lista.filter((s) => sucursalesFiltro.has(s.sucursal));
-    }
-    return lista;
-  }, [solicitudes, sucursalesFiltro]);
+  const { cola, porPriorizar } = useMemo(
+    () => colaDeSucursal(solicitudes, sucursalActiva),
+    [solicitudes, sucursalActiva]
+  );
 
   // Estado local: orden de la cola y lista "Por Priorizar" (para DnD optimista).
   // Se inicializan desde los props para que SSR y cliente coincidan y no haya flash.
@@ -229,10 +201,6 @@ export default function PrioridadesClient({
 
     // Reordenar dentro de la cola
     if (enCola && orden.includes(oId)) {
-      if (esAdmin) {
-        mostrarFeedback('Los administradores deben elegir una sucursal para reordenar.', 'error');
-        return;
-      }
       const prevOrden = listasRef.current.orden;
       const oldIndex = prevOrden.indexOf(aId);
       const newIndex = prevOrden.indexOf(oId);
@@ -378,10 +346,48 @@ export default function PrioridadesClient({
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Prioridades</h1>
         <p className="text-sm text-neutral-500">
-          Arrastra una solicitud desde &quot;Por Priorizar&quot; hacia la cola para priorizarla en la posición donde la sueltes.
-          Arrastra dentro de la cola para reordenarla; arrastrala fuera de la cola para sacarla.
+          Cada sucursal tiene su propia cola. Elige la sucursal y arrastra una solicitud desde &quot;Por Priorizar&quot;
+          hacia la cola para priorizarla en la posición donde la sueltes. Arrastra dentro de la cola para
+          reordenarla; arrástrala fuera de la cola para sacarla.
         </p>
       </div>
+
+      {resumen.length === 0 ? (
+        <div className="p-10 text-center border border-dashed rounded-2xl border-neutral-200 text-neutral-400 bg-white">
+          No tienes sucursales asignadas para gestionar prioridades.
+        </div>
+      ) : (
+        <div role="tablist" aria-label="Sucursales" className="flex flex-wrap gap-2">
+          {resumen.map((r) => {
+            const activa = r.id === sucursalActiva;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                role="tab"
+                aria-selected={activa}
+                onClick={() => setSucursalActiva(r.id)}
+                disabled={pendingOps > 0}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 ${
+                  activa
+                    ? 'bg-neutral-900 text-white border-neutral-900'
+                    : 'bg-white text-neutral-700 border-neutral-200 hover:border-neutral-300'
+                }`}
+              >
+                <span>{r.nombre}</span>
+                <span className={`px-1.5 py-0.5 rounded-md text-[11px] ${activa ? 'bg-white/20' : 'bg-neutral-100 text-neutral-600'}`}>
+                  {r.enCola} en cola
+                </span>
+                {r.porPriorizar > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-md text-[11px] bg-amber-100 text-amber-800">
+                    {r.porPriorizar} por priorizar
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <DndContext
         sensors={sensors}
@@ -396,7 +402,15 @@ export default function PrioridadesClient({
         <section className="lg:col-span-3 bg-white rounded-2xl border border-neutral-200 p-5">
           <div className="flex items-center gap-2 mb-4">
             <ListOrdered className="w-5 h-5 text-neutral-700" />
-            <h2 className="font-semibold text-neutral-900">Cola de Prioridades</h2>
+            <h2 className="font-semibold text-neutral-900">
+              Cola de Prioridades
+              {sucursalActiva !== null && (
+                <span className="font-normal text-neutral-500">
+                  {' · '}
+                  {resumen.find((r) => r.id === sucursalActiva)?.nombre}
+                </span>
+              )}
+            </h2>
             <span className="ml-auto px-2.5 py-0.5 rounded-full bg-neutral-100 text-xs text-neutral-600">
               {orden.length}
             </span>
