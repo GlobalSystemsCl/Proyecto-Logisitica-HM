@@ -95,3 +95,41 @@ describe('EmailService.sendUserCredentialsEmail', () => {
     expect(res).toEqual({ success: false, error: 'Error al conectar con la API de Brevo' });
   });
 });
+
+describe('EmailService.enviarCorreo', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ messageId: 'm-9' }) });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('should_send_subject_recipient_and_html_as_given', async () => {
+    const res = await EmailService.enviarCorreo({
+      toEmail: 'jl@test.cl',
+      toName: 'Juan',
+      asunto: '[H.Motores] Prueba',
+      html: '<p>hola</p>',
+    });
+
+    expect(res).toEqual({ success: true, messageId: 'm-9' });
+    const body = cuerpoEnviado() as unknown as { subject: string; htmlContent: string; to: unknown };
+    expect(body.subject).toBe('[H.Motores] Prueba');
+    expect(body.htmlContent).toBe('<p>hola</p>');
+    expect(body.to).toEqual([{ email: 'jl@test.cl', name: 'Juan' }]);
+  });
+
+  it('should_not_throw_when_fetch_fails', async () => {
+    fetchMock.mockRejectedValue(new Error('red'));
+    const res = await EmailService.enviarCorreo({ toEmail: 'a@b.cl', toName: 'A', asunto: 'x', html: 'y' });
+    expect(res).toEqual({ success: false, error: 'Error al conectar con la API de Brevo' });
+  });
+});
+

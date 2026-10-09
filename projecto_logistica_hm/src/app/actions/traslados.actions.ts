@@ -9,6 +9,8 @@ import { SucursalesService } from '@/services/sucursales.service';
 import { UserProfile } from '@/types/auth.types';
 import type { CreateTrasladoInput } from '@/types/traslado.types';
 import type { DatosRecepcion } from '@/lib/recepcion';
+import { NotificacionService } from '@/services/notificacion.service';
+import { enSegundoPlano } from '@/lib/segundoPlano';
 
 async function getProfileOrThrow(): Promise<UserProfile> {
   return requireProfile();
@@ -101,6 +103,13 @@ export async function cancelarTrasladoAction(trasladoId: string, motivo: string,
     const result = await TrasladoService.cancelarTraslado(trasladoId, profile.id, motivo, ubicacionId);
     if (!result.success) return { success: false, error: result.error };
 
+    enSegundoPlano(async () => {
+      const ubicacion = ubicacionId ? await OrganizacionService.getBranch(ubicacionId) : null;
+      await NotificacionService.notificarTrasladoInterno('traslado_interno_cancelado', trasladoId, profile.id, {
+        motivo: motivo.trim(),
+        ubicacionFinal: ubicacion?.nombre ?? null,
+      });
+    });
     revalidarSolicitudes();
     return { success: true, message: 'Traslado cancelado. Se registró el motivo y la ubicación del vehículo.' };
   } catch (err: unknown) {

@@ -5,7 +5,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { UsersService } from '@/services/users.service';
 import { UserProfile, UsuarioDetalle } from '@/types/auth.types';
 import { TipoSolicitud } from '@/types/solicitud.types';
-import { esFechaAnteriorAHoy } from '@/lib/fechas';
+import { esFechaAnteriorAHoy, formatFecha } from '@/lib/fechas';
 import { revalidarSolicitudes } from '@/lib/rutas';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import {
@@ -16,6 +16,9 @@ import {
   requireSolicitudVehiculoAccess,
 } from '@/lib/auth/guards';
 import type { DatosRecepcion } from '@/lib/recepcion';
+import { NotificacionService } from '@/services/notificacion.service';
+import type { DatosCorreo, EventoNotificacion } from '@/lib/notificaciones';
+import { enSegundoPlano } from '@/lib/segundoPlano';
 import { ocultarContacto, puedeVerContacto } from '@/lib/auth/contacto';
 
 /**
@@ -47,6 +50,22 @@ async function validarSucursalJefeLocal(
     return 'Solo puedes gestionar solicitudes de tus sucursales asignadas.';
   }
   return null;
+}
+
+/**
+ * R7: avisa por correo un hito de la solicitud después de responder al
+ * usuario. Nunca bloquea ni revierte la operación.
+ */
+function notificar(
+  evento: EventoNotificacion,
+  solicitudId: string,
+  actorId: string,
+  extra?: Partial<DatosCorreo> | (() => Promise<Partial<DatosCorreo>>)
+): void {
+  enSegundoPlano(async () => {
+    const datos = typeof extra === 'function' ? await extra() : extra;
+    await NotificacionService.notificarSolicitud(evento, solicitudId, actorId, datos);
+  });
 }
 
 export interface CreateSolicitudData {
@@ -171,6 +190,13 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
       return { success: false, error: result.error || 'Error al crear la solicitud.' };
     }
 
+    if (result.solicitud?.id) {
+      notificar(
+        estadoInicial === 'pendiente_aprobacion' ? 'solicitud_creada' : 'solicitud_aprobada',
+        result.solicitud.id,
+        profile.id
+      );
+    }
     revalidarSolicitudes();
     return {
       success: true,
@@ -211,6 +237,7 @@ export async function aprobarSolicitudAction(id: string, fecha: string) {
     const result = await SolicitudesService.aprobarSolicitud(id, profile.id, fecha);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_aprobada', id, profile.id);
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud aprobada exitosamente.' };
   } catch (err: unknown) {
@@ -243,6 +270,7 @@ export async function rechazarSolicitudAction(id: string, motivo: string) {
     const result = await SolicitudesService.rechazarSolicitud(id, motivo, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_rechazada', id, profile.id, { motivo: motivo.trim() });
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud rechazada.' };
   } catch (err: unknown) {
@@ -591,6 +619,7 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
     );
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_calendarizada', solicitudId, profile.id);
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud calendarizada exitosamente.' };
   } catch (err: unknown) {
@@ -631,6 +660,7 @@ export async function despacharSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.despacharSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_despachada', solicitudId, profile.id);
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud despachada.' };
   } catch (err: unknown) {
@@ -671,6 +701,10 @@ export async function recibirSolicitudAction(solicitudId: string, recepcion?: Da
     const result = await SolicitudesService.recibirSolicitud(solicitudId, profile.id, recepcion);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_recepcionada', solicitudId, profile.id, {
+      conNovedades: recepcion?.conNovedades ?? false,
+      observacion: recepcion?.observacion?.trim() || null,
+    });
     revalidarSolicitudes();
     return {
       success: true,
@@ -700,6 +734,10 @@ export async function recalendarizarSolicitudAction(
     const result = await SolicitudesService.recalendarizarSolicitud(solicitudId, nuevaFecha, profile.id, motivo);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_recalendarizada', solicitudId, profile.id, {
+      fechaAnterior: result.fechaAnterior ? formatFecha(result.fechaAnterior) : null,
+      motivo: motivo?.trim() || null,
+    });
     revalidarSolicitudes();
     return { success: true, message: 'Traslado reprogramado.' };
   } catch (err: unknown) {
@@ -724,6 +762,10 @@ export async function cancelarEnTransitoAction(
     const result = await SolicitudesService.cancelarEnTransito(solicitudId, motivo, ubicacionId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_cancelada_transito', solicitudId, profile.id, async () => ({
+      motivo: motivo.trim(),
+      ubicacionFinal: ubicacionId ? (await OrganizacionService.getBranch(ubicacionId))?.nombre ?? null : null,
+    }));
     revalidarSolicitudes();
     return { success: true, message: 'Traslado cancelado. Se registró el motivo y la ubicación del vehículo.' };
   } catch (err: unknown) {

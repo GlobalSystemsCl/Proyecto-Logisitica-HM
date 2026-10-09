@@ -9,8 +9,69 @@ export interface SendCredentialsParams {
   loginUrl?: string;
 }
 
+export interface EnviarCorreoParams {
+  toEmail: string;
+  toName: string;
+  asunto: string;
+  html: string;
+}
+
+export interface ResultadoEnvio {
+  success: boolean;
+  error?: string;
+  messageId?: string;
+}
+
 export class EmailService {
   private static readonly BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+
+  /**
+   * Envía un correo HTML con la API de Brevo. El HTML debe venir ya escapado.
+   * Nunca lanza: los errores vuelven en `{ success: false }` para que quien
+   * notifique no interrumpa la operación principal.
+   */
+  static async enviarCorreo(params: EnviarCorreoParams): Promise<ResultadoEnvio> {
+    try {
+      const apiKey = process.env.BREVO_API_KEY;
+      const senderEmail = process.env.BREVO_SENDER_EMAIL || 'globalsystemschile@gmail.com';
+      const senderName = process.env.BREVO_SENDER_NAME || 'H.Motores - Gestión de Vehículos';
+
+      if (!apiKey) {
+        console.warn('⚠️ BREVO_API_KEY no está configurada.');
+        return { success: false, error: 'Falta la clave API de Brevo en el entorno.' };
+      }
+
+      const response = await fetch(this.BREVO_API_URL, {
+        method: 'POST',
+        headers: {
+          'accept': 'application/json',
+          'api-key': apiKey,
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email: params.toEmail, name: params.toName }],
+          subject: params.asunto,
+          htmlContent: params.html,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Error de Brevo API:', errorData);
+        return {
+          success: false,
+          error: errorData.message || `Error HTTP ${response.status} al enviar correo con Brevo.`,
+        };
+      }
+
+      const responseData = await response.json();
+      return { success: true, messageId: responseData.messageId };
+    } catch (err: unknown) {
+      console.error('❌ Excepción en EmailService:', err);
+      return { success: false, error: 'Error al conectar con la API de Brevo' };
+    }
+  }
 
   /**
    * Envía correo con las credenciales de acceso iniciales utilizando la API de Brevo
@@ -21,15 +82,7 @@ export class EmailService {
     messageId?: string;
   }> {
     try {
-      const apiKey = process.env.BREVO_API_KEY;
-      const senderEmail = process.env.BREVO_SENDER_EMAIL || 'globalsystemschile@gmail.com';
-      const senderName = process.env.BREVO_SENDER_NAME || 'H.Motores - Gestión de Vehículos';
       const appUrl = escapeHtml(params.loginUrl || `${getAppUrl()}/login`);
-
-      if (!apiKey) {
-        console.warn('⚠️ BREVO_API_KEY no está configurada.');
-        return { success: false, error: 'Falta la clave API de Brevo en el entorno.' };
-      }
 
       const roleLabels: Record<string, string> = {
         administrador: 'Administrador',
@@ -141,45 +194,14 @@ export class EmailService {
         </html>
       `;
 
-      const response = await fetch(this.BREVO_API_URL, {
-        method: 'POST',
-        headers: {
-          'accept': 'application/json',
-          'api-key': apiKey,
-          'content-type': 'application/json',
-        },
-        body: JSON.stringify({
-          sender: {
-            name: senderName,
-            email: senderEmail,
-          },
-          to: [
-            {
-              email: params.toEmail,
-              name: params.recipientName,
-            },
-          ],
-          subject: 'Tus credenciales de acceso - Sistema de Gestión de Vehículos H.Motores',
-          htmlContent,
-        }),
+      const resultado = await this.enviarCorreo({
+        toEmail: params.toEmail,
+        toName: params.recipientName,
+        asunto: 'Tus credenciales de acceso - Sistema de Gestión de Vehículos H.Motores',
+        html: htmlContent,
       });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Error de Brevo API:', errorData);
-        return {
-          success: false,
-          error: errorData.message || `Error HTTP ${response.status} al enviar correo con Brevo.`,
-        };
-      }
-
-      const responseData = await response.json();
-      console.log('✅ Correo enviado con éxito vía Brevo. ID:', responseData.messageId);
-
-      return {
-        success: true,
-        messageId: responseData.messageId,
-      };
+      if (resultado.success) console.log('✅ Correo enviado con éxito vía Brevo. ID:', resultado.messageId);
+      return resultado;
     } catch (err: unknown) {
       const msg = 'Error al conectar con la API de Brevo';
       console.error('❌ Excepción en EmailService:', err);
