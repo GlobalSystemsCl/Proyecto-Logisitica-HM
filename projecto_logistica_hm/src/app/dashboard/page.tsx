@@ -1,4 +1,4 @@
-﻿import { redirect } from 'next/navigation';
+import { redirect } from 'next/navigation';
 import Image from 'next/image';
 import { Shield, LayoutGrid } from 'lucide-react';
 import { AuthService } from '@/services/auth.service';
@@ -11,6 +11,11 @@ import PageHeader from '@/components/PageHeader';
 import DashboardCardGrid from '@/components/DashboardCardGrid';
 import DashboardJefeLocal from '@/components/DashboardJefeLocal';
 import { TrasladoService } from '@/services/traslado.service';
+import { ReporteService } from '@/services/reporte.service';
+import IndicadoresLogistica from '@/components/IndicadoresLogistica';
+import { calcularReporte, indicadoresDeEncargado } from '@/lib/reporteLogistica';
+import { hoyISO } from '@/lib/fechas';
+import { sumarDias } from '@/lib/calendario';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,6 +74,23 @@ export default async function DashboardPage() {
       ])
     : [[], [], [], []];
 
+  // R17: Logística ve los mismos indicadores con que lo mide el administrador (últimos 30 días).
+  let indicadores: { reporte: ReturnType<typeof calcularReporte>; propios: ReturnType<typeof indicadoresDeEncargado> } | null = null;
+  if (rol === 'logistica') {
+    const [solicitudesZona, eventos] = await Promise.all([
+      SolicitudesService.getSolicitudesFiltradas(profile.id, 'logistica'),
+      ReporteService.getEventosLogistica(),
+    ]);
+    const hasta = hoyISO();
+    const reporte = calcularReporte(
+      solicitudesZona,
+      eventos,
+      [{ id: profile.id, nombre: `${profile.nombre} ${profile.apellido}`.trim() }],
+      { desde: sumarDias(hasta, -29), hasta, ahora: new Date().toISOString() }
+    );
+    indicadores = { reporte, propios: indicadoresDeEncargado(reporte, profile.id) };
+  }
+
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-neutral-900 flex flex-col">
       <PageHeader
@@ -110,6 +132,14 @@ export default async function DashboardPage() {
             recepcionesSolicitudes={recepcionesSolicitudes}
             recepcionesTraslados={recepcionesTraslados}
             porPriorizar={porPriorizar}
+          />
+        )}
+
+        {indicadores && (
+          <IndicadoresLogistica
+            propia={indicadores.propios.propia}
+            sinAsignar={indicadores.propios.sinAsignar}
+            slaHoras={indicadores.reporte.slaHoras}
           />
         )}
 

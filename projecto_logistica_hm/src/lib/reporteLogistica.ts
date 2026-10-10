@@ -276,6 +276,19 @@ export function calcularReporte(
   };
 }
 
+/**
+ * Indicadores de un encargado para su propio dashboard: su fila y lo que
+ * espera sin encargado en sus zonas (también le toca tomarlo).
+ */
+export function indicadoresDeEncargado(
+  reporte: ReporteLogistica,
+  usuarioId: string
+): { propia: FilaEncargado; sinAsignar: FilaEncargado | null } {
+  const propia = reporte.porEncargado.find((f) => f.id === usuarioId) ?? filaVacia(usuarioId, '');
+  const sinAsignar = reporte.porEncargado.find((f) => f.id === SIN_ASIGNAR) ?? null;
+  return { propia, sinAsignar };
+}
+
 /** "3 h", "1 d 4 h" o "—". */
 export function formatoHoras(horas: number | null): string {
   if (horas === null) return '—';

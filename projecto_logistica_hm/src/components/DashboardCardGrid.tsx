@@ -2,6 +2,7 @@ import Link from 'next/link';
 import {
   ArrowRight,
   ArrowUp,
+  BarChart3,
   Building2,
   CalendarClock,
   CalendarDays,
@@ -41,6 +42,8 @@ function renderIcono(nombre: string, className: string) {
   switch (nombre) {
     case 'ArrowUp':
       return <ArrowUp className={className} />;
+    case 'BarChart3':
+      return <BarChart3 className={className} />;
     case 'Building2':
       return <Building2 className={className} />;
     case 'CalendarClock':

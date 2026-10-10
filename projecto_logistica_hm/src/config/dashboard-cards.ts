@@ -157,6 +157,23 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     ],
   },
   {
+    clave: 'reportes',
+    href: '/logistica/reportes',
+    icono: 'BarChart3',
+    grupo: 'operacion',
+    orden: 55,
+    tituloAdmin: 'Reportería de Logística',
+    tituloPorRol: {},
+    descripcion:
+      'Medición de cada encargado de Logística: tiempo de respuesta, pendientes, atrasos y entregas a tiempo.',
+    acciones: [
+      'Ver el tiempo de respuesta de cada encargado contra el plazo objetivo',
+      'Detectar pendientes sin gestionar y solicitudes atrasadas',
+      'Filtrar por período y exportar a Excel',
+    ],
+    soloAdmin: true,
+  },
+  {
     clave: 'vehiculos',
     href: '/admin/vehiculos',
     icono: 'CarFront',

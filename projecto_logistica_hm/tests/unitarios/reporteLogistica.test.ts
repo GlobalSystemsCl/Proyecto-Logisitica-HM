@@ -3,6 +3,7 @@ import {
   SIN_ASIGNAR,
   calcularReporte,
   formatoHoras,
+  indicadoresDeEncargado,
   mediana,
   porcentaje,
   primeraCalendarizacion,
@@ -210,5 +211,31 @@ describe('calcularReporte', () => {
     );
     expect(r.porEncargado[0].id).toBe('beto');
     expect(r.porEncargado[0].semaforo).toBe('rojo');
+  });
+});
+
+describe('indicadoresDeEncargado', () => {
+  it('should_return_own_row_and_unassigned_pending', () => {
+    const r = calcularReporte(
+      [
+        sol({ id: 'a', estado: 'asignada', logistica_id: 'ana', fecha_confirmacion: '2026-10-08T12:00:00Z' }),
+        sol({ id: 'b', estado: 'aprobada', logistica_id: null, fecha_confirmacion: '2026-10-09T10:00:00Z' }),
+      ],
+      [],
+      [usuarios[0]],
+      OPC
+    );
+    const { propia, sinAsignar } = indicadoresDeEncargado(r, 'ana');
+    expect(propia.pendientes).toBe(1);
+    expect(propia.antiguedadMaximaHoras).toBe(24);
+    expect(sinAsignar?.pendientes).toBe(1);
+  });
+
+  it('should_return_empty_row_and_null_unassigned_when_there_is_no_activity', () => {
+    const r = calcularReporte([], [], [], OPC);
+    const { propia, sinAsignar } = indicadoresDeEncargado(r, 'ana');
+    expect(propia.pendientes).toBe(0);
+    expect(propia.semaforo).toBe('sin_datos');
+    expect(sinAsignar).toBeNull();
   });
 });
