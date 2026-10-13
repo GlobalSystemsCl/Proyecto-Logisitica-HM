@@ -264,11 +264,35 @@ export class SolicitudesService {
     return OrganizacionService.usuarioTieneSucursal(usuarioId, this.sucursalDeRecepcion(solicitud));
   }
 
+  /**
+   * Jefe de local de una sucursal. La fuente es `sucursal.usuario_id`: cada
+   * sucursal tiene a lo sumo un jefe a cargo, incluida su sucursal base (las
+   * sucursales adicionales se guardan ahí mismo; no hay tabla N:M). Si la
+   * sucursal no tiene encargado, se usa el jefe que la tiene como base.
+   */
   static async getJefeLocalDeSucursal(sucursalId: number): Promise<string | null> {
     try {
       const admin = createAdminClient();
 
-      // 1) Sucursal principal del jefe (usuario.sucursal_id)
+      // 1) Jefe a cargo de la sucursal (sucursal.usuario_id)
+      const { data: sucursal } = await admin
+        .from('sucursal')
+        .select('usuario_id')
+        .eq('id', sucursalId)
+        .maybeSingle();
+
+      const encargadoId = (sucursal as { usuario_id: string | null } | null)?.usuario_id;
+      if (encargadoId) {
+        const { data: jefe } = await admin
+          .from('usuario')
+          .select('id')
+          .eq('id', encargadoId)
+          .eq('rol', 'jefe_local')
+          .maybeSingle();
+        if (jefe) return (jefe as { id: string }).id;
+      }
+
+      // 2) Jefe con la sucursal como base (usuario.sucursal_id)
       const { data: principal } = await admin
         .from('usuario')
         .select('id')
@@ -278,51 +302,6 @@ export class SolicitudesService {
 
       if (principal && principal.length > 0) {
         return (principal[0] as { id: string }).id;
-      }
-
-      // 2) Encargado directo de la sucursal (sucursal.usuario_id)
-      const encargado = await admin
-        .from('sucursal')
-        .select('usuario_id')
-        .eq('id', sucursalId)
-        .maybeSingle();
-
-      if (encargado?.data && (encargado.data as { usuario_id: string | null }).usuario_id) {
-        const jlEncargado = await admin
-          .from('usuario')
-          .select('id')
-          .eq('id', (encargado.data as { usuario_id: string }).usuario_id)
-          .eq('rol', 'jefe_local')
-          .maybeSingle();
-
-        if (jlEncargado.data) {
-          return (jlEncargado.data as { id: string }).id;
-        }
-      }
-
-      // 3) Sucursales adicionales del jefe (tabla N:M usuario_sucursal)
-      try {
-        const { data: asignadas } = await admin
-          .from('usuario_sucursal')
-          .select('usuario_id')
-          .eq('sucursal_id', sucursalId);
-
-        if (asignadas && asignadas.length > 0) {
-          const ids = (asignadas as Array<{ usuario_id: string }>).map((r) => r.usuario_id);
-          const { data: jefes } = await admin
-            .from('usuario')
-            .select('id')
-            .in('id', ids)
-            .eq('rol', 'jefe_local')
-            .limit(1);
-
-          if (jefes && jefes.length > 0) {
-            return (jefes[0] as { id: string }).id;
-          }
-        }
-      } catch (nmErr) {
-        // Tabla N:M puede no existir en algunos entornos: no es fatal.
-        console.warn('No se pudo consultar usuario_sucursal en getJefeLocalDeSucursal:', nmErr);
       }
 
       return null;

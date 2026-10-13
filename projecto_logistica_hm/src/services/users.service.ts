@@ -6,6 +6,7 @@ import { randomInt } from 'crypto';
 import { validarCampoTexto, validarPassword } from '@/lib/validaciones';
 import { esAdminPrincipal } from '@/lib/auth/admin-principal';
 import { mensajeErrorUsuario } from '@/lib/errores';
+import { conflictoJefeLocal, normalizarAsignaciones, type AsignacionesNormalizadas } from '@/lib/asignaciones';
 
 export class UsersService {
   /**
@@ -147,6 +148,14 @@ export class UsersService {
       }
       const tempPassword = custom || this.generateTempPassword();
 
+      // Sucursal base, sucursales a cargo y zona según el rol. Se valida antes
+      // de crear la cuenta en Auth para no dejar usuarios a medias.
+      const normalizadas = normalizarAsignaciones(input);
+      if (!normalizadas.ok) return { success: false, error: normalizadas.error };
+      const asignaciones = normalizadas.asignaciones;
+      const errorConflicto = await this.validarSucursalesLibres(admin, null, asignaciones.sucursales_a_cargo);
+      if (errorConflicto) return { success: false, error: errorConflicto };
+
       // 1. Verificar si ya existe en la base de datos
       const { data: existing } = await admin
         .from('usuario')
@@ -194,7 +203,7 @@ export class UsersService {
         requiere_cambio_clave: true,
         intentos_fallidos: 0,
         bloqueado_hasta: null,
-        sucursal_id: input.sucursal_id || null,
+        sucursal_id: asignaciones.sucursal_id,
       };
 
       const { data: userProfile, error: dbError } = await admin
@@ -214,12 +223,16 @@ export class UsersService {
         };
       }
 
-      // 4. Asignar sucursales a cargo (encargado) y zonas de logística
-      await this.setSucursalesEncargadas(admin, authUserId, input.rol, [
-        ...(input.sucursal_id ? [input.sucursal_id] : []),
-        ...(input.sucursales_ids || []),
-      ]);
-      await this.setZonasAsignadas(admin, authUserId, input.rol, input.zonas_ids || []);
+      // 4. Asignar sucursales a cargo (jefe de local) y zona (logística)
+      const errorAsignacion =
+        (await this.setSucursalesEncargadas(admin, authUserId, asignaciones.sucursales_a_cargo)) ||
+        (await this.setZonasAsignadas(admin, authUserId, asignaciones.zonas_ids));
+      if (errorAsignacion) {
+        return {
+          success: false,
+          error: `El usuario se creó, pero no se pudieron guardar sus asignaciones: ${errorAsignacion} Revísalo en la lista de usuarios.`,
+        };
+      }
 
       // 5. Enviar correo con credenciales a través de Brevo
       const emailResult = await EmailService.sendUserCredentialsEmail({
@@ -430,8 +443,34 @@ export class UsersService {
       if (input.rol !== undefined) updateData.rol = input.rol;
       if (input.activo !== undefined) updateData.activo = input.activo;
       if (input.requiere_cambio_clave !== undefined) updateData.requiere_cambio_clave = input.requiere_cambio_clave;
-      if (input.sucursal_id !== undefined) updateData.sucursal_id = input.sucursal_id;
       if (input.telefono !== undefined) updateData.telefono = input.telefono?.trim() || null;
+
+      // Sucursal base, sucursales a cargo y zona: lo que no viene en el input
+      // se completa con lo actual, y todo se valida antes de escribir.
+      let asignaciones: AsignacionesNormalizadas | null = null;
+      if (
+        input.rol !== undefined ||
+        input.sucursal_id !== undefined ||
+        input.sucursales_ids !== undefined ||
+        input.zonas_ids !== undefined
+      ) {
+        const actual = await this.getAsignacionesActuales(admin, userId);
+        if (!actual) return { success: false, error: 'Usuario no encontrado.' };
+
+        const normalizadas = normalizarAsignaciones({
+          rol: input.rol ?? actual.rol,
+          sucursal_id: input.sucursal_id !== undefined ? input.sucursal_id : actual.sucursal_id,
+          sucursales_ids: input.sucursales_ids ?? actual.sucursales_a_cargo,
+          zonas_ids: input.zonas_ids ?? actual.zonas_ids,
+        });
+        if (!normalizadas.ok) return { success: false, error: normalizadas.error };
+        asignaciones = normalizadas.asignaciones;
+
+        const errorConflicto = await this.validarSucursalesLibres(admin, userId, asignaciones.sucursales_a_cargo);
+        if (errorConflicto) return { success: false, error: errorConflicto };
+
+        updateData.sucursal_id = asignaciones.sucursal_id;
+      }
 
       const { data, error } = await admin
         .from('usuario')
@@ -451,37 +490,16 @@ export class UsersService {
         },
       });
 
-      // Sucursales a cargo (encargado de local) y zonas de logística
-      if (
-        input.sucursales_ids !== undefined ||
-        input.sucursal_id !== undefined ||
-        input.rol !== undefined
-      ) {
-        const principal =
-          input.sucursal_id !== undefined ? input.sucursal_id : (data as UserProfile).sucursal_id ?? null;
-
-        let aCargo = input.sucursales_ids;
-        if (aCargo === undefined) {
-          const { data: encargadas } = await admin
-            .from('sucursal')
-            .select('id')
-            .eq('usuario_id', userId);
-          aCargo = (encargadas || []).map((s: { id: number }) => s.id);
-        }
-
-        const idsFinal = new Set<number>((aCargo || []).filter(Boolean));
-        if (principal) idsFinal.add(principal);
-        const rolFinal = input.rol ?? (data as UserProfile).rol ?? 'ejecutivo';
-        await this.setSucursalesEncargadas(admin, userId, rolFinal, Array.from(idsFinal));
-      }
-      if (input.zonas_ids !== undefined || input.rol !== undefined) {
-        const rolFinal = input.rol ?? (data as UserProfile).rol ?? 'ejecutivo';
-        if (rolFinal === 'logistica') {
-          if (input.zonas_ids !== undefined) {
-            await this.setZonasAsignadas(admin, userId, rolFinal, input.zonas_ids);
-          }
-        } else {
-          await this.setZonasAsignadas(admin, userId, rolFinal, []);
+      // Sucursales a cargo (jefe de local) y zona (logística)
+      if (asignaciones) {
+        const errorAsignacion =
+          (await this.setSucursalesEncargadas(admin, userId, asignaciones.sucursales_a_cargo)) ||
+          (await this.setZonasAsignadas(admin, userId, asignaciones.zonas_ids));
+        if (errorAsignacion) {
+          return {
+            success: false,
+            error: `Se guardaron los datos del usuario, pero no sus asignaciones: ${errorAsignacion}`,
+          };
         }
       }
 
@@ -569,57 +587,118 @@ export class UsersService {
     }
   }
 
+  /** Rol, sucursal base, sucursales adicionales a cargo y zonas actuales del usuario. */
+  private static async getAsignacionesActuales(
+    admin: SupabaseClient,
+    userId: string
+  ): Promise<{ rol: UserProfile['rol']; sucursal_id: number | null; sucursales_a_cargo: number[]; zonas_ids: number[] } | null> {
+    const [usuarioRes, sucursalesRes, zonasRes] = await Promise.all([
+      admin.from('usuario').select('rol, sucursal_id').eq('id', userId).maybeSingle(),
+      admin.from('sucursal').select('id').eq('usuario_id', userId),
+      admin.from('usuario_zona').select('zona_id').eq('usuario_id', userId),
+    ]);
+    const usuario = usuarioRes.data as { rol: UserProfile['rol']; sucursal_id: number | null } | null;
+    if (usuarioRes.error || !usuario) return null;
+    return {
+      rol: usuario.rol,
+      sucursal_id: usuario.sucursal_id ?? null,
+      sucursales_a_cargo: ((sucursalesRes.data as Array<{ id: number }> | null) ?? []).map((s) => s.id),
+      zonas_ids: ((zonasRes.data as Array<{ zona_id: number }> | null) ?? []).map((z) => z.zona_id),
+    };
+  }
+
   /**
-   * Reemplaza las sucursales de las que un usuario es encargado
-   * (`sucursal.usuario_id`). Solo los roles `jefe_local` y `administrador`
-   * pueden quedar a cargo de sucursales; a cualquier otro rol se le
-   * desmarcan todas. La lista recibe las sucursales a cargo finales.
+   * Una sucursal tiene un solo jefe de local: devuelve un mensaje si alguna
+   * de las sucursales ya está a cargo de otro jefe (como encargado o como su
+   * sucursal base), o `null` si están libres. `userId` es el usuario que se
+   * edita (`null` al crear).
+   */
+  private static async validarSucursalesLibres(
+    admin: SupabaseClient,
+    userId: string | null,
+    sucursales: number[]
+  ): Promise<string | null> {
+    if (sucursales.length === 0) return null;
+
+    let basesQuery = admin
+      .from('usuario')
+      .select('id, nombre, apellido, sucursal_id')
+      .eq('rol', 'jefe_local')
+      .in('sucursal_id', sucursales);
+    if (userId) basesQuery = basesQuery.neq('id', userId);
+
+    const [sucursalesRes, basesRes] = await Promise.all([
+      admin
+        .from('sucursal')
+        .select('id, nombre, usuario_id, encargado:usuario_id(nombre, apellido, rol)')
+        .in('id', sucursales),
+      basesQuery,
+    ]);
+    if (sucursalesRes.error || basesRes.error) {
+      return mensajeErrorUsuario(sucursalesRes.error ?? basesRes.error, 'No se pudo verificar las sucursales a cargo.');
+    }
+
+    type Persona = { nombre: string; apellido: string; rol?: string };
+    const filas = (sucursalesRes.data ?? []) as unknown as Array<{
+      id: number;
+      nombre: string | null;
+      usuario_id: string | null;
+      encargado: Persona | Persona[] | null;
+    }>;
+    const nombres = new Map(filas.map((s) => [s.id, s.nombre ?? `Sucursal #${s.id}`]));
+
+    const ocupadas = new Map<number, string>();
+    for (const s of filas) {
+      const encargado = Array.isArray(s.encargado) ? s.encargado[0] : s.encargado;
+      if (s.usuario_id && s.usuario_id !== userId && encargado?.rol === 'jefe_local') {
+        ocupadas.set(s.id, `${encargado.nombre} ${encargado.apellido}`.trim());
+      }
+    }
+    for (const u of (basesRes.data ?? []) as Array<{ nombre: string; apellido: string; sucursal_id: number }>) {
+      if (!ocupadas.has(u.sucursal_id)) ocupadas.set(u.sucursal_id, `${u.nombre} ${u.apellido}`.trim());
+    }
+
+    return conflictoJefeLocal(sucursales, ocupadas, (id) => nombres.get(id) ?? `Sucursal #${id}`);
+  }
+
+  /**
+   * Reemplaza las sucursales a cargo del usuario (`sucursal.usuario_id`) por
+   * la lista final. Solo un jefe de local recibe una lista no vacía (ver
+   * `normalizarAsignaciones`); para el resto de los roles se desmarcan todas.
+   * Devuelve el mensaje de error, o `null` si se guardó.
    */
   private static async setSucursalesEncargadas(
     admin: SupabaseClient,
     userId: string,
-    rol: string,
     sucursales: number[]
-  ): Promise<void> {
-    try {
-      await admin.from('sucursal').update({ usuario_id: null }).eq('usuario_id', userId);
+  ): Promise<string | null> {
+    const { error: errorLimpiar } = await admin.from('sucursal').update({ usuario_id: null }).eq('usuario_id', userId);
+    if (errorLimpiar) return mensajeErrorUsuario(errorLimpiar, 'No se pudieron actualizar las sucursales a cargo.');
 
-      const puedeSerEncargado = rol === 'jefe_local' || rol === 'administrador';
-      if (!puedeSerEncargado) return;
-
-      const ids = Array.from(new Set(sucursales.filter((id): id is number => Boolean(id))));
-      if (ids.length === 0) return;
-
-      await admin.from('sucursal').update({ usuario_id: userId }).in('id', ids);
-    } catch (err) {
-      console.error('Error en setSucursalesEncargadas:', err);
-    }
+    if (sucursales.length === 0) return null;
+    const { error } = await admin.from('sucursal').update({ usuario_id: userId }).in('id', sucursales);
+    if (error) return mensajeErrorUsuario(error, 'No se pudieron asignar las sucursales a cargo.');
+    return null;
   }
 
   /**
-   * Reemplaza las zonas asignadas (N:M) de un usuario. Únicamente los usuarios
-   * de rol `logistica` pueden quedar encargados por zonas territoriales: a
-   * cualquier otro rol se le limpian todas las asignaciones existentes.
+   * Reemplaza la zona del usuario (`usuario_zona`). Solo Logística recibe una
+   * zona (ver `normalizarAsignaciones`); para el resto se eliminan.
+   * Devuelve el mensaje de error, o `null` si se guardó.
    */
   private static async setZonasAsignadas(
     admin: SupabaseClient,
     userId: string,
-    rol: string,
-    zonas_ids: number[]
-  ): Promise<void> {
-    try {
-      await admin.from('usuario_zona').delete().eq('usuario_id', userId);
+    zonas: number[]
+  ): Promise<string | null> {
+    const { error: errorLimpiar } = await admin.from('usuario_zona').delete().eq('usuario_id', userId);
+    if (errorLimpiar) return mensajeErrorUsuario(errorLimpiar, 'No se pudo actualizar la zona.');
 
-      const soloLogistica = rol === 'logistica';
-      if (!soloLogistica) return;
-
-      const ids = (zonas_ids || []).filter(Boolean);
-      if (ids.length > 0) {
-        const filas = ids.map((zona_id) => ({ usuario_id: userId, zona_id }));
-        await admin.from('usuario_zona').insert(filas);
-      }
-    } catch (err) {
-      console.error('Error en setZonasAsignadas:', err);
-    }
+    if (zonas.length === 0) return null;
+    const { error } = await admin
+      .from('usuario_zona')
+      .insert(zonas.map((zona_id) => ({ usuario_id: userId, zona_id })));
+    if (error) return mensajeErrorUsuario(error, 'No se pudo asignar la zona.');
+    return null;
   }
 }

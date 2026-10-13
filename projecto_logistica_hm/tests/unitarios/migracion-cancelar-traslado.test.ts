@@ -21,7 +21,7 @@ function leer(carpeta: 'migrations' | 'rollback'): string {
 /** SQL sin comentarios de línea, en minúsculas y con espacios normalizados. */
 function normalizar(sql: string): string {
   return sql
-    .split('\n')
+    .split(/\r?\n/) // el checkout en Windows puede dejar CRLF
     .map((l) => l.replace(/--.*$/, ''))
     .join(' ')
     .replace(/\s+/g, ' ')
