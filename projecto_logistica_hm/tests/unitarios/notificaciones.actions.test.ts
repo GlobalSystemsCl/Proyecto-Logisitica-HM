@@ -148,6 +148,17 @@ describe('notificaciones desde las actions', () => {
     expect(svc.cancelarEnTransito).not.toHaveBeenCalled();
   });
 
+  it('should_reject_admin_when_rescheduling_or_cancelling_in_transit', async () => {
+    // Decisión de negocio (2026-10-13): solo Logística, también sin el administrador.
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'administrador' }));
+    const r1 = await actions.recalendarizarSolicitudAction('s-1', '2026-10-15');
+    const r2 = await actions.cancelarEnTransitoAction('s-1', 'Motivo válido', null);
+    expect(r1).toEqual({ success: false, error: 'Solo Logística puede reprogramar traslados.' });
+    expect(r2).toEqual({ success: false, error: 'Solo Logística puede cancelar un traslado en tránsito.' });
+    expect(svc.recalendarizarSolicitud).not.toHaveBeenCalled();
+    expect(svc.cancelarEnTransito).not.toHaveBeenCalled();
+  });
+
   it('should_send_reception_news', async () => {
     svc.getSolicitudById.mockResolvedValue({ ...solicitud, estado: 'en_transito' });
     svc.recibirSolicitud.mockResolvedValue({ success: true });
