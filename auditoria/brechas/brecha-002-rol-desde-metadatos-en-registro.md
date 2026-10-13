@@ -1,7 +1,7 @@
 # Brecha 002 — El trigger de registro toma el rol desde metadatos controlados por el usuario
 
 ## Estado
-Corregida en código; migración lista, **pendiente de aplicar en producción**
+Corregida: código listo y migración **aplicada en producción** (verificado en la base el 2026-10-13). El código está en la rama de trabajo; su despliegue en el hosting es No determinado
 
 ## Severidad
 Critical

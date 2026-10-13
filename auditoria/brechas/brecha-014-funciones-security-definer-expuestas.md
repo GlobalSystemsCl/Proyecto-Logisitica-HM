@@ -1,7 +1,7 @@
 # Brecha 014 — Funciones SECURITY DEFINER expuestas y `search_path` mutable
 
 ## Estado
-Parcial: migración lista, **pendiente de aplicar**; 2 puntos requieren el código actual de las funciones
+Parcial: migración **aplicada en producción** (verificado el 2026-10-13: ninguna función de `public` sin `search_path`). Quedan 2 puntos: `es_administrador` sigue tratando `activo` NULL como true y `usuario_tiene_sucursal` no usa `auth.uid()`
 
 ## Severidad
 Medium

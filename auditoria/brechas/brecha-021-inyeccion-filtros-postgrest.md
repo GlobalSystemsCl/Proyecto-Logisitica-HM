@@ -1,7 +1,7 @@
 # Brecha 021 — Inyección en filtros PostgREST (`.or()` con texto del usuario) y `ilike` sin escape
 
 ## Estado
-Corregida (índice único pendiente)
+Corregida (índice único `lower(nombre)` pendiente: verificado el 2026-10-13 que no existe)
 
 ## Severidad
 Low

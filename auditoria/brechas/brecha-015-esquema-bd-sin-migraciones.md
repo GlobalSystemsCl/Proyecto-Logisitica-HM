@@ -1,7 +1,7 @@
 # Brecha 015 — Esquema de base de datos sin migraciones versionadas
 
 ## Estado
-Parcial
+Parcial: 15 migraciones versionadas en `supabase/migrations/` y todas aplicadas en producción (2026-10-13); falta la migración base del esquema y alinear el historial de Supabase (ver "Avance 2026-10-13")
 
 ## Severidad
 Medium
@@ -65,3 +65,26 @@ Cambios de esquema hechos directamente en el dashboard o SQL editor de Supabase.
 1. `supabase link` + `supabase db pull` para generar la migración base del esquema completo (requiere la contraseña de la BD y Docker).
 2. `supabase gen types typescript` para que el typecheck detecte columnas inexistentes.
 3. CI con Supabase local que aplique las migraciones desde cero (brecha 017).
+
+## Avance 2026-10-13
+
+### Estado verificado en producción
+Las 15 migraciones de `projecto_logistica_hm/supabase/migrations/` están aplicadas (verificado con consultas de catálogo el 2026-10-13):
+
+| # | Migraciones | Cómo se aplicaron |
+|---|---|---|
+| 1–7 | Auditoría (`2026100712xxxx`) | SQL Editor (fecha exacta No determinada) |
+| 8–10 | Requisitos (`20261009…`) | SQL Editor (fecha exacta No determinada) |
+| 11 | `20261013120000_fix_cancelar_traslado_slots_ocupados` | Conector de Supabase (`apply_migration`) |
+| 12 | `20261013130000_brecha_011_recalculo_slots_unificado` | Conector de Supabase (`apply_migration`) |
+| 13–15 | Brecha 011 (`20261013140000`, `…150000`, `…160000`) | SQL Editor |
+
+Se eliminaron `projecto_logistica_hm/migraciones/` y `migraciones.rar`, copias exactas de las 7 primeras: `supabase/` es la única ubicación.
+
+### Desalineación del historial
+`supabase_migrations.schema_migrations` solo registra las 2 aplicadas con el conector y con versiones distintas a las del repo (`20261013144915` y `20261013152109` en lugar de `20261013120000` y `20261013130000`). Las aplicadas desde el SQL Editor no quedan registradas. Si se usa `supabase db push`, intentaría aplicar de nuevo las del repo. Todas son idempotentes (`create or replace`, `drop … if exists`, `add column if not exists`), así que no romperían nada, pero el historial debe alinearse.
+
+### Pendiente
+1. Migración base con `supabase db pull`.
+2. Alinear `schema_migrations` con los archivos del repo (`supabase migration repair --status applied <versión>` por cada archivo ya aplicado).
+3. Desde ahí, aplicar todo cambio con la CLI o con el conector para que quede registrado.

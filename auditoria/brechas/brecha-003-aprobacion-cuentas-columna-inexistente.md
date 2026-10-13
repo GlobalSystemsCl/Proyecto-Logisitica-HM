@@ -1,7 +1,7 @@
 # Brecha 003 — Aprobación de cuentas: la columna `aprobado` no existe en la base de datos
 
 ## Estado
-Corregida en código; migración lista, **pendiente de aplicar en producción**
+Corregida: código listo y migración **aplicada en producción** (verificado en la base el 2026-10-13). El código está en la rama de trabajo; su despliegue en el hosting es No determinado
 
 ## Severidad
 High

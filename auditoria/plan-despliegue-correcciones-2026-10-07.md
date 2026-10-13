@@ -5,7 +5,7 @@
 | Rama | `fix/brechas-auditoria-2026-10-07` (creada desde `auditoria/2026-10-07`) |
 | Entorno | Producción directa (decisión 1 del responsable): no hay staging |
 | Base de datos | Proyecto Supabase `Proyecto Logistica-HM` (`yaqbccvlenouqmtqrlrq`) |
-| Estado | Código verificado localmente. **Migraciones no aplicadas, código no desplegado** |
+| Estado | **Actualizado 2026-10-13:** las 15 migraciones están **aplicadas en producción** (verificado en la base). El código está en `joaco-ciclo-2`; su despliegue en el hosting es No determinado |
 
 Verificación local de la rama: 699 tests unitarios en verde, `tsc --noEmit` sin errores, ESLint sin errores, `next build` correcto y `npm audit --omit=dev` con 0 vulnerabilidades.
 
@@ -38,7 +38,19 @@ Ver `projecto_logistica_hm/supabase/README.md`. Cada archivo es transaccional (`
 | 6 | `20261007120500_brecha_024_indices_fk.sql` | 024 |
 | 7 | `20261007120600_brecha_012_intentos_fallidos_atomico.sql` | 012, 010 |
 
-- [ ] Después de cada una, ejecutar su consulta de "Verificación posterior".
+- [x] Migraciones 1–7 aplicadas (verificado en producción el 2026-10-13; fecha de aplicación No determinada).
+
+Migraciones posteriores (todas **aplicadas en producción** al 2026-10-13):
+
+| # | Archivo | Motivo |
+|---|---|---|
+| 8 | `20261009110000_req_estado_traslado_cancelado.sql` | R8 |
+| 9 | `20261009120000_req_traslados_cancelacion_recepcion.sql` | R8, R13, R14 |
+| 10 | `20261009130000_req_indices_calendario_reportes.sql` | R16, R17 |
+| 11 | `20261013120000_fix_cancelar_traslado_slots_ocupados.sql` | Corrección de R8 |
+| 12–15 | `20261013130000` … `20261013160000` (`brecha_011_*`) | Brecha 011 |
+
+Como las migraciones ya están en la base, el orden "migraciones antes que código" está cumplido: desplegar el código de `joaco-ciclo-2` no cierra sesiones por la columna `aprobado`.
 - [ ] Revisar los advisors de seguridad y rendimiento.
 - [ ] Si algo falla: el archivo homónimo de `supabase/rollback/` lo revierte.
 
@@ -50,7 +62,7 @@ Ver `projecto_logistica_hm/supabase/README.md`. Cada archivo es transaccional (`
 
 ## Paso 4 — Despliegue del código
 
-- [ ] Revisar y fusionar `fix/brechas-auditoria-2026-10-07` (incluye Next.js 16.4.0, brecha 027).
+- [x] Correcciones fusionadas en `joaco-ciclo-2` junto con los requisitos (incluye Next.js 16.4.0, brecha 027).
 - [ ] Desplegar.
 
 ## Paso 5 — Prueba manual en producción
@@ -78,7 +90,7 @@ Ver `projecto_logistica_hm/supabase/README.md`. Cada archivo es transaccional (`
 
 | Brecha | Pendiente |
 |---|---|
-| 011 | Recalcular slots y unificar los triggers (requiere versionar las funciones actuales) |
+| ~~011~~ | **Resuelta el 2026-10-13** (ver brecha 011) |
 | 010 | RPCs transaccionales para crear solicitud, crear traslado y reordenar la cola |
 | 014 | `usuario_tiene_sucursal` basada en `auth.uid()`; `COALESCE(activo, false)` en las funciones de rol |
 | 015 | Migración base con `supabase db pull` y tipos generados |

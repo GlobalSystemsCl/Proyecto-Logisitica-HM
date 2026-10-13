@@ -1,7 +1,7 @@
 # Brecha 024 — Consultas sin paginación, filtrado en memoria y RLS no optimizado
 
 ## Estado
-Parcial
+Parcial: los 6 índices de FK **aplicados en producción** (verificado el 2026-10-13); falta paginación y `(select auth.uid())` en las policies
 
 ## Severidad
 Low

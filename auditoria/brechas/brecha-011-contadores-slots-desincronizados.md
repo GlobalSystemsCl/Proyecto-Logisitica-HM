@@ -1,7 +1,7 @@
 # Brecha 011 — Contadores de slots desincronizados
 
 ## Estado
-Pendiente (requiere acceso a la base de datos)
+Corregida y **aplicada en producción** el 2026-10-13 (0 diferencias entre contadores guardados y calculados en todas las sucursales)
 
 ## Severidad
 Medium
@@ -75,3 +75,40 @@ La corrección necesita la definición exacta de `fn_recalcular_slots_ocupados` 
 2. Script de recálculo único de `slots_ocupados` y `slots_reservados` para las 6 sucursales.
 3. Unificar en un solo trigger de recálculo completo y eliminar el `disponibilidad()` duplicado.
 4. Test que compare `ESTADOS_ACTIVOS_RESERVA` con la lista SQL.
+
+## Solución aplicada (2026-10-13)
+
+**Rama:** `joaco-ciclo-2` (commits `a260122` y `9861f15`). **Aplicada en producción** y verificada el mismo día.
+
+### Diagnóstico en producción
+Con acceso de lectura a la base se obtuvieron las definiciones reales de las funciones y triggers de slots. Causas confirmadas:
+1. Mezcla de triggers incrementales (+1/−1) con `fn_recalcular_slots_ocupados`, que recalculaba solo `slots_ocupados` y **no contaba las reservas de traslados internos**: cada recálculo (entregar, finalizar, recibir traslado) borraba del contador las reservas de traslados pendientes.
+2. `slots_reservados` nunca se recalculaba.
+3. `tr_recalcular_slots_vehiculo` estaba **desactivado** desde el 2026-09-15 (`20260915_desactivar_trigger_slots_vehiculo.sql`, de forma "temporal" para la importación masiva de stock). Crear, editar, importar, borrar o mover vehículos no actualizaba los slots.
+4. Fugas no detectadas en la auditoría: al **borrar una solicitud** o un **traslado interno** sus reservas se borraban en cascada pero los contadores nunca bajaban.
+5. `fn_cancelar_traslado_interno` (requisito R8) descontaba solo `slots_reservados`, aunque la creación del traslado suma ambos contadores.
+6. Liberación duplicada al cancelar (`trigger_disponibilidad` y `fn_liberar_slots_rechazo_cancelacion`) y lista de estados distinta entre el código y el SQL (`despachada`).
+
+### Cambios
+| Migración | Qué hace |
+|---|---|
+| `20261013120000_fix_cancelar_traslado_slots_ocupados` | La cancelación de un traslado interno descuenta ambos contadores (corrección de R8) |
+| `20261013130000_brecha_011_recalculo_slots_unificado` | `fn_recalcular_slots_sucursal(id)`: fuente de verdad única. `reservados` = reservas de solicitudes activas + reservas de traslados pendientes o en tránsito; `ocupados` = vehículos con `ubicacion` = sucursal + `reservados`. Bloquea la fila de la sucursal para serializar recálculos concurrentes. `fn_estados_reserva_activos()` unifica la lista de estados. `fn_recalcular_slots_ocupados` delega en la nueva |
+| `20261013140000_brecha_011_triggers_recalculo` | Los triggers de reservas (solicitudes y traslados), rechazo, cancelación, entrega, recepción y la RPC de cancelación de traslados recalculan en lugar de sumar/restar. Nuevos triggers `AFTER DELETE` en `solicitud`, `traslado_interno` y `traslado_interno_vehiculo`. Se elimina `trigger_disponibilidad` |
+| `20261013150000_brecha_011_trigger_vehiculos` | Reemplaza el trigger por fila desactivado por 3 triggers **por sentencia** (alta, edición y borrado de vehículos): una importación masiva recalcula una vez cada sucursal afectada. Editar el precio no recalcula |
+| `20261013160000_brecha_011_recalculo_global` | Recálculo único de todas las sucursales (repetible) |
+
+Cada migración tiene su rollback en `supabase/rollback/` con las definiciones exactas de producción previas.
+
+**Marcha blanca:** los límites de capacidad están desactivados a propósito (capacidades bajas como `slots = 2` son intencionales). Superar la capacidad solo emite un `RAISE NOTICE`; nunca bloquea una operación. Un test lo verifica.
+
+Código: `ESTADOS_ACTIVOS_RESERVA` incluye `despachada` (sin efecto práctico: el flujo actual no la usa) y un test la compara con `fn_estados_reserva_activos()`.
+
+### Verificación
+- **Ensayos en producción** dentro de transacciones revertidas antes de aplicar: después de recalcular, cancelar, entregar, cancelar en tránsito, cancelar un traslado, borrar una solicitud, mover, crear y borrar vehículos y una actualización masiva, los contadores de todas las sucursales coincidieron con el cálculo.
+- **Después de aplicar:** 0 diferencias en todas las sucursales. Corregidas: CONCON (ocupados 5→6, reservados 3→2), VALPARAISO (ocupados 41→40) y 408 (ocupados 2→1, reservados 2→1).
+- Tests de contrato de cada migración y su rollback (`tests/unitarios/migracion-*.test.ts`, helper `tests/mocks/sql.ts`). Suite: 932 tests en verde, `tsc` y ESLint sin errores.
+
+### Pendiente
+- `fn_incrementar_slots_ocupados` y `fn_decrementar_slots_ocupados` siguen en la base sin trigger ni uso; se pueden eliminar.
+- Tests de triggers contra un Postgres real (brecha 017).

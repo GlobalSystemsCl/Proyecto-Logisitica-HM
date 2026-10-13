@@ -1,7 +1,7 @@
 # Brecha 012 — Bloqueo por intentos fallidos evitable, enumeración de cuentas y sin rate limiting
 
 ## Estado
-Parcial: código corregido; **falta configuración en el dashboard de Supabase**
+Parcial: código corregido y RPC atómica **aplicada en producción** (verificado el 2026-10-13); **falta configuración en el dashboard de Supabase**
 
 ## Severidad
 Medium
