@@ -92,6 +92,8 @@ export async function recibirTrasladoAction(trasladoId: string, recepcion?: Dato
 /**
  * R8: Logística cancela un traslado interno en tránsito con un motivo e indica
  * dónde queda el vehículo (`null` = sin ubicación asignada).
+ * Solo Logística: a diferencia de `esLogistica`, aquí el administrador queda
+ * excluido a propósito (decisión de negocio, 2026-10-13); no agregarlo.
  */
 export async function cancelarTrasladoAction(trasladoId: string, motivo: string, ubicacionId: number | null) {
   try {

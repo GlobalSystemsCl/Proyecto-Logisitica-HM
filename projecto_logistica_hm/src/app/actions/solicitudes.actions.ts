@@ -719,7 +719,8 @@ export async function recibirSolicitudAction(solicitudId: string, recepcion?: Da
 
 /**
  * R7/R16: Logística cambia la fecha de una solicitud ya calendarizada.
- * Solo Logística: es quien programa los traslados.
+ * Solo Logística: es quien programa los traslados. El administrador queda
+ * excluido a propósito (decisión de negocio, 2026-10-13); no agregarlo.
  */
 export async function recalendarizarSolicitudAction(
   solicitudId: string,
@@ -748,6 +749,8 @@ export async function recalendarizarSolicitudAction(
 /**
  * R8: Logística cancela una solicitud en tránsito con un motivo e indica dónde
  * queda el vehículo (`null` = sin ubicación asignada, por ejemplo en la ruta).
+ * Solo Logística: el administrador queda excluido a propósito (decisión de
+ * negocio, 2026-10-13); no agregarlo.
  */
 export async function cancelarEnTransitoAction(
   solicitudId: string,
