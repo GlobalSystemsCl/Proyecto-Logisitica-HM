@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { leerMigracion, normalizarSql as normalizar } from '../mocks/sql';
 
 /**
  * Contrato de la migración 20261013120000 (corrección R8).
@@ -12,21 +11,9 @@ import { describe, expect, it } from 'vitest';
  */
 
 const NOMBRE = '20261013120000_fix_cancelar_traslado_slots_ocupados.sql';
-const SUPABASE = join(process.cwd(), 'supabase');
 
 function leer(carpeta: 'migrations' | 'rollback'): string {
-  return readFileSync(join(SUPABASE, carpeta, NOMBRE), 'utf8');
-}
-
-/** SQL sin comentarios de línea, en minúsculas y con espacios normalizados. */
-function normalizar(sql: string): string {
-  return sql
-    .split('\n')
-    .map((l) => l.replace(/--.*$/, ''))
-    .join(' ')
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-    .trim();
+  return leerMigracion(carpeta, NOMBRE);
 }
 
 /** Sentencia `update public.sucursal ... ;` de la función. */

@@ -2,8 +2,10 @@
  * Cálculo de disponibilidad de slots de estacionamiento por sucursal.
  *
  * La BD mantiene `sucursal.slots`, `slots_ocupados` y `slots_reservados`;
- * los triggers `fn_incrementar_slots_ocupados`, `fn_decrementar_slots_ocupados`
- * y `fn_liberar_slots_rechazo_cancelacion` los actualizan. Este módulo es la
+ * los triggers de reservas, traslados y vehículos los recalculan con
+ * `fn_recalcular_slots_sucursal` (brecha 011): reservados = reservas activas
+ * de solicitudes y traslados hacia la sucursal; ocupados = vehículos en la
+ * sucursal + reservados. La app solo los lee. Este módulo es la
  * única fuente del cálculo de "libres" para la UI, de modo que el indicador del
  * dashboard y el panel `/logistica/slots` no puedan discrepar.
  *
