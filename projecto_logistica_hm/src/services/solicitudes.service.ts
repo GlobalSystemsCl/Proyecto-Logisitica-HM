@@ -25,9 +25,10 @@ import {
 
 /**
  * Estados en los que el vehículo sigue RESERVADO (no puede moverse a otra
- * solicitud). Debe coincidir con la lista de estados usada por
- * `public.fn_recalcular_slots_ocupados` (migración 20260928_triggers_fechas.sql),
- * que hoy solo actualiza el conteo informativo de slots (sin validar capacidad).
+ * solicitud). Debe coincidir con `public.fn_estados_reserva_activos()`
+ * (migración 20261013130000), la lista que usa la BD para contar los slots;
+ * un test compara ambas. `despachada` existe en el enum aunque el flujo actual
+ * no la usa.
  */
 export const ESTADOS_ACTIVOS_RESERVA = [
   'pendiente_aprobacion',
@@ -36,6 +37,7 @@ export const ESTADOS_ACTIVOS_RESERVA = [
   'priorizada',
   'asignada',
   'calendarizada',
+  'despachada',
   'en_transito',
 ] as const;
 

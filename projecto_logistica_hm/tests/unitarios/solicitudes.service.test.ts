@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createSupabaseMock, fila, filaConCount, type MockResult, type SupabaseMock } from '../mocks/supabase';
+import { cuerpoFuncion, leerMigracion } from '../mocks/sql';
 import {
   SolicitudesService,
   ESTADOS_ACTIVOS_RESERVA,
@@ -114,8 +115,19 @@ describe('ESTADOS_ACTIVOS_RESERVA', () => {
       'priorizada',
       'asignada',
       'calendarizada',
+      'despachada',
       'en_transito',
     ]);
+  });
+
+  it('should_match_the_database_list_of_reservation_states', () => {
+    // Brecha 011: la app y la BD deben considerar los mismos estados.
+    const funcion = cuerpoFuncion(
+      leerMigracion('migrations', '20261013130000_brecha_011_recalculo_slots_unificado.sql'),
+      'fn_estados_reserva_activos'
+    );
+    const enSql = [...funcion.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+    expect(enSql).toEqual([...ESTADOS_ACTIVOS_RESERVA]);
   });
 });
 

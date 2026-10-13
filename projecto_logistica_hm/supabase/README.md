@@ -41,6 +41,17 @@ Aplicar **antes** de desplegar el código de esa rama, en este orden:
 | 11 | `20261013120000_fix_cancelar_traslado_slots_ocupados.sql` | R8 | Bajo: reemplaza `fn_cancelar_traslado_interno` para que descuente también `slots_ocupados` del destino (las 8–10 ya están aplicadas en producción) |
 | 12 | `20261013150000_asignacion_sucursales_y_zonas_por_rol.sql` | Asignaciones por rol | Medio: quita los encargados de sucursal que no son jefe de local (datos), agrega triggers de "un jefe por sucursal", una zona por usuario de Logística y amplía la RLS de lectura del jefe de local a todas sus sucursales. Después, ejecutar `scripts/01_asignar_sucursales_sin_jefe.sql` (deja Valparaíso, Santiago Centro y las sucursales de prueba a cargo de Joaquin Lepe) |
 
+## Brecha 011 — contadores de slots (aplicar en este orden)
+
+| # | Archivo | Riesgo |
+|---|---|---|
+| 12 | `20261013130000_brecha_011_recalculo_slots_unificado.sql` | Bajo: `fn_recalcular_slots_sucursal` calcula ambos contadores (incluye traslados); `fn_recalcular_slots_ocupados` delega en ella |
+| 13 | `20261013140000_brecha_011_triggers_recalculo.sql` | Medio: los triggers de reservas recalculan en vez de sumar/restar; triggers de borrado nuevos; elimina `trigger_disponibilidad` |
+| 14 | `20261013150000_brecha_011_trigger_vehiculos.sql` | Medio: reactiva el recálculo por movimientos de vehículos con triggers por sentencia |
+| 15 | `20261013160000_brecha_011_recalculo_global.sql` | Bajo: corrección única de datos; se puede repetir |
+
+Marcha blanca: superar la capacidad solo emite un aviso (`RAISE NOTICE`); nunca bloquea.
+
 Después de aplicar la 9, ejecutar su "Verificación posterior". En particular,
 tras la primera cancelación de una solicitud en tránsito, comprobar que los
 slots reservados del destino bajaron.
