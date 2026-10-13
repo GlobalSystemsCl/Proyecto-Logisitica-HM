@@ -50,6 +50,18 @@ Aplicar **antes** de desplegar el código de esa rama, en este orden:
 
 Marcha blanca: superar la capacidad solo emite un aviso (`RAISE NOTICE`); nunca bloquea.
 
+## Brecha 014 — puntos pendientes
+
+| # | Archivo | Riesgo |
+|---|---|---|
+| 16 | `20261013170000_brecha_014_funciones_rol_y_sucursal.sql` | Medio: `es_administrador`, `tiene_rol` y `usuario_activo` solo cuentan `activo = true` (antes NULL contaba como activo); `usuario.activo` pasa a NOT NULL; `usuario_tiene_sucursal` no deja que un usuario con sesión consulte las sucursales de otro. Las policies sostienen casi todo el acceso: probar el login de cada rol después de aplicarla |
+
+## Historial de migraciones (brecha 015)
+
+Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. Después de aplicar la 16, ejecutar una vez `scripts/01_alinear_historial_migraciones.sql`: registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.
+
+Desde ahí, aplicar todo cambio con la CLI (`supabase db push`) o actualizar el script en la misma tarea.
+
 Después de aplicar la 9, ejecutar su "Verificación posterior". En particular,
 tras la primera cancelación de una solicitud en tránsito, comprobar que los
 slots reservados del destino bajaron.
