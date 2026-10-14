@@ -49,6 +49,7 @@ import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
+import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente de aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -89,16 +90,6 @@ function formatTamano(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function getEncargadoId(sol: SolicitudLista): string | null {
-  return sol.ejecutivo_id || sol.jefe_local_id || null;
-}
-
-function getEncargadoNombre(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
-  if (sol.jefe_local_id) return sol.jefe_local_nombre;
-  return null;
 }
 
 function getResponsableId(sol: SolicitudLista): string | null {
@@ -595,13 +586,13 @@ export default function SolicitudDetalleModal({
                 <div className="w-px bg-neutral-200 self-stretch" />
               </>
             )}
-            {/* Encargado de solicitud (logistica_id reusado) */}
+            {/* Responsable de Logística (logistica_id) */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
                 <UserCheck className="w-5 h-5 text-sky-700" />
               </div>
               <div>
-                <p className="text-[11px] text-neutral-400 font-medium">Encargado de solicitud</p>
+                <p className="text-[11px] text-neutral-400 font-medium">Responsable de Logística</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.logistica_nombre ? (
                     <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
@@ -715,10 +706,10 @@ export default function SolicitudDetalleModal({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Iniciada por</p>
                   <p className="text-sm text-neutral-900 font-medium">
-                    {getEncargadoNombre(solicitud) ? (
-                      <UsuarioNombreBoton usuarioId={getEncargadoId(solicitud)} nombre={getEncargadoNombre(solicitud)} />
+                    {iniciadorNombre(solicitud) ? (
+                      <UsuarioNombreBoton usuarioId={iniciadorId(solicitud)} nombre={iniciadorNombre(solicitud)} />
                     ) : (
                       <span className="text-neutral-400 italic">Sin asignar</span>
                     )}
@@ -735,7 +726,7 @@ export default function SolicitudDetalleModal({
                   </p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado de solicitud</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Responsable de Logística</p>
                   <p className="text-sm text-neutral-900 font-medium">
                     {solicitud.logistica_nombre ? (
                       <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />

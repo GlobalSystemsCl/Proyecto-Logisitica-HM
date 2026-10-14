@@ -165,9 +165,9 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     tituloAdmin: 'Reportería de Logística',
     tituloPorRol: {},
     descripcion:
-      'Medición de cada encargado de Logística: tiempo de respuesta, pendientes, atrasos y entregas a tiempo.',
+      'Medición de cada responsable de Logística: tiempo de respuesta, pendientes, atrasos y entregas a tiempo.',
     acciones: [
-      'Ver el tiempo de respuesta de cada encargado contra el plazo objetivo',
+      'Ver el tiempo de respuesta de cada responsable contra el plazo objetivo',
       'Detectar pendientes sin gestionar y solicitudes atrasadas',
       'Filtrar por período y exportar a Excel',
     ],

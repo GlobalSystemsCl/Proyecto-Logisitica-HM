@@ -21,6 +21,9 @@ export interface SolicitudLista {
   jefe_local_nombre: string | null;
   logistica_id: string | null;
   logistica_nombre: string | null;
+  /** Quién inició la solicitud (ejecutivo, jefe de local o administrador). UI: "Iniciada por". */
+  creado_por: string | null;
+  creado_por_nombre: string | null;
   fecha_creacion: string | null;
   /** Fecha estimada de despacho (UI: "Fecha estimada"). La fija Logística al calendarizar. */
   fecha_tentativa_despacho: string | null;

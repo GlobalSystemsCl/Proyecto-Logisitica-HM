@@ -5,11 +5,8 @@ import { cuerpoFuncion, leerMigracion } from '../mocks/sql';
 import {
   SolicitudesService,
   ESTADOS_ACTIVOS_RESERVA,
-  getEncargadoId,
-  getEncargadoNombre,
   type SolicitudMinima,
 } from '@/services/solicitudes.service';
-import type { SolicitudLista } from '@/types/solicitud.types';
 import { MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 
 const admin: SupabaseMock = createSupabaseMock();
@@ -128,26 +125,6 @@ describe('ESTADOS_ACTIVOS_RESERVA', () => {
     );
     const enSql = [...funcion.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
     expect(enSql).toEqual([...ESTADOS_ACTIVOS_RESERVA]);
-  });
-});
-
-describe('getEncargadoNombre/getEncargadoId', () => {
-  it('should_devolver_nombre_del_ejecutivo_cuando_existe', () => {
-    const sol = { ejecutivo_id: 'e-1', ejecutivo_nombre: 'Ana', jefe_local_id: 'j-1', jefe_local_nombre: 'Luis' } as SolicitudLista;
-    expect(getEncargadoNombre(sol)).toBe('Ana');
-    expect(getEncargadoId(sol)).toBe('e-1');
-  });
-
-  it('should_devolver_nombre_del_jefe_local_sin_ejecutivo', () => {
-    const sol = { ejecutivo_id: null, ejecutivo_nombre: null, jefe_local_id: 'j-1', jefe_local_nombre: 'Luis' } as SolicitudLista;
-    expect(getEncargadoNombre(sol)).toBe('Luis');
-    expect(getEncargadoId(sol)).toBe('j-1');
-  });
-
-  it('should_devolver_null_sin_encargado', () => {
-    const sol = { ejecutivo_id: null, ejecutivo_nombre: null, jefe_local_id: null, jefe_local_nombre: null } as SolicitudLista;
-    expect(getEncargadoNombre(sol)).toBeNull();
-    expect(getEncargadoId(sol)).toBeNull();
   });
 });
 
@@ -437,6 +414,7 @@ describe('SolicitudesService.createSolicitud', () => {
       estado: 'pendiente_aprobacion',
       ejecutivo_id: USUARIO_ID,
       fecha_limite: '2026-02-01',
+      creado_por: USUARIO_ID,
     });
     const svInsert = admin.callsTo('solicitud_vehiculo').find((c) => c[0] === 'insert');
     expect(svInsert?.[1]).toEqual([
@@ -445,6 +423,28 @@ describe('SolicitudesService.createSolicitud', () => {
     ]);
     const obs = admin.callsTo('observacion').find((c) => c[0] === 'insert');
     expect(obs?.[1]).toEqual({ solicitud_id: 's-nueva', usuario_id: USUARIO_ID, observacion: 'entrega rápida' });
+  });
+
+  it('should_save_jefe_local_as_creator_when_delegating_to_an_ejecutivo', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud_vehiculo = [fila([]), fila(null)];
+    admin.results.solicitud = [fila({ id: 's-deleg' }), fila(rawRow({ id: 's-deleg' }))];
+    spyRegistrarAuditoria();
+
+    await SolicitudesService.createSolicitud(
+      { sucursal: 1, tipo_solicitud: 'venta', sucursal_destino: 1, ejecutivo_id: 'ejec-delegado', jefe_local_id: 'jefe-1', estado: 'aprobada' },
+      ['v-1'],
+      'jefe-1'
+    );
+
+    const insert = admin.callsTo('solicitud').find((c) => c[0] === 'insert');
+    expect(insert?.[1]).toMatchObject({ ejecutivo_id: 'ejec-delegado', creado_por: 'jefe-1' });
+  });
+
+  it('should_map_creator_name_from_the_creado_por_join', async () => {
+    admin.results.solicitud = [fila(rawRow({ id: 's-9', creado_por: 'jefe-1', creador: { nombre: 'Ana', apellido: 'Díaz' } }))];
+    const sol = await SolicitudesService.getSolicitudCompleta('s-9');
+    expect(sol).toMatchObject({ creado_por: 'jefe-1', creado_por_nombre: 'Ana Díaz' });
   });
 
   it('should_para_evento_guardar_direccion_y_titulo_sin_sucursal_destino', async () => {

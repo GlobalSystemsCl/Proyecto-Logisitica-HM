@@ -826,7 +826,7 @@ export async function asignarEncargadoAction(solicitudId: string, logisticaId?: 
     const profile = await requireProfile();
 
     if (profile.rol !== 'administrador' && profile.rol !== 'logistica') {
-      return { success: false, error: 'Solo Logística o el Administrador pueden asignar el encargado.' };
+      return { success: false, error: 'Solo Logística o el Administrador pueden asignar el responsable de Logística.' };
     }
 
     await requireSolicitudAccess(profile, solicitudId);
@@ -838,7 +838,7 @@ export async function asignarEncargadoAction(solicitudId: string, logisticaId?: 
     notificar('solicitud_asignada', solicitudId, profile.id);
 
     revalidarSolicitudes();
-    return { success: true, message: 'Encargado de solicitud asignado.' };
+    return { success: true, message: 'Responsable de Logística asignado.' };
   } catch (err: unknown) {
     return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }

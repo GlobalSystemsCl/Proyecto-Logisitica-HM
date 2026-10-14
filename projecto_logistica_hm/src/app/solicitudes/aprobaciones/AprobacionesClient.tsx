@@ -21,6 +21,7 @@ import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import { hoyISO } from '@/lib/fechas';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { iniciadorNombre } from '@/lib/iniciador';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -63,12 +64,6 @@ function fechaInputValue(iso: string | null): string {
   const mes = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dia = String(d.getUTCDate()).padStart(2, '0');
   return `${anio}-${mes}-${dia}`;
-}
-
-function getEncargadoNombre(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_nombre) return sol.ejecutivo_nombre;
-  if (sol.jefe_local_nombre) return sol.jefe_local_nombre;
-  return null;
 }
 
 const tipoLabel: Record<TipoSolicitud, string> = {
@@ -211,8 +206,8 @@ export default function AprobacionesClient({
                     {sol.fecha_limite && (
                       <span>{ETIQUETA_FECHA_LIMITE}: {formatFecha(sol.fecha_limite)}</span>
                     )}
-                    {getEncargadoNombre(sol) && (
-                      <span>Encargado: {getEncargadoNombre(sol)}</span>
+                    {iniciadorNombre(sol) && (
+                      <span>Iniciada por: {iniciadorNombre(sol)}</span>
                     )}
                   </div>
                   {sol.vehiculos.length > 0 && (

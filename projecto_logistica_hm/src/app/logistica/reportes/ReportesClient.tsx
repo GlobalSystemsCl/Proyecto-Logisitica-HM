@@ -57,7 +57,7 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
 
   function exportar() {
     const filas = reporte.porEncargado.map((f: FilaEncargado) => ({
-      Encargado: f.nombre,
+      'Responsable de Logística': f.nombre,
       Estado: SEMAFORO[f.semaforo].etiqueta,
       'Pendientes de gestionar': f.pendientes,
       [`Pendientes con más de ${sla} h`]: f.pendientesFueraDeSla,
@@ -76,14 +76,14 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
     const pendientes = reporte.pendientesMasAntiguos.map((p) => ({
       Solicitud: p.id,
       Traslado: p.ruta,
-      Encargado: p.encargado,
+      'Responsable de Logística': p.encargado,
       Zona: nombreZona(p.zonaId),
       'Esperando (h)': Math.round(p.antiguedadHoras),
       [ETIQUETA_FECHA_LIMITE]: p.fechaLimite ? formatFecha(p.fechaLimite) : '',
       Atrasada: p.atrasada ? 'Sí' : 'No',
     }));
     const libro = utils.book_new();
-    utils.book_append_sheet(libro, utils.json_to_sheet(filas), 'Por encargado');
+    utils.book_append_sheet(libro, utils.json_to_sheet(filas), 'Por responsable');
     utils.book_append_sheet(libro, utils.json_to_sheet(pendientes), 'Pendientes');
     writeFile(libro, `reporte_logistica_${desde}_${hasta}.xlsx`);
   }
@@ -105,7 +105,7 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
             <BarChart3 className="w-6 h-6" /> Reportería de Logística
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Tiempo de respuesta, pendientes y atrasos de cada encargado. Plazo objetivo: calendarizar dentro de {sla} h desde la aprobación.
+            Tiempo de respuesta, pendientes y atrasos de cada responsable de Logística. Plazo objetivo: calendarizar dentro de {sla} h desde la aprobación.
           </p>
         </div>
         <div className="flex items-end gap-2 flex-wrap">
@@ -142,12 +142,12 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
       </div>
 
       <section className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-        <h2 className="px-5 py-3 border-b border-neutral-200 font-semibold text-sm">Por encargado ({formatFecha(desde)} – {formatFecha(hasta)})</h2>
+        <h2 className="px-5 py-3 border-b border-neutral-200 font-semibold text-sm">Por responsable de Logística ({formatFecha(desde)} – {formatFecha(hasta)})</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-neutral-50 text-left text-xs uppercase tracking-wider text-neutral-500">
-                <th className="px-4 py-3">Encargado</th>
+                <th className="px-4 py-3">Responsable</th>
                 <th className="px-4 py-3">Estado</th>
                 <th className="px-4 py-3">Pendientes</th>
                 <th className="px-4 py-3">Más de {sla} h</th>
@@ -195,7 +195,7 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
               <li key={p.id} className="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <span className="font-mono text-xs text-neutral-500">#{p.id.slice(0, 8)}</span>
                 <span className="font-semibold text-neutral-900">{p.ruta}</span>
-                <span className="text-xs text-neutral-500">Encargado: {p.encargado} · Zona: {nombreZona(p.zonaId)}</span>
+                <span className="text-xs text-neutral-500">Responsable: {p.encargado} · Zona: {nombreZona(p.zonaId)}</span>
                 <span className={`text-xs font-bold ${p.antiguedadHoras > sla ? 'text-red-700' : 'text-neutral-700'}`}>
                   Esperando {formatoHoras(p.antiguedadHoras)}
                 </span>
