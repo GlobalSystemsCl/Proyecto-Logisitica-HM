@@ -1,7 +1,7 @@
 # Brecha 016 — Eliminar una sucursal borra físicamente sus solicitudes y deja archivos huérfanos
 
 ## Estado
-Corregida en código; migración lista, **pendiente de aplicar en producción**
+Corregida: código listo y migración **aplicada en producción** (verificado en la base el 2026-10-13). El código está en la rama de trabajo; su despliegue en el hosting es No determinado
 
 ## Severidad
 Medium

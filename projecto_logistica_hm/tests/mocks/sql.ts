@@ -14,10 +14,14 @@ export function leerMigracion(carpeta: 'migrations' | 'rollback', nombre: string
   return readFileSync(join(SUPABASE, carpeta, nombre), 'utf8');
 }
 
-/** SQL sin comentarios de línea, en minúsculas y con espacios normalizados. */
+/**
+ * SQL sin comentarios de línea, en minúsculas y con espacios normalizados.
+ * Acepta CRLF (checkout en Windows): en JS el `.` no cruza `\r`, así que sin
+ * partir también por `\r` los comentarios quedarían sin quitar.
+ */
 export function normalizarSql(sql: string): string {
   return sql
-    .split('\n')
+    .split(/\r?\n/)
     .map((l) => l.replace(/--.*$/, ''))
     .join(' ')
     .replace(/\s+/g, ' ')

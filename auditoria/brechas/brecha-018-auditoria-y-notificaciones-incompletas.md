@@ -1,7 +1,7 @@
 # Brecha 018 — Auditoría best-effort y sistema de notificaciones sin implementar
 
 ## Estado
-Parcial
+Parcial: notificaciones en la app implementadas (2026-10-14, ver "Avance 2026-10-14"); la auditoría sigue pendiente de la decisión de diseño
 
 ## Severidad
 Low
@@ -70,3 +70,13 @@ Auditoría implementada en dos lugares a medias; desajuste de tipos.
 1. Elegir una sola fuente de auditoría (triggers en BD con el actor vía `set_config`, o la app) y permitir `usuario_id` NULL para acciones de sistema.
 2. Auditar las acciones administrativas sobre usuarios, sucursales, zonas y marcas. Las sucursales y zonas tienen ID numérico: requiere ampliar `entidad_id` a `text` o una columna aparte.
 3. Notificaciones: implementarlas (triggers + UI) o eliminar las funciones `notificar_*`, la tabla y el enum.
+
+## Avance 2026-10-14 — notificaciones
+
+Se resolvió el punto 3 del pendiente: las notificaciones se **implementaron** en la app, sin triggers. Detalle en la sección 30 de `documentacion-sistema-2026-10-07.md`.
+
+- `NotificacionService` inserta en `notificacion` una fila por destinatario en cada cambio de estado, con el actor como `emisor_id` (no depende de `auth.uid()`).
+- Campana en el encabezado con Supabase Realtime y RLS por destinatario.
+- La migración `20261014120000_notificaciones_en_app.sql` (aplicada en producción el 2026-10-14) elimina `notificar_solicitud`, `notificar_solicitud_vehiculo` y `notificar_observacion` (punto 2 de la descripción, en la parte de notificaciones).
+
+Sigue pendiente la parte de auditoría (puntos 1 y 2 del pendiente).

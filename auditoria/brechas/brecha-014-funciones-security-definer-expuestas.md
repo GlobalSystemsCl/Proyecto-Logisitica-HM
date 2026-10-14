@@ -1,7 +1,7 @@
 # Brecha 014 — Funciones SECURITY DEFINER expuestas y `search_path` mutable
 
 ## Estado
-Parcial: migración lista, **pendiente de aplicar**; 2 puntos requieren el código actual de las funciones
+**Corregida** (2026-10-14): las migraciones `20261007120200` y `20261013170000` están aplicadas en producción. Las funciones de rol ya no tratan `activo` NULL como activo y `usuario_tiene_sucursal` solo responde sobre el usuario con sesión. Los 4 avisos 0029 que quedan son intencionales (ver "Solución aplicada (2026-10-14)")
 
 ## Severidad
 Medium
@@ -73,3 +73,23 @@ Exposición menor de información (asignaciones de sucursal) y superficie de ata
 1. `usuario_tiene_sucursal`: un usuario autenticado todavía puede consultar las asignaciones de otro. Crear una versión pública basada en `auth.uid()` y otra interna para las policies.
 2. `es_administrador`, `tiene_rol` y `usuario_activo`: cambiar `COALESCE(v_activo, true)` a `false`.
 3. Después de aplicar: revisar los advisors 0011, 0028 y 0029 y hacer una prueba de humo de cada trigger (crear, cancelar y finalizar una solicitud de prueba).
+
+## Solución aplicada (2026-10-14)
+
+Migración `projecto_logistica_hm/supabase/migrations/20261013170000_brecha_014_funciones_rol_y_sucursal.sql` (+ rollback), aplicada en producción el 2026-10-14 desde el SQL Editor. Cubre los puntos 1 y 2 del pendiente anterior.
+
+### Cambios
+- `usuario.activo` pasa a NOT NULL (antes, los NULL se ponen en `false`).
+- `es_administrador` usa `coalesce(v_activo, false)`; `tiene_rol` y `usuario_activo` exigen `activo is true`.
+- `usuario_tiene_sucursal(p_usuario_id, p_sucursal_id)` conserva su firma (la usan las policies y la app), pero con sesión (`auth.uid()` no nulo) responde `false` si `p_usuario_id` no es el propio usuario. Sin sesión (service_role) se comporta como antes.
+
+### Verificación
+- **Ensayo previo en producción** (revertido), con las policies de la migración `20261013155000` ya aplicadas: los 8 usuarios activos ven exactamente las mismas filas antes y después en `solicitud`, `solicitud_vehiculo`, `observacion`, `traslado_interno`, `traslado_interno_vehiculo` y `usuario`.
+- **Después de aplicar:** `activo` es NOT NULL, ninguna de las 3 funciones contiene `coalesce(…, true)` y `usuario_tiene_sucursal` incluye el control con `auth.uid()`.
+- Test de contrato: `tests/unitarios/migracion-funciones-rol.test.ts`.
+
+### Avisos que quedan (intencionales)
+El advisor 0029 sigue listando `es_administrador`, `tiene_rol`, `usuario_activo` y `usuario_tiene_sucursal` como SECURITY DEFINER ejecutables por `authenticated`. Las policies RLS las necesitan, y desde esta migración solo devuelven información del propio usuario.
+
+### Pendiente
+- Prueba de humo del login de cada rol en la app (responsable).

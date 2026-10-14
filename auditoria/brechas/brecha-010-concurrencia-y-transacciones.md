@@ -1,7 +1,7 @@
 # Brecha 010 — Condiciones de carrera y operaciones multi-paso sin transacción
 
 ## Estado
-Parcial
+Parcial: trigger anti doble reserva y RPC atómica de intentos fallidos **aplicados en producción** (verificado el 2026-10-13); faltan las RPC transaccionales
 
 ## Severidad
 Medium

@@ -29,6 +29,7 @@ export default async function AdminUsuariosPage() {
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
       <PageHeader
+        usuarioId={profile.id}
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}

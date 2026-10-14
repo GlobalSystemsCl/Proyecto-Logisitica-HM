@@ -222,13 +222,13 @@ describe('AuthService', () => {
       admin.results.usuario = [fila({ id: 'u-9' })];
       const res = await AuthService.register(datos());
       expect(res).toEqual({ success: false, error: 'Ya existe un usuario registrado con ese correo.' });
-      expect(server.auth.signUp).not.toHaveBeenCalled();
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
     });
 
     it('should_reject_when_email_format_is_invalid', async () => {
       const res = await AuthService.register(datos({ email: 'correo-sin-arroba' }));
       expect(res.error).toBe('El formato del correo electrónico no es válido.');
-      expect(server.auth.signUp).not.toHaveBeenCalled();
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
       expect(admin.callsTo('usuario')).toHaveLength(0);
     });
 
@@ -236,7 +236,7 @@ describe('AuthService', () => {
       const res = await AuthService.register(datos({ password: 'secret123' }));
       expect(res.success).toBe(false);
       expect(res.error).toMatch(/al menos 10 caracteres/);
-      expect(server.auth.signUp).not.toHaveBeenCalled();
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
     });
 
     it('should_reject_when_password_exceeds_max_length', async () => {
@@ -249,34 +249,34 @@ describe('AuthService', () => {
       expect(res.error).toBe('El nombre contiene caracteres no permitidos.');
     });
 
-    it('should_translate_signup_error_when_email_is_already_in_auth', async () => {
+    it('should_translate_create_error_when_email_is_already_in_auth', async () => {
       admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({ data: { user: null }, error: { message: 'User already registered' } });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: null }, error: { message: 'User already registered' } });
       const res = await AuthService.register(datos());
       expect(res).toEqual({ success: false, error: 'Ya existe un usuario registrado con ese correo.' });
     });
 
     it('should_normalize_email_to_lowercase', async () => {
       admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({ data: { user: authUser() }, error: null });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       await AuthService.register(datos({ nombre: ' Juan ', apellido: ' Pérez ', email: '  USER@Test.COM ' }));
       expect(admin.callsTo('usuario')).toContainEqual(['eq', 'email', 'user@test.com']);
-      expect(server.auth.signUp).toHaveBeenCalledWith(
+      expect(admin.auth.admin.createUser).toHaveBeenCalledWith(
         expect.objectContaining({ email: 'user@test.com', password: CLAVE_VALIDA })
       );
     });
 
-    it('should_never_send_role_or_approval_in_signup_metadata', async () => {
+    it('should_never_send_role_or_approval_in_user_metadata', async () => {
       admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({ data: { user: authUser() }, error: null });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       await AuthService.register(datos());
-      const metadata = server.auth.signUp.mock.calls[0][0].options.data;
+      const metadata = admin.auth.admin.createUser.mock.calls[0][0].user_metadata;
       expect(metadata).toEqual({ nombre: 'Juan', apellido: 'Pérez', sucursal_id: null });
     });
 
     it('should_create_profile_as_inactive_pending_ejecutivo', async () => {
       admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({ data: { user: authUser() }, error: null });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       const res = await AuthService.register(datos());
       expect(res).toEqual({ success: true });
       const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
@@ -291,12 +291,12 @@ describe('AuthService', () => {
     it('should_send_sucursal_to_the_trigger_and_upsert', async () => {
       admin.results.usuario = [{ data: null, error: null }];
       admin.results.sucursal = [fila({ id: 5 })];
-      server.auth.signUp.mockResolvedValue({ data: { user: authUser() }, error: null });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
 
       const res = await AuthService.register(datos({ sucursal_id: 5 }));
 
       expect(res.success).toBe(true);
-      expect(server.auth.signUp.mock.calls[0][0].options.data).toMatchObject({ sucursal_id: 5 });
+      expect(admin.auth.admin.createUser.mock.calls[0][0].user_metadata).toMatchObject({ sucursal_id: 5 });
       expect(admin.callsTo('sucursal')).toContainEqual(['eq', 'id', 5]);
       const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
       expect(upsert?.[1]).toMatchObject({ sucursal_id: 5 });
@@ -307,7 +307,7 @@ describe('AuthService', () => {
       admin.results.sucursal = [fila(null)];
       const res = await AuthService.register(datos({ sucursal_id: 99 }));
       expect(res).toEqual({ success: false, error: 'La sucursal seleccionada no es válida.' });
-      expect(server.auth.signUp).not.toHaveBeenCalled();
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
     });
 
     it('should_reject_admin_principal_email_on_self_registration', async () => {
@@ -316,37 +316,52 @@ describe('AuthService', () => {
         success: false,
         error: 'El correo del Administrador Principal no puede registrarse de forma autónoma.',
       });
-      expect(server.auth.signUp).not.toHaveBeenCalled();
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
     });
 
-    it('should_confirm_email_on_registration', async () => {
+    it('should_create_confirmed_account_without_sending_signup_email', async () => {
       admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({ data: { user: authUser() }, error: null });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       await AuthService.register(datos());
-      expect(admin.auth.admin.updateUserById).toHaveBeenCalledWith('u-1', { email_confirm: true });
+      expect(admin.auth.admin.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({ email: 'user@test.com', email_confirm: true })
+      );
+      // signUp disparaba el correo de confirmación de Supabase (límite por hora).
+      expect(server.auth.signUp).not.toHaveBeenCalled();
+      expect(admin.auth.admin.updateUserById).not.toHaveBeenCalled();
+    });
+
+    it('should_translate_email_exists_code_when_creating_account', async () => {
+      admin.results.usuario = [{ data: null, error: null }];
+      admin.auth.admin.createUser.mockResolvedValue({
+        data: { user: null },
+        error: { message: 'A user with this email address has already been registered', code: 'email_exists' },
+      });
+      const res = await AuthService.register(datos());
+      expect(res).toEqual({ success: false, error: 'Ya existe un usuario registrado con ese correo.' });
     });
 
     it('should_return_error_when_profile_upsert_fails', async () => {
       admin.results.usuario = [{ data: null, error: null }, { data: null, error: { message: 'column x' } }];
-      server.auth.signUp.mockResolvedValue({ data: { user: authUser() }, error: null });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       const res = await AuthService.register(datos());
       expect(res.success).toBe(false);
       expect(res.error).toMatch(/^No se pudo completar el registro/);
       expect(res.error).not.toContain('column');
     });
 
-    it('should_return_generic_error_when_sign_up_fails', async () => {
+    it('should_return_generic_error_when_auth_user_creation_fails', async () => {
       admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({ data: { user: null }, error: { message: 'smtp down at 10.0.0.1' } });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: null }, error: { message: 'smtp down at 10.0.0.1' } });
       const res = await AuthService.register(datos());
       expect(res.success).toBe(false);
       expect(res.error).toMatch(/^No se pudo crear la cuenta\./);
       expect(res.error).not.toContain('10.0.0.1');
     });
 
-    it('should_return_error_when_sign_up_returns_no_user', async () => {
+    it('should_return_error_when_auth_returns_no_user', async () => {
       admin.results.usuario = [{ data: null, error: null }];
-      server.auth.signUp.mockResolvedValue({ data: { user: null }, error: null });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: null }, error: null });
       const res = await AuthService.register(datos());
       expect(res.error).toBe('No se pudo crear la cuenta. Intenta nuevamente.');
     });

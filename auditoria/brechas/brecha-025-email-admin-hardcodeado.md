@@ -1,7 +1,7 @@
 # Brecha 025 — Email del administrador principal hardcodeado en código y en la base de datos
 
 ## Estado
-Corregida en código; trigger corregido en la migración **pendiente de aplicar**
+Corregida en código; trigger corregido en la migración, **aplicada en producción** (verificado el 2026-10-13). Falta definir `ADMIN_PRINCIPAL_EMAIL` en el hosting
 
 ## Severidad
 Informational
