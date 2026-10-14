@@ -92,8 +92,8 @@ Como las migraciones ya están en la base, el orden "migraciones antes que códi
 |---|---|
 | ~~011~~ | **Resuelta el 2026-10-13** (ver brecha 011) |
 | 010 | RPCs transaccionales para crear solicitud, crear traslado y reordenar la cola |
-| 014 | `usuario_tiene_sucursal` basada en `auth.uid()`; `COALESCE(activo, false)` en las funciones de rol |
-| 015 | Migración base con `supabase db pull` y tipos generados |
+| ~~014~~ | **Resuelta el 2026-10-14** (migración `20261013170000`, ver brecha 014) |
+| 015 | Migración base con `supabase db pull` y tipos generados (el historial quedó alineado el 2026-10-14) |
 | 017 | Tests de RLS, triggers e integración con Supabase local; CI |
 | 018 | Decidir la fuente única de auditoría; auditar acciones de admin; notificaciones |
 | 019 | Pasar la CSP a modo enforce con nonces |

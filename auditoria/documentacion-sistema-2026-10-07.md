@@ -560,8 +560,8 @@ Con los volúmenes actuales (13 solicitudes, 2.261 vehículos) no hay problemas 
 - Variables `BREVO_SMTP_*` sin uso; claves legacy y nuevas de Supabase coexistiendo.
 - Dependencia `claude` sin uso.
 - Documentación de testing desactualizada (`tests/documentacion_testing.md` y `tests/plan_maestro_testing.md` describen la suite de septiembre); script `test:integration` roto.
-- Historial de migraciones de Supabase desalineado con el repo: las aplicadas desde el SQL Editor no quedan registradas (brecha 015, avance 2026-10-13).
-- Sucursales de prueba `TEST-SUC-…` (ids 407 y 408) en producción, restos de la suite de integración antigua.
+- ~~Historial de migraciones de Supabase desalineado con el repo.~~ **Resuelto 2026-10-14** (brecha 015): las 17 migraciones están registradas.
+- ~~Sucursales de prueba `TEST-SUC-…` (ids 407 y 408) en producción.~~ **Resuelto 2026-10-14:** borradas con `02_limpiar_sucursales_test.sql`, junto con sus 2 solicitudes; los 2 vehículos BAI que reservaban volvieron a estar disponibles.
 - Componentes y services muy grandes.
 - `src/middleware.ts` usa la convención obsoleta de Next 16 (renombrada a `proxy.ts`). Funciona; migrar con el codemod oficial.
 - La lista de sucursales de `/registro` se genera en el build (página estática): una sucursal nueva no aparece hasta el siguiente despliegue.
@@ -592,7 +592,7 @@ Notas de la fase de corrección:
 
 **Actualizado el 2026-10-14** con verificación directa en la base de producción (consultas de catálogo de solo lectura). Los cambios del 2026-10-13 sobre datos de prueba y asignación de sucursales por rol están en la sección 29.
 
-- **Base de datos:** de las **17 migraciones** de `projecto_logistica_hm/supabase/migrations/` están aplicadas **16**: las 7 de la auditoría, las 3 de los requisitos, la corrección de R8, las 4 de la brecha 011 y la de asignación de sucursales y zonas por rol (`20261013155000`, con el script `03_asignar_sucursales_sin_jefe.sql`). Falta aplicar `20261013170000` (brecha 014) y, después, los scripts `01_alinear_historial_migraciones.sql` y `02_limpiar_sucursales_test.sql`. Las brechas 001 y 002 (escalamiento a administrador) están cerradas en la base.
+- **Base de datos:** de las **17 migraciones** de `projecto_logistica_hm/supabase/migrations/` están **todas aplicadas y registradas en el historial de Supabase**: las 7 de la auditoría, las 3 de los requisitos, la corrección de R8, las 4 de la brecha 011 y la de asignación de sucursales y zonas por rol (`20261013155000`, con el script `03_asignar_sucursales_sin_jefe.sql`) y la de la brecha 014 (`20261013170000`, aplicada el 2026-10-14). También se ejecutaron los scripts `01_alinear_historial_migraciones.sql` y `02_limpiar_sucursales_test.sql`. Producción queda con 4 sucursales y 0 diferencias en los contadores de slots. Las brechas 001 y 002 (escalamiento a administrador) están cerradas en la base.
 - **Código:** las correcciones de la auditoría y los requisitos (fases 1 a 6) están integrados en las ramas `joaco-ciclo-2` y `feature/requisitos-2026-10`. Si esa versión está **desplegada en el hosting: No determinado**. Hasta desplegarla, sigue vigente la brecha 027 (Next.js vulnerable) en lo que esté publicado.
 - **Verificación local** (2026-10-14): 60 archivos y 972 tests en verde, `tsc --noEmit` sin errores y ESLint sin errores (6 advertencias previas).
 - Pasos pendientes del responsable: [`plan-despliegue-correcciones-2026-10-07.md`](plan-despliegue-correcciones-2026-10-07.md).
@@ -613,8 +613,8 @@ Notas de la fase de corrección:
 | 011 Slots desincronizados | Medium | **Corregida · aplicada en producción el 2026-10-13 (0 diferencias)** |
 | 012 Bloqueo de login / enumeración | Medium | Parcial · RPC aplicada; falta configuración en el dashboard de Supabase |
 | 013 Contraseñas temporales | Medium | Corregida |
-| 014 Funciones SECURITY DEFINER | Medium | Parcial · migración inicial aplicada; `20261013170000` (activo NULL ya no cuenta como activo, `usuario_tiene_sucursal` con `auth.uid()`) lista y ensayada en producción con RLS idénticas para los 8 usuarios activos, **pendiente de aplicar** |
-| 015 Esquema sin migraciones | Medium | Parcial · 17 migraciones versionadas (16 aplicadas); script para alinear el historial de Supabase listo, pendiente de ejecutar; falta la migración base |
+| 014 Funciones SECURITY DEFINER | Medium | **Corregida · aplicada en producción el 2026-10-14** (RLS idénticas para los 8 usuarios activos en el ensayo previo) |
+| 015 Esquema sin migraciones | Medium | Parcial · 17 migraciones versionadas, aplicadas y registradas en el historial de Supabase; falta la migración base |
 | 016 Borrado en cascada de sucursal | Medium | **Corregida · migración aplicada en producción** |
 | 017 Cobertura de tests | Medium | Parcial (unitarios, actions y contrato de migraciones; faltan RLS, triggers e integración) |
 | 018 Auditoría y notificaciones | Low | Parcial (requiere decisión de diseño; R7 agregó correos, no notificaciones internas) |
@@ -652,6 +652,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-13 | Verificación en producción: las 7 migraciones de la auditoría y las 3 de requisitos ya estaban aplicadas. Corrección de R8 (slots al cancelar un traslado) y de la brecha 011, aplicadas en producción. Actualizadas las secciones 4–5, 7–8, 12, 14, 16–18, 20, 25 y 27 (requisitos implementados), y las brechas 001–003, 005, 010–012, 014–016, 021, 024 y 025 | Claude (asistido) |
 | 2026-10-13 | Datos de prueba en producción, panel de priorizaciones del dashboard solo informativo y corrección de la asignación de sucursales y zonas por rol (migración `20261013155000`). Secciones 4, 7, 8, 9, 12, 15, 16 y nueva sección 29 | Claude (asistido) |
 | 2026-10-14 | Integración de las dos actualizaciones del 2026-10-13 (el merge había descartado la primera). La migración de asignación se renombró de `20261013150000` a `20261013155000` porque repetía la versión de `brecha_011_trigger_vehiculos`; el script de asignación pasó a `03_`. Estado de las brechas 014 y 015 en la sección 27 | Claude (asistido) |
+| 2026-10-14 | Aplicadas en producción la migración de la brecha 014 y los scripts de historial (brecha 015) y de limpieza TEST-SUC. Secciones 25, 27 y 29.1; brechas 014 y 015 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -686,7 +687,7 @@ Rama `feature/requisitos-2026-10`.
 
 **Después de la migración:** el script `supabase/scripts/03_asignar_sucursales_sin_jefe.sql` deja Valparaíso (9), Santiago Centro (8) y las sucursales de prueba 407 y 408 a cargo de Joaquin Lepe, por decisión del responsable. Concón (7) queda con su jefe de base.
 
-**Estado en producción (verificado 2026-10-13):** migración y script aplicados. Las 6 sucursales tienen jefe de local: 6, 8, 9, 407 y 408 → Joaquin Lepe; 7 → maickol concon.
+**Estado en producción (verificado 2026-10-13):** migración y script aplicados. Las 6 sucursales tienen jefe de local: 6, 8, 9, 407 y 408 → Joaquin Lepe; 7 → maickol concon. El 2026-10-14 se borraron las sucursales de prueba 407 y 408 (quedan 4).
 
 **Pendiente:**
 - Los usuarios de logística sin zona (por ejemplo "flowcode soluciones") y los ejecutivos, jefes o logística sin sucursal base deberán completarlas la próxima vez que se editen.

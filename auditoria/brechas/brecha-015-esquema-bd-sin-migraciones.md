@@ -1,7 +1,7 @@
 # Brecha 015 — Esquema de base de datos sin migraciones versionadas
 
 ## Estado
-Parcial: 15 migraciones versionadas en `supabase/migrations/` y todas aplicadas en producción (2026-10-13); falta la migración base del esquema y alinear el historial de Supabase (ver "Avance 2026-10-13")
+Parcial: 17 migraciones versionadas en `supabase/migrations/`, todas aplicadas en producción y **registradas en el historial de Supabase** (2026-10-14). Falta la migración base del esquema (ver "Avance 2026-10-14")
 
 ## Severidad
 Medium
@@ -88,3 +88,17 @@ Se eliminaron `projecto_logistica_hm/migraciones/` y `migraciones.rar`, copias e
 1. Migración base con `supabase db pull`.
 2. Alinear `schema_migrations` con los archivos del repo (`supabase migration repair --status applied <versión>` por cada archivo ya aplicado).
 3. Desde ahí, aplicar todo cambio con la CLI o con el conector para que quede registrado.
+
+## Avance 2026-10-14
+
+### Historial alineado
+Se ejecutó `projecto_logistica_hm/supabase/scripts/01_alinear_historial_migraciones.sql` en el SQL Editor. `supabase_migrations.schema_migrations` tiene ahora **17 filas** (de `20261007120000` a `20261013170000`), con la misma versión y nombre que los archivos del repo. Se borraron los 2 registros del conector con versiones distintas (`20261013144915` y `20261013152109`). Con esto, `supabase db push` ya no intentaría repetir migraciones aplicadas.
+
+Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.
+
+### Versión duplicada corregida
+La migración de asignación de sucursales y zonas por rol se creó con la versión `20261013150000`, la misma de `brecha_011_trigger_vehiculos`. Supabase exige versiones únicas, así que se renombró a `20261013155000` sin cambiar el contenido. Ya estaba aplicada.
+
+### Pendiente
+1. Migración base con `supabase db pull` (requiere la contraseña de la BD y Docker).
+2. Desde ahora, aplicar cada cambio con la CLI (`supabase db push`) para que quede registrado; si se aplica desde el SQL Editor, agregarlo al script de historial en la misma tarea.

@@ -67,7 +67,7 @@ Se aplicó con la versión `20261013150000`, la misma de `brecha_011_trigger_veh
 
 ## Historial de migraciones (brecha 015)
 
-Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. Después de aplicar la 17, ejecutar una vez `scripts/01_alinear_historial_migraciones.sql`: registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.
+Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. **Ejecutado el 2026-10-14**, junto con `scripts/02_limpiar_sucursales_test.sql`: las 17 migraciones están aplicadas y registradas. `scripts/01_alinear_historial_migraciones.sql` registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.
 
 Desde ahí, aplicar todo cambio con la CLI (`supabase db push`) o actualizar el script en la misma tarea.
 
