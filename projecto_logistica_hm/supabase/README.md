@@ -71,6 +71,12 @@ Se aplicó con la versión `20261013150000`, la misma de `brecha_011_trigger_veh
 |---|---|---|
 | 18 | `20261014120000_notificaciones_en_app.sql` | Bajo: agrega tipos al enum `tipo_notificacion`, índices de `notificacion`, publica la tabla en Realtime y elimina 3 funciones de trigger antiguas sin uso (`notificar_*`). Aplicada y registrada en el historial el 2026-10-14 |
 
+## Quién inició la solicitud
+
+| # | Archivo | Riesgo |
+|---|---|---|
+| 19 | `20261014130000_solicitud_creado_por.sql` | Bajo: agrega `solicitud.creado_por` y la completa desde la auditoría. **Aplicarla antes de desplegar el código**: la app la lee en todas las listas de solicitudes. Después, volver a ejecutar `scripts/01_alinear_historial_migraciones.sql` |
+
 ## Historial de migraciones (brecha 015)
 
 Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. **Ejecutado el 2026-10-14**, junto con `scripts/02_limpiar_sucursales_test.sql`: las 17 migraciones están aplicadas y registradas. `scripts/01_alinear_historial_migraciones.sql` registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.

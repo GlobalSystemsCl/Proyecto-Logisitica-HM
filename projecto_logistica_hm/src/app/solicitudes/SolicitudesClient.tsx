@@ -54,6 +54,7 @@ import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import BadgeEvento from '@/components/BadgeEvento';
 import PanelEjecutivo from '@/components/PanelEjecutivo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 
 /**
  * Nomenclatura de negocio para los estados.
@@ -158,16 +159,6 @@ interface SolicitudesClientProps {
   grupoInicial?: GrupoFiltroSolicitud;
   /** Solicitud cuyo detalle se abre al entrar (`?solicitud=` desde una notificación). */
   solicitudInicialId?: string | null;
-}
-
-function getEncargadoId(sol: SolicitudLista): string | null {
-  return sol.ejecutivo_id || sol.jefe_local_id || null;
-}
-
-function getEncargadoNombre(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
-  if (sol.jefe_local_id) return sol.jefe_local_nombre;
-  return null;
 }
 
 export default function SolicitudesClient({
@@ -595,9 +586,9 @@ export default function SolicitudesClient({
     try {
       const result = await asignarEncargadoAction(sol.id);
       if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'No se pudo asignar el encargado.' });
+        setFeedback({ type: 'error', message: result.error || 'No se pudo asignar el responsable de Logística.' });
       } else {
-        setFeedback({ type: 'success', message: result.message || 'Encargado asignado.' });
+        setFeedback({ type: 'success', message: result.message || 'Responsable de Logística asignado.' });
       }
     } finally {
       setIsSubmitting(false);
@@ -836,7 +827,7 @@ export default function SolicitudesClient({
                 <th className="py-3.5 px-4">Solicitud</th>
                 <th className="py-3.5 px-4">Destino</th>
                 <th className="py-3.5 px-4">Estado</th>
-                <th className="py-3.5 px-4">Encargado</th>
+                <th className="py-3.5 px-4">Iniciada por</th>
                 <th className="py-3.5 px-4">Tipo</th>
                 <th className="py-3.5 px-4">Creación</th>
                 <th className="py-3.5 px-4">{ETIQUETA_FECHA_LIMITE}</th>
@@ -909,8 +900,8 @@ export default function SolicitudesClient({
                       </td>
 
                       <td className="py-3.5 px-4 text-xs text-neutral-600">
-                        {getEncargadoNombre(sol) ? (
-                          <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted />
+                        {iniciadorNombre(sol) ? (
+                          <UsuarioNombreBoton usuarioId={iniciadorId(sol)} nombre={iniciadorNombre(sol)} muted />
                         ) : (
                           '—'
                         )}
@@ -950,7 +941,7 @@ export default function SolicitudesClient({
                             <button
                               onClick={() => handleAsignarEncargado(sol)}
                               disabled={isSubmitting}
-                              title="Asignarme como encargado de la solicitud"
+                              title="Asignarme como responsable de Logística"
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
                             >
                               <UserCheck className="w-3.5 h-3.5" /> Asignarme

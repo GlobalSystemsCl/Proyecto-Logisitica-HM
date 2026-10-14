@@ -9,8 +9,7 @@ para probar cada rol desde el frontend sin crear los casos a mano.
 | `02_limpiar_escenarios.sql` | Borra solo los datos de prueba y deja los vehículos y las colas como estaban |
 | `03_validar_escenarios.sql` | Controles de integridad, historial, fechas, colas y RLS por usuario. Solo lectura (termina en `ROLLBACK`) |
 | `04_poblar_100_solicitudes.sql` | Genera 100 solicitudes más (S1001–S1100) y 6 traslados (T1001–T1006) con el mismo motor, repartidas en todos los estados. Convive con el 01; el 02 y el 03 cubren ambos |
-| `05_poblar_notificaciones.sql` | Crea las notificaciones de la campana de los últimos 14 días a partir de la historia de 01 y 04, con los mismos destinatarios y textos que la app (`lib/notificaciones-app.ts`). Las de más de 2 días quedan leídas. Ejecutar después de 01 y 04 |
-| `PROMPT_PRUEBA_FLUJOS.md` | Guion (prompt) para probar todos los flujos, roles, límites y notificaciones con estos datos |
+| `05_poblar_10_priorizadas.sql` | 10 solicitudes **priorizadas** creadas hoy (S1101–S1110) en Valparaíso, 15 Norte y Concón, para probar el módulo de Logística (zona 1). El 02 también las borra |
 
 ## Cómo se ejecuta
 
@@ -21,10 +20,8 @@ no queda nada a medias.
 - **Poblar:** `01_poblar_escenarios.sql`.
 - **Regenerar con fechas de hoy:** `02_limpiar_escenarios.sql` y después `01_poblar_escenarios.sql`.
   Las fechas son relativas al día de ejecución (hora de Chile).
-- **Validar:** `03_validar_escenarios.sql`. Todas las filas deben tener `ok = true`,
-  salvo la informativa de slots (ver limitaciones).
-- **Limpiar:** `02_limpiar_escenarios.sql` (también borra las notificaciones de prueba y las que la app haya creado sobre solicitudes de prueba).
-- **Regenerar todo:** `02` → `01` → `04` → `05`. Último poblamiento: 2026-10-14 (130 solicitudes, 10 traslados, 513 notificaciones).
+- **Validar:** `03_validar_escenarios.sql`. Todas las filas deben tener `ok = true`.
+- **Limpiar:** `02_limpiar_escenarios.sql`.
 
 > **Atención:** los usuarios son cuentas reales con correos reales. El poblamiento
 > no envía correos porque escribe directo en la BD. Pero si se avanza una
@@ -65,7 +62,6 @@ El id de cada fila creada empieza con `5eed`:
 | `5eed0005` | `insistencia` |
 | `5eed0006-0000-4000-8000-00000000000N` | `traslado_interno` |
 | `5eed0007` | `traslado_interno_vehiculo` |
-| `5eed0008` | `notificacion` |
 
 ### Qué hace la limpieza
 
@@ -74,9 +70,9 @@ El id de cada fila creada empieza con `5eed`:
 2. Devuelve los vehículos del stock a "sin ubicación", salvo que una solicitud o un
    traslado real los esté usando.
 3. Devuelve el vehículo del traslado recepcionado a su sucursal de origen.
-4. Descuenta las reservas de slots de los traslados que seguían abiertos.
+4. Descuenta las reservas de slots de los traslados que seguían abiertos (redundante desde la brecha 011: los triggers de borrado ya recalculan).
 5. Compacta las colas de prioridad.
-6. Recalcula `slots_ocupados` de las sucursales tocadas con `fn_recalcular_slots_ocupados`.
+6. Recalcula ambos contadores de slots de las sucursales tocadas con `fn_recalcular_slots_ocupados`, que delega en `fn_recalcular_slots_sucursal`.
 
 ## Escenarios
 
@@ -134,11 +130,9 @@ Sucursales: 6 = 15 NORTE, 7 = CONCON, 8 = SANTIAGO CENTRO, 9 = VALPARAISO.
    - `createSolicitud` no la guarda y el trigger solo la sella en un `UPDATE`.
    - Afecta a S05, S08, S09, S11, S14, S16, S21, S23 y S27. El poblamiento reproduce este comportamiento real.
    - Consecuencia: la reportería de Logística no puede medir para ellas el tiempo de respuesta ni la antigüedad.
-2. **Slots desfasados (brecha 011).**
-   - El trigger de reserva de traslados suma a `slots_ocupados`, pero `fn_recalcular_slots_ocupados` no cuenta esas reservas.
-   - `fn_cancelar_traslado_interno` no descuenta los ocupados.
-   - Por eso el control informativo muestra +1 ocupado en 15 Norte, Concón y Valparaíso. La app produce exactamente lo mismo.
-   - Las diferencias de Concón (reservados) y Santiago Centro (ocupados) ya existían antes del poblamiento.
+2. ~~**Slots desfasados (brecha 011).**~~ **Resuelto el 2026-10-13.**
+   - Antes, el trigger de reserva de traslados sumaba a `slots_ocupados` sin que `fn_recalcular_slots_ocupados` contara esas reservas, y `fn_cancelar_traslado_interno` no descontaba los ocupados.
+   - Ahora `fn_recalcular_slots_sucursal` es la única fuente de verdad (incluye los traslados) y el control informativo de slots del `03` debe quedar en `ok = true`.
 3. **La RLS de `solicitud` es más estrecha que la regla de la app para el jefe de local y Logística** (brecha 005, pendiente). No afecta a la app, que lee con service_role.
 4. **Logística por zonas:**
    - Solo 1 de los 3 usuarios de Logística tiene zona asignada.
@@ -152,5 +146,4 @@ Sucursales: 6 = 15 NORTE, 7 = CONCON, 8 = SANTIAGO CENTRO, 9 = VALPARAISO.
 7. **Asignar un encargado desde `priorizada` no limpia `posicion_prioridad`.**
    - La solicitud queda con un número de cola huérfano hasta la siguiente renumeración.
    - Los escenarios asignan desde `aprobada` para no dejar la cola en ese estado intermedio.
-8. **No se generan documentos** (requieren archivos en Storage). Las notificaciones de la campana las crea `05`; no se envían correos.
-9. **Todas las solicitudes de prueba muestran el mismo código `#5EED0001`**: la app muestra los 8 primeros caracteres del id y todas comparten el prefijo `5eed0001-`. La búsqueda por N° en el calendario y el código de las notificaciones no las distinguen.
+8. **No se generan notificaciones** (la tabla `notificacion` no se usa; los avisos son correos) **ni documentos** (requieren archivos en Storage).

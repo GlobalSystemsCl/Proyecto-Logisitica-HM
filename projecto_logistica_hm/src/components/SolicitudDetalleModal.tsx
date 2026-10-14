@@ -49,7 +49,7 @@ import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
-import BadgeEvento from '@/components/BadgeEvento';
+import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente de aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -92,16 +92,6 @@ function formatTamano(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getEncargadoId(sol: SolicitudLista): string | null {
-  return sol.ejecutivo_id || sol.jefe_local_id || null;
-}
-
-function getEncargadoNombre(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
-  if (sol.jefe_local_id) return sol.jefe_local_nombre;
-  return null;
-}
-
 function getResponsableId(sol: SolicitudLista): string | null {
   if (sol.logistica_id) return sol.logistica_id;
   if (sol.jefe_local_id) return sol.jefe_local_id;
@@ -141,7 +131,6 @@ function getTimelineInfo(accion: string): { label: string; dotClass: string; tex
     observacion: { label: 'Observación', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     delegacion: { label: 'Delegada', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
     subir_documento: { label: 'Documento subido', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
-    creacion: { label: 'Solicitud creada', dotClass: 'border-2 border-neutral-900 bg-white', textClass: 'text-neutral-900' },
     eliminar_documento: { label: 'Documento eliminado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
   };
   return map[accion] || { label: accion, dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' };
@@ -203,46 +192,9 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
       return 'Documento eliminado';
     case 'delegacion':
       return 'El Jefe de Local delego la solicitud en un Ejecutivo';
-    case 'creacion':
-      return (a.valor_nuevo as { descripcion?: string } | null)?.descripcion ?? 'Solicitud creada';
     default:
       return null;
   }
-}
-
-/**
- * La creación no queda en la auditoría de la solicitud: se arma una entrada
- * con la fecha de creación y su autor para que el historial parta desde ahí.
- * Si el Jefe de Local la creó y la delegó, el autor es quien registró la
- * delegación; si no, el Ejecutivo y, en su defecto, el Jefe de Local.
- */
-function entradaCreacion(sol: SolicitudLista, auditoria: AuditoriaEntry[]): AuditoriaEntry | null {
-  if (auditoria.some((a) => a.accion === 'crear' || a.accion === 'solicitud_creada')) return null;
-  const delegacion = auditoria.find((a) => a.accion === 'delegacion');
-  const autor = delegacion
-    ? { id: delegacion.usuario_id, nombre: delegacion.usuario_nombre }
-    : sol.ejecutivo_id
-      ? { id: sol.ejecutivo_id, nombre: sol.ejecutivo_nombre }
-      : sol.jefe_local_id
-        ? { id: sol.jefe_local_id, nombre: sol.jefe_local_nombre }
-        : null;
-  const porEjecutivo = !delegacion && Boolean(sol.ejecutivo_id);
-  const descripcion = porEjecutivo
-    ? 'Solicitud creada y enviada a aprobación del Jefe de Local'
-    : delegacion
-      ? `Solicitud creada por el Jefe de Local y asignada a ${sol.ejecutivo_nombre ?? 'un Ejecutivo'}`
-      : 'Solicitud creada por el Jefe de Local (queda aprobada)';
-  return {
-    id: `creacion-${sol.id}`,
-    usuario_id: autor?.id ?? '',
-    usuario_nombre: autor?.nombre ?? 'Usuario no disponible',
-    entidad: 'solicitud',
-    entidad_id: sol.id,
-    accion: 'creacion',
-    valor_anterior: null,
-    valor_nuevo: { descripcion },
-    created_at: sol.fecha_creacion,
-  } as AuditoriaEntry;
 }
 
 function getUserRoleFromSolicitud(userId: string, sol: SolicitudLista): string {
@@ -322,13 +274,6 @@ export default function SolicitudDetalleModal({
     load();
     return () => { cancelled = true; };
   }, [solicitud]);
-
-  // Más reciente primero; la creación siempre cierra la línea de tiempo.
-  const creacion = entradaCreacion(solicitud, auditoria);
-  const historial = [
-    ...[...auditoria].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
-    ...(creacion ? [creacion] : []),
-  ];
 
   const vehiculosDisponiblesParaAgregar = vehiculosInventario
     .filter((v) => !v.reservado_en_activa)
@@ -501,7 +446,6 @@ export default function SolicitudDetalleModal({
             <span className={`inline-flex items-center px-3.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${estadoConfig[solicitud.estado].color}`}>
               {estadoConfig[solicitud.estado].label}
             </span>
-            {solicitud.tipo_solicitud === 'evento' && <BadgeEvento tamano="lg" />}
           </div>
           <p className="text-sm text-neutral-500">
             {solicitud.tipo_solicitud === 'evento' ? 'Evento' : 'Traslado entre locales'} · Creada el {formatFecha(solicitud.fecha_creacion)}
@@ -642,13 +586,13 @@ export default function SolicitudDetalleModal({
                 <div className="w-px bg-neutral-200 self-stretch" />
               </>
             )}
-            {/* Encargado de solicitud (logistica_id reusado) */}
+            {/* Responsable de Logística (logistica_id) */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
                 <UserCheck className="w-5 h-5 text-sky-700" />
               </div>
               <div>
-                <p className="text-[11px] text-neutral-400 font-medium">Encargado de solicitud</p>
+                <p className="text-[11px] text-neutral-400 font-medium">Responsable de Logística</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.logistica_nombre ? (
                     <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
@@ -762,10 +706,10 @@ export default function SolicitudDetalleModal({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Iniciada por</p>
                   <p className="text-sm text-neutral-900 font-medium">
-                    {getEncargadoNombre(solicitud) ? (
-                      <UsuarioNombreBoton usuarioId={getEncargadoId(solicitud)} nombre={getEncargadoNombre(solicitud)} />
+                    {iniciadorNombre(solicitud) ? (
+                      <UsuarioNombreBoton usuarioId={iniciadorId(solicitud)} nombre={iniciadorNombre(solicitud)} />
                     ) : (
                       <span className="text-neutral-400 italic">Sin asignar</span>
                     )}
@@ -782,7 +726,7 @@ export default function SolicitudDetalleModal({
                   </p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado de solicitud</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Responsable de Logística</p>
                   <p className="text-sm text-neutral-900 font-medium">
                     {solicitud.logistica_nombre ? (
                       <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
@@ -869,11 +813,11 @@ export default function SolicitudDetalleModal({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Timeline */}
               <div className="lg:col-span-2">
-                {historial.length === 0 ? (
+                {auditoria.length === 0 ? (
                   <p className="text-sm text-neutral-400 italic">Sin registros de auditoría.</p>
                 ) : (
                   <div className="relative">
-                    {historial.map((a, i, arr) => {
+                    {[...auditoria].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((a, i, arr) => {
                       const tl = getTimelineInfo(a.accion);
                       const desc = getTimelineDescription(a);
                       const isLast = i === arr.length - 1;
@@ -890,9 +834,8 @@ export default function SolicitudDetalleModal({
                               <span className={`text-sm font-bold ${tl.textClass}`}>{tl.label}</span>
                             </div>
                             <p className="text-sm text-neutral-700">
-                              {a.accion === 'creacion' && <span className="text-neutral-500">Creada por </span>}
                               <UsuarioNombreBoton
-                                usuarioId={a.usuario_id || null}
+                                usuarioId={a.usuario_id}
                                 nombre={a.usuario_nombre}
                                 muted={false}
                               />

@@ -80,6 +80,7 @@ interface SolicitudRawRow {
   ejecutivo_id: string | null;
   jefe_local_id: string | null;
   logistica_id: string | null;
+  creado_por: string | null;
   fecha_creacion: string | null;
   fecha_tentativa_despacho: string | null;
   fecha_despacho: string | null;
@@ -97,6 +98,7 @@ interface SolicitudRawRow {
   ejecutivo: { nombre: string; apellido: string } | null;
   jefe: { nombre: string; apellido: string } | null;
   logistica: { nombre: string; apellido: string } | null;
+  creador: { nombre: string; apellido: string } | null;
   solicitud_vehiculo: Array<{
     id: string;
     disponibilidad: DisponibilidadVehiculo;
@@ -116,7 +118,7 @@ function persona(p: { nombre: string; apellido: string } | null): string | null 
 }
 
 const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
-  ejecutivo_id, jefe_local_id, logistica_id,
+  ejecutivo_id, jefe_local_id, logistica_id, creado_por,
   fecha_creacion, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_limite, motivo_cancelacion,
   fecha_confirmacion, fecha_inicio_transito, fecha_recepcion, fecha_entrega_cliente,
   direccion_evento, titulo_evento,
@@ -125,6 +127,7 @@ const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud
   ejecutivo:ejecutivo_id(nombre, apellido),
   jefe:jefe_local_id(nombre, apellido),
   logistica:logistica_id(nombre, apellido),
+  creador:creado_por(nombre, apellido),
   solicitud_vehiculo(id, disponibilidad, vehiculo(chasis, patente, marca, modelo, anio, color))`;
 
 function mapRow(row: SolicitudRawRow): SolicitudLista {
@@ -143,6 +146,8 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
     jefe_local_nombre: persona(row.jefe),
     logistica_id: row.logistica_id,
     logistica_nombre: persona(row.logistica),
+    creado_por: row.creado_por ?? null,
+    creado_por_nombre: persona(row.creador),
     fecha_creacion: row.fecha_creacion,
     fecha_tentativa_despacho: row.fecha_tentativa_despacho,
     fecha_despacho: row.fecha_despacho,
@@ -169,18 +174,6 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
         color: sv.vehiculo!.color,
       })),
   };
-}
-
-export function getEncargadoNombre(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
-  if (sol.jefe_local_id) return sol.jefe_local_nombre;
-  return null;
-}
-
-export function getEncargadoId(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_id) return sol.ejecutivo_id;
-  if (sol.jefe_local_id) return sol.jefe_local_id;
-  return null;
 }
 
 export interface SolicitudMinima {
@@ -681,6 +674,8 @@ export class SolicitudesService {
         tipo_solicitud: input.tipo_solicitud,
         fecha_limite: input.fecha_limite?.trim() || null,
         estado: input.estado || 'pendiente_aprobacion',
+        // Quién la inicia (UI: "Iniciada por"); ejecutivo_id puede ser el delegado.
+        creado_por: usuarioId,
       };
 
       if (input.ejecutivo_id) {
@@ -2194,7 +2189,7 @@ export class SolicitudesService {
       if (!ESTADOS_ASIGNABLES.includes(actual.estado as (typeof ESTADOS_ASIGNABLES)[number])) {
         return {
           success: false,
-          error: 'Solo las solicitudes Aprobadas o Priorizadas pueden asignarse a un encargado de Logística.',
+          error: 'Solo las solicitudes Aprobadas o Priorizadas pueden asignarse a un responsable de Logística.',
         };
       }
 
@@ -2205,13 +2200,13 @@ export class SolicitudesService {
         .maybeSingle();
 
       if (userError || !encargado) {
-        return { success: false, error: 'El encargado indicado no existe.' };
+        return { success: false, error: 'El responsable indicado no existe.' };
       }
       if (encargado.rol !== 'logistica' && encargado.rol !== 'administrador') {
-        return { success: false, error: 'El encargado debe tener el rol Logística.' };
+        return { success: false, error: 'El responsable debe tener el rol Logística.' };
       }
       if (encargado.activo === false) {
-        return { success: false, error: 'El encargado indicado está inactivo.' };
+        return { success: false, error: 'El responsable indicado está inactivo.' };
       }
 
       const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'asignada', logistica_id: logisticaId });
@@ -2228,7 +2223,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al asignar el encargado') };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al asignar el responsable de Logística') };
     }
   }
 
