@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { CalendarClock, Clock, PackageSearch, Truck, Warehouse } from 'lucide-react';
+import { CalendarClock, Clock, PackageSearch, Warehouse } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
@@ -85,12 +85,6 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
       .sort((a, b) => tiempo(a.fecha_tentativa_despacho) - tiempo(b.fecha_tentativa_despacho)),
     LIMITE_PANEL_JEFE_LOCAL
   );
-  const enTransito = recortar(
-    solicitudes
-      .filter((s) => s.estado === 'en_transito')
-      .sort((a, b) => tiempo(a.fecha_limite) - tiempo(b.fecha_limite)),
-    LIMITE_PANEL_JEFE_LOCAL
-  );
   const trasladosPendientes = recortar(
     traslados.filter((t) => t.estado === 'pendiente'),
     LIMITE_PANEL_JEFE_LOCAL
@@ -103,7 +97,7 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
         <p className="text-sm text-neutral-500">Lo que tienes por gestionar. Usa “Ver” para ir a la vista de cada acción.</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         <PanelAcciones
           titulo="Por programar"
           descripcion="Priorizadas o asignadas sin fecha de despacho"
@@ -138,25 +132,6 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
               key={s.id}
               s={s}
               detalle={`Despacho programado: ${formatFecha(s.fecha_tentativa_despacho) || '—'}`}
-            />
-          ))}
-        </PanelAcciones>
-
-        <PanelAcciones
-          titulo="En tránsito"
-          descripcion="Despachadas, a la espera de recepción en destino"
-          icono={<Truck className="w-5 h-5 text-emerald-600" />}
-          total={enTransito.total}
-          restantes={enTransito.restantes}
-          verTodasHref={`${CALENDARIO}?estado=en_transito`}
-          textoVacio="No hay vehículos en tránsito."
-          tono="verde"
-        >
-          {enTransito.items.map((s) => (
-            <FilaSolicitud
-              key={s.id}
-              s={s}
-              detalle={`Despachado: ${formatFecha(s.fecha_despacho) || '—'}`}
             />
           ))}
         </PanelAcciones>
