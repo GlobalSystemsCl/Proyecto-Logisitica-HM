@@ -39,7 +39,6 @@ Aplicar **antes** de desplegar el código de esa rama, en este orden:
 | 9 | `20261009120000_req_traslados_cancelacion_recepcion.sql` | R8, R13, R14 | Bajo: columnas nuevas, trigger de 1 vehículo por traslado nuevo y funciones de cancelación |
 | 10 | `20261009130000_req_indices_calendario_reportes.sql` | R16, R17 | Bajo: solo índices |
 | 11 | `20261013120000_fix_cancelar_traslado_slots_ocupados.sql` | R8 | Bajo: reemplaza `fn_cancelar_traslado_interno` para que descuente también `slots_ocupados` del destino (las 8–10 ya están aplicadas en producción) |
-| 12 | `20261013150000_asignacion_sucursales_y_zonas_por_rol.sql` | Asignaciones por rol | Medio: quita los encargados de sucursal que no son jefe de local (datos), agrega triggers de "un jefe por sucursal", una zona por usuario de Logística y amplía la RLS de lectura del jefe de local a todas sus sucursales. Después, ejecutar `scripts/01_asignar_sucursales_sin_jefe.sql` (deja Valparaíso, Santiago Centro y las sucursales de prueba a cargo de Joaquin Lepe) |
 
 ## Brecha 011 — contadores de slots (aplicar en este orden)
 
@@ -52,15 +51,23 @@ Aplicar **antes** de desplegar el código de esa rama, en este orden:
 
 Marcha blanca: superar la capacidad solo emite un aviso (`RAISE NOTICE`); nunca bloquea.
 
+## Asignaciones por rol
+
+| # | Archivo | Riesgo |
+|---|---|---|
+| 16 | `20261013155000_asignacion_sucursales_y_zonas_por_rol.sql` | Medio: quita los encargados de sucursal que no son jefe de local (datos), agrega triggers de "un jefe por sucursal", una zona por usuario de Logística y amplía la RLS de lectura del jefe de local a todas sus sucursales. Después, ejecutar `scripts/03_asignar_sucursales_sin_jefe.sql` (deja Valparaíso, Santiago Centro y las sucursales de prueba a cargo de Joaquin Lepe). Ambos ya están aplicados en producción |
+
+Se aplicó con la versión `20261013150000`, la misma de `brecha_011_trigger_vehiculos`. Como Supabase exige versiones únicas, se renombró a `20261013155000` (el contenido no cambió).
+
 ## Brecha 014 — puntos pendientes
 
 | # | Archivo | Riesgo |
 |---|---|---|
-| 16 | `20261013170000_brecha_014_funciones_rol_y_sucursal.sql` | Medio: `es_administrador`, `tiene_rol` y `usuario_activo` solo cuentan `activo = true` (antes NULL contaba como activo); `usuario.activo` pasa a NOT NULL; `usuario_tiene_sucursal` no deja que un usuario con sesión consulte las sucursales de otro. Las policies sostienen casi todo el acceso: probar el login de cada rol después de aplicarla |
+| 17 | `20261013170000_brecha_014_funciones_rol_y_sucursal.sql` | Medio: `es_administrador`, `tiene_rol` y `usuario_activo` solo cuentan `activo = true` (antes NULL contaba como activo); `usuario.activo` pasa a NOT NULL; `usuario_tiene_sucursal` no deja que un usuario con sesión consulte las sucursales de otro. Las policies sostienen casi todo el acceso: probar el login de cada rol después de aplicarla |
 
 ## Historial de migraciones (brecha 015)
 
-Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. Después de aplicar la 16, ejecutar una vez `scripts/01_alinear_historial_migraciones.sql`: registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.
+Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. Después de aplicar la 17, ejecutar una vez `scripts/01_alinear_historial_migraciones.sql`: registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.
 
 Desde ahí, aplicar todo cambio con la CLI (`supabase db push`) o actualizar el script en la misma tarea.
 

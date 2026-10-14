@@ -61,7 +61,9 @@ begin
     and v.ubicacion = t.destino_id;
 
   -- Traslados aún pendientes o en tránsito: su reserva sumó 1 a los slots
-  -- reservados del destino y no hay trigger de borrado que la descuente.
+  -- reservados del destino. Desde la brecha 011 (2026-10-13) los triggers de
+  -- borrado y el recálculo final ya lo corrigen; este descuento es redundante
+  -- pero inofensivo.
   update public.sucursal s
   set slots_reservados = greatest(s.slots_reservados - x.cantidad, 0)
   from (

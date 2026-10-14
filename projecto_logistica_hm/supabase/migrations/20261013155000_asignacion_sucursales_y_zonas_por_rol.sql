@@ -36,7 +36,7 @@
 -- Después de aplicarla, asignar desde /admin/usuarios las sucursales que
 -- quedaron sin jefe (ver la consulta de "Verificación posterior").
 --
--- Rollback: supabase/rollback/20261013150000_asignacion_sucursales_y_zonas_por_rol.sql
+-- Rollback: supabase/rollback/20261013155000_asignacion_sucursales_y_zonas_por_rol.sql
 -- =============================================================================
 
 begin;

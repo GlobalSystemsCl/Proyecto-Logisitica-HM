@@ -1,5 +1,5 @@
 -- =============================================================================
--- Rollback de 20261013150000_asignacion_sucursales_y_zonas_por_rol.sql
+-- Rollback de 20261013155000_asignacion_sucursales_y_zonas_por_rol.sql
 -- =============================================================================
 -- Restaura la función, los triggers, el índice y las policies anteriores.
 --

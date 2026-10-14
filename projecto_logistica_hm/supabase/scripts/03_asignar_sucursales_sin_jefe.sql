@@ -1,7 +1,7 @@
 -- =============================================================================
 -- Asignar a Joaquin Lepe las sucursales que quedan sin jefe de local
 -- =============================================================================
--- Ejecutar DESPUÉS de migrations/20261013150000_asignacion_sucursales_y_zonas_por_rol.sql.
+-- Ejecutar DESPUÉS de migrations/20261013155000_asignacion_sucursales_y_zonas_por_rol.sql.
 --
 -- La migración quita los encargados que no son jefe de local. En producción
 -- (2026-10-13) quedan sin jefe VALPARAISO (9), SANTIAGO CENTRO (8) y las

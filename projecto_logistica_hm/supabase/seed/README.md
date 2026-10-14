@@ -19,8 +19,7 @@ no queda nada a medias.
 - **Poblar:** `01_poblar_escenarios.sql`.
 - **Regenerar con fechas de hoy:** `02_limpiar_escenarios.sql` y después `01_poblar_escenarios.sql`.
   Las fechas son relativas al día de ejecución (hora de Chile).
-- **Validar:** `03_validar_escenarios.sql`. Todas las filas deben tener `ok = true`,
-  salvo la informativa de slots (ver limitaciones).
+- **Validar:** `03_validar_escenarios.sql`. Todas las filas deben tener `ok = true`.
 - **Limpiar:** `02_limpiar_escenarios.sql`.
 
 > **Atención:** los usuarios son cuentas reales con correos reales. El poblamiento
@@ -70,9 +69,9 @@ El id de cada fila creada empieza con `5eed`:
 2. Devuelve los vehículos del stock a "sin ubicación", salvo que una solicitud o un
    traslado real los esté usando.
 3. Devuelve el vehículo del traslado recepcionado a su sucursal de origen.
-4. Descuenta las reservas de slots de los traslados que seguían abiertos.
+4. Descuenta las reservas de slots de los traslados que seguían abiertos (redundante desde la brecha 011: los triggers de borrado ya recalculan).
 5. Compacta las colas de prioridad.
-6. Recalcula `slots_ocupados` de las sucursales tocadas con `fn_recalcular_slots_ocupados`.
+6. Recalcula ambos contadores de slots de las sucursales tocadas con `fn_recalcular_slots_ocupados`, que delega en `fn_recalcular_slots_sucursal`.
 
 ## Escenarios
 
@@ -130,11 +129,9 @@ Sucursales: 6 = 15 NORTE, 7 = CONCON, 8 = SANTIAGO CENTRO, 9 = VALPARAISO.
    - `createSolicitud` no la guarda y el trigger solo la sella en un `UPDATE`.
    - Afecta a S05, S08, S09, S11, S14, S16, S21, S23 y S27. El poblamiento reproduce este comportamiento real.
    - Consecuencia: la reportería de Logística no puede medir para ellas el tiempo de respuesta ni la antigüedad.
-2. **Slots desfasados (brecha 011).**
-   - El trigger de reserva de traslados suma a `slots_ocupados`, pero `fn_recalcular_slots_ocupados` no cuenta esas reservas.
-   - `fn_cancelar_traslado_interno` no descuenta los ocupados.
-   - Por eso el control informativo muestra +1 ocupado en 15 Norte, Concón y Valparaíso. La app produce exactamente lo mismo.
-   - Las diferencias de Concón (reservados) y Santiago Centro (ocupados) ya existían antes del poblamiento.
+2. ~~**Slots desfasados (brecha 011).**~~ **Resuelto el 2026-10-13.**
+   - Antes, el trigger de reserva de traslados sumaba a `slots_ocupados` sin que `fn_recalcular_slots_ocupados` contara esas reservas, y `fn_cancelar_traslado_interno` no descontaba los ocupados.
+   - Ahora `fn_recalcular_slots_sucursal` es la única fuente de verdad (incluye los traslados) y el control informativo de slots del `03` debe quedar en `ok = true`.
 3. **La RLS de `solicitud` es más estrecha que la regla de la app para el jefe de local y Logística** (brecha 005, pendiente). No afecta a la app, que lee con service_role.
 4. **Logística por zonas:**
    - Solo 1 de los 3 usuarios de Logística tiene zona asignada.
