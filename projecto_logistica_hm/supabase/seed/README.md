@@ -9,6 +9,7 @@ para probar cada rol desde el frontend sin crear los casos a mano.
 | `02_limpiar_escenarios.sql` | Borra solo los datos de prueba y deja los vehículos y las colas como estaban |
 | `03_validar_escenarios.sql` | Controles de integridad, historial, fechas, colas y RLS por usuario. Solo lectura (termina en `ROLLBACK`) |
 | `04_poblar_100_solicitudes.sql` | Genera 100 solicitudes más (S1001–S1100) y 6 traslados (T1001–T1006) con el mismo motor, repartidas en todos los estados. Convive con el 01; el 02 y el 03 cubren ambos |
+| `05_poblar_10_priorizadas.sql` | 10 solicitudes **priorizadas** creadas hoy (S1101–S1110) en Valparaíso, 15 Norte y Concón, para probar el módulo de Logística (zona 1). El 02 también las borra |
 
 ## Cómo se ejecuta
 
