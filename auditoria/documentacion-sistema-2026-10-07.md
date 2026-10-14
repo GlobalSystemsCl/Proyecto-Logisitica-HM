@@ -105,16 +105,19 @@ projecto_logistica_hm/
 │  │  ├─ admin/{historial,sucursales,usuarios,vehiculos}/
 │  │  ├─ auth/callback/route.ts     Callback de Supabase Auth
 │  │  ├─ dashboard/ login/ registro/ recuperar-clave/ establecer-clave/ perfil/ faq/
-│  │  ├─ logistica/{calendarizaciones,slots,reportes}/
-│  │  └─ solicitudes/{aprobaciones,prioridades,recepciones,traslados}/ + layout.tsx
+│  │  ├─ logistica/{calendarizaciones,slots}/
+│  │  └─ solicitudes/{aprobaciones,prioridades,traslados}/ + layout.tsx
 │  ├─ components/                   Header, tarjetas de dashboard, modal de detalle, etc.
 │  ├─ config/dashboard-cards.ts     Módulos visibles por rol
-│  ├─ lib/                          Helpers puros (fechas, filtros, slots, validaciones) + clientes Supabase
-│  ├─ services/                     11 services (lógica de negocio y acceso a datos; + notificacion y reporte desde 2026-10)
+│  ├─ lib/                          Helpers puros (fechas, filtros, slots, validaciones, asignaciones por rol) + clientes Supabase
+│  ├─ services/                     Services (lógica de negocio y acceso a datos)
 │  └─ types/                        Tipos de dominio
-├─ supabase/                        migrations/ (15), rollback/ y scripts/ — ver supabase/README.md y brecha 015 (al 2026-10-07 estaba vacía)
+├─ supabase/
+│  ├─ migrations/ + rollback/       Migraciones con fecha y su reversión (ver supabase/README.md)
+│  ├─ scripts/                      Respaldo previo (00) y asignación de sucursales sin jefe (01)
+│  └─ seed/                         Datos de prueba del ciclo de vida (poblar, limpiar, validar)
 ├─ scripts/seed-admin.mjs, seed-solicitudes.mts
-├─ tests/                           unitarios (55 archivos al 2026-10-13), mocks (incl. sql.ts), documentación de testing
+├─ tests/                           unitarios (54 archivos al 2026-10-13), mocks, documentación de testing
 ├─ modelo_excel/                    Plantillas Excel (no analizadas en detalle)
 ├─ .env.local                       Secretos locales (en .gitignore)
 └─ AGENTS.md / CLAUDE.md            Reglas para agentes (tests obligatorios)
@@ -137,8 +140,6 @@ El repositorio git está en la carpeta superior (`C:\Proyecto-Logisitica-HM`).
 | `/perfil`, `/faq` | perfil/page.tsx, faq/page.tsx | Autenticado |
 | `/solicitudes/*` | solicitudes/layout.tsx | administrador, jefe_local, ejecutivo, logistica |
 | `/logistica/calendarizaciones`, `/logistica/slots` | page.tsx | jefe_local, administrador, logistica |
-| `/logistica/reportes` (R17, agregada 2026-10) | page.tsx | administrador |
-| `/solicitudes/recepciones` (R13, agregada 2026-10) | page.tsx | jefe_local, administrador |
 | `/admin/usuarios`, `/admin/historial`, `/admin/sucursales` | page.tsx | administrador |
 | `/admin/vehiculos` | page.tsx | según la página (administrador y roles de gestión) |
 
@@ -188,7 +189,7 @@ No valida `activo` ni `requiere_cambio_clave` (brecha 009).
 | Service | Responsabilidad | Cliente | Tablas | Observaciones |
 |---|---|---|---|---|
 | AuthService | perfil actual, registro, login con bloqueo, reset y cambio de clave, editar perfil | server (anon) + admin | usuario, sucursal, usuario_zona | Crea perfiles "huérfanos" con rol según email hardcodeado; escribe la columna inexistente `aprobado` |
-| UsersService | CRUD de usuarios, aprobar, reset de clave, sucursales a cargo, zonas | admin | usuario, sucursal, usuario_zona, auth.users | Contraseña temporal con `Math.random`; desactivar no revoca sesión |
+| UsersService | CRUD de usuarios, aprobar, reset de clave, sucursales a cargo, zonas | admin | usuario, sucursal, usuario_zona, auth.users | Contraseña temporal con `Math.random`; desactivar no revoca sesión. **Actualizado 2026-10-13:** las asignaciones se validan con `lib/asignaciones.ts` antes de escribir, no se pisan sucursales de otro jefe y los errores de BD se informan (sección 29) |
 | SolicitudesService | ciclo de vida completo de solicitudes, cola de prioridad, vehículos, observaciones, auditoría, documentos (Storage), insistencias | admin | solicitud, solicitud_vehiculo, observacion, auditoria, insistencia, solicitud_documento, usuario, storage | 2.100+ líneas; transiciones sin control de concurrencia; operaciones multi-paso sin transacción |
 | TrasladoService | traslados internos de vehículos vendidos | admin | traslado_interno, traslado_interno_vehiculo, vehiculo | Creación en 2 pasos con borrado compensatorio |
 | VehiculoService | CRUD de vehículos, disponibilidad, importación CSV | admin | vehiculo, solicitud_vehiculo, marca, sucursal | Paginación manual para superar el límite de 1000 filas |
@@ -197,11 +198,9 @@ No valida `activo` ni `requiere_cambio_clave` (brecha 009).
 | AuditoriaService | historial global + métricas | admin | auditoria + joins | Sin paginación |
 | EmailService | correo de credenciales vía Brevo | — | — | HTML con interpolación sin escape (brecha 022) |
 
-Servicios agregados por los requisitos (2026-10): `NotificacionService` (correos de operaciones críticas vía Brevo, enviados después de responder con `after` de Next.js; un fallo no afecta la operación) y `ReporteService` (reportería de logística).
-
 Lógica duplicada o en conflicto:
-- ~~La lista de estados que "reservan" vehículo es distinta en código y en SQL.~~ **Resuelto 2026-10-13:** `ESTADOS_ACTIVOS_RESERVA` coincide con `fn_estados_reserva_activos()` y un test lo verifica.
-- ~~Contadores de slots con triggers incrementales y recálculo completo a la vez.~~ **Resuelto 2026-10-13 (brecha 011):** una sola función, `fn_recalcular_slots_sucursal`, fija ambos contadores.
+- La lista de estados que "reservan" vehículo existe en código (`ESTADOS_ACTIVOS_RESERVA`) y en SQL (`fn_recalcular_slots_ocupados`). Son distintas: el SQL incluye `despachada`.
+- La disponibilidad de vehículos se recalcula a la vez con triggers incrementales (+1/−1) y con recálculo completo. Esto produce contadores desincronizados (brecha 011).
 - La auditoría la registra la aplicación (best-effort, los errores se ignoran). Existen funciones de auditoría y notificación en la BD que no están conectadas a ningún trigger (brecha 018).
 
 ---
@@ -210,70 +209,61 @@ Lógica duplicada o en conflicto:
 
 ### Tablas (schema `public`, todas con RLS habilitado)
 
-> Conteo de filas de la auditoría (2026-10-07). Al 2026-10-13 hay 113 solicitudes (incluye datos de prueba). Columnas actualizadas al 2026-10-13.
-
 | Tabla | Filas aprox. | Propósito | Columnas clave |
 |---|---|---|---|
-| usuario | 8 | Perfil de aplicación (1:1 con auth.users) | id (FK auth.users, cascade), email (unique), rol (enum rol_usuario), activo, **aprobado** (agregada por la migración de la brecha 003; `CHECK (aprobado OR NOT activo)`), requiere_cambio_clave, intentos_fallidos, bloqueado_hasta, sucursal_id, telefono |
-| sucursal | 6 | Sucursales | nombre, direccion, slots, slots_ocupados, slots_reservados, zona_id, usuario_id (encargado) |
+| usuario | 8 | Perfil de aplicación (1:1 con auth.users) | id (FK auth.users, cascade), email (unique), rol (enum rol_usuario), activo, requiere_cambio_clave, intentos_fallidos, bloqueado_hasta, sucursal_id, telefono. **No existe la columna `aprobado`** |
+| sucursal | 6 | Sucursales | nombre, direccion, slots, slots_ocupados, slots_reservados, zona_id, usuario_id (jefe de local a cargo: uno por sucursal; desde 2026-10-13 solo puede ser `jefe_local`) |
 | zona | 2 | Zonas logísticas | nombre (unique) |
-| usuario_zona | 1 | N:M usuario-zona (logística) | PK (usuario_id, zona_id) |
+| usuario_zona | 1 | Zona del usuario de logística | PK (usuario_id, zona_id); desde 2026-10-13, índice único `usuario_zona_una_por_usuario` (una zona por usuario) |
 | marca | 19 | Catálogo de marcas | codigo (unique), nombre |
 | vehiculo | 2.261 | Inventario | chasis (unique), patente (unique), marca, modelo, anio, color, precio, ubicacion (FK sucursal) |
-| solicitud | 13 | Solicitud de traslado (venta/evento) | ejecutivo_id, jefe_local_id, logistica_id, estado (enum), tipo_solicitud, sucursal (origen, FK **restrict** desde la brecha 016), sucursal_destino, posicion_prioridad (UNIQUE con sucursal), múltiples fechas de flujo |
+| solicitud | 13 | Solicitud de traslado (venta/evento) | ejecutivo_id, jefe_local_id, logistica_id, estado (enum), tipo_solicitud, sucursal (origen, FK cascade), sucursal_destino, posicion_prioridad (UNIQUE con sucursal), múltiples fechas de flujo |
 | solicitud_vehiculo | 12 | Vehículos de una solicitud | solicitud_id (cascade), vehiculo_id, disponibilidad (reservado/liberado/vendido); UNIQUE(solicitud_id, vehiculo_id) |
 | observacion | 5 | Comentarios | solicitud_id (cascade), usuario_id, observacion |
 | auditoria | 228 | Bitácora | usuario_id, entidad, entidad_id (uuid), accion, valor_anterior/nuevo (jsonb) |
 | insistencia | 1 | Insistencias del ejecutivo (cooldown 24 h) | solicitud_id, usuario_id, mensaje |
 | solicitud_documento | 2 | Metadatos de archivos en Storage | ruta_storage (unique), tipo_mime, tamano_bytes, subido_por |
-| traslado_interno | 3 | Traslado de vehículos vendidos entre sucursales | origen_id, destino_id (CHECK distintos), logistica_id, estado; desde R8/R13: motivo_cancelacion, fecha_cancelacion, cancelado_por, recepcion_con_novedades, observacion_recepcion |
-| traslado_interno_vehiculo | 20 | Vehículos de un traslado | UNIQUE(traslado_id, vehiculo_id); desde R14 un solo vehículo por traslado nuevo (trigger) |
+| traslado_interno | 3 | Traslado de vehículos vendidos entre sucursales | origen_id, destino_id (CHECK distintos), logistica_id, estado |
+| traslado_interno_vehiculo | 20 | Vehículos de un traslado | UNIQUE(traslado_id, vehiculo_id) |
 | notificacion | 0 | Notificaciones internas | **Sin uso**: ninguna función de notificación está conectada a un trigger |
 
 ### Enums
 - `rol_usuario`: ejecutivo, jefe_local, logistica, administrador, operaciones
 - `estado_solicitud`: pendiente, priorizada, asignada, calendarizada, en_transito, entregada, cancelada, finalizada, pendiente_aprobacion, aprobada, rechazada, despachada (`pendiente` y `despachada` no se usan en el flujo actual del código)
 - `disponibilidad`: reservado, liberado, vendido
-- `tipo_solicitud`: evento, venta · `estado_traslado`: pendiente, en_transito, recepcionado, **cancelado** (R8) · `tipo_notificacion` (11 valores)
+- `tipo_solicitud`: evento, venta · `estado_traslado`: pendiente, en_transito, recepcionado · `tipo_notificacion` (11 valores)
 
-### Triggers activos (actualizado 2026-10-13, verificado en producción)
+### Triggers activos
 
 | Tabla | Trigger | Función | Efecto |
 |---|---|---|---|
-| auth.users | on_auth_user_created | handle_new_auth_user | Crea `public.usuario` siempre como `ejecutivo`, inactivo y no aprobado; ya no lee `rol` de los metadatos (brecha 002) |
-| usuario | tr_proteger_columnas_usuario (BEFORE) | fn_proteger_columnas_usuario | Un no administrador no puede cambiar rol, estado, bloqueo ni sucursal (brecha 001) |
-| usuario | tr_usuario_updated_at | handle_updated_at | updated_at |
+| auth.users | on_auth_user_created | handle_new_auth_user | Crea `public.usuario`; **toma `rol` de los metadatos del registro** (brecha 002) |
 | solicitud | tr_registrar_fechas_flujo (BEFORE UPDATE) | fn_registrar_fechas_flujo | Sella fechas de flujo |
 | solicitud | tr_validate_solicitud_tipo | validate_solicitud_tipo | venta exige destino; evento exige dirección y título |
 | solicitud | tr_solicitud_destino_invariante | fn_validar_destino_invariante | Destino inmutable una vez definido |
-| solicitud | tr_liberar_slots_rechazo_cancelacion | fn_liberar_slots_rechazo_cancelacion | Libera vehículos al rechazar/cancelar y recalcula el destino |
-| solicitud | tr_entregar_solicitud_vehiculos | fn_entregar_solicitud_vehiculos | Mueve vehículos al recibir y recalcula destino y origen |
-| solicitud | tr_finalizar_solicitud_vehiculos | fn_finalizar_solicitud_vehiculos | Marca vendidos, saca del inventario y recalcula |
-| solicitud | tr_recalcular_slots_solicitud_eliminada (AFTER DELETE) | fn_recalcular_slots_solicitud_eliminada | Recalcula el destino al borrar una solicitud |
-| solicitud_vehiculo | tr_validar_reserva_unica_vehiculo (BEFORE) | fn_validar_reserva_unica_vehiculo | Impide reservar un vehículo vendido o ya reservado en otra solicitud activa, con advisory lock (brecha 010) |
-| solicitud_vehiculo | tr_reservar_slots_solicitud_vehiculo / tr_liberar_slots_solicitud_vehiculo_eliminado | — | Recalculan el destino al reservar o quitar un vehículo |
-| vehiculo | tr_recalcular_slots_vehiculos_insertados / _actualizados / _eliminados (por sentencia) | — | Recalculan las sucursales afectadas, una vez por sentencia (reemplazan al trigger por fila desactivado el 2026-09-15) |
-| traslado_interno_vehiculo | tr_validar_un_vehiculo_por_traslado (BEFORE) | fn_validar_un_vehiculo_por_traslado | Un vehículo por traslado nuevo (R14) |
-| traslado_interno_vehiculo | tr_reservar_slots_traslado_vehiculo / tr_recalcular_slots_traslado_vehiculo_eliminado | — | Recalculan el destino |
-| traslado_interno | tr_recibir_traslado_vehiculos, tr_registrar_fechas_traslado, tr_traslado_interno_touch, tr_recalcular_slots_traslado_eliminado | — | Recepción (mueve el vehículo y recalcula), fechas, updated_at y recálculo al borrar |
-| sucursal | trg_validar_encargado_sucursal | validar_encargado_sucursal | Valida el encargado |
+| solicitud | tr_liberar_slots_rechazo_cancelacion | fn_liberar_slots_rechazo_cancelacion | Libera vehículos y descuenta slots al rechazar/cancelar |
+| solicitud | trigger_disponibilidad | disponibilidad | Libera vehículos al cancelar (se solapa con el anterior) |
+| solicitud | tr_entregar_solicitud_vehiculos | fn_entregar_solicitud_vehiculos | Mueve vehículos al recibir |
+| solicitud | tr_finalizar_solicitud_vehiculos | fn_finalizar_solicitud_vehiculos | Marca vendidos, saca del inventario y recalcula slots |
+| solicitud_vehiculo | tr_reservar_slots_… / tr_liberar_slots_… | — | +1/−1 en slots del destino |
+| vehiculo | tr_recalcular_slots_vehiculo | fn_recalcular_slots_por_vehiculo | Recalcula ocupación al mover vehículo |
+| traslado_interno(_vehiculo) | tr_reservar_slots_traslado_vehiculo, tr_recibir_traslado_vehiculos, tr_registrar_fechas_traslado, touch | — | Slots y fechas de traslados |
+| sucursal | trg_validar_encargado_sucursal | validar_encargado_sucursal | Valida el encargado. Desde 2026-10-13: debe ser `jefe_local` y la sucursal no puede ser la base de otro jefe (error P0001) |
 | insistencia | tr_insistencia_cooldown | fn_insistencia_cooldown | Cooldown 24 h con advisory lock |
+| usuario | tr_usuario_updated_at | handle_updated_at | updated_at |
+| usuario | tr_validar_base_jefe_local (BEFORE, 2026-10-13) | fn_validar_base_jefe_local | La sucursal base de un jefe de local no puede tener otro jefe |
+| usuario | tr_sincronizar_sucursales_jefe_local (AFTER, 2026-10-13) | fn_sincronizar_sucursales_jefe_local | La base del jefe queda a su cargo; si deja de ser jefe, sus sucursales quedan libres |
 
-Eliminado el 2026-10-13: `trigger_disponibilidad` (duplicaba la liberación al cancelar).
+Funciones sin trigger asociado: `cambio_estado_auditoria`, `auditoria_disponibilidad`, `notificar_solicitud`, `notificar_solicitud_vehiculo`, `notificar_observacion`.
 
-**Slots (brecha 011):** `fn_recalcular_slots_sucursal(id)` es la única fuente de verdad. `slots_reservados` = reservas de solicitudes en estados de `fn_estados_reserva_activos()` + reservas de traslados pendientes o en tránsito hacia la sucursal; `slots_ocupados` = vehículos con `ubicacion` = sucursal + `slots_reservados`. **Marcha blanca:** superar la capacidad solo emite un aviso y nunca bloquea (capacidades bajas como `slots = 2` son intencionales).
+### Integridad
 
-RPC usadas por la app (solo `service_role`): `fn_cancelar_solicitud_en_transito`, `fn_cancelar_traslado_interno` (R8) y `fn_registrar_intento_fallido` (brecha 012).
-
-Funciones sin trigger asociado: `cambio_estado_auditoria`, `auditoria_disponibilidad`, `notificar_solicitud`, `notificar_solicitud_vehiculo`, `notificar_observacion`, `disponibilidad`, `fn_incrementar_slots_ocupados`, `fn_decrementar_slots_ocupados`, `fn_recalcular_slots_por_vehiculo`.
-
-### Integridad (actualizado 2026-10-13)
-
-- FK `solicitud.sucursal → sucursal` pasó a **ON DELETE RESTRICT** (brecha 016): borrar una sucursal con solicitudes falla y el service lo informa. `solicitud.sucursal_destino` no tiene cascade.
-- La doble reserva de un vehículo se impide en la BD con `tr_validar_reserva_unica_vehiculo` (brecha 010).
-- Contadores de slots: 0 diferencias en todas las sucursales tras la corrección de la brecha 011.
+- FK `solicitud.sucursal → sucursal` con **ON DELETE CASCADE**: borrar una sucursal borra sus solicitudes, observaciones, insistencias, vínculos de vehículos y metadatos de documentos (brecha 016). `solicitud.sucursal_destino` no tiene cascade.
+- No existe una restricción en BD que impida reservar el mismo vehículo en dos solicitudes activas. Solo lo valida el service, con una carrera posible (brecha 010). Hoy no hay duplicados en los datos.
+- Contadores `slots_ocupados` y `slots_reservados` desincronizados en 4 de 6 sucursales (brecha 011).
 - Sin soft delete: las eliminaciones son físicas.
-- Se agregaron 6 índices de FK (brecha 024) y 3 para calendario y reportes (R16/R17); quedan FKs sin índice según el advisor.
+- 12 FKs sin índice (advisor de rendimiento).
+- **Desde 2026-10-13:** cada sucursal tiene a lo sumo un jefe de local (`sucursal.usuario_id`, base incluida) y cada usuario de logística una sola zona. Lo garantizan los triggers y el índice de la migración `20261013150000` (sección 29).
 
 ---
 
@@ -295,16 +285,16 @@ Funciones sin trigger asociado: `cambio_estado_auditoria`, `auditoria_disponibil
 | Tabla | SELECT | INSERT | UPDATE | DELETE | Problema |
 |---|---|---|---|---|---|
 | usuario | propio o admin | admin o `auth.uid() = id` | **admin o `auth.uid() = id`, sin WITH CHECK, todas las columnas** | admin | **Escalamiento a admin (brecha 001)** |
-| solicitud | admin / participante / JL de su sucursal en estados pendiente o priorizada | admin / ejecutivo propio / JL con sucursal | admin / participante / JL sucursal principal; **WITH CHECK solo `usuario_activo()`** | admin | Participantes pueden cambiar estado, fechas o asignados saltando el flujo (brecha 005) |
-| solicitud_vehiculo | admin / participante | admin, logistica (sin alcance) | admin, logistica (sin alcance) | admin | Logística modifica cualquier reserva (brecha 005) |
+| solicitud | admin / participante / JL de su sucursal en estados pendiente o priorizada. **Desde 2026-10-13:** JL con origen o destino en cualquiera de sus sucursales, todos los estados | admin / ejecutivo propio / JL con sucursal | admin / participante / JL sucursal principal; **WITH CHECK solo `usuario_activo()`** | admin | Participantes pueden cambiar estado, fechas o asignados saltando el flujo (brecha 005) |
+| solicitud_vehiculo | admin / participante (desde 2026-10-13, también el JL de sus sucursales) | admin, logistica (sin alcance) | admin, logistica (sin alcance) | admin | Logística modifica cualquier reserva (brecha 005) |
 | vehiculo | activos | admin, JL, logistica | admin, JL, logistica (sin alcance) | admin | Cualquier JL modifica cualquier vehículo (brecha 005) |
-| observacion | admin / participante | participante | autor o admin | autor o admin | Correcta |
+| observacion | admin / participante (desde 2026-10-13, también el JL de sus sucursales) | participante | autor o admin | autor o admin | Correcta |
 | auditoria | admin | — | — | — | Correcta (escritura solo service_role) |
 | insistencia | **cualquier activo** | ejecutivo propio | — | — | Lectura amplia (bajo impacto) |
 | notificacion | destinatario | — | destinatario | destinatario | Correcta (sin uso) |
 | sucursal, zona, marca | activos | admin | admin | admin | Correctas |
 | usuario_zona | propio o admin | admin | admin | admin | Correcta |
-| traslado_interno(_vehiculo) | admin / logística propia / JL origen o destino | admin, logística | admin, logística; JL solo pasar a recepcionado | admin, logística | Aceptables |
+| traslado_interno(_vehiculo) | admin / logística propia / JL origen o destino (en `traslado_interno_vehiculo` era solo destino; alineado el 2026-10-13) | admin, logística | admin, logística; JL solo pasar a recepcionado | admin, logística | Aceptables |
 
 Nota: `tiene_rol()`, `usuario_activo()` y `es_administrador()` leen `public.usuario`. Por eso la brecha 001 (modificar el propio `rol`) habilita **todas** las policies de administrador.
 
@@ -333,30 +323,36 @@ Debilidades: actions sin guard (004), actions sin verificación de pertenencia (
 
 ## 12. Roles y permisos
 
-> Actualizado 2026-10-13: alcance por sucursal y zona aplicado en las actions (brecha 008) y acciones nuevas de los requisitos.
-
 | Capacidad | administrador | jefe_local | ejecutivo | logistica | operaciones |
 |---|---|---|---|---|---|
 | Usuarios, sucursales, zonas, marcas, historial | ✔ | — | — | — | — |
 | Crear solicitud | ✔ | ✔ (sus sucursales; queda aprobada) | ✔ (su sucursal; pendiente_aprobacion) | — | — |
 | Aprobar / rechazar / priorizar / reordenar cola | ✔ | ✔ (sus sucursales) | — | — | — |
-| Asignar encargado / despachar / cancelar despacho | ✔ | — | — | ✔ (sus zonas) | — |
-| Calendarizar / descalendarizar | ✔ | ✔ (alcance; no queda como encargado) | — | ✔ (sus zonas) | — |
-| Reprogramar una solicitud calendarizada (R16) | **—** (decisión de negocio 2026-10-13) | — | — | ✔ (sus zonas) | — |
-| Cancelar una solicitud o un traslado interno **en tránsito** (R8) | **—** (decisión de negocio 2026-10-13) | — | — | ✔ (encargado o sus zonas) | — |
-| Recibir en destino (con novedades, R13) | ✔ | ✔ (destino) | — | — | — |
+| Asignar encargado / despachar / cancelar despacho | ✔ | — | — | ✔ | — |
+| Calendarizar / descalendarizar | ✔ | ✔ (sin verificación de alcance) | — | ✔ | — |
+| Recibir en destino | ✔ | ✔ (destino) | — | — | — |
 | Finalizar (entregar al cliente) | ✔ | ✔ (destino) | ✔ (propia) | — | — |
-| Cancelar (pre-despacho) | ✔ | ✔ (sucursal) | ✔ (propia) | ✔ (sus zonas) | — |
+| Cancelar | ✔ | ✔ (sucursal) | ✔ (propia) | ✔ (cualquiera) | — |
 | Eliminar solicitud (pre-despacho) | ✔ | ✔ (sucursal) | ✔ (propia) | — | — |
-| Agregar/quitar vehículos de solicitud | ✔ | ✔ (alcance) | — | ✔ (alcance) | — |
+| Agregar/quitar vehículos de solicitud | ✔ | ✔ (sin alcance) | — | ✔ (sin alcance) | — |
 | Insistir | — | — | ✔ (propia, cada 24 h) | — | — |
 | Vehículos (crear/editar/importar) | ✔ | ✔ | — | ✔ | ✔ |
 | Eliminar vehículo | ✔ | — | — | — | — |
-| Traslados internos (crear, despachar) | ✔ | recibir (destino) | — | ✔ | — |
-| Reportería de logística (`/logistica/reportes`, R17) | ✔ | — | — | — | — |
+| Traslados internos | ✔ | recibir (destino) | — | ✔ | — |
 | Ver solicitudes | todas | origen o destino en sus sucursales | propias | sucursal origen en sus zonas | ninguna |
 
-Excluir al administrador de reprogramar y de cancelar en tránsito es intencional: está documentado en el JSDoc de las actions y cubierto por tests (`notificaciones.actions.test.ts`, `traslados.actions.test.ts`).
+### Asignación de sucursales y zonas por rol (desde 2026-10-13)
+
+| Rol | Sucursal base (`usuario.sucursal_id`) | Sucursales adicionales a cargo (`sucursal.usuario_id`) | Zona (`usuario_zona`) |
+|---|---|---|---|
+| ejecutivo | Obligatoria (una sola) | — | — |
+| jefe_local | Obligatoria; queda a su cargo | Opcionales, varias | — |
+| logistica | Obligatoria | — | Exactamente una |
+| administrador / operaciones | Opcional | — | — |
+
+- Una sucursal tiene a lo sumo un jefe de local, contando tanto las sucursales base como las adicionales. No hay tabla N:M: las adicionales se guardan en `sucursal.usuario_id`.
+- "Sus sucursales" de un jefe de local = base + adicionales. Es el alcance de solicitudes, aprobaciones, priorizaciones, recepciones, traslados, calendario, slots, dashboard y correos (`OrganizacionService.getUserAssignedBranches`, RPC `usuario_tiene_sucursal`) y, desde la migración `20261013150000`, también de la RLS de lectura.
+- Las reglas están en `src/lib/asignaciones.ts`. Las aplican el modal de `/admin/usuarios`, `UsersService` y los triggers de la BD.
 
 ## 13. APIs
 
@@ -390,12 +386,7 @@ Formulario → `loginAction` → `AuthService.signIn` (service_role lee `usuario
 Formulario `/registro` → `registerAction` → `signUp` (trigger crea `usuario` con rol de metadatos) → upsert con `aprobado` (falla en silencio) → el usuario puede iniciar sesión, porque ninguna verificación lee una columna real → solo el middleware lo bloquea por `user_metadata.aprobado=false`, y el propio usuario puede cambiarlo con `auth.updateUser`. `approveUserAction` → `UsersService.approveUser` → `update({aprobado:true})` → **error de columna inexistente** (previsto; no ejecutado).
 
 ### Traslado interno
-Logística elige **un** vehículo vendido (R14) → `crearTraslado` (insert traslado + insert vehículo; si falla, borra el traslado) → `despachar` → `en_transito` → JL destino `recibir`, con novedades y observación opcionales (R13) → `recepcionado` (trigger mueve el vehículo y recalcula slots).
-
-Cancelación en tránsito (R8, solo Logística): `cancelarTrasladoAction` → RPC `fn_cancelar_traslado_interno`, que en una transacción pasa el traslado a `cancelado` con motivo, libera la reserva, deja el vehículo en la ubicación indicada (o sin ubicación) y recalcula los slots del destino. Para solicitudes, `cancelarEnTransitoAction` → RPC `fn_cancelar_solicitud_en_transito`. Ambas envían un correo [URGENTE] a los involucrados.
-
-### Correos de operaciones críticas (R7)
-Las actions agendan el correo con `enSegundoPlano` (`after` de Next.js) después de responder: no bloquean ni revierten la operación si Brevo falla. Eventos: creada, aprobada, rechazada, calendarizada, reprogramada [URGENTE], despachada, recibida y cancelación en tránsito [URGENTE]. No se avisa a quien hizo la acción.
+Logística elige vehículos vendidos → `crearTraslado` (insert traslado + insert vehículos; si falla, borra el traslado) → `despachar` → `en_transito` → JL destino `recibir` → `recepcionado` (trigger mueve los vehículos).
 
 ### Documentos
 Upload multipart (Server Action, límite 15 MB) → validación de tamaño y MIME (declarado por el navegador) → Storage privado + fila `solicitud_documento` + auditoría. Descarga mediante URL firmada de 5 min.
@@ -418,6 +409,8 @@ Los services devuelven `{success, error}`; las actions envuelven en try/catch y 
 - Documentos: máximo 10 MB, lista blanca de MIME.
 - Bloqueo de cuenta: 5 intentos → 15 minutos.
 - El admin principal (email fijo) no puede desactivarse ni autoregistrarse.
+- (2026-10-13) Cada sucursal tiene un solo jefe de local. Ejecutivo, jefe de local y logística deben tener sucursal base, y logística exactamente una zona (sección 12).
+- (2026-10-13) La priorización se hace solo arrastrando en `/solicitudes/prioridades`. El panel "Priorizaciones pendientes" del dashboard del jefe de local es informativo y su botón "Ver" lleva a esa página.
 
 ## 16. Tests
 
@@ -428,16 +421,16 @@ Los services devuelven `{success, error}`; las actions envuelven en try/catch y 
 - Los mocks ocultaron la ausencia de la columna `aprobado`: los tests de `auth.service` y `users.service` la usan y pasan.
 - Resultado de ejecución: **No determinado** (no se ejecutaron por instrucción).
 
-**Actualización 2026-10-13:** 57 archivos y **932 tests** en verde (`npm run test`), `tsc --noEmit` y ESLint sin errores, `next build` correcto. Ya se cubren Server Actions (guards, alcance e inventario de actions), middleware (`acceso.test.ts`), EmailService y SucursalesService. Nuevo: tests de contrato de las migraciones SQL (`tests/unitarios/migracion-*.test.ts`, helper `tests/mocks/sql.ts`), que leen los archivos de `supabase/` porque aún no hay tests contra un Postgres real. Siguen faltando RLS, triggers e integración (brecha 017).
-
 Detalle: brecha 017.
+
+**Actualización 2026-10-13:** 54 archivos y 916 tests unitarios en verde, `tsc --noEmit` sin errores y ESLint sin errores (6 advertencias previas). Nuevos: `asignaciones.test.ts` (reglas por rol y conflictos de jefe de local) y casos de `users.service.test.ts` y `solicitudes.service.test.ts` para las asignaciones. `migracion-cancelar-traslado.test.ts` fallaba con saltos de línea CRLF (checkout en Windows); se corrigió su normalización.
 
 ## 17. Integraciones externas
 
 | Servicio | Uso | Configuración |
 |---|---|---|
 | Supabase | Auth, BD, Storage | `NEXT_PUBLIC_SUPABASE_URL`, claves anon/publishable y service_role/secret |
-| Brevo | Correo de credenciales de usuario y, desde R7, correos de operaciones críticas (`NotificacionService`) | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` |
+| Brevo | Correo de credenciales de usuario | `BREVO_API_KEY`, `BREVO_SENDER_EMAIL`, `BREVO_SENDER_NAME` |
 | cdn.sheetjs.com | Origen del paquete `xlsx` | URL fija en package.json |
 
 ## 18. Variables de entorno
@@ -452,9 +445,7 @@ Detalle: brecha 017.
 | BREVO_API_KEY | **No (secreto)** | EmailService | Sí |
 | BREVO_SENDER_EMAIL / BREVO_SENDER_NAME | No | EmailService | Sí |
 | BREVO_SMTP_HOST / PORT / USER | No | **No se usan en el código** | Sí |
-| NEXT_PUBLIC_APP_URL | Sí | Enlaces de correo y reset (obligatoria en producción desde la brecha 026) | **No** |
-| ADMIN_PRINCIPAL_EMAIL | No | Protege al administrador principal de ser desactivado; no otorga permisos (brecha 025, agregada 2026-10-07) | No determinado |
-| NEXT_PUBLIC_SOPORTE_EMAIL | Sí | Correo de soporte que se muestra a una cuenta desactivada (requisito de la fase 1, agregada 2026-10) | No determinado |
+| NEXT_PUBLIC_APP_URL | Sí | Enlaces de correo y reset | **No** |
 
 `.env.local` está en `.gitignore`. Si estuvo alguna vez en el historial de git: No determinado (no hubo acceso a la carpeta del repositorio git).
 
@@ -477,7 +468,7 @@ Resumen de controles existentes:
 |---|---|---|
 | 003 | Columna `aprobado` inexistente: aprobación, registro (sucursal) y creación de usuarios por admin fallan o no tienen efecto | High |
 | 010 | Transiciones de estado y reservas sin control de concurrencia ni transacciones | Medium |
-| 011 | Contadores de slots desincronizados (4/6 sucursales) — **corregida y aplicada en producción el 2026-10-13** | Medium |
+| 011 | Contadores de slots desincronizados (4/6 sucursales) | Medium |
 | 016 | Borrar sucursal elimina solicitudes en cascada y deja archivos huérfanos | Medium |
 | 018 | Auditoría best-effort; notificaciones sin implementar | Low |
 | 026 | `NEXT_PUBLIC_APP_URL` ausente → enlaces de reset a localhost (en local) | Informational |
@@ -534,9 +525,7 @@ Con los volúmenes actuales (13 solicitudes, 2.261 vehículos) no hay problemas 
 - Valores de enum sin uso (`pendiente`, `despachada`).
 - Variables `BREVO_SMTP_*` sin uso; claves legacy y nuevas de Supabase coexistiendo.
 - Dependencia `claude` sin uso.
-- Documentación de testing desactualizada (`tests/documentacion_testing.md` y `tests/plan_maestro_testing.md` describen la suite de septiembre); script `test:integration` roto.
-- Historial de migraciones de Supabase desalineado con el repo: las aplicadas desde el SQL Editor no quedan registradas (brecha 015, avance 2026-10-13).
-- Sucursales de prueba `TEST-SUC-…` (ids 407 y 408) en producción, restos de la suite de integración antigua.
+- Documentación de testing desactualizada; script `test:integration` roto.
 - Componentes y services muy grandes.
 - `src/middleware.ts` usa la convención obsoleta de Next 16 (renombrada a `proxy.ts`). Funciona; migrar con el codemod oficial.
 - La lista de sucursales de `/registro` se genera en el build (página estática): una sucursal nueva no aparece hasta el siguiente despliegue.
@@ -565,57 +554,43 @@ Notas de la fase de corrección:
 
 ## 27. Estado actual del sistema
 
-**Actualizado el 2026-10-13** con verificación directa en la base de producción (consultas de catálogo de solo lectura).
+> **2026-10-13:** los cambios posteriores a esta sección (datos de prueba y asignación de sucursales por rol) están en la sección 29. La migración `20261013150000` y el script `supabase/scripts/01_asignar_sucursales_sin_jefe.sql` están **aplicados en producción**. La tabla de brechas de abajo conserva su estado del 2026-10-07, salvo la nota de la brecha 005 en su archivo.
 
-- **Base de datos:** están aplicadas las **15 migraciones** de `projecto_logistica_hm/supabase/migrations/`: las 7 de la auditoría, las 3 de los requisitos, la corrección de R8 y las 4 de la brecha 011. Las brechas 001 y 002 (escalamiento a administrador) están cerradas en la base.
-- **Código:** las correcciones de la auditoría y los requisitos (fases 1 a 6) están integrados en la rama `joaco-ciclo-2` (y en `feature/requisitos-2026-10`, salvo los commits del 2026-10-13). Si esa versión está **desplegada en el hosting: No determinado**. Hasta desplegarla, sigue vigente la brecha 027 (Next.js vulnerable) en lo que esté publicado.
-- **Verificación local** (2026-10-13): 932 tests en verde, `tsc --noEmit` y ESLint sin errores, `next build` correcto.
-- Pasos pendientes del responsable: [`plan-despliegue-correcciones-2026-10-07.md`](plan-despliegue-correcciones-2026-10-07.md).
+Actualizado tras la fase de corrección (2026-10-07). El código corregido está en la rama `fix/brechas-auditoria-2026-10-07`; **no está desplegado** y las migraciones **no están aplicadas** en producción.
 
-| Brecha | Severidad | Estado (2026-10-13) |
+- Mientras no se apliquen las migraciones 001/002 y se despliegue el código, producción sigue expuesta a las brechas 001 y 002 (escalamiento a administrador) y a la 027 (Next.js vulnerable).
+- Verificación local de la rama: 699 tests unitarios en verde (eran 521), `tsc --noEmit` sin errores, ESLint sin errores, `next build` correcto y `npm audit --omit=dev` con 0 vulnerabilidades.
+- Pasos de despliegue y acciones del responsable: [`plan-despliegue-correcciones-2026-10-07.md`](plan-despliegue-correcciones-2026-10-07.md).
+
+| Brecha | Severidad | Estado |
 |---|---|---|
-| 001 Escalamiento vía UPDATE usuario | Critical | **Corregida · migración aplicada en producción** |
-| 002 Rol desde metadatos del registro | Critical | **Corregida · migración aplicada en producción** |
-| 027 Next.js vulnerable | Critical | Corregida en código · despliegue No determinado |
-| 003 Columna `aprobado` inexistente | High | **Corregida · migración aplicada en producción** |
+| 001 Escalamiento vía UPDATE usuario | Critical | Código listo · migración pendiente de aplicar |
+| 002 Rol desde metadatos del registro | Critical | Código listo · migración pendiente de aplicar |
+| 027 Next.js vulnerable | Critical | Corregida · pendiente de desplegar |
+| 003 Columna `aprobado` inexistente | High | Código listo · migración pendiente de aplicar |
 | 004 Actions sin autenticación | High | Corregida |
-| 005 RLS permisivo | High | **Corregida · migración aplicada en producción** |
+| 005 RLS permisivo | High | Código listo · migración pendiente de aplicar |
 | 006 IDOR | High | Corregida |
 | 007 Contraseña en el seed | High | Parcial · **rotar la contraseña (responsable)** |
 | 008 Alcance sucursal/zona | Medium | Corregida (reglas por defecto a confirmar) |
 | 009 Sesión de desactivados / cambio de clave | Medium | Corregida |
-| 010 Concurrencia | Medium | Parcial · trigger anti doble reserva y RPC de intentos aplicados; faltan RPC transaccionales |
-| 011 Slots desincronizados | Medium | **Corregida · aplicada en producción el 2026-10-13 (0 diferencias)** |
-| 012 Bloqueo de login / enumeración | Medium | Parcial · RPC aplicada; falta configuración en el dashboard de Supabase |
+| 010 Concurrencia | Medium | Parcial (transiciones y doble reserva; faltan RPC transaccionales) |
+| 011 Slots desincronizados | Medium | Pendiente (requiere acceso a BD) |
+| 012 Bloqueo de login / enumeración | Medium | Parcial · falta configuración en el dashboard de Supabase |
 | 013 Contraseñas temporales | Medium | Corregida |
-| 014 Funciones SECURITY DEFINER | Medium | Parcial · migración aplicada; faltan `es_administrador` (activo NULL = true) y `usuario_tiene_sucursal` con `auth.uid()` |
-| 015 Esquema sin migraciones | Medium | Parcial · 15 migraciones versionadas y aplicadas; faltan la migración base y alinear el historial de Supabase |
-| 016 Borrado en cascada de sucursal | Medium | **Corregida · migración aplicada en producción** |
-| 017 Cobertura de tests | Medium | Parcial (unitarios, actions y contrato de migraciones; faltan RLS, triggers e integración) |
-| 018 Auditoría y notificaciones | Low | Parcial (requiere decisión de diseño; R7 agregó correos, no notificaciones internas) |
+| 014 Funciones SECURITY DEFINER | Medium | Parcial · migración pendiente de aplicar |
+| 015 Esquema sin migraciones | Medium | Parcial (migraciones de corrección; falta la base) |
+| 016 Borrado en cascada de sucursal | Medium | Código listo · migración pendiente de aplicar |
+| 017 Cobertura de tests | Medium | Parcial (unitarios y actions; faltan RLS e integración) |
+| 018 Auditoría y notificaciones | Low | Parcial (requiere decisión de diseño) |
 | 019 Headers de seguridad | Low | Corregida (CSP en Report-Only) |
 | 020 Errores internos / `next` | Low | Corregida |
-| 021 Inyección en filtros | Low | Corregida (índice único `lower(nombre)` pendiente) |
+| 021 Inyección en filtros | Low | Corregida (índice único pendiente) |
 | 022 HTML en correos | Low | Corregida |
 | 023 Validación de archivos | Low | Corregida |
-| 024 Rendimiento | Low | Parcial · índices aplicados; falta paginación |
-| 025 Email del admin hardcodeado | Informational | Corregida · migración aplicada; requiere `ADMIN_PRINCIPAL_EMAIL` en el hosting |
+| 024 Rendimiento | Low | Parcial (cache de perfil, filtro por zona e índices; falta paginación) |
+| 025 Email del admin hardcodeado | Informational | Código listo · requiere `ADMIN_PRINCIPAL_EMAIL` y la migración |
 | 026 Dependencias y variables de entorno | Informational | Parcial (acciones del responsable en el hosting) |
-
-### Requisitos implementados después de la auditoría (rama `feature/requisitos-2026-10`)
-
-| Fase | Requisitos | Resumen |
-|---|---|---|
-| 1 | — | Mensaje con correo de soporte para cuentas desactivadas (`NEXT_PUBLIC_SOPORTE_EMAIL`); "Fecha límite de entrega propuesta" en todas las pantallas; estados visibles del vehículo (Disponible, Reservado, Vendido); solicitudes rechazadas o canceladas sin observaciones ni documentos; prioridades con una cola por sucursal |
-| 2 | R2, R8, R13, R14 | Traslados internos de 1 vehículo; cancelación en tránsito de solicitudes y traslados (RPC atómicas); bandeja `/solicitudes/recepciones` con novedades, observación y fotos; reprogramación auditada (`recalendarizacion`); auditoría de altas, ediciones, eliminaciones e importaciones de vehículos |
-| 3 | R7 | Correos de operaciones críticas (ver sección 14) |
-| 4 | R2, R3, R5, R11, R12 | Paneles de acción del Jefe de Local y del Ejecutivo; vehículos en tránsito con su destino; 20 % de slots extra por sucursal como aviso |
-| 5 | R16 | Calendario de logística con vistas mes/semana/día, filtros en la URL, indicadores y reprogramación arrastrando |
-| 6 | R17 | `/logistica/reportes` (solo administrador): tiempos, atrasos, reprogramaciones y cancelaciones por encargado, exportación a Excel; indicadores propios en el dashboard de Logística |
-
-La descripción completa de cada requisito (R1–R17) **no está documentada en el repositorio**: solo se conoce por los mensajes de commit. Se recomienda agregar el listado acordado con el negocio.
-
-Correcciones posteriores (2026-10-13): la cancelación de un traslado interno descuenta también `slots_ocupados` (corrección de R8) y la brecha 011.
 
 ## 28. Historial de cambios
 
@@ -624,4 +599,71 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-07 | Creación del documento: auditoría inicial de solo lectura, 26 brechas documentadas | Claude (auditoría asistida) |
 | 2026-10-07 | Registro de decisiones del responsable (sección 26) | Claude (auditoría asistida) |
 | 2026-10-07 | Fase de corrección: código, migraciones y tests en `fix/brechas-auditoria-2026-10-07`; sección "Solución aplicada" en cada brecha; nueva brecha 027; estado actualizado (sección 27) y plan de despliegue | Claude (auditoría asistida) |
-| 2026-10-13 | Verificación en producción: las 7 migraciones de la auditoría y las 3 de requisitos ya estaban aplicadas. Corrección de R8 (slots al cancelar un traslado) y de la brecha 011, aplicadas en producción. Actualizadas las secciones 4–5, 7–8, 12, 14, 16–18, 20, 25 y 27 (requisitos implementados), y las brechas 001–003, 005, 010–012, 014–016, 021, 024 y 025 | Claude (asistido) |
+| 2026-10-13 | Datos de prueba en producción, panel de priorizaciones del dashboard solo informativo y corrección de la asignación de sucursales y zonas por rol (migración `20261013150000`). Secciones 4, 7, 8, 9, 12, 15, 16 y nueva sección 29 | Claude (asistido) |
+
+## 29. Cambios del 2026-10-13
+
+Rama `feature/requisitos-2026-10`.
+
+### 29.1 Asignación de sucursales y zonas por rol
+
+**Problema encontrado**
+- En `/admin/usuarios`, el modal permitía asignar "sucursales a su cargo" también a administradores. Al editar uno, `UsersService` le pasó las 6 sucursales (`sucursal.usuario_id`) y se las quitó en silencio a los jefes de local. En producción quedaron todas a cargo de un administrador y Valparaíso sin jefe, así que su ejecutivo no podía crear solicitudes.
+- Los errores de BD al guardar sucursales y zonas se ignoraban: el modal informaba éxito aunque no se hubiera guardado nada.
+- Nada impedía que una sucursal fuera base de un jefe y estuviera a cargo de otro, ni que logística tuviera varias zonas.
+- `SolicitudesService.getJefeLocalDeSucursal` consultaba una tabla N:M `usuario_sucursal` que no existe.
+- La RLS de lectura de `solicitud` solo dejaba ver al jefe de local su sucursal base, y solo en estado pendiente o priorizada.
+
+**Modelo** (sin tablas nuevas): las reglas por rol están en la sección 12. Las sucursales adicionales siguen en `sucursal.usuario_id`: al ser una sola columna, cada sucursal tiene a lo sumo un jefe.
+
+**Código**
+
+| Archivo | Cambio |
+|---|---|
+| `src/lib/asignaciones.ts` (nuevo) | Reglas puras: `normalizarAsignaciones`, `sucursalesOcupadasPorJefes`, `conflictoJefeLocal`, `validarAsignacionesFormulario` |
+| `src/services/users.service.ts` | `createUser` y `updateUser` validan asignaciones y conflictos antes de escribir (al crear, antes de crear la cuenta en Auth). Solo un jefe de local puede tener sucursales a cargo. `setSucursalesEncargadas` y `setZonasAsignadas` devuelven el error en vez de ignorarlo |
+| `src/app/admin/usuarios/UsersTableClient.tsx` | Campos según el rol: sucursal base; sucursales adicionales solo para el jefe de local, con las de otros jefes bloqueadas y su nombre; una sola zona para logística. Errores dentro del modal |
+| `src/services/solicitudes.service.ts` | `getJefeLocalDeSucursal` usa primero `sucursal.usuario_id` y después la sucursal base; se quitó la consulta a `usuario_sucursal` |
+
+**Base de datos:** migración `supabase/migrations/20261013150000_asignacion_sucursales_y_zonas_por_rol.sql`, con su rollback.
+- **Datos:** quita los encargados que no son jefe de local y deja la base de cada jefe a su cargo. Si encuentra conflictos, se detiene.
+- **`validar_encargado_sucursal`:** el encargado debe ser jefe de local y la sucursal no puede ser la base de otro jefe (error P0001, el mensaje se muestra al usuario).
+- **Triggers nuevos en `usuario`:** `tr_validar_base_jefe_local` y `tr_sincronizar_sucursales_jefe_local`.
+- **Índice:** `usuario_zona_una_por_usuario`.
+- **RLS:** `solicitud_select_participantes`, `sv_select_participantes` y `observacion_select_participantes` incluyen al jefe de local con origen o destino en cualquiera de sus sucursales. `traslado_veh_select` incluye el origen.
+
+**Después de la migración:** el script `supabase/scripts/01_asignar_sucursales_sin_jefe.sql` deja Valparaíso (9), Santiago Centro (8) y las sucursales de prueba 407 y 408 a cargo de Joaquin Lepe, por decisión del responsable. Concón (7) queda con su jefe de base.
+
+**Estado en producción (verificado 2026-10-13):** migración y script aplicados. Las 6 sucursales tienen jefe de local: 6, 8, 9, 407 y 408 → Joaquin Lepe; 7 → maickol concon.
+
+**Pendiente:**
+- Los usuarios de logística sin zona (por ejemplo "flowcode soluciones") y los ejecutivos, jefes o logística sin sucursal base deberán completarlas la próxima vez que se editen.
+- La RLS de lectura de logística por zona no se alineó con la regla de la app (sigue solo como participante).
+
+### 29.2 Panel de priorizaciones del dashboard del jefe de local
+
+`src/components/DashboardJefeLocal.tsx`: el panel "Priorizaciones pendientes" ya no prioriza directamente. Cada fila tiene un botón "Ver" que abre `/solicitudes/prioridades`, donde la cola se ordena arrastrando. La action `priorizarSolicitudAction` se mantiene porque la usa esa página.
+
+### 29.3 Datos de prueba en producción
+
+Con autorización del responsable, se poblaron datos de prueba en la rama principal de Supabase. Los scripts y su documentación están en `supabase/seed/` (ver `supabase/seed/README.md`).
+
+| Archivo | Uso |
+|---|---|
+| `01_poblar_escenarios.sql` | 30 escenarios escritos a mano (S1–S30) y 4 traslados |
+| `02_limpiar_escenarios.sql` | Borra solo los datos de prueba y restaura vehículos, colas y slots |
+| `03_validar_escenarios.sql` | Controles de integridad, historial, fechas, colas y RLS por usuario (solo lectura) |
+| `04_poblar_100_solicitudes.sql` | 100 solicitudes generadas (S1001–S1100) en todos los estados y 6 traslados |
+
+- Cada solicitud recorre las mismas transiciones que `SolicitudesService`, con sus validaciones. Así se disparan los triggers reales y cada paso queda en `auditoria` con su actor y su hora.
+- Usan usuarios reales y vehículos existentes del stock; no crean usuarios ni vehículos ni cambian el esquema.
+- Todo lo creado tiene un id que empieza con `5eed`.
+- **Estado en producción (2026-10-13):** están cargadas las 100 solicitudes S1001–S1100 y 6 traslados; las 30 de `01` ya se limpiaron.
+- Para cualquier análisis de datos reales, excluir `id::text like '5eed%'`.
+- **Atención:** avanzar una solicitud de prueba desde la app envía correos reales (Brevo) a las cuentas de los usuarios.
+
+Hallazgos del poblamiento:
+1. Las solicitudes creadas por un jefe de local no guardan `fecha_confirmacion`, así que la reportería de logística no mide su tiempo de respuesta.
+2. Los traslados internos suman `slots_ocupados` que `fn_recalcular_slots_ocupados` no cuenta (brecha 011).
+3. Asignar un encargado desde `priorizada` no limpia `posicion_prioridad`.
+4. Revertir un despacho conserva `fecha_inicio_transito`.

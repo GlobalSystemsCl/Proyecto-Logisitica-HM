@@ -1,6 +1,11 @@
 ﻿'use client';
 
-import { useState, useEffect, useTransition } from 'react';
+import { useState, useEffect, useMemo, useTransition } from 'react';
+import {
+  ROLES_CON_SUCURSAL_BASE,
+  sucursalesOcupadasPorJefes,
+  validarAsignacionesFormulario,
+} from '@/lib/asignaciones';
 import { UserProfile, UserRole } from '@/types/auth.types';
 import { Sucursal, Zona } from '@/types/sucursal.types';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
@@ -65,41 +70,163 @@ function MultiCheckSelector({
   options,
   selected,
   onToggle,
+  ayuda,
 }: {
   title: string;
-  options: { id: number; label: string }[];
+  /** `bloqueadaPor`: la opción no se puede elegir y se indica por qué. */
+  options: { id: number; label: string; bloqueadaPor?: string }[];
   selected: number[];
   onToggle: (id: number) => void;
+  ayuda?: string;
 }) {
   return (
     <div className="space-y-1.5">
       <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
         {title}
       </label>
+      {ayuda && <p className="text-[11px] text-neutral-400">{ayuda}</p>}
       {options.length === 0 ? (
         <p className="text-xs text-neutral-400 italic">Sin opciones disponibles.</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {options.map((o) => {
             const active = selected.includes(o.id);
+            const bloqueada = Boolean(o.bloqueadaPor) && !active;
             return (
               <button
                 type="button"
                 key={o.id}
                 onClick={() => onToggle(o.id)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
+                disabled={bloqueada}
+                title={bloqueada ? `A cargo de ${o.bloqueadaPor}` : undefined}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
                   active
-                    ? 'bg-neutral-900 text-white border-neutral-900'
-                    : 'bg-white text-neutral-600 border-neutral-300 hover:border-neutral-900'
+                    ? 'bg-neutral-900 text-white border-neutral-900 cursor-pointer'
+                    : bloqueada
+                      ? 'bg-neutral-50 text-neutral-400 border-neutral-200 cursor-not-allowed'
+                      : 'bg-white text-neutral-600 border-neutral-300 hover:border-neutral-900 cursor-pointer'
                 }`}
               >
                 {o.label}
+                {bloqueada && <span className="ml-1 text-[10px]">· {o.bloqueadaPor}</span>}
               </button>
             );
           })}
         </div>
       )}
     </div>
+  );
+}
+
+const ROTULO_SUCURSAL_BASE: Record<UserRole, string> = {
+  ejecutivo: 'Sucursal *',
+  jefe_local: 'Sucursal base *',
+  logistica: 'Sucursal base *',
+  administrador: 'Sucursal (opcional)',
+  operaciones: 'Sucursal (opcional)',
+};
+
+/**
+ * Campos de asignación según el rol (ver `lib/asignaciones.ts`):
+ * ejecutivo → una sucursal; logística → sucursal base y una zona; jefe de
+ * local → sucursal base y sucursales adicionales a su cargo. Las sucursales
+ * que ya tiene otro jefe de local aparecen bloqueadas.
+ */
+function AsignacionesFields({
+  rol,
+  sucursales,
+  zonas,
+  ocupadas,
+  sucursalId,
+  onSucursalId,
+  sucursalesIds,
+  onSucursalesIds,
+  zonasIds,
+  onZonasIds,
+  error,
+}: {
+  rol: UserRole;
+  sucursales: Sucursal[];
+  zonas: Zona[];
+  ocupadas: Map<number, string>;
+  sucursalId: number | null;
+  onSucursalId: (id: number | null) => void;
+  sucursalesIds: number[];
+  onSucursalesIds: (ids: number[]) => void;
+  zonasIds: number[];
+  onZonasIds: (ids: number[]) => void;
+  error: string | null;
+}) {
+  const esJefe = rol === 'jefe_local';
+  const requiereBase = ROLES_CON_SUCURSAL_BASE.includes(rol);
+  const selectCls =
+    'w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900';
+
+  return (
+    <>
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+          {ROTULO_SUCURSAL_BASE[rol]}
+        </label>
+        <select
+          required={requiereBase}
+          value={sucursalId ?? ''}
+          onChange={(e) => {
+            const id = e.target.value ? Number(e.target.value) : null;
+            onSucursalId(id);
+            if (id !== null) onSucursalesIds(sucursalesIds.filter((s) => s !== id));
+          }}
+          className={selectCls}
+        >
+          <option value="">Seleccionar sucursal...</option>
+          {sucursales.map((s) => {
+            const jefe = esJefe ? ocupadas.get(s.id) : undefined;
+            return (
+              <option key={s.id} value={s.id} disabled={Boolean(jefe) && s.id !== sucursalId}>
+                {s.nombre}{s.direccion ? ` - ${s.direccion}` : ''}{jefe ? ` (a cargo de ${jefe})` : ''}
+              </option>
+            );
+          })}
+        </select>
+      </div>
+
+      {esJefe && (
+        <MultiCheckSelector
+          title="Sucursales adicionales a su cargo"
+          ayuda="Cada sucursal tiene un solo jefe de local. Las que ya tienen jefe aparecen bloqueadas."
+          options={sucursales
+            .filter((s) => s.id !== sucursalId)
+            .map((s) => ({ id: s.id, label: s.nombre ?? `Sucursal #${s.id}`, bloqueadaPor: ocupadas.get(s.id) }))}
+          selected={sucursalesIds}
+          onToggle={(id) => onSucursalesIds(toggleId(sucursalesIds, id))}
+        />
+      )}
+
+      {rol === 'logistica' && (
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+            Zona de logística *
+          </label>
+          <select
+            required
+            value={zonasIds[0] ?? ''}
+            onChange={(e) => onZonasIds(e.target.value ? [Number(e.target.value)] : [])}
+            className={selectCls}
+          >
+            <option value="">Seleccionar zona...</option>
+            {zonas.map((z) => (
+              <option key={z.id} value={z.id}>{z.nombre}</option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-start gap-2 p-3 rounded-xl border border-red-200 bg-red-50 text-xs text-red-800">
+          <span>{error}</span>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -139,6 +266,16 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   const [editSucursalId, setEditSucursalId] = useState<number | null>(null);
   const [editSucursalesIds, setEditSucursalesIds] = useState<number[]>([]);
   const [editZonasIds, setEditZonasIds] = useState<number[]>([]);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Sucursales que ya tienen jefe de local (base o adicionales), con su nombre.
+  const jefes = useMemo(
+    () => users.map((u) => ({ id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim(), rol: u.rol, sucursal_id: u.sucursal_id, sucursales: u.sucursales })),
+    [users]
+  );
+  const ocupadasCrear = useMemo(() => sucursalesOcupadasPorJefes(jefes), [jefes]);
+  const ocupadasEditar = useMemo(() => sucursalesOcupadasPorJefes(jefes, editUserId), [jefes, editUserId]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -171,12 +308,21 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     setSucursalId(null);
     setSucursalesIds([]);
     setZonasIds([]);
+    setCreateError(null);
   };
 
   const handleCreateUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFeedback(null);
     setCopiedCreds(false);
+
+    const errorAsignacion = validarAsignacionesFormulario(
+      { rol, sucursal_id: sucursalId, sucursales_ids: sucursalesIds, zonas_ids: zonasIds },
+      ocupadasCrear,
+      sucursales
+    );
+    setCreateError(errorAsignacion);
+    if (errorAsignacion) return;
 
     let fullEmail = emailPrefix.trim();
     if (!fullEmail.includes('@')) {
@@ -191,8 +337,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
         rol,
         password: customPassword.trim() || undefined,
         sucursal_id: sucursalId,
-        sucursales_ids: sucursalesIds.length > 0 ? sucursalesIds : undefined,
-        zonas_ids: zonasIds.length > 0 ? zonasIds : undefined,
+        sucursales_ids: rol === 'jefe_local' ? sucursalesIds : [],
+        zonas_ids: rol === 'logistica' ? zonasIds : [],
       });
 
       if (res.success) {
@@ -205,10 +351,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
         setIsModalOpen(false);
         resetForm();
       } else {
-        setFeedback({
-          type: 'error',
-          message: res.error || 'Error al crear usuario.',
-        });
+        setCreateError(res.error || 'Error al crear usuario.');
       }
     });
   };
@@ -315,11 +458,20 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     setEditSucursalId(null);
     setEditSucursalesIds([]);
     setEditZonasIds([]);
+    setEditError(null);
   };
 
   const handleEditUser = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setFeedback(null);
+
+    const errorAsignacion = validarAsignacionesFormulario(
+      { rol: editRol, sucursal_id: editSucursalId, sucursales_ids: editSucursalesIds, zonas_ids: editZonasIds },
+      ocupadasEditar,
+      sucursales
+    );
+    setEditError(errorAsignacion);
+    if (errorAsignacion) return;
 
     startTransition(async () => {
       const res = await updateUserAction({
@@ -328,8 +480,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
         apellido: editApellido.trim(),
         rol: editRol,
         sucursal_id: editSucursalId,
-        sucursales_ids: editSucursalesIds.length > 0 ? editSucursalesIds : undefined,
-        zonas_ids: editZonasIds.length > 0 ? editZonasIds : undefined,
+        sucursales_ids: editRol === 'jefe_local' ? editSucursalesIds : [],
+        zonas_ids: editRol === 'logistica' ? editZonasIds : [],
       });
 
       if (res.success) {
@@ -340,10 +492,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
         setIsEditModalOpen(false);
         resetEditForm();
       } else {
-        setFeedback({
-          type: 'error',
-          message: res.error || 'Error al actualizar usuario.',
-        });
+        setEditError(res.error || 'Error al actualizar usuario.');
       }
     });
   };
@@ -814,6 +963,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                     const next = e.target.value as UserRole;
                     setRol(next);
                     if (next !== 'logistica') setZonasIds([]);
+                    if (next !== 'jefe_local') setSucursalesIds([]);
+                    setCreateError(null);
                   }}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                 >
@@ -825,42 +976,19 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 </select>
               </div>
 
-              {/* Sucursal */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                  Sucursal Asignada *
-                </label>
-                <select
-                  value={sucursalId ?? ''}
-                  onChange={(e) => setSucursalId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                >
-                  <option value="">Seleccionar sucursal...</option>
-                  {sucursales.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}{s.direccion ? ` - ${s.direccion}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {(rol === 'jefe_local' || rol === 'administrador') && (
-                <MultiCheckSelector
-                  title="Sucursales a su cargo (encargado de local)"
-                  options={sucursales.filter((s) => s.id !== sucursalId).map((s) => ({ id: s.id, label: s.nombre ?? '' }))}
-                  selected={sucursalesIds}
-                  onToggle={(id) => setSucursalesIds((prev) => toggleId(prev, id))}
-                />
-              )}
-
-              {rol === 'logistica' && (
-                <MultiCheckSelector
-                  title="Zonas de logística territorial"
-                  options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
-                  selected={zonasIds}
-                  onToggle={(id) => setZonasIds((prev) => toggleId(prev, id))}
-                />
-              )}
+              <AsignacionesFields
+                rol={rol}
+                sucursales={sucursales}
+                zonas={zonas}
+                ocupadas={ocupadasCrear}
+                sucursalId={sucursalId}
+                onSucursalId={setSucursalId}
+                sucursalesIds={sucursalesIds}
+                onSucursalesIds={setSucursalesIds}
+                zonasIds={zonasIds}
+                onZonasIds={setZonasIds}
+                error={createError}
+              />
 
               {/* Optional Custom Password */}
               <div className="space-y-1.5">
@@ -969,6 +1097,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                     const next = e.target.value as UserRole;
                     setEditRol(next);
                     if (next !== 'logistica') setEditZonasIds([]);
+                    if (next !== 'jefe_local') setEditSucursalesIds([]);
+                    setEditError(null);
                   }}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
                 >
@@ -980,42 +1110,19 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 </select>
               </div>
 
-              {/* Sucursal */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                  Sucursal Asignada
-                </label>
-                <select
-                  value={editSucursalId ?? ''}
-                  onChange={(e) => setEditSucursalId(e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                >
-                  <option value="">Seleccionar sucursal...</option>
-                  {sucursales.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.nombre}{s.direccion ? ` - ${s.direccion}` : ''}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {(editRol === 'jefe_local' || editRol === 'administrador') && (
-                <MultiCheckSelector
-                  title="Sucursales a su cargo (encargado de local)"
-                  options={sucursales.filter((s) => s.id !== editSucursalId).map((s) => ({ id: s.id, label: s.nombre ?? '' }))}
-                  selected={editSucursalesIds}
-                  onToggle={(id) => setEditSucursalesIds((prev) => toggleId(prev, id))}
-                />
-              )}
-
-              {editRol === 'logistica' && (
-                <MultiCheckSelector
-                  title="Zonas de logística territorial"
-                  options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
-                  selected={editZonasIds}
-                  onToggle={(id) => setEditZonasIds((prev) => toggleId(prev, id))}
-                />
-              )}
+              <AsignacionesFields
+                rol={editRol}
+                sucursales={sucursales}
+                zonas={zonas}
+                ocupadas={ocupadasEditar}
+                sucursalId={editSucursalId}
+                onSucursalId={setEditSucursalId}
+                sucursalesIds={editSucursalesIds}
+                onSucursalesIds={setEditSucursalesIds}
+                zonasIds={editZonasIds}
+                onZonasIds={setEditZonasIds}
+                error={editError}
+              />
 
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-200">

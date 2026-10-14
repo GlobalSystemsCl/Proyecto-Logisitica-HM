@@ -8,7 +8,8 @@ fecha, cada una con su script de reversión.
 supabase/
 ├── scripts/00_respaldo_antes_de_migrar.sql   consultas de solo lectura para respaldar
 ├── migrations/                               cambios, en orden de aplicación
-└── rollback/                                 reversión de cada migración (mismo nombre)
+├── rollback/                                 reversión de cada migración (mismo nombre)
+└── seed/                                     datos de prueba del ciclo de vida (ver seed/README.md)
 ```
 
 ## Orden de aplicación
@@ -38,6 +39,7 @@ Aplicar **antes** de desplegar el código de esa rama, en este orden:
 | 9 | `20261009120000_req_traslados_cancelacion_recepcion.sql` | R8, R13, R14 | Bajo: columnas nuevas, trigger de 1 vehículo por traslado nuevo y funciones de cancelación |
 | 10 | `20261009130000_req_indices_calendario_reportes.sql` | R16, R17 | Bajo: solo índices |
 | 11 | `20261013120000_fix_cancelar_traslado_slots_ocupados.sql` | R8 | Bajo: reemplaza `fn_cancelar_traslado_interno` para que descuente también `slots_ocupados` del destino (las 8–10 ya están aplicadas en producción) |
+| 12 | `20261013150000_asignacion_sucursales_y_zonas_por_rol.sql` | Asignaciones por rol | Medio: quita los encargados de sucursal que no son jefe de local (datos), agrega triggers de "un jefe por sucursal", una zona por usuario de Logística y amplía la RLS de lectura del jefe de local a todas sus sucursales. Después, ejecutar `scripts/01_asignar_sucursales_sin_jefe.sql` (deja Valparaíso, Santiago Centro y las sucursales de prueba a cargo de Joaquin Lepe) |
 
 ## Brecha 011 — contadores de slots (aplicar en este orden)
 

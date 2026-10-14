@@ -183,7 +183,7 @@ describe('UsersService', () => {
       admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-2' })];
       admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-2' } }, error: null });
 
-      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo' });
+      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo', sucursal_id: 1 });
 
       expect(res.emailSent).toBe(true);
       expect(res.tempPassword).toBeUndefined();
@@ -195,7 +195,7 @@ describe('UsersService', () => {
       admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-2' })];
       admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-2' } }, error: null });
 
-      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo' });
+      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo', sucursal_id: 1 });
 
       expect(res.emailSent).toBe(false);
       expect(res.tempPassword).toHaveLength(16);
@@ -228,20 +228,22 @@ describe('UsersService', () => {
       admin.results.usuario = [{ data: null, error: null }, { data: null, error: { message: 'column "aprobado" does not exist' } }];
       admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-2' } }, error: null });
 
-      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo' });
+      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'a@test.com', rol: 'ejecutivo', sucursal_id: 1 });
 
       expect(res.success).toBe(false);
       expect(res.error).not.toContain('aprobado');
     });
 
-    it('should_assign_all_branches_as_manager_when_role_is_jefe_local', async () => {
-      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-3', rol: 'jefe_local' })];
-      admin.results.sucursal = [{ data: null, error: null }, { data: null, error: null }];
-      admin.results.usuario_zona = [{ data: null, error: null }];
-      admin.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'u-3' } },
-        error: null,
-      });
+    it('should_assign_base_and_additional_branches_when_role_is_jefe_local', async () => {
+      // usuario: [jefes con esas sucursales como base, correo existente, upsert]
+      admin.results.usuario = [fila([]), { data: null, error: null }, fila({ id: 'u-3', rol: 'jefe_local' })];
+      // sucursal: [verificación de encargados, limpiar, asignar]
+      admin.results.sucursal = [
+        fila([{ id: 1, nombre: '15 Norte', usuario_id: null, encargado: null }]),
+        { data: null, error: null },
+        { data: null, error: null },
+      ];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-3' } }, error: null });
 
       const res = await UsersService.createUser({
         nombre: 'Juan',
@@ -253,23 +255,79 @@ describe('UsersService', () => {
       });
 
       expect(res.success).toBe(true);
-      expect(admin.callsTo('sucursal')[0]).toEqual(['update', { usuario_id: null }]);
-      const assign = admin
-        .callsTo('sucursal')
-        .find((c: [string, ...unknown[]]) => c[0] === 'update' && (c[1] as { usuario_id?: string })?.usuario_id === 'u-3');
-      expect(assign).toBeTruthy();
-      const inCall = admin.callsTo('sucursal').find((c) => c[0] === 'in');
-      expect(inCall).toEqual(['in', 'id', [1, 2, 3]]);
+      expect(admin.callsTo('sucursal')).toContainEqual(['update', { usuario_id: null }]);
+      expect(admin.callsTo('sucursal')).toContainEqual(['update', { usuario_id: 'u-3' }]);
+      expect(admin.callsTo('sucursal')).toContainEqual(['in', 'id', [1, 2, 3]]);
     });
 
-    it('should_not_assign_branches_when_role_is_not_manager', async () => {
-      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-4' })];
-      admin.results.sucursal = [{ data: null, error: null }];
-      admin.results.usuario_zona = [{ data: null, error: null }];
-      admin.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'u-4' } },
-        error: null,
+    it('should_reject_jefe_local_when_a_branch_is_managed_by_another_jefe', async () => {
+      admin.results.usuario = [fila([])];
+      admin.results.sucursal = [
+        fila([
+          { id: 1, nombre: '15 Norte', usuario_id: null, encargado: null },
+          { id: 2, nombre: 'Concón', usuario_id: 'u-otro', encargado: { nombre: 'Luis', apellido: 'Rojas', rol: 'jefe_local' } },
+        ]),
+      ];
+
+      const res = await UsersService.createUser({
+        nombre: 'Juan',
+        apellido: 'Pérez',
+        email: 'jefe@test.com',
+        rol: 'jefe_local',
+        sucursal_id: 1,
+        sucursales_ids: [2],
       });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Cada sucursal tiene un solo jefe de local. Ya están asignadas: Concón (a cargo de Luis Rojas).');
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+    });
+
+    it('should_reject_jefe_local_when_the_branch_is_the_base_of_another_jefe', async () => {
+      admin.results.usuario = [fila([{ id: 'u-otro', nombre: 'Ana', apellido: 'Soto', sucursal_id: 1 }])];
+      admin.results.sucursal = [fila([{ id: 1, nombre: '15 Norte', usuario_id: null, encargado: null }])];
+
+      const res = await UsersService.createUser({
+        nombre: 'Juan',
+        apellido: 'Pérez',
+        email: 'jefe@test.com',
+        rol: 'jefe_local',
+        sucursal_id: 1,
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('15 Norte (a cargo de Ana Soto)');
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+    });
+
+    it('should_allow_taking_a_branch_whose_manager_is_not_a_jefe_local', async () => {
+      admin.results.usuario = [fila([]), { data: null, error: null }, fila({ id: 'u-3', rol: 'jefe_local' })];
+      admin.results.sucursal = [
+        fila([{ id: 1, nombre: '15 Norte', usuario_id: 'u-admin', encargado: { nombre: 'Maic', apellido: 'H', rol: 'administrador' } }]),
+      ];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-3' } }, error: null });
+
+      const res = await UsersService.createUser({
+        nombre: 'Juan',
+        apellido: 'Pérez',
+        email: 'jefe@test.com',
+        rol: 'jefe_local',
+        sucursal_id: 1,
+      });
+
+      expect(res.success).toBe(true);
+    });
+
+    it('should_reject_roles_that_need_a_base_branch_without_one', async () => {
+      const res = await UsersService.createUser({ nombre: 'Luis', apellido: 'Rojas', email: 'e@test.com', rol: 'ejecutivo' });
+
+      expect(res).toEqual({ success: false, error: 'Debes asignar la sucursal base del usuario.' });
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+    });
+
+    it('should_not_assign_branches_when_role_is_not_jefe_local', async () => {
+      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-4' })];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-4' } }, error: null });
 
       const res = await UsersService.createUser({
         nombre: 'Luis',
@@ -281,58 +339,81 @@ describe('UsersService', () => {
       });
 
       expect(res.success).toBe(true);
-      const assign = admin
-        .callsTo('sucursal')
-        .find((c: [string, ...unknown[]]) => c[0] === 'update' && (c[1] as { usuario_id?: string })?.usuario_id === 'u-4');
-      expect(assign).toBeUndefined();
+      expect(admin.callsTo('sucursal')).not.toContainEqual(['update', { usuario_id: 'u-4' }]);
+      const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
+      expect(upsert?.[1]).toMatchObject({ sucursal_id: 1 });
     });
 
-    it('should_assign_zones_when_role_is_logistica', async () => {
+    it('should_assign_one_zone_when_role_is_logistica', async () => {
       admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-log', rol: 'logistica' })];
-      admin.results.sucursal = [{ data: null, error: null }];
-      admin.results.usuario_zona = [{ data: null, error: null }, { data: null, error: null }];
-      admin.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'u-log' } },
-        error: null,
-      });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-log' } }, error: null });
 
       const res = await UsersService.createUser({
         nombre: 'Leo',
         apellido: 'Zona',
         email: 'logistica@test.com',
         rol: 'logistica',
-        zonas_ids: [1, 2],
+        sucursal_id: 1,
+        zonas_ids: [2],
       });
 
       expect(res.success).toBe(true);
       const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
-      expect(inserts).toHaveLength(1);
-      expect(inserts[0][1]).toEqual([
-        { usuario_id: 'u-log', zona_id: 1 },
-        { usuario_id: 'u-log', zona_id: 2 },
-      ]);
+      expect(inserts).toEqual([['insert', [{ usuario_id: 'u-log', zona_id: 2 }]]]);
+    });
+
+    it('should_reject_logistica_with_more_than_one_zone', async () => {
+      const res = await UsersService.createUser({
+        nombre: 'Leo',
+        apellido: 'Zona',
+        email: 'logistica@test.com',
+        rol: 'logistica',
+        sucursal_id: 1,
+        zonas_ids: [1, 2],
+      });
+
+      expect(res).toEqual({ success: false, error: 'Un usuario de Logística debe tener exactamente una zona asignada.' });
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
     });
 
     it('should_not_assign_zones_when_role_is_not_logistica', async () => {
       admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-8', rol: 'ejecutivo' })];
-      admin.results.sucursal = [{ data: null, error: null }];
-      admin.results.usuario_zona = [{ data: null, error: null }];
-      admin.auth.admin.createUser.mockResolvedValue({
-        data: { user: { id: 'u-8' } },
-        error: null,
-      });
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-8' } }, error: null });
 
       const res = await UsersService.createUser({
         nombre: 'Rolando',
         apellido: 'Vera',
         email: 'ejecutivo2@test.com',
         rol: 'ejecutivo',
+        sucursal_id: 1,
         zonas_ids: [1, 2],
       });
 
       expect(res.success).toBe(true);
       const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
       expect(inserts).toHaveLength(0);
+    });
+
+    it('should_report_error_when_saving_branches_fails', async () => {
+      admin.results.usuario = [fila([]), { data: null, error: null }, fila({ id: 'u-3', rol: 'jefe_local' })];
+      admin.results.sucursal = [
+        fila([{ id: 1, nombre: '15 Norte', usuario_id: null, encargado: null }]),
+        { data: null, error: null },
+        { data: null, error: { message: 'Cada sucursal tiene un solo jefe de local.', code: 'P0001' } },
+      ];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-3' } }, error: null });
+
+      const res = await UsersService.createUser({
+        nombre: 'Juan',
+        apellido: 'Pérez',
+        email: 'jefe@test.com',
+        rol: 'jefe_local',
+        sucursal_id: 1,
+      });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toContain('no se pudieron guardar sus asignaciones');
+      expect(res.error).toContain('Cada sucursal tiene un solo jefe de local.');
     });
   });
 
@@ -488,61 +569,99 @@ describe('UsersService', () => {
   });
 
   describe('updateUser', () => {
-    const base = {
+    const perfil = {
       email: 'j2@test.com',
       nombre: 'Marta',
       apellido: 'López',
-      rol: 'jefe_local',
       activo: true,
-      creado: new Date().toISOString(),
       created_at: '2026-01-01T00:00:00Z',
     };
 
     it('should_preserve_managed_branches_when_role_stays_jefe', async () => {
-      admin.results.usuario = [fila({ id: 'u-5', sucursal_id: 1, ...base })];
-      admin.results.sucursal = [
-        fila([{ id: 2 }, { id: 1 }]),
-        { data: null, error: null },
-        { data: null, error: null },
+      // usuario: [asignaciones actuales, bases de otros jefes, update]
+      admin.results.usuario = [
+        fila({ rol: 'jefe_local', sucursal_id: 1 }),
+        fila([]),
+        fila({ id: 'u-5', ...perfil, rol: 'jefe_local', sucursal_id: 1 }),
       ];
-      admin.auth.admin.updateUserById.mockResolvedValue({ data: {}, error: null });
+      // sucursal: [a cargo actuales, verificación, limpiar, asignar]
+      admin.results.sucursal = [fila([{ id: 2 }, { id: 1 }]), fila([]), { data: null, error: null }, { data: null, error: null }];
+      admin.results.usuario_zona = [fila([])];
 
       const res = await UsersService.updateUser('u-5', { rol: 'jefe_local' });
 
       expect(res.success).toBe(true);
-      const inCall = admin.callsTo('sucursal').find((c) => c[0] === 'in');
-      expect(inCall).toEqual(['in', 'id', [2, 1]]);
+      expect(admin.callsTo('sucursal')).toContainEqual(['update', { usuario_id: 'u-5' }]);
+      expect(admin.callsTo('sucursal')).toContainEqual(['in', 'id', [1, 2]]);
+    });
+
+    it('should_remove_additional_branches_when_list_is_empty', async () => {
+      admin.results.usuario = [
+        fila({ rol: 'jefe_local', sucursal_id: 1 }),
+        fila([]),
+        fila({ id: 'u-5', ...perfil, rol: 'jefe_local', sucursal_id: 1 }),
+      ];
+      admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }]), fila([]), { data: null, error: null }, { data: null, error: null }];
+      admin.results.usuario_zona = [fila([])];
+
+      const res = await UsersService.updateUser('u-5', { sucursales_ids: [] });
+
+      expect(res.success).toBe(true);
+      expect(admin.callsTo('sucursal')).toContainEqual(['in', 'id', [1]]);
     });
 
     it('should_unassign_all_branches_when_role_is_demoted', async () => {
-      admin.results.usuario = [fila({ id: 'u-6', sucursal_id: null, ...base })];
-      admin.results.sucursal = [
-        { data: null, error: null },
-        { data: null, error: null },
+      admin.results.usuario = [
+        fila({ rol: 'jefe_local', sucursal_id: 1 }),
+        fila({ id: 'u-6', ...perfil, rol: 'ejecutivo', sucursal_id: 1 }),
       ];
-      admin.auth.admin.updateUserById.mockResolvedValue({ data: {}, error: null });
+      admin.results.sucursal = [fila([{ id: 1 }]), { data: null, error: null }];
+      admin.results.usuario_zona = [fila([])];
 
       const res = await UsersService.updateUser('u-6', { rol: 'ejecutivo' });
 
       expect(res.success).toBe(true);
-      const assign = admin
-        .callsTo('sucursal')
-        .find((c: [string, ...unknown[]]) => c[0] === 'update' && (c[1] as { usuario_id?: string })?.usuario_id === 'u-6');
-      expect(assign).toBeUndefined();
-      const nullUpdate = admin
-        .callsTo('sucursal')
-        .find((c: [string, ...unknown[]]) => c[0] === 'update' && (c[1] as { usuario_id: string | null })?.usuario_id === null);
-      expect(nullUpdate).toEqual(['update', { usuario_id: null }]);
+      expect(admin.callsTo('sucursal')).toContainEqual(['update', { usuario_id: null }]);
+      expect(admin.callsTo('sucursal')).not.toContainEqual(['update', { usuario_id: 'u-6' }]);
+    });
+
+    it('should_reject_role_change_when_the_base_branch_is_missing', async () => {
+      admin.results.usuario = [fila({ rol: 'administrador', sucursal_id: null })];
+      admin.results.sucursal = [fila([])];
+      admin.results.usuario_zona = [fila([])];
+
+      const res = await UsersService.updateUser('u-7', { rol: 'ejecutivo' });
+
+      expect(res).toEqual({ success: false, error: 'Debes asignar la sucursal base del usuario.' });
+      expect(admin.callsTo('usuario').some((c) => c[0] === 'update')).toBe(false);
+    });
+
+    it('should_reject_when_a_branch_belongs_to_another_jefe', async () => {
+      admin.results.usuario = [fila({ rol: 'jefe_local', sucursal_id: 1 }), fila([])];
+      admin.results.sucursal = [
+        fila([{ id: 1 }]),
+        fila([
+          { id: 1, nombre: '15 Norte', usuario_id: 'u-5', encargado: { nombre: 'Marta', apellido: 'López', rol: 'jefe_local' } },
+          { id: 7, nombre: 'Concón', usuario_id: 'u-otro', encargado: { nombre: 'Luis', apellido: 'Rojas', rol: 'jefe_local' } },
+        ]),
+      ];
+      admin.results.usuario_zona = [fila([])];
+
+      const res = await UsersService.updateUser('u-5', { sucursales_ids: [7] });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('Cada sucursal tiene un solo jefe de local. Ya están asignadas: Concón (a cargo de Luis Rojas).');
+      expect(admin.callsTo('usuario').some((c) => c[0] === 'update')).toBe(false);
     });
 
     it('should_clear_zones_when_role_is_demoted_from_logistica', async () => {
-      admin.results.usuario = [fila({ id: 'u-9', sucursal_id: null, ...base, rol: 'logistica' })];
-      admin.results.sucursal = [
-        { data: null, error: null },
-        { data: null, error: null },
+      admin.results.usuario = [
+        fila({ rol: 'logistica', sucursal_id: 1 }),
+        fila([]),
+        fila({ id: 'u-9', ...perfil, rol: 'jefe_local', sucursal_id: 1 }),
       ];
-      admin.results.usuario_zona = [{ data: null, error: null }];
-      admin.auth.admin.updateUserById.mockResolvedValue({ data: {}, error: null });
+      admin.results.sucursal = [fila([]), fila([]), { data: null, error: null }, { data: null, error: null }];
+      admin.results.usuario_zona = [fila([{ zona_id: 3 }]), { data: null, error: null }];
 
       const res = await UsersService.updateUser('u-9', { rol: 'jefe_local' });
 
@@ -552,21 +671,37 @@ describe('UsersService', () => {
       expect(admin.callsTo('usuario_zona')).toContainEqual(['delete']);
     });
 
-    it('should_assign_zones_when_role_is_logistica', async () => {
-      admin.results.usuario = [fila({ id: 'u-10', sucursal_id: null, ...base, rol: 'ejecutivo' })];
-      admin.results.sucursal = [
-        { data: null, error: null },
-        { data: null, error: null },
+    it('should_assign_zone_when_role_is_logistica', async () => {
+      admin.results.usuario = [
+        fila({ rol: 'ejecutivo', sucursal_id: 1 }),
+        fila({ id: 'u-10', ...perfil, rol: 'logistica', sucursal_id: 1 }),
       ];
-      admin.results.usuario_zona = [{ data: null, error: null }, { data: null, error: null }];
-      admin.auth.admin.updateUserById.mockResolvedValue({ data: {}, error: null });
+      admin.results.sucursal = [fila([]), { data: null, error: null }];
+      admin.results.usuario_zona = [fila([]), { data: null, error: null }, { data: null, error: null }];
 
       const res = await UsersService.updateUser('u-10', { rol: 'logistica', zonas_ids: [5] });
 
       expect(res.success).toBe(true);
       const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
-      expect(inserts).toHaveLength(1);
-      expect(inserts[0][1]).toEqual([{ usuario_id: 'u-10', zona_id: 5 }]);
+      expect(inserts).toEqual([['insert', [{ usuario_id: 'u-10', zona_id: 5 }]]]);
+    });
+
+    it('should_not_touch_assignments_when_only_the_name_changes', async () => {
+      admin.results.usuario = [fila({ id: 'u-11', ...perfil, rol: 'ejecutivo', sucursal_id: 1 })];
+
+      const res = await UsersService.updateUser('u-11', { nombre: 'Marta Elena' });
+
+      expect(res.success).toBe(true);
+      expect(admin.callsTo('sucursal')).toHaveLength(0);
+      expect(admin.callsTo('usuario_zona')).toHaveLength(0);
+    });
+
+    it('should_return_error_when_user_does_not_exist', async () => {
+      admin.results.usuario = [fila(null)];
+
+      const res = await UsersService.updateUser('u-x', { rol: 'ejecutivo', sucursal_id: 1 });
+
+      expect(res).toEqual({ success: false, error: 'Usuario no encontrado.' });
     });
   });
 });

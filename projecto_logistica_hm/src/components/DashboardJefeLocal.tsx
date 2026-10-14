@@ -2,12 +2,11 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { CheckCircle2, Clock, ListOrdered, Loader2, PackageCheck, X } from 'lucide-react';
+import { CheckCircle2, Clock, ListOrdered, PackageCheck, X } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import { RecepcionModal } from '@/components/ModalesTraslado';
-import { priorizarSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { recibirTrasladoAction } from '@/app/actions/traslados.actions';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import { itemsRecepcion, recortar, LIMITE_PANEL_JEFE_LOCAL, type ItemRecepcion } from '@/lib/panel';
@@ -42,25 +41,11 @@ export default function DashboardJefeLocal({
   porPriorizar,
 }: Props) {
   const [recibir, setRecibir] = useState<ItemRecepcion | null>(null);
-  const [priorizando, setPriorizando] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
 
   const aprobar = recortar(pendientesAprobar, LIMITE_PANEL_JEFE_LOCAL);
   const recepciones = recortar(itemsRecepcion(recepcionesSolicitudes, recepcionesTraslados), LIMITE_PANEL_JEFE_LOCAL);
   const priorizar = recortar(porPriorizar, LIMITE_PANEL_JEFE_LOCAL);
-
-  async function priorizarAlFinal(id: string) {
-    setPriorizando(id);
-    try {
-      const res = await priorizarSolicitudAction(id);
-      setFeedback({
-        tipo: res.success ? 'success' : 'error',
-        mensaje: res.success ? res.message ?? 'Solicitud priorizada.' : res.error ?? 'No se pudo priorizar.',
-      });
-    } finally {
-      setPriorizando(null);
-    }
-  }
 
   async function confirmarRecepcion(datos: DatosRecepcion, fotos: File[]): Promise<string | null> {
     if (!recibir) return null;
@@ -183,15 +168,13 @@ export default function DashboardJefeLocal({
                   {ETIQUETA_FECHA_LIMITE}: {formatFecha(s.fecha_limite) || '—'}
                 </p>
               </div>
-              <button
-                onClick={() => priorizarAlFinal(s.id)}
-                disabled={priorizando !== null}
-                title="Agregar al final de la cola de su sucursal"
-                className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shrink-0 cursor-pointer disabled:opacity-50"
+              {/* Solo informativo: la priorización se hace arrastrando en su propia página. */}
+              <Link
+                href="/solicitudes/prioridades"
+                className="px-3 py-1.5 text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded-lg shrink-0"
               >
-                {priorizando === s.id && <Loader2 className="w-3 h-3 animate-spin" />}
-                Priorizar
-              </button>
+                Ver
+              </Link>
             </li>
           ))}
         </PanelAcciones>
