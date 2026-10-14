@@ -94,6 +94,7 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-neutral-900 flex flex-col">
       <PageHeader
+        usuarioId={profile.id}
         nombre={profile.nombre}
         apellido={profile.apellido}
         rol={profile.rol}

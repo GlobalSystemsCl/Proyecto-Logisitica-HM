@@ -231,13 +231,13 @@ Lógica duplicada o en conflicto:
 | solicitud_documento | 2 | Metadatos de archivos en Storage | ruta_storage (unique), tipo_mime, tamano_bytes, subido_por |
 | traslado_interno | 3 | Traslado de vehículos vendidos entre sucursales | origen_id, destino_id (CHECK distintos), logistica_id, estado; desde R8/R13: motivo_cancelacion, fecha_cancelacion, cancelado_por, recepcion_con_novedades, observacion_recepcion |
 | traslado_interno_vehiculo | 20 | Vehículos de un traslado | UNIQUE(traslado_id, vehiculo_id); desde R14 un solo vehículo por traslado nuevo (trigger) |
-| notificacion | 0 | Notificaciones internas | **Sin uso**: ninguna función de notificación está conectada a un trigger |
+| notificacion | — | Notificaciones en la app (campana) | Desde 2026-10-14 la escribe `NotificacionService` en cada cambio de estado (sección 30) |
 
 ### Enums
 - `rol_usuario`: ejecutivo, jefe_local, logistica, administrador, operaciones
 - `estado_solicitud`: pendiente, priorizada, asignada, calendarizada, en_transito, entregada, cancelada, finalizada, pendiente_aprobacion, aprobada, rechazada, despachada (`pendiente` y `despachada` no se usan en el flujo actual del código)
 - `disponibilidad`: reservado, liberado, vendido
-- `tipo_solicitud`: evento, venta · `estado_traslado`: pendiente, en_transito, recepcionado, **cancelado** (R8) · `tipo_notificacion` (11 valores)
+- `tipo_solicitud`: evento, venta · `estado_traslado`: pendiente, en_transito, recepcionado, **cancelado** (R8) · `tipo_notificacion` (11 valores; 18 con la migración `20261014120000`)
 
 ### Triggers activos (actualizado 2026-10-13, verificado en producción)
 
@@ -307,7 +307,7 @@ Funciones sin trigger asociado: `cambio_estado_auditoria`, `auditoria_disponibil
 | observacion | admin / participante (desde 2026-10-13, también el JL de sus sucursales) | participante | autor o admin | autor o admin | Correcta |
 | auditoria | admin | — | — | — | Correcta (escritura solo service_role) |
 | insistencia | **cualquier activo** | ejecutivo propio | — | — | Lectura amplia (bajo impacto) |
-| notificacion | destinatario | — | destinatario | destinatario | Correcta (sin uso) |
+| notificacion | destinatario | — (service_role) | destinatario (sin grant: va por Server Action) | destinatario | Correcta |
 | sucursal, zona, marca | activos | admin | admin | admin | Correctas |
 | usuario_zona | propio o admin | admin | admin | admin | Correcta |
 | traslado_interno(_vehiculo) | admin / logística propia / JL origen o destino (en `traslado_interno_vehiculo` era solo destino; alineado el 2026-10-13) | admin, logística | admin, logística; JL solo pasar a recepcionado | admin, logística | Aceptables |
@@ -555,7 +555,7 @@ Con los volúmenes actuales (13 solicitudes, 2.261 vehículos) no hay problemas 
 ## 25. Deuda técnica
 
 - Columna y flujo `aprobado` desalineados entre código y BD.
-- Funciones SQL muertas (auditoría y notificaciones) y tabla `notificacion` sin uso.
+- Funciones SQL muertas de auditoría. (Las de notificación y la tabla `notificacion`: resuelto el 2026-10-14, sección 30.)
 - Valores de enum sin uso (`pendiente`, `despachada`).
 - Variables `BREVO_SMTP_*` sin uso; claves legacy y nuevas de Supabase coexistiendo.
 - Dependencia `claude` sin uso.
@@ -617,7 +617,7 @@ Notas de la fase de corrección:
 | 015 Esquema sin migraciones | Medium | Parcial · 17 migraciones versionadas, aplicadas y registradas en el historial de Supabase; falta la migración base |
 | 016 Borrado en cascada de sucursal | Medium | **Corregida · migración aplicada en producción** |
 | 017 Cobertura de tests | Medium | Parcial (unitarios, actions y contrato de migraciones; faltan RLS, triggers e integración) |
-| 018 Auditoría y notificaciones | Low | Parcial (requiere decisión de diseño; R7 agregó correos, no notificaciones internas) |
+| 018 Auditoría y notificaciones | Low | Parcial · notificaciones en la app implementadas (2026-10-14, migración pendiente de aplicar); falta la decisión de diseño de la auditoría |
 | 019 Headers de seguridad | Low | Corregida (CSP en Report-Only) |
 | 020 Errores internos / `next` | Low | Corregida |
 | 021 Inyección en filtros | Low | Corregida (índice único `lower(nombre)` pendiente) |
@@ -653,6 +653,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-13 | Datos de prueba en producción, panel de priorizaciones del dashboard solo informativo y corrección de la asignación de sucursales y zonas por rol (migración `20261013155000`). Secciones 4, 7, 8, 9, 12, 15, 16 y nueva sección 29 | Claude (asistido) |
 | 2026-10-14 | Integración de las dos actualizaciones del 2026-10-13 (el merge había descartado la primera). La migración de asignación se renombró de `20261013150000` a `20261013155000` porque repetía la versión de `brecha_011_trigger_vehiculos`; el script de asignación pasó a `03_`. Estado de las brechas 014 y 015 en la sección 27 | Claude (asistido) |
 | 2026-10-14 | Aplicadas en producción la migración de la brecha 014 y los scripts de historial (brecha 015) y de limpieza TEST-SUC. Secciones 25, 27 y 29.1; brechas 014 y 015 | Claude (asistido) |
+| 2026-10-14 | Notificaciones en la app por cambios de estado (campana con Realtime) y registro sin correo de Supabase. Nueva sección 30; secciones 8, 9, 25 y 27; brecha 018 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -720,3 +721,42 @@ Hallazgos del poblamiento:
 2. ~~Los traslados internos suman `slots_ocupados` que `fn_recalcular_slots_ocupados` no cuenta (brecha 011).~~ **Resuelto 2026-10-13:** `fn_recalcular_slots_sucursal` cuenta las reservas de traslados.
 3. Asignar un encargado desde `priorizada` no limpia `posicion_prioridad`.
 4. Revertir un despacho conserva `fecha_inicio_transito`.
+
+## 30. Notificaciones en la app (2026-10-14)
+
+Campana en el encabezado con las notificaciones de cada usuario por los cambios de estado de sus solicitudes y traslados internos. Se suman a los correos de R7, que no cambian.
+
+**Quién recibe cada aviso** (acordado con el responsable el 2026-10-14; definido en `src/lib/notificaciones-app.ts`, `DESTINATARIOS_APP`). Nunca se notifica a quien hizo la acción.
+
+| Cambio de estado | Notificación en la app | Correo (R7) |
+|---|---|---|
+| Creada | Jefe de local de origen | Sí |
+| Aprobada | Ejecutivo, Logística de la zona | Sí |
+| Rechazada | Ejecutivo | Sí |
+| Priorizada (entra a la cola; reordenar no avisa) | Ejecutivo | No |
+| Asignada a un encargado | Encargado de Logística, ejecutivo | No |
+| Programada / reprogramada | Ejecutivo, jefes de origen y destino | Sí |
+| Desprogramada (vuelve a la cola) | Ejecutivo, jefe de origen | No |
+| Despachada (en tránsito) | Jefe de destino, ejecutivo | Solo al jefe |
+| Despacho revertido | Jefe de destino, ejecutivo | No |
+| Recibida en destino | Ejecutivo, encargado de Logística | Sí |
+| Finalizada | Jefe de origen, encargado de Logística | No |
+| Cancelada (antes del despacho) | Ejecutivo, jefe de origen, encargado de Logística | No |
+| Cancelada en tránsito / traslado interno cancelado | Todos los involucrados | Sí |
+
+**Cómo funciona**
+- Las actions llaman a `notificar(evento, …)` después de una operación exitosa. `NotificacionService.notificarSolicitud` resuelve los participantes una vez, envía el correo si el evento es de R7 e inserta una fila en `notificacion` por destinatario (service_role). Corre en segundo plano (`after`): si falla, la operación no se ve afectada.
+- La campana (`src/components/CampanaNotificaciones.tsx`, dentro de `PageHeader`) carga la bandeja con `getBandejaNotificacionesAction` y se suscribe con **Supabase Realtime** a los INSERT del propio usuario. La RLS de la tabla solo le entrega los suyos. Ante cada aviso vuelve a pedir la bandeja al servidor.
+- Muestra las últimas 20 y el contador de no leídas. Al abrir una notificación se marca como leída y lleva al detalle (`/solicitudes?solicitud=<id>`, que abre el modal) o a `/solicitudes/traslados`. También hay "Marcar todas como leídas".
+- Marcar como leída va por Server Action (`bandeja.actions.ts`): `authenticated` solo tiene SELECT sobre la tabla y el id del usuario sale de la sesión.
+- CSP: `connect-src` incluye el websocket de Supabase (`wss://…`).
+
+**Base de datos:** migración `supabase/migrations/20261014120000_notificaciones_en_app.sql` (+ rollback): tipos nuevos en `tipo_notificacion`, índices `(usuario_id, leida, created_at)` y `emisor_id`, tabla publicada en Realtime y eliminación de las funciones antiguas `notificar_solicitud`, `notificar_observacion` y `notificar_solicitud_vehiculo`. Esas funciones no tenían trigger y usaban `auth.uid()` como emisor: con service_role es NULL y `emisor_id` es NOT NULL, así que conectarlas habría hecho fallar todas las transiciones. Ensayada en producción (revertida): el destinatario ve solo las suyas, otro usuario no las ve y `authenticated` no puede modificarlas.
+
+**Estado (2026-10-14):** código listo en `joaco-ciclo-2`; **migración pendiente de aplicar**. Hasta aplicarla, solo se guardan los eventos cuyo tipo ya existía en el enum (creada, priorizada, asignada, programada, despachada, recibida, finalizada, cancelada); los demás registran un error en el servidor sin afectar la operación.
+
+**Tests:** `notificaciones-app.test.ts`, `notificacion.service.test.ts`, `notificaciones.actions.test.ts`, `bandeja.actions.test.ts`, `migracion-notificaciones.test.ts`, `security-headers.test.ts`. La campana no tiene test de componente (el proyecto no tiene infraestructura para eso).
+
+**Pendiente**
+- Limpieza de notificaciones antiguas (no hay retención; la tabla crece con el uso).
+- Observaciones nuevas y reservas de vehículos no notifican (los tipos `NUEVA_OBSERVACION`, `VEHICULO_RESERVADO` y `VEHICULO_LIBERADO` quedan sin uso).

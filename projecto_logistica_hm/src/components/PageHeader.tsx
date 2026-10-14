@@ -4,9 +4,12 @@ import { ArrowLeft, LogOut, MapPin } from 'lucide-react';
 import { logoutAction } from '@/app/actions/auth.actions';
 import { ROL_LABEL, UserRole } from '@/types/auth.types';
 import SlotsResumen from '@/components/SlotsResumen';
+import CampanaNotificaciones from '@/components/CampanaNotificaciones';
 import type { SlotSucursalResumen } from '@/lib/slots';
 
 interface PageHeaderProps {
+  /** Id del usuario con sesión: muestra la campana de notificaciones. */
+  usuarioId?: string | null;
   nombre?: string | null;
   apellido?: string | null;
   rol?: UserRole | null;
@@ -34,6 +37,7 @@ interface PageHeaderProps {
  * muestra solo la marca, sin datos de usuario, sin slots y sin cerrar sesión.
  */
 export default function PageHeader({
+  usuarioId,
   nombre,
   apellido,
   rol,
@@ -82,6 +86,8 @@ export default function PageHeader({
           {autenticado && (
             <div className="flex items-center gap-2 sm:gap-3">
               {verSlots && <SlotsResumen sucursales={slots!} />}
+
+              {usuarioId && <CampanaNotificaciones usuarioId={usuarioId} />}
 
               {sucursalNombre && (
                 <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-600">

@@ -17,7 +17,8 @@ import {
 } from '@/lib/auth/guards';
 import type { DatosRecepcion } from '@/lib/recepcion';
 import { NotificacionService } from '@/services/notificacion.service';
-import type { DatosCorreo, EventoNotificacion } from '@/lib/notificaciones';
+import type { DatosCorreo } from '@/lib/notificaciones';
+import type { EventoApp } from '@/lib/notificaciones-app';
 import { enSegundoPlano } from '@/lib/segundoPlano';
 import { ocultarContacto, puedeVerContacto } from '@/lib/auth/contacto';
 
@@ -53,11 +54,12 @@ async function validarSucursalJefeLocal(
 }
 
 /**
- * R7: avisa por correo un hito de la solicitud después de responder al
- * usuario. Nunca bloquea ni revierte la operación.
+ * Avisa un cambio de estado de la solicitud después de responder al usuario:
+ * notificación en la app y, en los hitos de R7, correo. Nunca bloquea ni
+ * revierte la operación.
  */
 function notificar(
-  evento: EventoNotificacion,
+  evento: EventoApp,
   solicitudId: string,
   actorId: string,
   extra?: Partial<DatosCorreo> | (() => Promise<Partial<DatosCorreo>>)
@@ -299,6 +301,9 @@ export async function priorizarSolicitudAction(id: string) {
     const result = await SolicitudesService.priorizarSolicitud(id, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    // Solo cuando entra a la cola; reordenarla no notifica.
+    if (solicitud.estado !== 'priorizada') notificar('solicitud_priorizada', id, profile.id);
+
     revalidarSolicitudes();
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
   } catch (err: unknown) {
@@ -326,6 +331,8 @@ export async function priorizarEnPosicionAction(id: string, posicion: number) {
 
     const result = await SolicitudesService.priorizarEnPosicion(id, posicion, profile.id);
     if (!result.success) return { success: false, error: result.error };
+
+    if (solicitud.estado !== 'priorizada') notificar('solicitud_priorizada', id, profile.id);
 
     revalidarSolicitudes();
     return { success: true, message: `Solicitud priorizada en la posición #${result.posicion} de la cola.` };
@@ -411,6 +418,8 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
 
     const result = await SolicitudesService.cancelarSolicitud(id, motivo, profile.id);
     if (!result.success) return { success: false, error: result.error };
+
+    notificar('solicitud_cancelada', id, profile.id, { motivo: motivo.trim() });
 
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud cancelada.' };
@@ -640,6 +649,8 @@ export async function descalendarizarSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.descalendarizarSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_descalendarizada', solicitudId, profile.id);
+
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud devuelta a priorizada.' };
   } catch (err: unknown) {
@@ -680,6 +691,8 @@ export async function cancelarDespachoSolicitudAction(solicitudId: string) {
 
     const result = await SolicitudesService.cancelarDespacharSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
+
+    notificar('solicitud_despacho_revertido', solicitudId, profile.id);
 
     revalidarSolicitudes();
     return { success: true, message: 'Despacho cancelado: la solicitud volvió a Calendarizada.' };
@@ -789,6 +802,8 @@ export async function finalizarSolicitudAction(solicitudId: string) {
     const result = await SolicitudesService.finalizarSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    notificar('solicitud_finalizada', solicitudId, profile.id);
+
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud finalizada.' };
   } catch (err: unknown) {
@@ -819,6 +834,8 @@ export async function asignarEncargadoAction(solicitudId: string, logisticaId?: 
     const encargadoId = logisticaId && logisticaId.trim() !== '' ? logisticaId.trim() : profile.id;
     const result = await SolicitudesService.asignarEncargadoLogistica(solicitudId, encargadoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
+
+    notificar('solicitud_asignada', solicitudId, profile.id);
 
     revalidarSolicitudes();
     return { success: true, message: 'Encargado de solicitud asignado.' };

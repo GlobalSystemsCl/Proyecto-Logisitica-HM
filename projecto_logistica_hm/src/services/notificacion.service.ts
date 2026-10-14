@@ -12,23 +12,56 @@ import {
   type EventoNotificacion,
   type RolDestinatario,
 } from '@/lib/notificaciones';
+import {
+  TIPO_NOTIFICACION_POR_EVENTO,
+  esEventoConCorreo,
+  resolverDestinatariosApp,
+  rutaNotificacion,
+  textoNotificacion,
+  type DatosNotificacionApp,
+  type EventoApp,
+} from '@/lib/notificaciones-app';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { formatFecha } from '@/lib/fechas';
 import { getAppUrl } from '@/lib/env';
 
 export interface ResultadoNotificacion {
+  /** Correos enviados y fallidos (R7). */
   enviados: number;
   fallidos: number;
+  /** Notificaciones creadas en la app (campana). */
+  enApp: number;
 }
 
-const SIN_ENVIOS: ResultadoNotificacion = { enviados: 0, fallidos: 0 };
+const SIN_ENVIOS: ResultadoNotificacion = { enviados: 0, fallidos: 0, enApp: 0 };
+
+/** Notificación de la bandeja del usuario. */
+export interface NotificacionApp {
+  id: string;
+  tipo: string;
+  titulo: string;
+  mensaje: string;
+  leida: boolean;
+  ruta: string | null;
+  created_at: string;
+}
+
+export interface BandejaNotificaciones {
+  items: NotificacionApp[];
+  noLeidas: number;
+}
+
+/** Cantidad de notificaciones que muestra la campana. */
+export const LIMITE_BANDEJA = 20;
 
 /**
- * Envío de las notificaciones por correo de las operaciones críticas (R7).
+ * Notificaciones de los cambios de estado: correo en los hitos críticos (R7) y
+ * notificación en la app (campana) en todos los cambios de estado.
  *
  * Resuelve los participantes de la solicitud o del traslado, arma el correo
- * con `lib/notificaciones` y lo envía con Brevo. Nunca lanza: un fallo de
- * correo no debe afectar la operación que lo originó (se llama desde `after`).
+ * con `lib/notificaciones` y lo envía con Brevo, e inserta una fila en
+ * `notificacion` por destinatario (`lib/notificaciones-app`). Nunca lanza: un
+ * fallo no debe afectar la operación que lo originó (se llama desde `after`).
  */
 export class NotificacionService {
   /**
@@ -102,7 +135,40 @@ export class NotificacionService {
     const enviados = resultados.filter((r) => r.success).length;
     const fallidos = resultados.length - enviados;
     if (fallidos > 0) console.error(`[notificación ${evento}] ${fallidos} correo(s) no se pudieron enviar.`);
-    return { enviados, fallidos };
+    return { enviados, fallidos, enApp: 0 };
+  }
+
+  /**
+   * Inserta una notificación en la app por destinatario. Devuelve cuántas se
+   * crearon (0 si falla: la operación original no se ve afectada).
+   */
+  static async crearNotificaciones(
+    evento: EventoApp,
+    destinatarios: Destinatario[],
+    emisorId: string,
+    entidad: 'solicitud' | 'traslado_interno',
+    entidadId: string,
+    datos: DatosNotificacionApp
+  ): Promise<number> {
+    if (destinatarios.length === 0) return 0;
+    const { titulo, mensaje } = textoNotificacion(evento, datos);
+    const filas = destinatarios.map((d) => ({
+      usuario_id: d.id,
+      emisor_id: emisorId,
+      tipo: TIPO_NOTIFICACION_POR_EVENTO[evento],
+      titulo,
+      mensaje,
+      entidad,
+      entidad_id: entidadId,
+      ruta: rutaNotificacion(entidad, entidadId),
+    }));
+    const admin = createAdminClient();
+    const { error } = await admin.from('notificacion').insert(filas);
+    if (error) {
+      console.error(`[notificación ${evento}] No se pudieron crear las notificaciones en la app:`, error);
+      return 0;
+    }
+    return filas.length;
   }
 
   /**
@@ -110,7 +176,7 @@ export class NotificacionService {
    * están en la solicitud (motivo, fecha anterior, ubicación final, etc.).
    */
   static async notificarSolicitud(
-    evento: EventoNotificacion,
+    evento: EventoApp,
     solicitudId: string,
     actorId: string | null,
     extra: Partial<DatosCorreo> = {}
@@ -146,12 +212,21 @@ export class NotificacionService {
         ...extra,
       };
 
-      return await NotificacionService.enviar(
-        evento,
-        resolverDestinatarios(evento, porRol, actorId),
-        datos,
-        '/solicitudes'
-      );
+      const correo = esEventoConCorreo(evento)
+        ? await NotificacionService.enviar(evento, resolverDestinatarios(evento, porRol, actorId), datos, '/solicitudes')
+        : SIN_ENVIOS;
+      // emisor_id es obligatorio: sin actor (procesos automáticos) no hay campana.
+      const enApp = actorId
+        ? await NotificacionService.crearNotificaciones(
+            evento,
+            resolverDestinatariosApp(evento, porRol, actorId),
+            actorId,
+            'solicitud',
+            sol.id,
+            datos
+          )
+        : 0;
+      return { ...correo, enApp };
     } catch (err) {
       console.error(`[notificación ${evento}] Error inesperado:`, err);
       return SIN_ENVIOS;
@@ -183,19 +258,80 @@ export class NotificacionService {
         ...extra,
       };
 
-      return await NotificacionService.enviar(
+      const porRol = { jefe_origen: jefeOrigen, jefe_recepcion: jefeRecepcion, logistica_encargado: logisticaEncargado };
+      const correo = await NotificacionService.enviar(
         evento,
-        resolverDestinatarios(
-          evento,
-          { jefe_origen: jefeOrigen, jefe_recepcion: jefeRecepcion, logistica_encargado: logisticaEncargado },
-          actorId
-        ),
+        resolverDestinatarios(evento, porRol, actorId),
         datos,
         '/solicitudes/traslados'
       );
+      const enApp = actorId
+        ? await NotificacionService.crearNotificaciones(
+            evento,
+            resolverDestinatariosApp(evento, porRol, actorId),
+            actorId,
+            'traslado_interno',
+            t.id,
+            datos
+          )
+        : 0;
+      return { ...correo, enApp };
     } catch (err) {
       console.error(`[notificación ${evento}] Error inesperado:`, err);
       return SIN_ENVIOS;
     }
+  }
+
+  /** Últimas notificaciones del usuario y cuántas no ha leído. */
+  static async getBandeja(usuarioId: string, limite = LIMITE_BANDEJA): Promise<BandejaNotificaciones> {
+    const admin = createAdminClient();
+    const [lista, conteo] = await Promise.all([
+      admin
+        .from('notificacion')
+        .select('id, tipo, titulo, mensaje, leida, ruta, created_at')
+        .eq('usuario_id', usuarioId)
+        .order('created_at', { ascending: false })
+        .limit(limite),
+      admin
+        .from('notificacion')
+        .select('id', { count: 'exact', head: true })
+        .eq('usuario_id', usuarioId)
+        .eq('leida', false),
+    ]);
+    if (lista.error) {
+      console.error('Error al listar notificaciones:', lista.error);
+      return { items: [], noLeidas: 0 };
+    }
+    return {
+      items: (lista.data ?? []) as NotificacionApp[],
+      noLeidas: conteo.error ? 0 : conteo.count ?? 0,
+    };
+  }
+
+  /**
+   * Marca como leída una notificación. El filtro por `usuario_id` impide
+   * marcar las de otro usuario (la app escribe con service_role).
+   */
+  static async marcarLeida(usuarioId: string, notificacionId: string): Promise<boolean> {
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from('notificacion')
+      .update({ leida: true })
+      .eq('id', notificacionId)
+      .eq('usuario_id', usuarioId);
+    if (error) console.error('Error al marcar la notificación como leída:', error);
+    return !error;
+  }
+
+  /** Marca como leídas todas las notificaciones del usuario. */
+  static async marcarTodasLeidas(usuarioId: string): Promise<boolean> {
+    const admin = createAdminClient();
+    const { error } = await admin
+      .from('notificacion')
+      .update({ leida: true })
+      .eq('usuario_id', usuarioId)
+      .eq('leida', false);
+    if (error) console.error('Error al marcar las notificaciones como leídas:', error);
+    return !error;
   }
 }

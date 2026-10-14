@@ -39,7 +39,8 @@ values
   ('20261013150000', 'brecha_011_trigger_vehiculos'),
   ('20261013155000', 'asignacion_sucursales_y_zonas_por_rol'),
   ('20261013160000', 'brecha_011_recalculo_global'),
-  ('20261013170000', 'brecha_014_funciones_rol_y_sucursal')
+  ('20261013170000', 'brecha_014_funciones_rol_y_sucursal'),
+  ('20261014120000', 'notificaciones_en_app')
 on conflict (version) do nothing;
 
 commit;

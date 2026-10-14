@@ -7,6 +7,8 @@
  * `Content-Security-Policy` (ver documentación de la brecha 019).
  */
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+/** Websocket de Supabase Realtime (campana de notificaciones). */
+const supabaseRealtimeUrl = supabaseUrl.replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
 
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
@@ -14,7 +16,7 @@ export const CONTENT_SECURITY_POLICY = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self' data:",
-  `connect-src 'self' ${supabaseUrl}`.trim(),
+  `connect-src 'self' ${supabaseUrl} ${supabaseRealtimeUrl}`.trim(),
   "frame-ancestors 'none'",
   "base-uri 'self'",
   "form-action 'self'",

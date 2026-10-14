@@ -65,6 +65,12 @@ Se aplicó con la versión `20261013150000`, la misma de `brecha_011_trigger_veh
 |---|---|---|
 | 17 | `20261013170000_brecha_014_funciones_rol_y_sucursal.sql` | Medio: `es_administrador`, `tiene_rol` y `usuario_activo` solo cuentan `activo = true` (antes NULL contaba como activo); `usuario.activo` pasa a NOT NULL; `usuario_tiene_sucursal` no deja que un usuario con sesión consulte las sucursales de otro. Las policies sostienen casi todo el acceso: probar el login de cada rol después de aplicarla |
 
+## Notificaciones en la app
+
+| # | Archivo | Riesgo |
+|---|---|---|
+| 18 | `20261014120000_notificaciones_en_app.sql` | Bajo: agrega tipos al enum `tipo_notificacion`, índices de `notificacion`, publica la tabla en Realtime y elimina 3 funciones de trigger antiguas sin uso (`notificar_*`). Después de aplicarla, volver a ejecutar `scripts/01_alinear_historial_migraciones.sql` (es idempotente) para registrarla |
+
 ## Historial de migraciones (brecha 015)
 
 Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. **Ejecutado el 2026-10-14**, junto con `scripts/02_limpiar_sucursales_test.sql`: las 17 migraciones están aplicadas y registradas. `scripts/01_alinear_historial_migraciones.sql` registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.

@@ -13,7 +13,9 @@ export default async function SolicitudesPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  const { grupo } = await searchParams;
+  const { grupo, solicitud } = await searchParams;
+  // Desde una notificación: abre el detalle de esa solicitud.
+  const solicitudInicialId = typeof solicitud === 'string' ? solicitud : null;
   const grupoInicial = GRUPOS_FILTRO_SOLICITUDES.some((g) => g.id === grupo)
     ? (grupo as GrupoFiltroSolicitud)
     : 'todas';
@@ -33,11 +35,12 @@ export default async function SolicitudesPage({
 
   return (
     <SolicitudesClient
-      key={grupoInicial}
+      key={`${grupoInicial}-${solicitudInicialId ?? ''}`}
       solicitudes={solicitudes}
       sucursales={sucursales}
       sucursales_asignadas={sucursalesAsignadas}
       grupoInicial={grupoInicial}
+      solicitudInicialId={solicitudInicialId}
       vehiculos={vehiculos}
       viewer={{
         id: profile.id,

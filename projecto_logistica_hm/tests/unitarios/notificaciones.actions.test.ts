@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserProfile } from '@/types/auth.types';
 import type { SolicitudMinima } from '@/services/solicitudes.service';
 
-/** R7: las actions agendan el correo del hito solo cuando la operación salió bien. */
+/**
+ * R7 y notificaciones en la app: las actions agendan el aviso del cambio de
+ * estado solo cuando la operación salió bien.
+ */
 
 const getCurrentUserProfile = vi.fn();
 const notificarSolicitud = vi.fn(async () => ({ enviados: 1, fallidos: 0 }));
@@ -13,6 +16,13 @@ const svc = {
   recalendarizarSolicitud: vi.fn(),
   cancelarEnTransito: vi.fn(),
   recibirSolicitud: vi.fn(),
+  priorizarSolicitud: vi.fn(),
+  priorizarEnPosicion: vi.fn(),
+  cancelarSolicitud: vi.fn(),
+  descalendarizarSolicitud: vi.fn(),
+  cancelarDespacharSolicitud: vi.fn(),
+  finalizarSolicitud: vi.fn(),
+  asignarEncargadoLogistica: vi.fn(),
 };
 const getBranch = vi.fn();
 const usuarioTieneSucursal = vi.fn(async () => true);
@@ -170,5 +180,47 @@ describe('notificaciones desde las actions', () => {
       conNovedades: true,
       observacion: 'Rayón',
     });
+  });
+
+  it('should_notify_when_solicitud_enters_the_queue', async () => {
+    svc.getSolicitudById.mockResolvedValue({ ...solicitud, estado: 'aprobada' });
+    svc.priorizarSolicitud.mockResolvedValue({ success: true, posicion: 1 });
+    await actions.priorizarSolicitudAction('s-1');
+    await tick();
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_priorizada', 's-1', 'u-1', undefined);
+  });
+
+  it('should_not_notify_when_queue_is_only_reordered', async () => {
+    svc.getSolicitudById.mockResolvedValue({ ...solicitud, estado: 'priorizada' });
+    svc.priorizarEnPosicion.mockResolvedValue({ success: true, posicion: 2 });
+    await actions.priorizarEnPosicionAction('s-1', 2);
+    await tick();
+    expect(notificarSolicitud).not.toHaveBeenCalled();
+  });
+
+  it('should_notify_cancellation_with_reason', async () => {
+    svc.cancelarSolicitud.mockResolvedValue({ success: true });
+    await actions.cancelarSolicitudAction('s-1', ' Cliente desistió ');
+    await tick();
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_cancelada', 's-1', 'u-1', { motivo: 'Cliente desistió' });
+  });
+
+  it.each([
+    ['descalendarizarSolicitudAction', 'descalendarizarSolicitud', 'solicitud_descalendarizada'],
+    ['cancelarDespachoSolicitudAction', 'cancelarDespacharSolicitud', 'solicitud_despacho_revertido'],
+    ['finalizarSolicitudAction', 'finalizarSolicitud', 'solicitud_finalizada'],
+    ['asignarEncargadoAction', 'asignarEncargadoLogistica', 'solicitud_asignada'],
+  ] as const)('should_notify_state_change_when_%s_succeeds', async (action, metodo, evento) => {
+    svc[metodo].mockResolvedValue({ success: true });
+    await actions[action]('s-1');
+    await tick();
+    expect(notificarSolicitud).toHaveBeenCalledWith(evento, 's-1', 'u-1', undefined);
+  });
+
+  it('should_not_notify_state_change_when_service_fails', async () => {
+    svc.finalizarSolicitud.mockResolvedValue({ success: false, error: 'x' });
+    await actions.finalizarSolicitudAction('s-1');
+    await tick();
+    expect(notificarSolicitud).not.toHaveBeenCalled();
   });
 });

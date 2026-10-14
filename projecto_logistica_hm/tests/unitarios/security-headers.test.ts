@@ -35,4 +35,10 @@ describe('CONTENT_SECURITY_POLICY', () => {
   it('should_allow_connections_to_supabase_url', () => {
     expect(CONTENT_SECURITY_POLICY).toContain(`connect-src 'self' ${process.env.NEXT_PUBLIC_SUPABASE_URL}`);
   });
+
+  it('should_allow_supabase_realtime_websocket', () => {
+    const ws = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? '').replace(/^https:/, 'wss:').replace(/^http:/, 'ws:');
+    expect(ws).toMatch(/^wss?:/);
+    expect(CONTENT_SECURITY_POLICY).toContain(` ${ws}`);
+  });
 });

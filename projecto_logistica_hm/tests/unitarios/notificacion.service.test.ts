@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSupabaseMock, fila } from '../mocks/supabase';
+import { createSupabaseMock, fila, filaConCount } from '../mocks/supabase';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 
@@ -141,7 +141,7 @@ describe('NotificacionService.notificarSolicitud', () => {
       fechaAnterior: '12/10/2026',
     });
 
-    expect(res).toEqual({ enviados: 3, fallidos: 0 });
+    expect(res).toEqual({ enviados: 3, fallidos: 0, enApp: 3 });
     const destinos = enviarCorreo.mock.calls.map((c) => (c[0] as { toEmail: string }).toEmail);
     expect(destinos.sort()).toEqual(['eje@test.cl', 'jl1@test.cl', 'jl2@test.cl']);
     const correo = enviarCorreo.mock.calls[0][0] as { asunto: string; html: string };
@@ -182,15 +182,68 @@ describe('NotificacionService.notificarSolicitud', () => {
     expect(res.enviados).toBe(2);
   });
 
+  it('should_create_one_in_app_notification_per_recipient_excluding_actor', async () => {
+    getSolicitudCompleta.mockResolvedValue(solicitud({ estado: 'calendarizada' }));
+    participantes();
+
+    const res = await NotificacionService.notificarSolicitud('solicitud_calendarizada', 's-1', 'jl1');
+
+    expect(res.enApp).toBe(2);
+    const insert = admin.callsTo('notificacion').find((c) => c[0] === 'insert');
+    const filas = insert?.[1] as Array<Record<string, unknown>>;
+    expect(filas.map((f) => f.usuario_id).sort()).toEqual(['eje', 'jl2']);
+    expect(filas[0]).toMatchObject({
+      emisor_id: 'jl1',
+      tipo: 'SOLICITUD_CALENDARIZADA',
+      titulo: 'Traslado programado',
+      entidad: 'solicitud',
+      entidad_id: 'abcd1234-0000-0000-0000-000000000000',
+      ruta: '/solicitudes?solicitud=abcd1234-0000-0000-0000-000000000000',
+    });
+    expect(filas[0].mensaje).toContain('#ABCD1234 (Centro → Norte)');
+  });
+
+  it('should_create_in_app_notification_without_email_for_in_app_only_events', async () => {
+    getSolicitudCompleta.mockResolvedValue(solicitud({ estado: 'finalizada' }));
+    participantes();
+
+    const res = await NotificacionService.notificarSolicitud('solicitud_finalizada', 's-1', 'eje');
+
+    expect(enviarCorreo).not.toHaveBeenCalled();
+    expect(res).toEqual({ enviados: 0, fallidos: 0, enApp: 2 });
+    const filas = admin.callsTo('notificacion').find((c) => c[0] === 'insert')?.[1] as Array<{ usuario_id: string }>;
+    expect(filas.map((f) => f.usuario_id).sort()).toEqual(['jl1', 'log']);
+  });
+
+  it('should_skip_in_app_notifications_when_there_is_no_actor', async () => {
+    getSolicitudCompleta.mockResolvedValue(solicitud());
+    participantes();
+
+    const res = await NotificacionService.notificarSolicitud('solicitud_creada', 's-1', null);
+
+    expect(res.enApp).toBe(0);
+    expect(admin.callsTo('notificacion')).toHaveLength(0);
+  });
+
+  it('should_keep_emails_when_in_app_insert_fails', async () => {
+    getSolicitudCompleta.mockResolvedValue(solicitud());
+    participantes();
+    admin.results.notificacion = [{ data: null, error: { message: 'insert falló' } }];
+
+    const res = await NotificacionService.notificarSolicitud('solicitud_rechazada', 's-1', 'jl1', { motivo: 'Sin stock' });
+
+    expect(res).toEqual({ enviados: 1, fallidos: 0, enApp: 0 });
+  });
+
   it('should_do_nothing_when_solicitud_does_not_exist', async () => {
     getSolicitudCompleta.mockResolvedValue(null);
-    expect(await NotificacionService.notificarSolicitud('solicitud_creada', 's-x', null)).toEqual({ enviados: 0, fallidos: 0 });
+    expect(await NotificacionService.notificarSolicitud('solicitud_creada', 's-x', null)).toEqual({ enviados: 0, fallidos: 0, enApp: 0 });
     expect(enviarCorreo).not.toHaveBeenCalled();
   });
 
   it('should_never_throw_when_something_fails', async () => {
     getSolicitudCompleta.mockRejectedValue(new Error('BD caída'));
-    expect(await NotificacionService.notificarSolicitud('solicitud_creada', 's-1', null)).toEqual({ enviados: 0, fallidos: 0 });
+    expect(await NotificacionService.notificarSolicitud('solicitud_creada', 's-1', null)).toEqual({ enviados: 0, fallidos: 0, enApp: 0 });
   });
 });
 
@@ -219,5 +272,69 @@ describe('NotificacionService.notificarTrasladoInterno', () => {
     const correo = enviarCorreo.mock.calls[0][0] as { asunto: string; html: string };
     expect(correo.asunto).toContain('Traslado interno #FFFF0000 cancelado');
     expect(correo.html).toContain('http://localhost:3000/solicitudes/traslados');
+    expect(res.enApp).toBe(3);
+    const filas = admin.callsTo('notificacion').find((c) => c[0] === 'insert')?.[1] as Array<Record<string, unknown>>;
+    expect(filas[0]).toMatchObject({
+      tipo: 'TRASLADO_INTERNO_CANCELADO',
+      entidad: 'traslado_interno',
+      entidad_id: 'ffff0000-0000-0000-0000-000000000000',
+      ruta: '/solicitudes/traslados',
+    });
+  });
+});
+
+describe('NotificacionService.crearNotificaciones', () => {
+  it('should_not_insert_when_there_are_no_recipients', async () => {
+    const n = await NotificacionService.crearNotificaciones('solicitud_aprobada', [], 'jl1', 'solicitud', 's-1', {
+      codigo: 'X',
+      origen: 'A',
+      destino: 'B',
+    });
+    expect(n).toBe(0);
+    expect(admin.callsTo('notificacion')).toHaveLength(0);
+  });
+});
+
+describe('NotificacionService.getBandeja', () => {
+  it('should_return_latest_notifications_and_unread_count_of_the_user', async () => {
+    const item = { id: 'n1', tipo: 'SOLICITUD_APROBADA', titulo: 'T', mensaje: 'M', leida: false, ruta: '/x', created_at: '2026-10-14' };
+    admin.results.notificacion = [fila([item]), filaConCount(4)];
+
+    const res = await NotificacionService.getBandeja('u-1');
+
+    expect(res).toEqual({ items: [item], noLeidas: 4 });
+    const llamadas = admin.callsTo('notificacion');
+    expect(llamadas).toContainEqual(['eq', 'usuario_id', 'u-1']);
+    expect(llamadas).toContainEqual(['eq', 'leida', false]);
+    expect(llamadas).toContainEqual(['limit', 20]);
+  });
+
+  it('should_return_empty_inbox_when_query_fails', async () => {
+    admin.results.notificacion = [{ data: null, error: { message: 'x' } }, filaConCount(2)];
+    expect(await NotificacionService.getBandeja('u-1')).toEqual({ items: [], noLeidas: 0 });
+  });
+});
+
+describe('NotificacionService.marcarLeida', () => {
+  it('should_only_update_notifications_of_the_user', async () => {
+    expect(await NotificacionService.marcarLeida('u-1', 'n1')).toBe(true);
+    const llamadas = admin.callsTo('notificacion');
+    expect(llamadas).toContainEqual(['update', { leida: true }]);
+    expect(llamadas).toContainEqual(['eq', 'id', 'n1']);
+    expect(llamadas).toContainEqual(['eq', 'usuario_id', 'u-1']);
+  });
+
+  it('should_return_false_when_update_fails', async () => {
+    admin.results.notificacion = [{ data: null, error: { message: 'x' } }];
+    expect(await NotificacionService.marcarLeida('u-1', 'n1')).toBe(false);
+  });
+});
+
+describe('NotificacionService.marcarTodasLeidas', () => {
+  it('should_update_only_unread_notifications_of_the_user', async () => {
+    expect(await NotificacionService.marcarTodasLeidas('u-1')).toBe(true);
+    const llamadas = admin.callsTo('notificacion');
+    expect(llamadas).toContainEqual(['eq', 'usuario_id', 'u-1']);
+    expect(llamadas).toContainEqual(['eq', 'leida', false]);
   });
 });

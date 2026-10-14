@@ -155,6 +155,8 @@ interface SolicitudesClientProps {
   sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
   /** Grupo de la tabla seleccionado al entrar (`?grupo=` desde los paneles). */
   grupoInicial?: GrupoFiltroSolicitud;
+  /** Solicitud cuyo detalle se abre al entrar (`?solicitud=` desde una notificación). */
+  solicitudInicialId?: string | null;
 }
 
 function getEncargadoId(sol: SolicitudLista): string | null {
@@ -174,6 +176,7 @@ export default function SolicitudesClient({
   viewer,
   sucursales_asignadas = [],
   grupoInicial = 'todas',
+  solicitudInicialId = null,
 }: SolicitudesClientProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
@@ -182,7 +185,9 @@ export default function SolicitudesClient({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(null);
+  const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(
+    () => (solicitudInicialId ? solicitudes.find((s) => s.id === solicitudInicialId) ?? null : null)
+  );
   const [cancelTarget, setCancelTarget] = useState<SolicitudLista | null>(null);
 
   const [sucursalSel, setSucursalSel] = useState('');
