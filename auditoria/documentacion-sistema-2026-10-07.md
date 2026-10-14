@@ -592,7 +592,7 @@ Notas de la fase de corrección:
 
 **Actualizado el 2026-10-14** con verificación directa en la base de producción (consultas de catálogo de solo lectura). Los cambios del 2026-10-13 sobre datos de prueba y asignación de sucursales por rol están en la sección 29.
 
-- **Base de datos:** de las **17 migraciones** de `projecto_logistica_hm/supabase/migrations/` están **todas aplicadas y registradas en el historial de Supabase**: las 7 de la auditoría, las 3 de los requisitos, la corrección de R8, las 4 de la brecha 011 y la de asignación de sucursales y zonas por rol (`20261013155000`, con el script `03_asignar_sucursales_sin_jefe.sql`) y la de la brecha 014 (`20261013170000`, aplicada el 2026-10-14). También se ejecutaron los scripts `01_alinear_historial_migraciones.sql` y `02_limpiar_sucursales_test.sql`. Producción queda con 4 sucursales y 0 diferencias en los contadores de slots. Las brechas 001 y 002 (escalamiento a administrador) están cerradas en la base.
+- **Base de datos:** de las **18 migraciones** de `projecto_logistica_hm/supabase/migrations/` están **todas aplicadas y registradas en el historial de Supabase**: las 7 de la auditoría, las 3 de los requisitos, la corrección de R8, las 4 de la brecha 011 y la de asignación de sucursales y zonas por rol (`20261013155000`, con el script `03_asignar_sucursales_sin_jefe.sql`) , la de la brecha 014 (`20261013170000`) y la de notificaciones en la app (`20261014120000`), ambas aplicadas el 2026-10-14. También se ejecutaron los scripts `01_alinear_historial_migraciones.sql` y `02_limpiar_sucursales_test.sql`. Producción queda con 4 sucursales y 0 diferencias en los contadores de slots. Las brechas 001 y 002 (escalamiento a administrador) están cerradas en la base.
 - **Código:** las correcciones de la auditoría y los requisitos (fases 1 a 6) están integrados en las ramas `joaco-ciclo-2` y `feature/requisitos-2026-10`. Si esa versión está **desplegada en el hosting: No determinado**. Hasta desplegarla, sigue vigente la brecha 027 (Next.js vulnerable) en lo que esté publicado.
 - **Verificación local** (2026-10-14): 60 archivos y 972 tests en verde, `tsc --noEmit` sin errores y ESLint sin errores (6 advertencias previas).
 - Pasos pendientes del responsable: [`plan-despliegue-correcciones-2026-10-07.md`](plan-despliegue-correcciones-2026-10-07.md).
@@ -614,10 +614,10 @@ Notas de la fase de corrección:
 | 012 Bloqueo de login / enumeración | Medium | Parcial · RPC aplicada; falta configuración en el dashboard de Supabase |
 | 013 Contraseñas temporales | Medium | Corregida |
 | 014 Funciones SECURITY DEFINER | Medium | **Corregida · aplicada en producción el 2026-10-14** (RLS idénticas para los 8 usuarios activos en el ensayo previo) |
-| 015 Esquema sin migraciones | Medium | Parcial · 17 migraciones versionadas, aplicadas y registradas en el historial de Supabase; falta la migración base |
+| 015 Esquema sin migraciones | Medium | Parcial · 18 migraciones versionadas, aplicadas y registradas en el historial de Supabase; falta la migración base |
 | 016 Borrado en cascada de sucursal | Medium | **Corregida · migración aplicada en producción** |
 | 017 Cobertura de tests | Medium | Parcial (unitarios, actions y contrato de migraciones; faltan RLS, triggers e integración) |
-| 018 Auditoría y notificaciones | Low | Parcial · notificaciones en la app implementadas (2026-10-14, migración pendiente de aplicar); falta la decisión de diseño de la auditoría |
+| 018 Auditoría y notificaciones | Low | Parcial · notificaciones en la app implementadas y aplicadas en producción (2026-10-14); falta la decisión de diseño de la auditoría |
 | 019 Headers de seguridad | Low | Corregida (CSP en Report-Only) |
 | 020 Errores internos / `next` | Low | Corregida |
 | 021 Inyección en filtros | Low | Corregida (índice único `lower(nombre)` pendiente) |
@@ -753,7 +753,7 @@ Campana en el encabezado con las notificaciones de cada usuario por los cambios 
 
 **Base de datos:** migración `supabase/migrations/20261014120000_notificaciones_en_app.sql` (+ rollback): tipos nuevos en `tipo_notificacion`, índices `(usuario_id, leida, created_at)` y `emisor_id`, tabla publicada en Realtime y eliminación de las funciones antiguas `notificar_solicitud`, `notificar_observacion` y `notificar_solicitud_vehiculo`. Esas funciones no tenían trigger y usaban `auth.uid()` como emisor: con service_role es NULL y `emisor_id` es NOT NULL, así que conectarlas habría hecho fallar todas las transiciones. Ensayada en producción (revertida): el destinatario ve solo las suyas, otro usuario no las ve y `authenticated` no puede modificarlas.
 
-**Estado (2026-10-14):** código listo en `joaco-ciclo-2`; **migración pendiente de aplicar**. Hasta aplicarla, solo se guardan los eventos cuyo tipo ya existía en el enum (creada, priorizada, asignada, programada, despachada, recibida, finalizada, cancelada); los demás registran un error en el servidor sin afectar la operación.
+**Estado (2026-10-14):** código en `joaco-ciclo-2` y **migración aplicada en producción** y registrada en el historial (verificado: 18 valores en el enum, 2 índices nuevos, tabla en Realtime, 0 funciones `notificar_*`, historial con 18 filas).
 
 **Tests:** `notificaciones-app.test.ts`, `notificacion.service.test.ts`, `notificaciones.actions.test.ts`, `bandeja.actions.test.ts`, `migracion-notificaciones.test.ts`, `security-headers.test.ts`. La campana no tiene test de componente (el proyecto no tiene infraestructura para eso).
 

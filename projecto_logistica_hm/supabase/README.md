@@ -69,7 +69,7 @@ Se aplicó con la versión `20261013150000`, la misma de `brecha_011_trigger_veh
 
 | # | Archivo | Riesgo |
 |---|---|---|
-| 18 | `20261014120000_notificaciones_en_app.sql` | Bajo: agrega tipos al enum `tipo_notificacion`, índices de `notificacion`, publica la tabla en Realtime y elimina 3 funciones de trigger antiguas sin uso (`notificar_*`). Después de aplicarla, volver a ejecutar `scripts/01_alinear_historial_migraciones.sql` (es idempotente) para registrarla |
+| 18 | `20261014120000_notificaciones_en_app.sql` | Bajo: agrega tipos al enum `tipo_notificacion`, índices de `notificacion`, publica la tabla en Realtime y elimina 3 funciones de trigger antiguas sin uso (`notificar_*`). Aplicada y registrada en el historial el 2026-10-14 |
 
 ## Historial de migraciones (brecha 015)
 

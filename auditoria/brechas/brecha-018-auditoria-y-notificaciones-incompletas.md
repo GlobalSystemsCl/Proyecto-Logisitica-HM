@@ -77,6 +77,6 @@ Se resolvió el punto 3 del pendiente: las notificaciones se **implementaron** e
 
 - `NotificacionService` inserta en `notificacion` una fila por destinatario en cada cambio de estado, con el actor como `emisor_id` (no depende de `auth.uid()`).
 - Campana en el encabezado con Supabase Realtime y RLS por destinatario.
-- La migración `20261014120000_notificaciones_en_app.sql` elimina `notificar_solicitud`, `notificar_solicitud_vehiculo` y `notificar_observacion` (punto 2 de la descripción, en la parte de notificaciones).
+- La migración `20261014120000_notificaciones_en_app.sql` (aplicada en producción el 2026-10-14) elimina `notificar_solicitud`, `notificar_solicitud_vehiculo` y `notificar_observacion` (punto 2 de la descripción, en la parte de notificaciones).
 
 Sigue pendiente la parte de auditoría (puntos 1 y 2 del pendiente).
