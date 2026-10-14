@@ -13,6 +13,11 @@ import DashboardJefeLocal from '@/components/DashboardJefeLocal';
 import { TrasladoService } from '@/services/traslado.service';
 import { ReporteService } from '@/services/reporte.service';
 import IndicadoresLogistica from '@/components/IndicadoresLogistica';
+import DashboardLogistica from '@/components/DashboardLogistica';
+import PanelCuentasPendientes from '@/components/PanelCuentasPendientes';
+import { UsersService } from '@/services/users.service';
+import type { TrasladoInterno } from '@/types/traslado.types';
+import type { SolicitudLista } from '@/types/solicitud.types';
 import { calcularReporte, indicadoresDeEncargado } from '@/lib/reporteLogistica';
 import { hoyISO } from '@/lib/fechas';
 import { sumarDias } from '@/lib/calendario';
@@ -76,11 +81,14 @@ export default async function DashboardPage() {
 
   // R17: Logística ve los mismos indicadores con que lo mide el administrador (últimos 30 días).
   let indicadores: { reporte: ReturnType<typeof calcularReporte>; propios: ReturnType<typeof indicadoresDeEncargado> } | null = null;
+  let pendientesLogistica: { solicitudes: SolicitudLista[]; traslados: TrasladoInterno[] } | null = null;
   if (rol === 'logistica') {
-    const [solicitudesZona, eventos] = await Promise.all([
+    const [solicitudesZona, eventos, trasladosPropios] = await Promise.all([
       SolicitudesService.getSolicitudesFiltradas(profile.id, 'logistica'),
       ReporteService.getEventosLogistica(),
+      TrasladoService.getTrasladosByLogistica(profile.id),
     ]);
+    pendientesLogistica = { solicitudes: solicitudesZona, traslados: trasladosPropios };
     const hasta = hoyISO();
     const reporte = calcularReporte(
       solicitudesZona,
@@ -90,6 +98,12 @@ export default async function DashboardPage() {
     );
     indicadores = { reporte, propios: indicadoresDeEncargado(reporte, profile.id) };
   }
+
+  // Cuentas autoregistradas por activar (solo administrador).
+  const cuentas =
+    rol === 'administrador'
+      ? await Promise.all([UsersService.getUsers(), SucursalesService.getSucursales(), OrganizacionService.getZonas()])
+      : null;
 
   return (
     <div className="min-h-screen bg-[#f4f6f9] text-neutral-900 flex flex-col">
@@ -126,6 +140,14 @@ export default async function DashboardPage() {
             </p>
           </div>
         </div>
+
+        {cuentas && (
+          <PanelCuentasPendientes usuarios={cuentas[0]} sucursales={cuentas[1]} zonas={cuentas[2]} />
+        )}
+
+        {pendientesLogistica && (
+          <DashboardLogistica solicitudes={pendientesLogistica.solicitudes} traslados={pendientesLogistica.traslados} />
+        )}
 
         {vePanel && (
           <DashboardJefeLocal

@@ -51,6 +51,7 @@ import {
 } from '@/lib/filtroSolicitudes';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import BadgeEvento from '@/components/BadgeEvento';
 import PanelEjecutivo from '@/components/PanelEjecutivo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
@@ -864,9 +865,13 @@ export default function SolicitudesClient({
                         <p className="font-mono text-xs font-bold text-neutral-900 uppercase">
                           #{sol.id.slice(0, 8)}
                         </p>
-                        <span className="inline-flex mt-0.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-600 border border-neutral-300">
-                          {tipoLabel[sol.tipo_solicitud]}
-                        </span>
+                        {sol.tipo_solicitud === 'evento' ? (
+                          <span className="flex mt-1"><BadgeEvento tamano="sm" /></span>
+                        ) : (
+                          <span className="inline-flex mt-0.5 px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-600 border border-neutral-300">
+                            {tipoLabel[sol.tipo_solicitud]}
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-xs text-neutral-600 max-w-[200px] truncate" title={destino}>
@@ -912,9 +917,13 @@ export default function SolicitudesClient({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-neutral-50 text-neutral-700 border border-neutral-300">
-                          {tipoLabel[sol.tipo_solicitud]}
-                        </span>
+                        {sol.tipo_solicitud === 'evento' ? (
+                          <BadgeEvento />
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-neutral-50 text-neutral-700 border border-neutral-300">
+                            {tipoLabel[sol.tipo_solicitud]}
+                          </span>
+                        )}
                       </td>
 
                       <td className="py-3.5 px-4 text-xs text-neutral-500">{formatFecha(sol.fecha_creacion)}</td>
