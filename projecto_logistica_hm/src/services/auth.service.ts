@@ -236,41 +236,45 @@ export class AuthService {
         }
       }
 
-      const supabase = await createClient();
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      // La cuenta se crea con service_role y ya confirmada, en vez de
+      // `auth.signUp`: signUp hacía que Supabase enviara un correo de
+      // confirmación inútil (la cuenta se confirmaba enseguida) y, con el límite
+      // de correos por hora del SMTP integrado, los registros siguientes
+      // fallaban. Así además se puede desactivar el signup público de Supabase
+      // y /registro queda como único camino (brecha 012).
+      const { data: authData, error: createError } = await admin.auth.admin.createUser({
         email: cleanEmail,
         password: data.password,
-        options: {
-          data: {
-            nombre: data.nombre.trim(),
-            apellido: data.apellido.trim(),
-            sucursal_id: sucursalId,
-          },
+        email_confirm: true,
+        // Brecha 002: el rol no viaja en los metadatos; el trigger crea el
+        // perfil como ejecutivo inactivo y el upsert siguiente lo asegura.
+        user_metadata: {
+          nombre: data.nombre.trim(),
+          apellido: data.apellido.trim(),
+          sucursal_id: sucursalId,
         },
       });
 
       // Traducir errores conocidos de Supabase (especialmente el de email duplicado,
       // que se dispara incluso cuando la fila de perfil quedó huérfana).
-      if (signUpError) {
-        const msg = signUpError.message.toLowerCase();
+      if (createError) {
+        const msg = createError.message.toLowerCase();
         const already =
           msg.includes('already registered') ||
           msg.includes('already been registered') ||
-          signUpError.code === 'user_already_exists' ||
-          signUpError.code === 'email_address_not_authorized';
+          createError.code === 'email_exists' ||
+          createError.code === 'user_already_exists';
         if (already) {
           return { success: false, error: 'Ya existe un usuario registrado con ese correo.' };
         }
-        return { success: false, error: mensajeErrorUsuario(signUpError, 'No se pudo crear la cuenta.') };
+        return { success: false, error: mensajeErrorUsuario(createError, 'No se pudo crear la cuenta.') };
       }
 
-      if (!authData.user) {
+      if (!authData?.user) {
         return { success: false, error: 'No se pudo crear la cuenta. Intenta nuevamente.' };
       }
 
-      // Confirmar email y asegurar el perfil base en public.usuario
-      await admin.auth.admin.updateUserById(authData.user.id, { email_confirm: true });
-
+      // Asegurar el perfil base en public.usuario
       const { error: perfilError } = await admin.from('usuario').upsert({
         id: authData.user.id,
         email: cleanEmail,

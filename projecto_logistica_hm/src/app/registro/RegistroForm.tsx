@@ -10,7 +10,23 @@ interface Props {
   sucursales: { id: number; nombre: string | null }[];
 }
 
+/**
+ * Tras un registro exitoso el botón queda deshabilitado para no enviar la
+ * misma solicitud dos veces. "Registrar otra cuenta" vuelve a montar el
+ * formulario (cambia la `key`), lo que limpia el estado de la action.
+ */
 export default function RegistroForm({ sucursales }: Props) {
+  const [intento, setIntento] = useState(0);
+  return (
+    <FormularioRegistro
+      key={intento}
+      sucursales={sucursales}
+      onRegistrarOtra={() => setIntento((n) => n + 1)}
+    />
+  );
+}
+
+function FormularioRegistro({ sucursales, onRegistrarOtra }: Props & { onRegistrarOtra: () => void }) {
   const [state, formAction, isPending] = useActionState(registerAction, null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -71,6 +87,13 @@ export default function RegistroForm({ sucursales }: Props) {
                   </Link>
                   .
                 </span>
+                <button
+                  type="button"
+                  onClick={onRegistrarOtra}
+                  className="mt-2 block text-xs underline font-semibold hover:text-green-900 cursor-pointer"
+                >
+                  Registrar otra cuenta
+                </button>
               </div>
             </div>
           )}
