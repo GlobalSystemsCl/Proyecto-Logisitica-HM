@@ -239,9 +239,18 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
  * El autor es `creado_por` (quien la inició); en solicitudes anteriores a esa
  * columna, quien registró la delegación o la deducción de `lib/iniciador`.
  */
+/**
+ * createSolicitud registra "delegacion" siempre que hay ejecutivo, también
+ * cuando el propio ejecutivo crea la solicitud: esa fila no es una delegación.
+ */
+function esAutoDelegacion(a: AuditoriaEntry): boolean {
+  const ejecutivo = (a.valor_nuevo as { ejecutivo_id?: string } | null)?.ejecutivo_id;
+  return a.accion === 'delegacion' && Boolean(ejecutivo) && ejecutivo === a.usuario_id;
+}
+
 function entradaCreacion(sol: SolicitudLista, auditoria: AuditoriaEntry[]): AuditoriaEntry | null {
   if (auditoria.some((a) => a.accion === 'crear' || a.accion === 'solicitud_creada')) return null;
-  const delegacion = auditoria.find((a) => a.accion === 'delegacion');
+  const delegacion = auditoria.find((a) => a.accion === 'delegacion' && !esAutoDelegacion(a));
   const autorId = sol.creado_por ?? delegacion?.usuario_id ?? iniciadorId(sol);
   const autorNombre = sol.creado_por
     ? sol.creado_por_nombre ?? null
@@ -349,7 +358,7 @@ export default function SolicitudDetalleModal({
   // Más reciente primero; la creación siempre cierra la línea de tiempo.
   const creacion = entradaCreacion(solicitud, auditoria);
   const historial = [
-    ...[...auditoria].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    ...[...auditoria].filter((a) => !esAutoDelegacion(a)).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
     ...(creacion ? [creacion] : []),
   ];
 
