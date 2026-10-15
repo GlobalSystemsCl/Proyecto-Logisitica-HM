@@ -887,6 +887,9 @@ export class SolicitudesService {
         };
       }
 
+      const errLiberar = await SolicitudesService.liberarPosicionesAjenas(admin, sucursalId);
+      if (errLiberar) return { success: false, error: errLiberar };
+
       const err = await SolicitudesService.reescribirCola(
         admin,
         orden,
@@ -949,6 +952,9 @@ export class SolicitudesService {
       const nuevoOrden = cola.map((c) => c.id);
       nuevoOrden.splice(posicion - 1, 0, id);
 
+      const errLiberar = await SolicitudesService.liberarPosicionesAjenas(admin, actual.sucursal);
+      if (errLiberar) return { success: false, error: errLiberar };
+
       // Marcar el nuevo item como priorizada (la posición la asigna la reescritura)
       const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'priorizada' });
       if (errEstado) return { success: false, error: errEstado };
@@ -958,7 +964,16 @@ export class SolicitudesService {
         nuevoOrden,
         nuevoOrden.map((id2, i) => ({ id: id2, pos: i + 1 }))
       );
-      if (errReesc) return { success: false, error: errReesc };
+      if (errReesc) {
+        // No dejarla "priorizada" sin posición: vuelve a su estado anterior.
+        await admin
+          .from('solicitud')
+          .update({ estado: actual.estado, posicion_prioridad: null })
+          .eq('id', id)
+          .eq('estado', 'priorizada');
+        await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+        return { success: false, error: errReesc };
+      }
 
       await this.registrarAuditoria(
         userId,
@@ -1111,22 +1126,46 @@ export class SolicitudesService {
     return null;
   }
 
-  // Lee la cola actual de la sucursal y la compacta a posiciones 1..N.
-  private static async renumerarColaSucursal(
+  /**
+   * Libera las posiciones que conservan solicitudes que ya no están en la cola
+   * (por ejemplo, asignadas antes de que la asignación las sacara). Si no, al
+   * reescribir la cola chocan con el índice único (sucursal, posicion_prioridad).
+   */
+  private static async liberarPosicionesAjenas(
     admin: ReturnType<typeof createAdminClient>,
     sucursalId: number
   ): Promise<string | null> {
-    const { error: eJunk } = await admin
+    const { error } = await admin
       .from('solicitud')
       .update({ posicion_prioridad: null })
       .eq('sucursal', sucursalId)
       .neq('estado', 'priorizada')
       .not('posicion_prioridad', 'is', null);
-    if (eJunk) return mensajeErrorUsuario(eJunk, 'No se pudo actualizar la cola de prioridades.');
+    return error ? mensajeErrorUsuario(error, 'No se pudo actualizar la cola de prioridades.') : null;
+  }
+
+  // Lee la cola actual de la sucursal y la compacta a posiciones 1..N. Las
+  // priorizadas que quedaron sin posición (fallo de una reescritura anterior)
+  // vuelven a la cola, al final.
+  private static async renumerarColaSucursal(
+    admin: ReturnType<typeof createAdminClient>,
+    sucursalId: number
+  ): Promise<string | null> {
+    const errLiberar = await SolicitudesService.liberarPosicionesAjenas(admin, sucursalId);
+    if (errLiberar) return errLiberar;
 
     const cola = await SolicitudesService.getColaPriorizada(sucursalId);
-    if (cola.length === 0) return null;
-    const ids = cola.map((c) => c.id);
+    const { data: sinPosicion } = await admin
+      .from('solicitud')
+      .select('id')
+      .eq('sucursal', sucursalId)
+      .eq('estado', 'priorizada')
+      .is('posicion_prioridad', null)
+      .order('fecha_creacion', { ascending: true });
+    const huerfanas = ((sinPosicion as Array<{ id: string }> | null) ?? []).map((r) => r.id);
+
+    const ids = [...cola.map((c) => c.id), ...huerfanas];
+    if (ids.length === 0) return null;
     return SolicitudesService.reescribirCola(admin, ids, ids.map((id2, i) => ({ id: id2, pos: i + 1 })));
   }
 

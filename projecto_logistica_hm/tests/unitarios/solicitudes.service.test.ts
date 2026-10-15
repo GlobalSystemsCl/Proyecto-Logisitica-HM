@@ -798,13 +798,35 @@ describe('SolicitudesService.priorizarEnPosicion', () => {
       fila(null),
       fila(null),
       fila(null),
+      fila(null),
     ];
     spyRegistrarAuditoria();
 
     const res = await SolicitudesService.priorizarEnPosicion('s-1', 2, USUARIO_ID);
     expect(res).toEqual({ success: true, posicion: 2 });
-    const stateUpdate = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
-    expect(stateUpdate[0]?.[1]).toEqual({ estado: 'priorizada' });
+    const updates = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
+    // Primero libera las posiciones que conservan solicitudes fuera de la cola.
+    expect(updates[0]?.[1]).toEqual({ posicion_prioridad: null });
+    expect(updates[1]?.[1]).toEqual({ estado: 'priorizada' });
+  });
+
+  it('should_revertir_el_estado_when_falla_la_reescritura_de_la_cola', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud = [
+      fila(minimo({ estado: 'aprobada', sucursal: 1 })),
+      fila([{ id: 'c1', posicion_prioridad: 1 }]),
+      fila(null), // liberar posiciones ajenas
+      fila(null), // estado → priorizada
+      errorResult('duplicate key value violates unique constraint'), // reescritura
+    ];
+    const auditoria = spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.priorizarEnPosicion('s-1', 1, USUARIO_ID);
+
+    expect(res.success).toBe(false);
+    const updates = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
+    expect(updates).toContainEqual(['update', { estado: 'aprobada', posicion_prioridad: null }]);
+    expect(auditoria).not.toHaveBeenCalled();
   });
 });
 
