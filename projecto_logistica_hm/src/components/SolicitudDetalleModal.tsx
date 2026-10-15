@@ -49,6 +49,7 @@ import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
+import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 import BadgeEvento from '@/components/BadgeEvento';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
@@ -92,16 +93,6 @@ function formatTamano(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getEncargadoId(sol: SolicitudLista): string | null {
-  return sol.ejecutivo_id || sol.jefe_local_id || null;
-}
-
-function getEncargadoNombre(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
-  if (sol.jefe_local_id) return sol.jefe_local_nombre;
-  return null;
-}
-
 function getResponsableId(sol: SolicitudLista): string | null {
   if (sol.logistica_id) return sol.logistica_id;
   if (sol.jefe_local_id) return sol.jefe_local_id;
@@ -143,8 +134,8 @@ function getTimelineInfo(a: AuditoriaEntry): { label: string; dotClass: string; 
     observacion: { label: 'Observación', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     delegacion: { label: 'Delegada', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
     subir_documento: { label: 'Documento subido', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
-    creacion: { label: 'Solicitud creada', dotClass: 'border-2 border-neutral-900 bg-white', textClass: 'text-neutral-900' },
     eliminar_documento: { label: 'Documento eliminado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
+    creacion: { label: 'Solicitud creada', dotClass: 'border-2 border-neutral-900 bg-white', textClass: 'text-neutral-900' },
     // Acciones con el nombre con que las registra SolicitudesService.
     aprobacion: { label: 'Aprobada', dotClass: 'bg-green-500', textClass: 'text-green-600' },
     rechazo: { label: 'Rechazada', dotClass: 'bg-red-500', textClass: 'text-red-600' },
@@ -245,30 +236,29 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
 /**
  * La creación no queda en la auditoría de la solicitud: se arma una entrada
  * con la fecha de creación y su autor para que el historial parta desde ahí.
- * Si el Jefe de Local la creó y la delegó, el autor es quien registró la
- * delegación; si no, el Ejecutivo y, en su defecto, el Jefe de Local.
+ * El autor es `creado_por` (quien la inició); en solicitudes anteriores a esa
+ * columna, quien registró la delegación o la deducción de `lib/iniciador`.
  */
 function entradaCreacion(sol: SolicitudLista, auditoria: AuditoriaEntry[]): AuditoriaEntry | null {
   if (auditoria.some((a) => a.accion === 'crear' || a.accion === 'solicitud_creada')) return null;
   const delegacion = auditoria.find((a) => a.accion === 'delegacion');
-  const autor = delegacion
-    ? { id: delegacion.usuario_id, nombre: delegacion.usuario_nombre }
-    : sol.ejecutivo_id
-      ? { id: sol.ejecutivo_id, nombre: sol.ejecutivo_nombre }
-      : sol.jefe_local_id
-        ? { id: sol.jefe_local_id, nombre: sol.jefe_local_nombre }
-        : null;
+  const autorId = sol.creado_por ?? delegacion?.usuario_id ?? iniciadorId(sol);
+  const autorNombre = sol.creado_por
+    ? sol.creado_por_nombre ?? null
+    : delegacion
+      ? delegacion.usuario_nombre ?? null
+      : iniciadorNombre(sol);
   const descripcion = delegacion
     ? `Solicitud creada por el Jefe de Local y asignada a ${sol.ejecutivo_nombre ?? 'un Ejecutivo'}`
-    : sol.ejecutivo_id
+    : autorId && autorId === sol.ejecutivo_id
       ? 'Solicitud creada y enviada a aprobación del Jefe de Local'
-      : sol.jefe_local_id
+      : autorId && autorId === sol.jefe_local_id
         ? 'Solicitud creada por el Jefe de Local (queda aprobada)'
         : 'Solicitud creada';
   return {
     id: `creacion-${sol.id}`,
-    usuario_id: autor?.id ?? '',
-    usuario_nombre: autor?.nombre ?? null,
+    usuario_id: autorId ?? '',
+    usuario_nombre: autorNombre,
     entidad: 'solicitud',
     entidad_id: sol.id,
     accion: 'creacion',
@@ -675,13 +665,13 @@ export default function SolicitudDetalleModal({
                 <div className="w-px bg-neutral-200 self-stretch" />
               </>
             )}
-            {/* Encargado de solicitud (logistica_id reusado) */}
+            {/* Responsable de Logística (logistica_id) */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
                 <UserCheck className="w-5 h-5 text-sky-700" />
               </div>
               <div>
-                <p className="text-[11px] text-neutral-400 font-medium">Encargado de solicitud</p>
+                <p className="text-[11px] text-neutral-400 font-medium">Responsable de Logística</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.logistica_nombre ? (
                     <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
@@ -795,10 +785,10 @@ export default function SolicitudDetalleModal({
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Iniciada por</p>
                   <p className="text-sm text-neutral-900 font-medium">
-                    {getEncargadoNombre(solicitud) ? (
-                      <UsuarioNombreBoton usuarioId={getEncargadoId(solicitud)} nombre={getEncargadoNombre(solicitud)} />
+                    {iniciadorNombre(solicitud) ? (
+                      <UsuarioNombreBoton usuarioId={iniciadorId(solicitud)} nombre={iniciadorNombre(solicitud)} />
                     ) : (
                       <span className="text-neutral-400 italic">Sin asignar</span>
                     )}
@@ -815,7 +805,7 @@ export default function SolicitudDetalleModal({
                   </p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Encargado de solicitud</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Responsable de Logística</p>
                   <p className="text-sm text-neutral-900 font-medium">
                     {solicitud.logistica_nombre ? (
                       <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />

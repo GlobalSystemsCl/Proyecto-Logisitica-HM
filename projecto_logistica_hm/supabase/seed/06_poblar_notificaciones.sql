@@ -2,7 +2,7 @@
 -- Datos de prueba: notificaciones de la campana para los escenarios poblados
 -- =============================================================================
 --
--- Ejecutar DESPUÉS de 01_poblar_escenarios.sql y 04_poblar_100_solicitudes.sql.
+-- Ejecutar DESPUÉS de 01, 04 y 05 (01_poblar_escenarios, 04_poblar_100_solicitudes, 05_poblar_10_priorizadas).
 --
 -- Recorre la historia de las solicitudes y traslados de prueba (auditoría con
 -- prefijo 5eed y la creación de cada solicitud) y crea, por cada cambio de

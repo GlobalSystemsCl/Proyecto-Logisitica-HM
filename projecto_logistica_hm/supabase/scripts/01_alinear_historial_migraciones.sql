@@ -4,7 +4,7 @@
 -- Las migraciones aplicadas desde el SQL Editor no quedan registradas en
 -- supabase_migrations.schema_migrations, y las 2 aplicadas con el conector
 -- quedaron con versiones distintas a las de los archivos del repo. Este script
--- registra los 17 archivos de supabase/migrations/ como aplicados, con su
+-- registra los archivos de supabase/migrations/ como aplicados, con su
 -- versión y nombre exactos, para que `supabase db push` no intente repetirlos.
 --
 -- Solo toca la tabla de historial (metadatos). No cambia el esquema ni datos.
@@ -40,12 +40,13 @@ values
   ('20261013155000', 'asignacion_sucursales_y_zonas_por_rol'),
   ('20261013160000', 'brecha_011_recalculo_global'),
   ('20261013170000', 'brecha_014_funciones_rol_y_sucursal'),
-  ('20261014120000', 'notificaciones_en_app')
+  ('20261014120000', 'notificaciones_en_app'),
+  ('20261014130000', 'solicitud_creado_por')
 on conflict (version) do nothing;
 
 commit;
 
 -- -----------------------------------------------------------------------------
--- Verificación (ejecutar por separado): 17 filas, de 20261007120000 a 20261013170000
+-- Verificación (ejecutar por separado): una fila por archivo de migrations/ (19 al 2026-10-14)
 -- -----------------------------------------------------------------------------
 -- select version, name from supabase_migrations.schema_migrations order by version;

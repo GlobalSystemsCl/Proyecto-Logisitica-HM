@@ -43,6 +43,7 @@ import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import BadgeEvento from '@/components/BadgeEvento';
 import { colaDeSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
 import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
+import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -473,16 +474,6 @@ export default function PrioridadesClient({
   );
 }
 
-function getEncargadoId(sol: SolicitudLista): string | null {
-  return sol.ejecutivo_id || sol.jefe_local_id || null;
-}
-
-function getEncargadoNombre(sol: SolicitudLista): string | null {
-  if (sol.ejecutivo_id) return sol.ejecutivo_nombre;
-  if (sol.jefe_local_id) return sol.jefe_local_nombre;
-  return null;
-}
-
 // Identificación del vehículo: patente (si existe), marca modelo año y chasis.
 function LineaVehiculo({ v }: { v: VehiculoAsociado }) {
   const patente = v.patente?.trim();
@@ -578,8 +569,8 @@ function SolicitudCard({
               <Clock className="w-3 h-3" />
               {formatFecha(sol.fecha_limite)}
             </span>
-            {getEncargadoNombre(sol) && (
-              <span className="text-neutral-400">· <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted /></span>
+            {iniciadorNombre(sol) && (
+              <span className="text-neutral-400">· <UsuarioNombreBoton usuarioId={iniciadorId(sol)} nombre={iniciadorNombre(sol)} muted /></span>
             )}
           </div>
         </div>
@@ -671,8 +662,8 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
               <Clock className="w-3 h-3" />
               {formatFecha(sol.fecha_limite)}
             </span>
-            {getEncargadoNombre(sol) && (
-              <span className="text-neutral-400">· <UsuarioNombreBoton usuarioId={getEncargadoId(sol)} nombre={getEncargadoNombre(sol)} muted /></span>
+            {iniciadorNombre(sol) && (
+              <span className="text-neutral-400">· <UsuarioNombreBoton usuarioId={iniciadorId(sol)} nombre={iniciadorNombre(sol)} muted /></span>
             )}
           </div>
         </div>

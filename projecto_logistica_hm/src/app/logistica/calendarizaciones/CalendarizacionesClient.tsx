@@ -321,7 +321,7 @@ export default function CalendarizacionesClient({
           <span>{ETIQUETA_FECHA_LIMITE}: {formatFecha(s.fecha_limite) || '—'}</span>
           {s.fecha_despacho && <span>Despachado: {formatFecha(s.fecha_despacho)}</span>}
           {s.fecha_recepcion && <span>Recibido: {formatFecha(s.fecha_recepcion)}</span>}
-          {s.logistica_nombre && <span>Encargado: {s.logistica_nombre}</span>}
+          {s.logistica_nombre && <span>Responsable: {s.logistica_nombre}</span>}
         </div>
         {s.vehiculos.length > 0 && (
           <p className="text-xs text-neutral-500 flex items-center gap-1">
@@ -453,8 +453,8 @@ export default function CalendarizacionesClient({
             <option value="venta">Sala de venta</option>
             <option value="evento">Evento</option>
           </select>
-          <select value={filtros.encargado} onChange={(e) => setFiltros({ ...filtros, encargado: e.target.value })} className={selectCls} aria-label="Encargado de logística">
-            <option value="">Encargado: todos</option>
+          <select value={filtros.encargado} onChange={(e) => setFiltros({ ...filtros, encargado: e.target.value })} className={selectCls} aria-label="Responsable de Logística">
+            <option value="">Responsable: todos</option>
             {encargados.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
           </select>
           <select value={filtros.plazo} onChange={(e) => setFiltros({ ...filtros, plazo: e.target.value as FiltrosCalendario['plazo'] })} className={selectCls} aria-label="Plazo">

@@ -102,7 +102,7 @@ begin
     and not exists (select 1 from public.traslado_interno_vehiculo tv where tv.vehiculo_id = v.id);
 
   -- ---- Notificaciones ----------------------------------------------------------
-  -- Las de 05_poblar_notificaciones.sql y las que la app creó al avanzar
+  -- Las de 06_poblar_notificaciones.sql y las que la app creó al avanzar
   -- solicitudes o traslados de prueba.
   delete from public.notificacion n
   where n.id::text like '5eed0008-%'

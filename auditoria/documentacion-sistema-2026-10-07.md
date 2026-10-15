@@ -654,6 +654,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-14 | Integración de las dos actualizaciones del 2026-10-13 (el merge había descartado la primera). La migración de asignación se renombró de `20261013150000` a `20261013155000` porque repetía la versión de `brecha_011_trigger_vehiculos`; el script de asignación pasó a `03_`. Estado de las brechas 014 y 015 en la sección 27 | Claude (asistido) |
 | 2026-10-14 | Aplicadas en producción la migración de la brecha 014 y los scripts de historial (brecha 015) y de limpieza TEST-SUC. Secciones 25, 27 y 29.1; brechas 014 y 015 | Claude (asistido) |
 | 2026-10-14 | Notificaciones en la app por cambios de estado (campana con Realtime) y registro sin correo de Supabase. Nueva sección 30; secciones 8, 9, 25 y 27; brecha 018 | Claude (asistido) |
+| 2026-10-14 | "Encargado" pasa a "Iniciada por" (columna `solicitud.creado_por`) y "Encargado de solicitud" a "Responsable de Logística". Nueva sección 31 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -760,3 +761,19 @@ Campana en el encabezado con las notificaciones de cada usuario por los cambios 
 **Pendiente**
 - Limpieza de notificaciones antiguas (no hay retención; la tabla crece con el uso).
 - Observaciones nuevas y reservas de vehículos no notifican (los tipos `NUEVA_OBSERVACION`, `VEHICULO_RESERVADO` y `VEHICULO_LIBERADO` quedan sin uso).
+
+## 31. "Iniciada por" y "Responsable de Logística" (2026-10-14)
+
+Decisión del responsable: "Encargado" era confuso porque nombraba dos cosas distintas.
+
+| Antes | Ahora | Qué es |
+|---|---|---|
+| "Encargado" (lista, aprobaciones, prioridades, detalle) | **Iniciada por** | Quien creó la solicitud: ejecutivo, jefe de local o administrador (`solicitud.creado_por`) |
+| "Encargado de solicitud" / "Encargado:" (detalle, calendario, reportes, traslados, recepciones, indicadores) | **Responsable de Logística** / "Responsable:" | El usuario de Logística que toma la solicitud o el traslado (`logistica_id`, estado `asignada`) |
+
+- El antiguo "Encargado" mostraba `ejecutivo_id` o, sin él, `jefe_local_id`. No era el creador: si un jefe de local crea y delega, aparecía el ejecutivo delegado (9 casos al 2026-10-14), y `jefe_local_id` se llena siempre con el jefe de la sucursal.
+- **BD:** migración `20261014130000_solicitud_creado_por.sql` (+ rollback). Agrega `solicitud.creado_por` (FK a `usuario`, ON DELETE SET NULL) y la completa para las existentes con el creador registrado en la auditoría (`ASIGNACION_VEHICULO` al crear: 149 de 153), luego la delegación y, si no, la deducción anterior. Ensayada en producción (revertida): 153 de 153 con creador.
+- **App:** `SolicitudesService.createSolicitud` guarda `creado_por`; `SOLICITUD_SELECT` trae el nombre (`creador:creado_por`). Helper puro `src/lib/iniciador.ts` (`iniciadorId`, `iniciadorNombre`), con la deducción anterior como respaldo. Se eliminaron `getEncargadoId`/`getEncargadoNombre` y sus copias locales en las pantallas.
+- El "encargado" de una **sucursal** (administración de sucursales) no cambia: es otro concepto.
+- **Orden de despliegue:** aplicar la migración antes del código. La consulta de listas lee `creado_por`: sin la columna, las listas de solicitudes quedan vacías.
+- **Tests:** `helpers/tipos.test.ts` (`iniciadorNombre`, `iniciadorId`), `solicitudes.service.test.ts` (guarda y mapea el creador), `migracion-creado-por.test.ts`.
