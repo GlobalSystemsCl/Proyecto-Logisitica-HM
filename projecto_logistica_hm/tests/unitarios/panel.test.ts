@@ -37,8 +37,11 @@ describe('límites de los paneles del dashboard', () => {
     expect(r.restantes).toBe(3);
   });
 
-  it('should_keep_7_rows_for_logistics_and_pending_accounts_panels', () => {
-    expect(LIMITE_PANEL_LOGISTICA).toBe(7);
+  it('should_show_at_most_5_cards_per_container_when_viewer_is_logistics', () => {
+    expect(LIMITE_PANEL_LOGISTICA).toBe(5);
+  });
+
+  it('should_keep_7_rows_for_pending_accounts_panel', () => {
     expect(LIMITE_PANEL_CUENTAS).toBe(7);
   });
 });

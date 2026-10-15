@@ -11,8 +11,8 @@ import { etiquetaVehiculo } from '@/lib/vehiculo';
 
 /** Tarjetas visibles por contenedor en el dashboard del Jefe de Local (máximo 5, decisión del 2026-10-15). */
 export const LIMITE_PANEL_JEFE_LOCAL = 5;
-/** Filas visibles por contenedor en el dashboard de Logística. */
-export const LIMITE_PANEL_LOGISTICA = 7;
+/** Tarjetas visibles por contenedor en el dashboard de Logística (máximo 5, decisión del 2026-10-15). */
+export const LIMITE_PANEL_LOGISTICA = 5;
 /** Filas visibles en el panel de cuentas pendientes del administrador. */
 export const LIMITE_PANEL_CUENTAS = 7;
 /** Filas visibles por contenedor en el panel del Ejecutivo. */
