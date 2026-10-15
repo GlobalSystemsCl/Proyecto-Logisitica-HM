@@ -9,7 +9,7 @@ import PanelAcciones from '@/components/PanelAcciones';
 import AsignacionesFields from '@/components/AsignacionesUsuarioFields';
 import { approveUserAction, updateUserAction } from '@/app/actions/users.actions';
 import { sucursalesOcupadasPorJefes, validarAsignacionesFormulario } from '@/lib/asignaciones';
-import { recortar, LIMITE_PANEL_JEFE_LOCAL } from '@/lib/panel';
+import { recortar, LIMITE_PANEL_CUENTAS } from '@/lib/panel';
 import { formatFecha } from '@/lib/fechas';
 
 interface Props {
@@ -56,7 +56,7 @@ export default function PanelCuentasPendientes({ usuarios, sucursales, zonas }: 
         .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()),
     [usuarios]
   );
-  const lista = recortar(pendientes, LIMITE_PANEL_JEFE_LOCAL);
+  const lista = recortar(pendientes, LIMITE_PANEL_CUENTAS);
 
   const jefes = useMemo(
     () => usuarios.map((u) => ({ id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim(), rol: u.rol, sucursal_id: u.sucursal_id, sucursales: u.sucursales })),

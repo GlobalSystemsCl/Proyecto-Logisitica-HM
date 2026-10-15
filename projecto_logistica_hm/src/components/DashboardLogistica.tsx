@@ -4,7 +4,7 @@ import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import BadgeEvento from '@/components/BadgeEvento';
-import { recortar, LIMITE_PANEL_JEFE_LOCAL } from '@/lib/panel';
+import { recortar, LIMITE_PANEL_LOGISTICA } from '@/lib/panel';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
@@ -77,17 +77,17 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
     solicitudes
       .filter((s) => s.estado === 'priorizada' || s.estado === 'asignada')
       .sort((a, b) => (a.posicion_prioridad ?? Infinity) - (b.posicion_prioridad ?? Infinity) || tiempo(a.fecha_limite) - tiempo(b.fecha_limite)),
-    LIMITE_PANEL_JEFE_LOCAL
+    LIMITE_PANEL_LOGISTICA
   );
   const porDespachar = recortar(
     solicitudes
       .filter((s) => s.estado === 'calendarizada')
       .sort((a, b) => tiempo(a.fecha_tentativa_despacho) - tiempo(b.fecha_tentativa_despacho)),
-    LIMITE_PANEL_JEFE_LOCAL
+    LIMITE_PANEL_LOGISTICA
   );
   const trasladosPendientes = recortar(
     traslados.filter((t) => t.estado === 'pendiente'),
-    LIMITE_PANEL_JEFE_LOCAL
+    LIMITE_PANEL_LOGISTICA
   );
 
   return (

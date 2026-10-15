@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { gruposPanelEjecutivo, itemsRecepcion, recortar } from '@/lib/panel';
+import {
+  LIMITE_PANEL_CUENTAS,
+  LIMITE_PANEL_JEFE_LOCAL,
+  LIMITE_PANEL_LOGISTICA,
+  gruposPanelEjecutivo,
+  itemsRecepcion,
+  recortar,
+} from '@/lib/panel';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 
@@ -19,6 +26,20 @@ describe('recortar', () => {
   it('should_handle_missing_list_and_negative_limit', () => {
     expect(recortar(null, 7)).toEqual({ items: [], total: 0, restantes: 0 });
     expect(recortar([1, 2], -1)).toEqual({ items: [], total: 2, restantes: 2 });
+  });
+});
+
+describe('límites de los paneles del dashboard', () => {
+  it('should_show_at_most_5_cards_per_container_when_viewer_is_jefe_local', () => {
+    expect(LIMITE_PANEL_JEFE_LOCAL).toBe(5);
+    const r = recortar([1, 2, 3, 4, 5, 6, 7, 8], LIMITE_PANEL_JEFE_LOCAL);
+    expect(r.items).toHaveLength(5);
+    expect(r.restantes).toBe(3);
+  });
+
+  it('should_keep_7_rows_for_logistics_and_pending_accounts_panels', () => {
+    expect(LIMITE_PANEL_LOGISTICA).toBe(7);
+    expect(LIMITE_PANEL_CUENTAS).toBe(7);
   });
 });
 
