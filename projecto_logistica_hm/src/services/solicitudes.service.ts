@@ -2209,16 +2209,27 @@ export class SolicitudesService {
         return { success: false, error: 'El responsable indicado está inactivo.' };
       }
 
-      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'asignada', logistica_id: logisticaId });
+      // Al asignarse sale de la cola de prioridad (como al calendarizar): una
+      // asignada no conserva su número de cola.
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
+        estado: 'asignada',
+        logistica_id: logisticaId,
+        posicion_prioridad: null,
+      });
       if (errEstado) return { success: false, error: errEstado };
+
+      if (actual.posicion_prioridad !== null && actual.posicion_prioridad !== undefined) {
+        const errReesc = await SolicitudesService.renumerarColaSucursal(admin, actual.sucursal);
+        if (errReesc) return { success: false, error: errReesc };
+      }
 
       await this.registrarAuditoria(
         usuarioId ?? logisticaId,
         'solicitud',
         id,
         'asignacion_logistica',
-        { estado: actual.estado, logistica_id: actual.logistica_id ?? null },
-        { estado: 'asignada', logistica_id: logisticaId }
+        { estado: actual.estado, logistica_id: actual.logistica_id ?? null, posicion_prioridad: actual.posicion_prioridad ?? null },
+        { estado: 'asignada', logistica_id: logisticaId, posicion_prioridad: null }
       );
 
       return { success: true };

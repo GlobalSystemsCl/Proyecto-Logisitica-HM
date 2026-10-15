@@ -320,6 +320,9 @@ export default function SolicitudDetalleModal({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [vehiculosLocal, setVehiculosLocal] = useState<VehiculoAsociado[]>(solicitud.vehiculos);
   const fileDocRef = useRef<HTMLInputElement | null>(null);
+  // Id de la solicitud cuyos datos (observaciones, auditoría, documentos) ya llegaron.
+  const [cargadoId, setCargadoId] = useState<string | null>(null);
+  const cargando = cargadoId !== solicitud.id;
 
   const [prevSolicitudId, setPrevSolicitudId] = useState(solicitud.id);
   if (prevSolicitudId !== solicitud.id) {
@@ -349,6 +352,7 @@ export default function SolicitudDetalleModal({
         setAuditoria(audit);
         setResponsableDetalle(detalleResp);
         setDocumentos(docs);
+        setCargadoId(solicitud.id);
       }
     }
     load();
@@ -579,6 +583,10 @@ export default function SolicitudDetalleModal({
                       <span>{formatFecha(rechazo.created_at)}</span>
                     </p>
                   </>
+                ) : cargando ? (
+                  <p className="text-base text-red-900/70 leading-relaxed animate-pulse">
+                    Cargando el motivo del rechazo…
+                  </p>
                 ) : (
                   <p className="text-base text-red-900 leading-relaxed">
                     Esta solicitud fue rechazada, pero el motivo no quedó registrado en el sistema.
@@ -901,7 +909,9 @@ export default function SolicitudDetalleModal({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Timeline */}
               <div className="lg:col-span-2">
-                {historial.length === 0 ? (
+                {cargando ? (
+                  <p className="text-sm text-neutral-400 italic animate-pulse">Cargando historial…</p>
+                ) : historial.length === 0 ? (
                   <p className="text-sm text-neutral-400 italic">Sin registros de auditoría.</p>
                 ) : (
                   <div className="relative">
