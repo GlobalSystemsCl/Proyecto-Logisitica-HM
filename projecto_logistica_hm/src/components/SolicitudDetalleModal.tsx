@@ -50,6 +50,7 @@ import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
+import BadgeEvento from '@/components/BadgeEvento';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente de aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -110,7 +111,9 @@ function getResponsableRol(sol: SolicitudLista): string | null {
   return null;
 }
 
-function getTimelineInfo(accion: string): { label: string; dotClass: string; textClass: string } {
+function getTimelineInfo(a: AuditoriaEntry): { label: string; dotClass: string; textClass: string } {
+  const estadoNuevo = (a.valor_nuevo as { estado?: string } | null)?.estado;
+  const accion = a.accion === 'despacho' && estadoNuevo === 'calendarizada' ? 'despacho_revertido' : a.accion;
   const map: Record<string, { label: string; dotClass: string; textClass: string }> = {
     crear: { label: 'Pendiente', dotClass: 'border-2 border-amber-400 bg-white', textClass: 'text-amber-600' },
     solicitud_creada: { label: 'Pendiente', dotClass: 'border-2 border-amber-400 bg-white', textClass: 'text-amber-600' },
@@ -132,6 +135,21 @@ function getTimelineInfo(accion: string): { label: string; dotClass: string; tex
     delegacion: { label: 'Delegada', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
     subir_documento: { label: 'Documento subido', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     eliminar_documento: { label: 'Documento eliminado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
+    creacion: { label: 'Solicitud creada', dotClass: 'border-2 border-neutral-900 bg-white', textClass: 'text-neutral-900' },
+    // Acciones con el nombre con que las registra SolicitudesService.
+    aprobacion: { label: 'Aprobada', dotClass: 'bg-green-500', textClass: 'text-green-600' },
+    rechazo: { label: 'Rechazada', dotClass: 'bg-red-500', textClass: 'text-red-600' },
+    priorizacion: { label: 'Priorizada', dotClass: 'border-2 border-blue-500 bg-white', textClass: 'text-blue-600' },
+    asignacion_logistica: { label: 'Encargado de Logística asignado', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
+    calendarizacion: { label: 'Programada', dotClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
+    recalendarizacion: { label: 'Reprogramada', dotClass: 'bg-purple-500', textClass: 'text-purple-600' },
+    descalendarizacion: { label: 'Programación quitada', dotClass: 'border-2 border-emerald-500 bg-white', textClass: 'text-emerald-700' },
+    despacho: { label: 'Despachada', dotClass: 'bg-sky-500', textClass: 'text-sky-600' },
+    despacho_revertido: { label: 'Despacho revertido', dotClass: 'border-2 border-sky-500 bg-white', textClass: 'text-sky-700' },
+    entrega: { label: 'Recepcionada', dotClass: 'bg-neutral-800', textClass: 'text-neutral-800' },
+    finalizacion: { label: 'Entregado a cliente', dotClass: 'bg-black', textClass: 'text-neutral-900' },
+    CAMBIO_ESTADO: { label: 'Cancelada', dotClass: 'bg-red-500', textClass: 'text-red-600' },
+    cancelacion_transito: { label: 'Cancelada en tránsito', dotClass: 'bg-red-500', textClass: 'text-red-600' },
   };
   return map[accion] || { label: accion, dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' };
 }
@@ -161,7 +179,21 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
     case 'descalendarizacion':
       return 'Devuelta a la cola de prioridades';
     case 'despacho':
-      return 'Vehículo(s) despachados desde la sucursal origen';
+      return val?.estado === 'calendarizada'
+        ? 'El vehículo no salió: vuelve a quedar programada'
+        : 'Vehículo(s) despachados desde la sucursal origen';
+    case 'recalendarizacion': {
+      const fecha = val?.fecha_tentativa_despacho;
+      const motivo = val?.motivo;
+      return `${fecha ? `Nueva fecha de traslado: ${formatFecha(String(fecha))}` : 'Traslado reprogramado'}${motivo ? `. Motivo: ${String(motivo)}` : ''}`;
+    }
+    case 'asignacion_logistica':
+      return 'Se asignó el encargado de Logística';
+    case 'CAMBIO_ESTADO':
+    case 'cancelacion_transito': {
+      const motivo = val?.motivo;
+      return motivo ? `Motivo: ${String(motivo)}` : 'Solicitud cancelada';
+    }
     case 'inicio_transito':
       return 'Inicio de ruta confirmado: vehículo(s) en tránsito';
     case 'entrega':
@@ -176,8 +208,10 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
       return motivo ? `Motivo: ${String(motivo)}` : 'Solicitud cancelada';
     }
     case 'rechazo':
-    case 'rechazar':
-      return 'Solicitud rechazada';
+    case 'rechazar': {
+      const motivo = val?.motivo;
+      return motivo ? `Solicitud rechazada. Motivo: ${String(motivo)}` : 'Solicitud rechazada';
+    }
     case 'insistencia': {
       const mensaje = val?.mensaje;
       return mensaje
@@ -192,9 +226,46 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
       return 'Documento eliminado';
     case 'delegacion':
       return 'El Jefe de Local delego la solicitud en un Ejecutivo';
+    case 'creacion':
+      return (a.valor_nuevo as { descripcion?: string } | null)?.descripcion ?? 'Solicitud creada';
     default:
       return null;
   }
+}
+
+/**
+ * La creación no queda en la auditoría de la solicitud: se arma una entrada
+ * con la fecha de creación y su autor para que el historial parta desde ahí.
+ * El autor es `creado_por` (quien la inició); en solicitudes anteriores a esa
+ * columna, quien registró la delegación o la deducción de `lib/iniciador`.
+ */
+function entradaCreacion(sol: SolicitudLista, auditoria: AuditoriaEntry[]): AuditoriaEntry | null {
+  if (auditoria.some((a) => a.accion === 'crear' || a.accion === 'solicitud_creada')) return null;
+  const delegacion = auditoria.find((a) => a.accion === 'delegacion');
+  const autorId = sol.creado_por ?? delegacion?.usuario_id ?? iniciadorId(sol);
+  const autorNombre = sol.creado_por
+    ? sol.creado_por_nombre ?? null
+    : delegacion
+      ? delegacion.usuario_nombre ?? null
+      : iniciadorNombre(sol);
+  const descripcion = delegacion
+    ? `Solicitud creada por el Jefe de Local y asignada a ${sol.ejecutivo_nombre ?? 'un Ejecutivo'}`
+    : autorId && autorId === sol.ejecutivo_id
+      ? 'Solicitud creada y enviada a aprobación del Jefe de Local'
+      : autorId && autorId === sol.jefe_local_id
+        ? 'Solicitud creada por el Jefe de Local (queda aprobada)'
+        : 'Solicitud creada';
+  return {
+    id: `creacion-${sol.id}`,
+    usuario_id: autorId ?? '',
+    usuario_nombre: autorNombre,
+    entidad: 'solicitud',
+    entidad_id: sol.id,
+    accion: 'creacion',
+    valor_anterior: null,
+    valor_nuevo: { descripcion },
+    created_at: sol.fecha_creacion,
+  } as AuditoriaEntry;
 }
 
 function getUserRoleFromSolicitud(userId: string, sol: SolicitudLista): string {
@@ -274,6 +345,13 @@ export default function SolicitudDetalleModal({
     load();
     return () => { cancelled = true; };
   }, [solicitud]);
+
+  // Más reciente primero; la creación siempre cierra la línea de tiempo.
+  const creacion = entradaCreacion(solicitud, auditoria);
+  const historial = [
+    ...[...auditoria].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()),
+    ...(creacion ? [creacion] : []),
+  ];
 
   const vehiculosDisponiblesParaAgregar = vehiculosInventario
     .filter((v) => !v.reservado_en_activa)
@@ -446,6 +524,7 @@ export default function SolicitudDetalleModal({
             <span className={`inline-flex items-center px-3.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${estadoConfig[solicitud.estado].color}`}>
               {estadoConfig[solicitud.estado].label}
             </span>
+            {solicitud.tipo_solicitud === 'evento' && <BadgeEvento tamano="lg" />}
           </div>
           <p className="text-sm text-neutral-500">
             {solicitud.tipo_solicitud === 'evento' ? 'Evento' : 'Traslado entre locales'} · Creada el {formatFecha(solicitud.fecha_creacion)}
@@ -813,12 +892,12 @@ export default function SolicitudDetalleModal({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Timeline */}
               <div className="lg:col-span-2">
-                {auditoria.length === 0 ? (
+                {historial.length === 0 ? (
                   <p className="text-sm text-neutral-400 italic">Sin registros de auditoría.</p>
                 ) : (
                   <div className="relative">
-                    {[...auditoria].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((a, i, arr) => {
-                      const tl = getTimelineInfo(a.accion);
+                    {historial.map((a, i, arr) => {
+                      const tl = getTimelineInfo(a);
                       const desc = getTimelineDescription(a);
                       const isLast = i === arr.length - 1;
                       return (
@@ -833,16 +912,19 @@ export default function SolicitudDetalleModal({
                               <span className="text-xs text-neutral-300 hidden sm:inline">—</span>
                               <span className={`text-sm font-bold ${tl.textClass}`}>{tl.label}</span>
                             </div>
-                            <p className="text-sm text-neutral-700">
-                              <UsuarioNombreBoton
-                                usuarioId={a.usuario_id}
-                                nombre={a.usuario_nombre}
-                                muted={false}
-                              />
-                              {getUserRoleFromSolicitud(a.usuario_id, solicitud) && (
-                                <span className="text-neutral-400"> ({getUserRoleFromSolicitud(a.usuario_id, solicitud)})</span>
-                              )}
-                            </p>
+                            {a.usuario_id && (
+                              <p className="text-sm text-neutral-700">
+                                {a.accion === 'creacion' && <span className="text-neutral-500">Creada por </span>}
+                                <UsuarioNombreBoton
+                                  usuarioId={a.usuario_id}
+                                  nombre={a.usuario_nombre}
+                                  muted={false}
+                                />
+                                {getUserRoleFromSolicitud(a.usuario_id, solicitud) && (
+                                  <span className="text-neutral-400"> ({getUserRoleFromSolicitud(a.usuario_id, solicitud)})</span>
+                                )}
+                              </p>
+                            )}
                             {desc && <p className="text-sm text-neutral-500 mt-0.5">{desc}</p>}
                           </div>
                         </div>

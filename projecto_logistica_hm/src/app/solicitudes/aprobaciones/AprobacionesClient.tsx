@@ -19,6 +19,7 @@ import {
 import { SolicitudLista, EstadoSolicitud, TipoSolicitud, VehiculoInventario } from '@/types/solicitud.types';
 import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import BadgeEvento from '@/components/BadgeEvento';
 import { hoyISO } from '@/lib/fechas';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { iniciadorNombre } from '@/lib/iniciador';
@@ -191,6 +192,7 @@ export default function AprobacionesClient({
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-sm text-neutral-500">#{sol.id.slice(0, 8)}</span>
+                    {sol.tipo_solicitud === 'evento' && <BadgeEvento />}
                     <span className="px-2 py-0.5 rounded-md text-xs bg-amber-50 text-amber-700 border border-amber-200">
                       Pendiente
                     </span>

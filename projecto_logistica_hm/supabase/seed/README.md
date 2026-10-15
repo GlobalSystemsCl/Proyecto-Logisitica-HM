@@ -10,6 +10,8 @@ para probar cada rol desde el frontend sin crear los casos a mano.
 | `03_validar_escenarios.sql` | Controles de integridad, historial, fechas, colas y RLS por usuario. Solo lectura (termina en `ROLLBACK`) |
 | `04_poblar_100_solicitudes.sql` | Genera 100 solicitudes más (S1001–S1100) y 6 traslados (T1001–T1006) con el mismo motor, repartidas en todos los estados. Convive con el 01; el 02 y el 03 cubren ambos |
 | `05_poblar_10_priorizadas.sql` | 10 solicitudes **priorizadas** creadas hoy (S1101–S1110) en Valparaíso, 15 Norte y Concón, para probar el módulo de Logística (zona 1). El 02 también las borra |
+| `06_poblar_notificaciones.sql` | Crea las notificaciones de la campana de los últimos 14 días a partir de la historia de las solicitudes y traslados de prueba, con los mismos destinatarios y textos que la app (`lib/notificaciones-app.ts`). Las de más de 2 días quedan leídas. Ejecutar al final |
+| `PROMPT_PRUEBA_FLUJOS.md` | Guion (prompt) para probar todos los flujos, roles, límites y notificaciones con estos datos |
 
 ## Cómo se ejecuta
 
@@ -21,7 +23,8 @@ no queda nada a medias.
 - **Regenerar con fechas de hoy:** `02_limpiar_escenarios.sql` y después `01_poblar_escenarios.sql`.
   Las fechas son relativas al día de ejecución (hora de Chile).
 - **Validar:** `03_validar_escenarios.sql`. Todas las filas deben tener `ok = true`.
-- **Limpiar:** `02_limpiar_escenarios.sql`.
+- **Limpiar:** `02_limpiar_escenarios.sql` (también borra las notificaciones de prueba y las que la app haya creado sobre solicitudes de prueba).
+- **Regenerar todo:** `02` → `01` → `04` → `05` → `06`.
 
 > **Atención:** los usuarios son cuentas reales con correos reales. El poblamiento
 > no envía correos porque escribe directo en la BD. Pero si se avanza una
@@ -62,6 +65,7 @@ El id de cada fila creada empieza con `5eed`:
 | `5eed0005` | `insistencia` |
 | `5eed0006-0000-4000-8000-00000000000N` | `traslado_interno` |
 | `5eed0007` | `traslado_interno_vehiculo` |
+| `5eed0008` | `notificacion` (06) |
 
 ### Qué hace la limpieza
 
@@ -146,4 +150,5 @@ Sucursales: 6 = 15 NORTE, 7 = CONCON, 8 = SANTIAGO CENTRO, 9 = VALPARAISO.
 7. **Asignar un encargado desde `priorizada` no limpia `posicion_prioridad`.**
    - La solicitud queda con un número de cola huérfano hasta la siguiente renumeración.
    - Los escenarios asignan desde `aprobada` para no dejar la cola en ese estado intermedio.
-8. **No se generan notificaciones** (la tabla `notificacion` no se usa; los avisos son correos) **ni documentos** (requieren archivos en Storage).
+8. **No se generan documentos** (requieren archivos en Storage). Las notificaciones de la campana las crea `06`; no se envían correos.
+9. **Todas las solicitudes de prueba muestran el mismo código `#5EED0001`**: la app muestra los 8 primeros caracteres del id y todas comparten el prefijo `5eed0001-`.

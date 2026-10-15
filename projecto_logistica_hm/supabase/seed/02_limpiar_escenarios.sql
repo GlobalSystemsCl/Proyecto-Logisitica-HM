@@ -61,9 +61,7 @@ begin
     and v.ubicacion = t.destino_id;
 
   -- Traslados aún pendientes o en tránsito: su reserva sumó 1 a los slots
-  -- reservados del destino. Desde la brecha 011 (2026-10-13) los triggers de
-  -- borrado y el recálculo final ya lo corrigen; este descuento es redundante
-  -- pero inofensivo.
+  -- reservados del destino y no hay trigger de borrado que la descuente.
   update public.sucursal s
   set slots_reservados = greatest(s.slots_reservados - x.cantidad, 0)
   from (
@@ -102,6 +100,14 @@ begin
     and v.ubicacion is not null
     and not exists (select 1 from public.solicitud_vehiculo sv where sv.vehiculo_id = v.id)
     and not exists (select 1 from public.traslado_interno_vehiculo tv where tv.vehiculo_id = v.id);
+
+  -- ---- Notificaciones ----------------------------------------------------------
+  -- Las de 06_poblar_notificaciones.sql y las que la app creó al avanzar
+  -- solicitudes o traslados de prueba.
+  delete from public.notificacion n
+  where n.id::text like '5eed0008-%'
+     or n.entidad_id in (select id from seed_sol)
+     or n.entidad_id in (select id from seed_tras);
 
   -- ---- Auditoría --------------------------------------------------------------
   delete from public.auditoria a

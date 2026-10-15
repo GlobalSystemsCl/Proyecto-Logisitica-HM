@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
+  Eye,
   Filter,
   GripVertical,
   PackageCheck,
@@ -20,6 +21,9 @@ import {
   X,
 } from 'lucide-react';
 import type { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
+import type { UserRole } from '@/types/auth.types';
+import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import BadgeEvento from '@/components/BadgeEvento';
 import {
   calendarizarSolicitudAction,
   descalendarizarSolicitudAction,
@@ -92,6 +96,20 @@ function ruta(s: SolicitudLista): string {
   return `${s.sucursal_nombre ?? ''} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? ''}`;
 }
 
+/** N° visible de la solicitud: el mismo que muestra su detalle. */
+function numero(s: SolicitudLista): string {
+  return `#${s.id.slice(0, 8).toUpperCase()}`;
+}
+
+function TipoChip({ s, tamano = 'sm' }: { s: SolicitudLista; tamano?: 'sm' | 'md' }) {
+  if (s.tipo_solicitud === 'evento') return <BadgeEvento tamano={tamano} />;
+  return (
+    <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
+      {tipoLabel[s.tipo_solicitud]}
+    </span>
+  );
+}
+
 export default function CalendarizacionesClient({
   vista,
   fecha,
@@ -119,6 +137,7 @@ export default function CalendarizacionesClient({
   const [recibirTarget, setRecibirTarget] = useState<SolicitudLista | null>(null);
   const [reprogramar, setReprogramar] = useState<{ sol: SolicitudLista; fecha: string | null } | null>(null);
   const [cancelarTarget, setCancelarTarget] = useState<SolicitudLista | null>(null);
+  const [detalle, setDetalle] = useState<SolicitudLista | null>(null);
 
   const puedeCalendarizar = viewer.rol === 'logistica';
   const puedeDespachar = viewer.rol === 'administrador' || viewer.rol === 'logistica';
@@ -244,6 +263,9 @@ export default function CalendarizacionesClient({
     const ocupado = loading === s.id;
     return (
       <div className="flex flex-wrap gap-2">
+        <button onClick={() => setDetalle(s)} className={`${btn} text-neutral-700 border border-neutral-300 hover:bg-neutral-100`}>
+          <Eye className="w-3 h-3" /> Ver detalle
+        </button>
         {puedeDespachar && s.estado === 'calendarizada' && (
           <button onClick={() => accion(s.id, () => despacharSolicitudAction(s.id))} disabled={ocupado} className={`${btn} text-white bg-sky-600 hover:bg-sky-700`}>
             <PackageSearch className="w-3 h-3" /> Despachar
@@ -288,13 +310,13 @@ export default function CalendarizacionesClient({
     return (
       <div key={s.id} className="p-4 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-mono text-xs font-bold text-neutral-900 px-1.5 py-0.5 rounded bg-neutral-100 border border-neutral-200">{numero(s)}</span>
           <span className="text-sm font-semibold text-neutral-900">{ruta(s)}</span>
           {estado && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${estado.clase}`}>{estado.texto}</span>}
-          <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">{tipoLabel[s.tipo_solicitud]}</span>
+          <TipoChip s={s} tamano="md" />
           {chips(s)}
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-neutral-500">
-          <span className="font-mono">#{s.id.slice(0, 8)}</span>
           <span className="flex items-center gap-1"><Clock className="w-3 h-3" /> Despacho programado: {formatFecha(s.fecha_tentativa_despacho) || '—'}</span>
           <span>{ETIQUETA_FECHA_LIMITE}: {formatFecha(s.fecha_limite) || '—'}</span>
           {s.fecha_despacho && <span>Despachado: {formatFecha(s.fecha_despacho)}</span>}
@@ -320,12 +342,14 @@ export default function CalendarizacionesClient({
         draggable={arrastrable && loading !== s.id}
         onDragStart={(e) => arrastrable && handleDragStart(e, s.id)}
         onDragEnd={() => { setDraggedId(null); setDropTarget(null); }}
-        onClick={(e) => { e.stopPropagation(); setDiaSeleccionado(s.fecha_tentativa_despacho?.slice(0, 10) ?? null); }}
-        title={arrastrable ? 'Arrastra a otro día para reprogramar' : undefined}
-        className={`p-2 rounded-lg border bg-white text-left space-y-1 ${arrastrable ? 'cursor-grab' : 'cursor-pointer'} ${draggedId === s.id ? 'opacity-50' : ''} border-neutral-200 hover:border-neutral-400`}
+        onClick={(e) => { e.stopPropagation(); setDetalle(s); }}
+        title={arrastrable ? 'Clic para ver el detalle · Arrastra a otro día para reprogramar' : 'Clic para ver el detalle'}
+        className={`p-2 rounded-lg border text-left space-y-1 ${s.tipo_solicitud === 'evento' ? 'bg-fuchsia-50 border-fuchsia-300 hover:border-fuchsia-500' : 'bg-white border-neutral-200 hover:border-neutral-400'} ${arrastrable ? 'cursor-grab' : 'cursor-pointer'} ${draggedId === s.id ? 'opacity-50' : ''}`}
       >
+        <p className="font-mono text-[10px] font-bold text-neutral-900">{numero(s)}</p>
         <p className="text-[11px] font-semibold text-neutral-900 truncate">{ruta(s)}</p>
         <div className="flex flex-wrap gap-1">
+          {s.tipo_solicitud === 'evento' && <BadgeEvento tamano="sm" />}
           {estado && <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${estado.clase}`}>{estado.texto}</span>}
           {chips(s)}
         </div>
@@ -371,6 +395,17 @@ export default function CalendarizacionesClient({
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="search"
+              value={filtros.busqueda}
+              onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value.replace(/^#/, '').slice(0, 40) })}
+              placeholder="Buscar N° de solicitud, patente o chasis"
+              aria-label="Buscar solicitud"
+              className={`${selectCls} w-full pl-9`}
+            />
+          </div>
           <div className="inline-flex rounded-xl border border-neutral-300 bg-white p-0.5" role="group" aria-label="Vista">
             {(['mes', 'semana', 'dia'] as VistaCalendario[]).map((v) => (
               <button
@@ -395,15 +430,6 @@ export default function CalendarizacionesClient({
       {/* Filtros */}
       {mostrarFiltros && (
         <div className="bg-white border border-neutral-200 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div className="relative sm:col-span-2">
-            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              value={filtros.busqueda}
-              onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value.slice(0, 40) })}
-              placeholder="Buscar por patente, chasis o N° de solicitud"
-              className={`${selectCls} w-full pl-9`}
-            />
-          </div>
           <select value={filtros.origen} onChange={(e) => setFiltros({ ...filtros, origen: e.target.value })} className={selectCls} aria-label="Sucursal de origen">
             <option value="">Origen: todas</option>
             {sucursales.map((s) => <option key={s.id} value={String(s.id)}>{s.nombre ?? `Sucursal ${s.id}`}</option>)}
@@ -474,7 +500,7 @@ export default function CalendarizacionesClient({
                 <h3 className="font-bold text-neutral-900 text-sm flex items-center gap-2">
                   <GripVertical className="w-4 h-4" /> Por programar ({pendientes.length})
                 </h3>
-                <p className="text-[10px] text-neutral-500 mt-0.5">Arrastra al calendario para programar</p>
+                <p className="text-[10px] text-neutral-500 mt-0.5">Arrastra al calendario para programar · clic para ver el detalle</p>
               </div>
               <div className="max-h-[560px] overflow-y-auto p-2 space-y-2">
                 {pendientes.length === 0 ? (
@@ -486,12 +512,16 @@ export default function CalendarizacionesClient({
                       draggable={loading !== s.id}
                       onDragStart={(e) => handleDragStart(e, s.id)}
                       onDragEnd={() => { setDraggedId(null); setDropTarget(null); }}
-                      className={`p-3 rounded-xl border bg-white cursor-grab active:cursor-grabbing ${draggedId === s.id ? 'border-neutral-900 ring-2 ring-neutral-900 opacity-60' : 'border-neutral-200 hover:border-neutral-300'} ${loading === s.id ? 'opacity-50 pointer-events-none' : ''}`}
+                      onClick={() => setDetalle(s)}
+                      title="Clic para ver el detalle · Arrastra al calendario para programar"
+                      className={`p-3 rounded-xl border cursor-grab active:cursor-grabbing ${s.tipo_solicitud === 'evento' ? 'bg-fuchsia-50' : 'bg-white'} ${draggedId === s.id ? 'border-neutral-900 ring-2 ring-neutral-900 opacity-60' : s.tipo_solicitud === 'evento' ? 'border-fuchsia-300 hover:border-fuchsia-500' : 'border-neutral-200 hover:border-neutral-300'} ${loading === s.id ? 'opacity-50 pointer-events-none' : ''}`}
                     >
-                      <p className="text-xs font-semibold text-neutral-900 truncate" title={ruta(s)}>{ruta(s)}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-xs font-bold text-neutral-900">{numero(s)}</span>
+                        <TipoChip s={s} />
+                      </div>
+                      <p className="mt-1 text-xs font-semibold text-neutral-900 truncate" title={ruta(s)}>{ruta(s)}</p>
                       <div className="mt-1 flex items-center gap-1.5 flex-wrap">
-                        <span className="font-mono text-[10px] text-neutral-500">#{s.id.slice(0, 8)}</span>
-                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">{tipoLabel[s.tipo_solicitud]}</span>
                         {s.estado === 'priorizada' && s.posicion_prioridad !== null && (
                           <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-900 text-white">Prioridad #{s.posicion_prioridad}</span>
                         )}
@@ -635,6 +665,20 @@ export default function CalendarizacionesClient({
       )}
 
       {/* Modales */}
+      {detalle && (
+        <SolicitudDetalleModal
+          solicitud={detalle}
+          vehiculosInventario={[]}
+          onClose={() => setDetalle(null)}
+          onMensaje={(tipo, mensaje) => { if (tipo === 'error') alert(mensaje); }}
+          onCancelar={() => {}}
+          puedeCancelar={false}
+          puedeGestionarVehiculos={false}
+          currentUserId={viewer.id}
+          currentUserRol={viewer.rol as UserRole}
+        />
+      )}
+
       {recibirTarget && (
         <RecepcionModal
           titulo="Registrar recepción"

@@ -40,6 +40,7 @@ import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
 import { nombreVehiculoConAnio } from '@/lib/vehiculo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
+import BadgeEvento from '@/components/BadgeEvento';
 import { colaDeSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
 import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
@@ -539,9 +540,13 @@ function SolicitudCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
-              {tipoLabel[sol.tipo_solicitud]}
-            </span>
+            {sol.tipo_solicitud === 'evento' ? (
+              <BadgeEvento tamano="sm" />
+            ) : (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
+                {tipoLabel[sol.tipo_solicitud]}
+              </span>
+            )}
             {chipAtraso && (
               <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${chipAtraso.clase}`}>
                 {chipAtraso.texto}
@@ -637,9 +642,13 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
-            <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
-              {tipoLabel[sol.tipo_solicitud]}
-            </span>
+            {sol.tipo_solicitud === 'evento' ? (
+              <BadgeEvento tamano="sm" />
+            ) : (
+              <span className="px-1.5 py-0.5 rounded text-[10px] bg-neutral-100 text-neutral-600 border border-neutral-200">
+                {tipoLabel[sol.tipo_solicitud]}
+              </span>
+            )}
           </div>
           {sol.vehiculos.length > 0 && (
             <div className="mt-2 space-y-1">
