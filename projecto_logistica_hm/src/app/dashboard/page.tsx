@@ -67,15 +67,15 @@ export default async function DashboardPage() {
     ? await SucursalesService.getSlotsPorSucursales(sucursalesAsignadas)
     : [];
 
-  // R3 + R11: panel de pendientes del Jefe de Local (el administrador ve todas las sucursales).
-  const vePanel = rol === 'jefe_local' || rol === 'administrador';
-  const alcance = rol === 'administrador' ? null : sucursalesAsignadas;
+  // R3 + R11: panel de pendientes del Jefe de Local. El administrador no lo
+  // ve: su dashboard es de visualización y solo muestra las cuentas por activar.
+  const vePanel = rol === 'jefe_local';
   const [pendientesAprobar, recepcionesSolicitudes, recepcionesTraslados, porPriorizar] = vePanel
     ? await Promise.all([
-        SolicitudesService.getSolicitudesPendientesAprobacion(alcance),
-        SolicitudesService.getRecepcionesPendientes(alcance),
-        TrasladoService.getTrasladosEnTransitoHacia(alcance),
-        SolicitudesService.getSolicitudesPorPriorizar(alcance),
+        SolicitudesService.getSolicitudesPendientesAprobacion(sucursalesAsignadas),
+        SolicitudesService.getRecepcionesPendientes(sucursalesAsignadas),
+        TrasladoService.getTrasladosEnTransitoHacia(sucursalesAsignadas),
+        SolicitudesService.getSolicitudesPorPriorizar(sucursalesAsignadas),
       ])
     : [[], [], [], []];
 
