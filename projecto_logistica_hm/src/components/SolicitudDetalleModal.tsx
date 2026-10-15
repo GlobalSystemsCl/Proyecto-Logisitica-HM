@@ -120,7 +120,9 @@ function getResponsableRol(sol: SolicitudLista): string | null {
   return null;
 }
 
-function getTimelineInfo(accion: string): { label: string; dotClass: string; textClass: string } {
+function getTimelineInfo(a: AuditoriaEntry): { label: string; dotClass: string; textClass: string } {
+  const estadoNuevo = (a.valor_nuevo as { estado?: string } | null)?.estado;
+  const accion = a.accion === 'despacho' && estadoNuevo === 'calendarizada' ? 'despacho_revertido' : a.accion;
   const map: Record<string, { label: string; dotClass: string; textClass: string }> = {
     crear: { label: 'Pendiente', dotClass: 'border-2 border-amber-400 bg-white', textClass: 'text-amber-600' },
     solicitud_creada: { label: 'Pendiente', dotClass: 'border-2 border-amber-400 bg-white', textClass: 'text-amber-600' },
@@ -143,6 +145,20 @@ function getTimelineInfo(accion: string): { label: string; dotClass: string; tex
     subir_documento: { label: 'Documento subido', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
     creacion: { label: 'Solicitud creada', dotClass: 'border-2 border-neutral-900 bg-white', textClass: 'text-neutral-900' },
     eliminar_documento: { label: 'Documento eliminado', dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' },
+    // Acciones con el nombre con que las registra SolicitudesService.
+    aprobacion: { label: 'Aprobada', dotClass: 'bg-green-500', textClass: 'text-green-600' },
+    rechazo: { label: 'Rechazada', dotClass: 'bg-red-500', textClass: 'text-red-600' },
+    priorizacion: { label: 'Priorizada', dotClass: 'border-2 border-blue-500 bg-white', textClass: 'text-blue-600' },
+    asignacion_logistica: { label: 'Encargado de Logística asignado', dotClass: 'bg-blue-500', textClass: 'text-blue-600' },
+    calendarizacion: { label: 'Programada', dotClass: 'bg-emerald-500', textClass: 'text-emerald-600' },
+    recalendarizacion: { label: 'Reprogramada', dotClass: 'bg-purple-500', textClass: 'text-purple-600' },
+    descalendarizacion: { label: 'Programación quitada', dotClass: 'border-2 border-emerald-500 bg-white', textClass: 'text-emerald-700' },
+    despacho: { label: 'Despachada', dotClass: 'bg-sky-500', textClass: 'text-sky-600' },
+    despacho_revertido: { label: 'Despacho revertido', dotClass: 'border-2 border-sky-500 bg-white', textClass: 'text-sky-700' },
+    entrega: { label: 'Recepcionada', dotClass: 'bg-neutral-800', textClass: 'text-neutral-800' },
+    finalizacion: { label: 'Entregado a cliente', dotClass: 'bg-black', textClass: 'text-neutral-900' },
+    CAMBIO_ESTADO: { label: 'Cancelada', dotClass: 'bg-red-500', textClass: 'text-red-600' },
+    cancelacion_transito: { label: 'Cancelada en tránsito', dotClass: 'bg-red-500', textClass: 'text-red-600' },
   };
   return map[accion] || { label: accion, dotClass: 'bg-neutral-400', textClass: 'text-neutral-600' };
 }
@@ -172,7 +188,21 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
     case 'descalendarizacion':
       return 'Devuelta a la cola de prioridades';
     case 'despacho':
-      return 'Vehículo(s) despachados desde la sucursal origen';
+      return val?.estado === 'calendarizada'
+        ? 'El vehículo no salió: vuelve a quedar programada'
+        : 'Vehículo(s) despachados desde la sucursal origen';
+    case 'recalendarizacion': {
+      const fecha = val?.fecha_tentativa_despacho;
+      const motivo = val?.motivo;
+      return `${fecha ? `Nueva fecha de traslado: ${formatFecha(String(fecha))}` : 'Traslado reprogramado'}${motivo ? `. Motivo: ${String(motivo)}` : ''}`;
+    }
+    case 'asignacion_logistica':
+      return 'Se asignó el encargado de Logística';
+    case 'CAMBIO_ESTADO':
+    case 'cancelacion_transito': {
+      const motivo = val?.motivo;
+      return motivo ? `Motivo: ${String(motivo)}` : 'Solicitud cancelada';
+    }
     case 'inicio_transito':
       return 'Inicio de ruta confirmado: vehículo(s) en tránsito';
     case 'entrega':
@@ -187,8 +217,10 @@ function getTimelineDescription(a: AuditoriaEntry): string | null {
       return motivo ? `Motivo: ${String(motivo)}` : 'Solicitud cancelada';
     }
     case 'rechazo':
-    case 'rechazar':
-      return 'Solicitud rechazada';
+    case 'rechazar': {
+      const motivo = val?.motivo;
+      return motivo ? `Solicitud rechazada. Motivo: ${String(motivo)}` : 'Solicitud rechazada';
+    }
     case 'insistencia': {
       const mensaje = val?.mensaje;
       return mensaje
@@ -226,16 +258,17 @@ function entradaCreacion(sol: SolicitudLista, auditoria: AuditoriaEntry[]): Audi
       : sol.jefe_local_id
         ? { id: sol.jefe_local_id, nombre: sol.jefe_local_nombre }
         : null;
-  const porEjecutivo = !delegacion && Boolean(sol.ejecutivo_id);
-  const descripcion = porEjecutivo
-    ? 'Solicitud creada y enviada a aprobación del Jefe de Local'
-    : delegacion
-      ? `Solicitud creada por el Jefe de Local y asignada a ${sol.ejecutivo_nombre ?? 'un Ejecutivo'}`
-      : 'Solicitud creada por el Jefe de Local (queda aprobada)';
+  const descripcion = delegacion
+    ? `Solicitud creada por el Jefe de Local y asignada a ${sol.ejecutivo_nombre ?? 'un Ejecutivo'}`
+    : sol.ejecutivo_id
+      ? 'Solicitud creada y enviada a aprobación del Jefe de Local'
+      : sol.jefe_local_id
+        ? 'Solicitud creada por el Jefe de Local (queda aprobada)'
+        : 'Solicitud creada';
   return {
     id: `creacion-${sol.id}`,
     usuario_id: autor?.id ?? '',
-    usuario_nombre: autor?.nombre ?? 'Usuario no disponible',
+    usuario_nombre: autor?.nombre ?? null,
     entidad: 'solicitud',
     entidad_id: sol.id,
     accion: 'creacion',
@@ -874,7 +907,7 @@ export default function SolicitudDetalleModal({
                 ) : (
                   <div className="relative">
                     {historial.map((a, i, arr) => {
-                      const tl = getTimelineInfo(a.accion);
+                      const tl = getTimelineInfo(a);
                       const desc = getTimelineDescription(a);
                       const isLast = i === arr.length - 1;
                       return (
@@ -889,17 +922,19 @@ export default function SolicitudDetalleModal({
                               <span className="text-xs text-neutral-300 hidden sm:inline">—</span>
                               <span className={`text-sm font-bold ${tl.textClass}`}>{tl.label}</span>
                             </div>
-                            <p className="text-sm text-neutral-700">
-                              {a.accion === 'creacion' && <span className="text-neutral-500">Creada por </span>}
-                              <UsuarioNombreBoton
-                                usuarioId={a.usuario_id || null}
-                                nombre={a.usuario_nombre}
-                                muted={false}
-                              />
-                              {getUserRoleFromSolicitud(a.usuario_id, solicitud) && (
-                                <span className="text-neutral-400"> ({getUserRoleFromSolicitud(a.usuario_id, solicitud)})</span>
-                              )}
-                            </p>
+                            {a.usuario_id && (
+                              <p className="text-sm text-neutral-700">
+                                {a.accion === 'creacion' && <span className="text-neutral-500">Creada por </span>}
+                                <UsuarioNombreBoton
+                                  usuarioId={a.usuario_id}
+                                  nombre={a.usuario_nombre}
+                                  muted={false}
+                                />
+                                {getUserRoleFromSolicitud(a.usuario_id, solicitud) && (
+                                  <span className="text-neutral-400"> ({getUserRoleFromSolicitud(a.usuario_id, solicitud)})</span>
+                                )}
+                              </p>
+                            )}
                             {desc && <p className="text-sm text-neutral-500 mt-0.5">{desc}</p>}
                           </div>
                         </div>

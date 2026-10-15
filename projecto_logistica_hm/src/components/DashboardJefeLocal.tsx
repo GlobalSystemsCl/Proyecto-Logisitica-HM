@@ -6,6 +6,7 @@ import { CheckCircle2, Clock, ListOrdered, PackageCheck, X } from 'lucide-react'
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
+import BadgeEvento from '@/components/BadgeEvento';
 import { RecepcionModal } from '@/components/ModalesTraslado';
 import { recibirTrasladoAction } from '@/app/actions/traslados.actions';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
@@ -96,6 +97,9 @@ export default function DashboardJefeLocal({
           {aprobar.items.map((s) => (
             <li key={s.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
+                {s.tipo_solicitud === 'evento' && (
+                  <span className="flex mb-0.5"><BadgeEvento tamano="sm" /></span>
+                )}
                 <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
                 <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
                 <p className="text-[11px] text-neutral-400 flex items-center gap-1">
@@ -162,6 +166,9 @@ export default function DashboardJefeLocal({
           {priorizar.items.map((s) => (
             <li key={s.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
+                {s.tipo_solicitud === 'evento' && (
+                  <span className="flex mb-0.5"><BadgeEvento tamano="sm" /></span>
+                )}
                 <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
                 <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
                 <p className="text-[11px] text-neutral-400">
