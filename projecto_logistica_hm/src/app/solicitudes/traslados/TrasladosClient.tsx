@@ -461,7 +461,7 @@ export default function TrasladosClient({
                       <span className="truncate">{t.destino_nombre}</span>
                     </div>
                     <p className="mt-1 text-xs text-neutral-500">
-                      Responsable: {t.logistica_nombre ?? t.logistica_id} · Creado: {formatFecha(t.created_at)}
+                      Logística: {t.logistica_nombre ?? t.logistica_id} · Creado: {formatFecha(t.created_at)}
                     </p>
                     {t.observacion && (
                       <p className="mt-1 text-xs text-neutral-500 italic">“{t.observacion}”</p>
@@ -568,7 +568,7 @@ export default function TrasladosClient({
                   <span className="truncate">{detalle.destino_nombre ?? detalle.destino_id}</span>
                 </div>
                 <p className="mt-1 text-xs text-neutral-500">
-                  Responsable: {detalle.logistica_nombre ?? detalle.logistica_id} · Creado: {formatFecha(detalle.created_at)}
+                  Logística: {detalle.logistica_nombre ?? detalle.logistica_id} · Creado: {formatFecha(detalle.created_at)}
                 </p>
                 {detalle.observacion && (
                   <p className="mt-1 text-xs text-neutral-500 italic">“{detalle.observacion}”</p>

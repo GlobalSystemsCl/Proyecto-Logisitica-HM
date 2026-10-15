@@ -226,7 +226,7 @@ export default function PerfilClient({ profile }: PerfilClientProps) {
             </div>
             <p className="text-[11px] text-neutral-400 flex items-center gap-1.5">
               <PencilLine className="w-3 h-3" />
-              Aparecerá en el detalle de solicitudes como contacto responsable.
+              Aparecerá en el detalle de solicitudes como dato de contacto.
             </p>
           </div>
         </div>

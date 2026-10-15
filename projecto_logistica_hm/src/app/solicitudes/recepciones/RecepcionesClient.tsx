@@ -136,7 +136,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                         {t.vehiculos.map((v) => `${v.patente ?? v.chasis} · ${v.marca} ${v.modelo}`).join(' · ') || 'Sin vehículo'}
                       </p>
                       <p className="text-xs text-neutral-500">
-                        Despacho: {formatFecha(t.fecha_despacho)} · Responsable: {t.logistica_nombre ?? '—'}
+                        Despacho: {formatFecha(t.fecha_despacho)} · Logística: {t.logistica_nombre ?? '—'}
                       </p>
                     </div>
                     <button

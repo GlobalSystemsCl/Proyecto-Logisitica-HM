@@ -2189,7 +2189,7 @@ export class SolicitudesService {
       if (!ESTADOS_ASIGNABLES.includes(actual.estado as (typeof ESTADOS_ASIGNABLES)[number])) {
         return {
           success: false,
-          error: 'Solo las solicitudes Aprobadas o Priorizadas pueden asignarse a un responsable de Logística.',
+          error: 'Solo las solicitudes Aprobadas o Priorizadas pueden asignarse a Logística.',
         };
       }
 
@@ -2200,13 +2200,13 @@ export class SolicitudesService {
         .maybeSingle();
 
       if (userError || !encargado) {
-        return { success: false, error: 'El responsable indicado no existe.' };
+        return { success: false, error: 'El usuario indicado no existe.' };
       }
       if (encargado.rol !== 'logistica' && encargado.rol !== 'administrador') {
-        return { success: false, error: 'El responsable debe tener el rol Logística.' };
+        return { success: false, error: 'El usuario asignado debe tener el rol Logística.' };
       }
       if (encargado.activo === false) {
-        return { success: false, error: 'El responsable indicado está inactivo.' };
+        return { success: false, error: 'El usuario indicado está inactivo.' };
       }
 
       const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'asignada', logistica_id: logisticaId });
@@ -2223,7 +2223,7 @@ export class SolicitudesService {
 
       return { success: true };
     } catch (err: unknown) {
-      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al asignar el responsable de Logística') };
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al asignar la solicitud') };
     }
   }
 

@@ -283,7 +283,7 @@ export class TrasladoService {
       if (actual.logistica_id !== logisticaId) {
         const { data: user } = await admin.from('usuario').select('rol').eq('id', logisticaId).maybeSingle();
         if (!user || user.rol !== 'administrador') {
-          return { success: false, error: 'Solo el responsable del traslado o el Administrador pueden despacharlo.' };
+          return { success: false, error: 'Solo la Logística asignada al traslado o el Administrador pueden despacharlo.' };
         }
       }
 
@@ -422,7 +422,7 @@ export class TrasladoService {
           (origen?.zona_id != null && misZonas.has(origen.zona_id)) ||
           (destino?.zona_id != null && misZonas.has(destino.zona_id));
         if (!enMiZona) {
-          return { success: false, error: 'Solo el responsable del traslado o Logística de la zona pueden cancelar este traslado.' };
+          return { success: false, error: 'Solo la Logística asignada al traslado o Logística de la zona pueden cancelar este traslado.' };
         }
       }
 

@@ -586,13 +586,13 @@ export default function SolicitudDetalleModal({
                 <div className="w-px bg-neutral-200 self-stretch" />
               </>
             )}
-            {/* Responsable de Logística (logistica_id) */}
+            {/* Logística asignada (logistica_id) */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
                 <UserCheck className="w-5 h-5 text-sky-700" />
               </div>
               <div>
-                <p className="text-[11px] text-neutral-400 font-medium">Responsable de Logística</p>
+                <p className="text-[11px] text-neutral-400 font-medium">Logística asignada</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.logistica_nombre ? (
                     <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
@@ -604,13 +604,13 @@ export default function SolicitudDetalleModal({
               </div>
             </div>
             <div className="w-px bg-neutral-200 self-stretch" />
-            {/* Responsible */}
+            {/* Contacto actual: Logística, jefe de local o ejecutivo según la etapa */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-neutral-200 flex items-center justify-center shrink-0">
                 <User className="w-5 h-5 text-neutral-600" />
               </div>
               <div>
-                <p className="text-xs text-neutral-400 font-medium">Responsable actual</p>
+                <p className="text-xs text-neutral-400 font-medium">Contacto actual</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.logistica_nombre || solicitud.jefe_local_nombre || solicitud.ejecutivo_nombre ? (
                     <UsuarioNombreBoton usuarioId={getResponsableId(solicitud)} nombre={getResponsableNombre(solicitud)} />
@@ -726,7 +726,7 @@ export default function SolicitudDetalleModal({
                   </p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Responsable de Logística</p>
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Logística asignada</p>
                   <p className="text-sm text-neutral-900 font-medium">
                     {solicitud.logistica_nombre ? (
                       <UsuarioNombreBoton usuarioId={solicitud.logistica_id} nombre={solicitud.logistica_nombre} />
@@ -887,11 +887,11 @@ export default function SolicitudDetalleModal({
                   </div>
                 </div>
 
-                {/* Contacto responsable card */}
+                {/* Contacto de la solicitud */}
                 <div className="border border-neutral-200 rounded-xl p-5 space-y-4">
                   <h3 className="text-sm font-bold text-neutral-900 flex items-center gap-2">
                     <User className="w-4 h-4 text-neutral-500" />
-                    Contacto responsable
+                    Contacto de la solicitud
                   </h3>
 
                   {!responsableDetalle && getResponsableId(solicitud) && (
@@ -941,7 +941,7 @@ export default function SolicitudDetalleModal({
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-neutral-400 italic">Sin responsable asignado.</p>
+                    <p className="text-sm text-neutral-400 italic">Sin contacto asignado.</p>
                   )}
                 </div>
               </div>

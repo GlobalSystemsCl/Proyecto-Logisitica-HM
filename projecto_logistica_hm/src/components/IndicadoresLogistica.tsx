@@ -25,7 +25,7 @@ export default function IndicadoresLogistica({ propia, sinAsignar, slaHoras }: P
     { titulo: 'Por calendarizar', valor: String(propia.pendientes), detalle: `${propia.pendientesFueraDeSla} con más de ${slaHoras} h esperando`, icono: Hourglass, alerta: propia.pendientesFueraDeSla > 0 },
     { titulo: 'Atrasadas', valor: String(propia.atrasadas), detalle: 'Pasada la fecha límite de entrega propuesta', icono: AlertTriangle, alerta: propia.atrasadas > 0 },
     { titulo: 'Tu tiempo de respuesta', valor: formatoHoras(propia.respuestaPromedioHoras), detalle: `${porcentaje(propia.respuestasDentroDeSla, propia.respondidas)} dentro de ${slaHoras} h`, icono: Timer, alerta: propia.semaforo === 'rojo' },
-    { titulo: 'Sin responsable en tus zonas', valor: String(sinAsignar?.pendientes ?? 0), detalle: 'Esperando que alguien las tome', icono: Inbox, alerta: (sinAsignar?.pendientesFueraDeSla ?? 0) > 0 },
+    { titulo: 'Sin Logística asignada en tus zonas', valor: String(sinAsignar?.pendientes ?? 0), detalle: 'Esperando que alguien las tome', icono: Inbox, alerta: (sinAsignar?.pendientesFueraDeSla ?? 0) > 0 },
   ];
 
   return (

@@ -124,7 +124,7 @@ export class SucursalesService {
         fecha_tentativa_despacho: row.fecha_tentativa_despacho,
         fecha_limite: row.fecha_limite,
         motivo_cancelacion: row.motivo_cancelacion,
-        ejecutivo: formatPersona(row.ejecutivo) || 'Sin responsable',
+        ejecutivo: formatPersona(row.ejecutivo) || 'Sin ejecutivo',
         jefe_local: formatPersona(row.jefe),
         logistica: formatPersona(row.logistica),
         ejecutivo_id: row.ejecutivo?.id ?? null,

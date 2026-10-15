@@ -176,7 +176,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
       return {
         'Fecha Solicitud': formatFecha(reg.solicitud_fecha_creacion),
         'Fecha Cambio': formatFechaHora(reg.created_at),
-        'Responsable': `${reg.usuario_nombre || ''} ${reg.usuario_apellido || ''}`.trim(),
+        'Realizado por': `${reg.usuario_nombre || ''} ${reg.usuario_apellido || ''}`.trim(),
         'Chasis': reg.chasis || '',
         'Patente': reg.patente || '',
         'Entidad': entCfg.label,
@@ -337,7 +337,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
               <tr className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase font-semibold text-neutral-500 tracking-wider">
                 <th className="py-3.5 px-4">Fecha Solicitud</th>
                 <th className="py-3.5 px-4">Fecha Cambio</th>
-                <th className="py-3.5 px-4">Responsable</th>
+                <th className="py-3.5 px-4">Realizado por</th>
                 <th className="py-3.5 px-4">Chasis</th>
                 <th className="py-3.5 px-4">Patente</th>
                 <th className="py-3.5 px-4">Detalle</th>
@@ -369,7 +369,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
                         {formatFechaHora(reg.created_at)}
                       </td>
 
-                      {/* Responsable */}
+                      {/* Realizado por */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-7 h-7 rounded-full bg-neutral-900 flex items-center justify-center font-bold text-[9px] text-white uppercase shrink-0">
@@ -530,7 +530,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
                   <p className="text-sm text-neutral-900 font-medium">{formatFechaHora(detailRegistro.created_at)}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Responsable</p>
+                  <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">Realizado por</p>
                   <p className="text-sm text-neutral-900 font-medium">
                     <UsuarioNombreBoton usuarioId={detailRegistro.usuario_id} nombre={`${detailRegistro.usuario_nombre || ''} ${detailRegistro.usuario_apellido || ''}`.trim() || null} muted />
                   </p>

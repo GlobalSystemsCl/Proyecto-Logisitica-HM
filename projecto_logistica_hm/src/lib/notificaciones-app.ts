@@ -138,7 +138,7 @@ export function textoNotificacion(evento: EventoApp, d: DatosNotificacionApp): T
     solicitud_aprobada: { titulo: 'Solicitud aprobada', mensaje: `La solicitud ${ref} fue aprobada.` },
     solicitud_rechazada: { titulo: 'Solicitud rechazada', mensaje: `La solicitud ${ref} fue rechazada.${motivo}` },
     solicitud_priorizada: { titulo: 'Solicitud en la cola', mensaje: `La solicitud ${ref} entró a la cola de prioridades.` },
-    solicitud_asignada: { titulo: 'Responsable de Logística asignado', mensaje: `La solicitud ${ref} ya tiene responsable de Logística.` },
+    solicitud_asignada: { titulo: 'Logística asignada', mensaje: `La solicitud ${ref} ya tiene Logística asignada.` },
     solicitud_calendarizada: { titulo: 'Traslado programado', mensaje: `El traslado de la solicitud ${ref} quedó programado${fecha}.` },
     solicitud_recalendarizada: {
       titulo: 'Traslado reprogramado',

@@ -585,9 +585,9 @@ export default function SolicitudesClient({
     try {
       const result = await asignarEncargadoAction(sol.id);
       if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'No se pudo asignar el responsable de Logística.' });
+        setFeedback({ type: 'error', message: result.error || 'No se pudo asignar la solicitud.' });
       } else {
-        setFeedback({ type: 'success', message: result.message || 'Responsable de Logística asignado.' });
+        setFeedback({ type: 'success', message: result.message || 'Solicitud asignada.' });
       }
     } finally {
       setIsSubmitting(false);
@@ -932,7 +932,7 @@ export default function SolicitudesClient({
                             <button
                               onClick={() => handleAsignarEncargado(sol)}
                               disabled={isSubmitting}
-                              title="Asignarme como responsable de Logística"
+                              title="Asignármela"
                               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
                             >
                               <UserCheck className="w-3.5 h-3.5" /> Asignarme
