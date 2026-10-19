@@ -6,7 +6,6 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
 import { ROL_LABEL } from '@/types/auth.types';
-import type { SlotSucursalResumen } from '@/lib/slots';
 import PageHeader from '@/components/PageHeader';
 import DashboardCardGrid from '@/components/DashboardCardGrid';
 import DashboardJefeLocal from '@/components/DashboardJefeLocal';
@@ -15,11 +14,12 @@ import { ReporteService } from '@/services/reporte.service';
 import IndicadoresLogistica from '@/components/IndicadoresLogistica';
 import DashboardLogistica from '@/components/DashboardLogistica';
 import PanelCuentasPendientes from '@/components/PanelCuentasPendientes';
+import PanelSlotsJefeLocal from '@/components/PanelSlotsJefeLocal';
 import { UsersService } from '@/services/users.service';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { calcularReporte, indicadoresDeEncargado } from '@/lib/reporteLogistica';
-import { hoyISO } from '@/lib/fechas';
+import { hoyISO, ZONA_HORARIA } from '@/lib/fechas';
 import { sumarDias } from '@/lib/calendario';
 
 export const dynamic = 'force-dynamic';
@@ -57,13 +57,14 @@ export default async function DashboardPage() {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: ZONA_HORARIA,
   }).format(new Date());
 
   const sucursalesAsignadas = veSlots
     ? (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
     : [];
 
-  const slots: SlotSucursalResumen[] = veSlots
+  const slots = veSlots
     ? await SucursalesService.getSlotsPorSucursales(sucursalesAsignadas)
     : [];
 
@@ -157,6 +158,8 @@ export default async function DashboardPage() {
             porPriorizar={porPriorizar}
           />
         )}
+
+        {vePanel && <PanelSlotsJefeLocal sucursales={slots} actualizado={timestamp} />}
 
         {indicadores && (
           <IndicadoresLogistica

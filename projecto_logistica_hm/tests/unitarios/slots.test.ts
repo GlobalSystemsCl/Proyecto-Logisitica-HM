@@ -10,6 +10,7 @@ import {
   capacidadTotal,
   estadoCapacidad,
   extraLibres,
+  filaSlots,
   type SlotSucursalResumen,
 } from '@/lib/slots';
 
@@ -210,3 +211,36 @@ describe('resumenSlots con capacidad extra (R5)', () => {
   });
 });
 
+
+describe('filaSlots', () => {
+  it('should_calcular_todos_los_valores_when_sucursal_con_espacio', () => {
+    const fila = filaSlots({ nombre: 'Norte', slots: 10, slots_ocupados: 4, slots_reservados: 2 });
+    expect(fila).toMatchObject({
+      nombre: 'Norte',
+      real: 10,
+      extra: 2,
+      uso: 6,
+      libres: 4,
+      extraLibres: 2,
+      estado: 'disponible',
+      porcentajeUso: 50,
+    });
+  });
+
+  it('should_conservar_campos_extra_de_la_entrada', () => {
+    const fila = filaSlots({ id: 7, nombre: 'Sur', slots: 5, slots_ocupados: 0, slots_reservados: 0 });
+    expect(fila.id).toBe(7);
+  });
+
+  it('should_marcar_excedido_y_porcentaje_sobre_100_when_supera_extra', () => {
+    const fila = filaSlots({ nombre: 'Centro', slots: 5, slots_ocupados: 8, slots_reservados: 0 });
+    expect(fila.estado).toBe('excedido');
+    expect(fila.libres).toBe(0);
+    expect(fila.porcentajeUso).toBe(133);
+  });
+
+  it('should_devolver_ceros_when_valores_nulos', () => {
+    const fila = filaSlots({ nombre: null, slots: null, slots_ocupados: null, slots_reservados: null });
+    expect(fila).toMatchObject({ real: 0, extra: 0, uso: 0, libres: 0, porcentajeUso: 0, estado: 'sin_capacidad' });
+  });
+});
