@@ -4,7 +4,7 @@ import { SolicitudesService } from '@/services/solicitudes.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import SolicitudesClient from './SolicitudesClient';
-import { GRUPOS_FILTRO_SOLICITUDES, type GrupoFiltroSolicitud } from '@/lib/filtroSolicitudes';
+import { grupoInicialSolicitudes } from '@/lib/filtroSolicitudes';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,15 +16,14 @@ export default async function SolicitudesPage({
   const { grupo, solicitud } = await searchParams;
   // Desde una notificación: abre el detalle de esa solicitud.
   const solicitudInicialId = typeof solicitud === 'string' ? solicitud : null;
-  const grupoInicial = GRUPOS_FILTRO_SOLICITUDES.some((g) => g.id === grupo)
-    ? (grupo as GrupoFiltroSolicitud)
-    : 'todas';
 
   const profile = await AuthService.getCurrentUserProfile();
 
   if (!profile) {
     redirect('/login');
   }
+
+  const grupoInicial = grupoInicialSolicitudes(grupo, profile.rol);
 
   const sucursalesAsignadas = await OrganizacionService.getUserAssignedBranches(profile.id);
   const [solicitudes, sucursales, vehiculos] = await Promise.all([

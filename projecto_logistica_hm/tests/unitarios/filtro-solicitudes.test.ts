@@ -5,8 +5,10 @@ import {
   contarPorGrupo,
   destinoDeSolicitud,
   estadoEnGrupo,
+  ESTADOS_CERRADOS,
   filtrarPorGrupo,
   grupoFiltro,
+  grupoInicialSolicitudes,
   type GrupoFiltroSolicitud,
 } from '@/lib/filtroSolicitudes';
 import type { EstadoSolicitud, SolicitudLista } from '@/types/solicitud.types';
@@ -46,7 +48,7 @@ describe('GRUPOS_FILTRO_SOLICITUDES', () => {
       'cancelada',
       'rechazada',
     ];
-    expect([...estadosEnum].filter((e) => !estadosCubiertos.has(e))).toEqual(['cancelada']);
+    expect([...estadosEnum].filter((e) => !estadosCubiertos.has(e))).toEqual([]);
     expect([...estadosCubiertos].every((e) => estadosEnum.includes(e))).toBe(true);
   });
 
@@ -55,9 +57,16 @@ describe('GRUPOS_FILTRO_SOLICITUDES', () => {
     expect(new Set(todos).size).toBe(todos.length);
   });
 
-  it('should_incluir_grupo_todas_sin_estados', () => {
+  it('should_incluir_en_todas_solo_estados_no_cerrados', () => {
     const todas = grupoFiltro('todas');
-    expect(todas.estados).toEqual([]);
+    expect(todas.label).toBe('Activas');
+    expect(todas.estados.length).toBeGreaterThan(0);
+    expect(todas.estados.some((e) => ESTADOS_CERRADOS.includes(e))).toBe(false);
+  });
+
+  it('should_cubrir_en_todas_exactamente_pendientes_en_curso_y_por_entregar', () => {
+    const activos = ['pendientes', 'en_curso', 'por_entregar'].flatMap((id) => grupoFiltro(id).estados);
+    expect([...grupoFiltro('todas').estados].sort()).toEqual([...activos].sort());
   });
 });
 
@@ -81,9 +90,15 @@ describe('estadoEnGrupo', () => {
     expect(estadoEnGrupo('entregada', 'pendientes')).toBe(false);
   });
 
-  it('should_devolver_true_cualquier_estado_when_grupo_todas', () => {
-    expect(estadoEnGrupo('finalizada', 'todas')).toBe(true);
+  it('should_devolver_true_when_estado_activo_y_grupo_todas', () => {
     expect(estadoEnGrupo('pendiente_aprobacion', 'todas')).toBe(true);
+    expect(estadoEnGrupo('entregada', 'todas')).toBe(true);
+  });
+
+  it('should_devolver_false_when_estado_cerrado_y_grupo_todas', () => {
+    expect(estadoEnGrupo('finalizada', 'todas')).toBe(false);
+    expect(estadoEnGrupo('rechazada', 'todas')).toBe(false);
+    expect(estadoEnGrupo('cancelada', 'todas')).toBe(false);
   });
 });
 
@@ -97,10 +112,15 @@ describe('filtrarPorGrupo', () => {
     solicitud('finalizada'),
   ];
 
-  it('should_devolver_copia_completa_when_grupo_todas', () => {
+  it('should_excluir_cerradas_when_grupo_todas', () => {
     const resultado = filtrarPorGrupo(lista, 'todas');
-    expect(resultado).toHaveLength(lista.length);
+    expect(resultado.map((s) => s.estado)).toEqual(['pendiente_aprobacion', 'aprobada', 'en_transito', 'entregada']);
     expect(resultado).not.toBe(lista);
+  });
+
+  it('should_incluir_canceladas_when_grupo_rechazadas', () => {
+    const resultado = filtrarPorGrupo([solicitud('cancelada'), solicitud('rechazada')], 'rechazadas');
+    expect(resultado).toHaveLength(2);
   });
 
   it('should_solo_entregar_por_entregar_when_grupo_por_entregar', () => {
@@ -158,10 +178,38 @@ describe('contarPorGrupo', () => {
     });
   });
 
-  it('should_no_contar_canceladas_en_ningun_grupo_que_no_sea_todas', () => {
-    const conteo = contarPorGrupo([solicitud('cancelada')]);
+  it('should_no_contar_cerradas_en_todas', () => {
+    const conteo = contarPorGrupo([
+      solicitud('aprobada'),
+      solicitud('finalizada'),
+      solicitud('rechazada'),
+      solicitud('cancelada'),
+    ]);
     expect(conteo.todas).toBe(1);
-    expect(conteo.pendientes + conteo.en_curso + conteo.por_entregar + conteo.rechazadas + conteo.finalizadas).toBe(0);
+    expect(conteo.finalizadas).toBe(1);
+    expect(conteo.rechazadas).toBe(2);
+  });
+});
+
+describe('grupoInicialSolicitudes', () => {
+  it('should_respetar_grupo_de_la_url_when_es_valido', () => {
+    expect(grupoInicialSolicitudes('en_curso', 'ejecutivo')).toBe('en_curso');
+    expect(grupoInicialSolicitudes('todas', 'jefe_local')).toBe('todas');
+  });
+
+  it('should_partir_por_entregar_when_ejecutivo_o_jefe_local_sin_grupo', () => {
+    expect(grupoInicialSolicitudes(undefined, 'ejecutivo')).toBe('por_entregar');
+    expect(grupoInicialSolicitudes(undefined, 'jefe_local')).toBe('por_entregar');
+  });
+
+  it('should_partir_por_activas_when_otro_rol_sin_grupo', () => {
+    expect(grupoInicialSolicitudes(undefined, 'administrador')).toBe('todas');
+    expect(grupoInicialSolicitudes(undefined, 'logistica')).toBe('todas');
+  });
+
+  it('should_ignorar_grupo_invalido_o_no_string', () => {
+    expect(grupoInicialSolicitudes('no-existe', 'ejecutivo')).toBe('por_entregar');
+    expect(grupoInicialSolicitudes(['en_curso'], 'administrador')).toBe('todas');
   });
 });
 

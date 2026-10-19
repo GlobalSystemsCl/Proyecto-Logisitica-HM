@@ -646,8 +646,11 @@ export default function SolicitudesClient({
         />
       )}
 
-      {/* Metric Cards: hacen de acceso directo al filtro de cada grupo */}
-      <div id="lista" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 scroll-mt-6">
+      {/* Metric Cards: hacen de acceso directo al filtro de cada grupo. Ejecutivo
+          y Jefe de Local no las ven: repetían los contadores de los chips de
+          la lista y confundían. */}
+      {!esEjecutivo && !esJefeLocal && (
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <button
           type="button"
           onClick={() => activarGrupo('todas')}
@@ -657,8 +660,8 @@ export default function SolicitudesClient({
           }`}
         >
           <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Visibles</p>
-            <p className="text-3xl font-bold text-neutral-900 mt-1">{visibles.length}</p>
+            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Activas</p>
+            <p className="text-3xl font-bold text-neutral-900 mt-1">{conteo.todas}</p>
           </div>
           <div className="w-11 h-11 rounded-xl border border-neutral-300 flex items-center justify-center text-neutral-900">
             <FileText className="w-5 h-5" />
@@ -720,6 +723,7 @@ export default function SolicitudesClient({
           </div>
         </button>
       </div>
+      )}
 
       {/* Feedback Banner */}
       {feedback && (
@@ -754,7 +758,7 @@ export default function SolicitudesClient({
       )}
 
       {/* Filters: chips de grupo (con contador) + búsqueda + estado exacto */}
-      <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-4">
+      <div id="lista" className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col gap-4 scroll-mt-6">
         <div
           role="group"
           aria-label="Filtrar solicitudes por estado"
@@ -808,7 +812,7 @@ export default function SolicitudesClient({
               className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
             >
               <option value="todos">Todos</option>
-              {(Object.keys(estadoConfig) as EstadoSolicitud[]).map((est) => (
+              {(Object.keys(estadoConfig) as EstadoSolicitud[]).filter((est) => estadoEnGrupo(est, grupoActivo)).map((est) => (
                 <option key={est} value={est}>
                   {estadoConfig[est].label}
                 </option>
