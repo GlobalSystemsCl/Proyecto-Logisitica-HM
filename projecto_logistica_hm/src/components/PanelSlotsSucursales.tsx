@@ -4,18 +4,21 @@ import { filaSlots } from '@/lib/slots';
 import TablaSlots, { type SlotSucursal } from '@/components/TablaSlots';
 
 interface Props {
-  /** Slots de las sucursales asignadas al Jefe de Local (principal + adicionales). */
   sucursales: SlotSucursal[];
+  titulo: string;
+  /** Muestra la columna de zona (vista de todas las sucursales). */
+  conZona?: boolean;
+  textoVacio: string;
   /** Momento de la lectura, ya formateado, para que se sepa qué tan frescos son los datos. */
   actualizado: string;
 }
 
 /**
- * Espacios disponibles de las sucursales del Jefe de Local, en el dashboard.
- * Misma tabla que `/logistica/slots`, siempre visible: si no hay sucursales
- * asignadas lo dice en vez de desaparecer.
+ * Espacios disponibles por sucursal, en el dashboard: las asignadas para el
+ * Jefe de Local y todas para Logística. Misma tabla que `/logistica/slots`,
+ * siempre visible: si no hay sucursales lo dice en vez de desaparecer.
  */
-export default function PanelSlotsJefeLocal({ sucursales, actualizado }: Props) {
+export default function PanelSlotsSucursales({ sucursales, titulo, conZona = false, textoVacio, actualizado }: Props) {
   const filas = sucursales.map(filaSlots);
   const libres = filas.reduce((acc, s) => acc + s.libres, 0);
   const extraLibres = filas.reduce((acc, s) => acc + s.extraLibres, 0);
@@ -29,7 +32,7 @@ export default function PanelSlotsJefeLocal({ sucursales, actualizado }: Props) 
             <Grid2x2 className="w-5 h-5 text-emerald-600" />
           </div>
           <div className="min-w-0">
-            <h2 className="font-bold text-neutral-900 text-sm">Espacios disponibles en tus sucursales</h2>
+            <h2 className="font-bold text-neutral-900 text-sm">{titulo}</h2>
             <p className="text-xs text-neutral-500">Actualizado {actualizado}</p>
           </div>
         </div>
@@ -50,10 +53,7 @@ export default function PanelSlotsJefeLocal({ sucursales, actualizado }: Props) 
           </Link>
         </div>
       </header>
-      <TablaSlots
-        filas={filas}
-        textoVacio="No tienes sucursales asignadas. Solicita a un Administrador que te asigne una."
-      />
+      <TablaSlots filas={filas} conZona={conZona} textoVacio={textoVacio} />
     </section>
   );
 }

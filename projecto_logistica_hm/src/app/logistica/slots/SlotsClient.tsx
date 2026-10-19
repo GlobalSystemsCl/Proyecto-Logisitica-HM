@@ -6,7 +6,8 @@ import { PORCENTAJE_SLOTS_EXTRA, filaSlots, type EstadoCapacidad } from '@/lib/s
 import TablaSlots, { type SlotSucursal } from '@/components/TablaSlots';
 
 interface SlotsClientProps {
-  esAdmin: boolean;
+  /** Todas las sucursales (administrador y logística) en vez de solo las asignadas. */
+  vistaGlobal: boolean;
   sucursales: SlotSucursal[];
 }
 
@@ -16,7 +17,7 @@ interface SlotsClientProps {
  * Todos los cálculos vienen de `@/lib/slots`, igual que el indicador del
  * encabezado, para que no puedan discrepar.
  */
-export default function SlotsClient({ esAdmin, sucursales }: SlotsClientProps) {
+export default function SlotsClient({ vistaGlobal, sucursales }: SlotsClientProps) {
   const [filtro, setFiltro] = useState<'todas' | EstadoCapacidad>('todas');
 
   const filas = useMemo(() => sucursales.map(filaSlots), [sucursales]);
@@ -36,7 +37,7 @@ export default function SlotsClient({ esAdmin, sucursales }: SlotsClientProps) {
             Slots por Sucursal
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
-            {esAdmin
+            {vistaGlobal
               ? 'Vista global de capacidad de todas las sucursales'
               : 'Capacidad de tus sucursales asignadas (principal + adicionales)'}
             . Cada sucursal suma un {porcentajeExtra}% de slots extra para estacionar fuera de los slots oficiales.
@@ -88,7 +89,7 @@ export default function SlotsClient({ esAdmin, sucursales }: SlotsClientProps) {
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
-        <TablaSlots filas={visibles} conZona={esAdmin} />
+        <TablaSlots filas={visibles} conZona={vistaGlobal} />
       </div>
     </div>
   );

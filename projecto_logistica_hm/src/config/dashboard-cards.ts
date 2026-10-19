@@ -25,9 +25,14 @@ export interface DashboardCard {
   grupo: DashboardCardGrupo;
   /** Orden explícito dentro del grupo. */
   orden: number;
+  /** Nombre corto del módulo; se muestra como etiqueta sobre el título a los demás roles. */
+  nombre: string;
   /** Nomenclatura de administración; la ve el `administrador`. */
   tituloAdmin: string;
-  /** Nomenclatura específica del rol; su presencia también habilita la card. */
+  /**
+   * Título del rol, redactado como una invitación a la acción en segunda
+   * persona ("Revisa aquí…"). Su presencia también habilita la card.
+   */
   tituloPorRol: Partial<Record<UserRole, string>>;
   descripcion: string;
   /** Acciones concretas que se pueden realizar en el módulo. */
@@ -42,6 +47,7 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'Building2',
     grupo: 'gestion',
     orden: 5,
+    nombre: 'Zonas y sucursales',
     tituloAdmin: 'Gestión de Zonas y Sucursales',
     tituloPorRol: {},
     descripcion:
@@ -60,10 +66,11 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'FileText',
     grupo: 'gestion',
     orden: 10,
+    nombre: 'Solicitudes',
     tituloAdmin: 'Gestión de Solicitudes',
     tituloPorRol: {
-      jefe_local: 'Solicitudes',
-      logistica: 'Solicitudes',
+      jefe_local: 'Solicita aquí tu traslado y haz su seguimiento',
+      logistica: 'Visualiza y rastrea tus solicitudes',
     },
     descripcion:
       'Módulo principal del flujo: aquí nacen y se siguen los traslados de vehículos entre sucursales.',
@@ -80,8 +87,11 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'CheckCircle2',
     grupo: 'gestion',
     orden: 20,
+    nombre: 'Aprobaciones',
     tituloAdmin: 'Aprobaciones',
-    tituloPorRol: { jefe_local: 'Aprobaciones' },
+    tituloPorRol: {
+      jefe_local: 'Revisa aquí tus solicitudes pendientes de aprobar',
+    },
     descripcion:
       'Revisión de las solicitudes pendientes: se aprueba aceptando o ajustando la fecha límite de entrega propuesta, o se rechaza con un motivo.',
     acciones: [
@@ -96,8 +106,11 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'PackageCheck',
     grupo: 'gestion',
     orden: 25,
+    nombre: 'Recepciones',
     tituloAdmin: 'Recepciones',
-    tituloPorRol: { jefe_local: 'Recepciones' },
+    tituloPorRol: {
+      jefe_local: 'Revisa aquí tus vehículos en tránsito',
+    },
     descripcion:
       'Vehículos en camino a tus sucursales: marca la llegada y registra si llegaron con novedades.',
     acciones: [
@@ -111,8 +124,11 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'ListOrdered',
     grupo: 'gestion',
     orden: 30,
+    nombre: 'Prioridades',
     tituloAdmin: 'Prioridades',
-    tituloPorRol: { jefe_local: 'Prioridades' },
+    tituloPorRol: {
+      jefe_local: 'Ordena aquí la urgencia de tus solicitudes',
+    },
     descripcion:
       'Cola de solicitudes ordenadas por urgencia. La posición 1 es lo más urgente de la sucursal.',
     acciones: [
@@ -127,8 +143,12 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'Truck',
     grupo: 'gestion',
     orden: 35,
+    nombre: 'Traslados',
     tituloAdmin: 'Traslados',
-    tituloPorRol: { jefe_local: 'Traslados', logistica: 'Traslados' },
+    tituloPorRol: {
+      jefe_local: 'Traslada aquí tus vehículos ya vendidos',
+      logistica: 'Gestiona aquí los traslados entre sucursales',
+    },
     descripcion:
       'Traslados de vehículos ya vendidos entre sucursales, sin ocupar slots ni generar solicitudes.',
     acciones: [
@@ -143,10 +163,11 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'CalendarDays',
     grupo: 'operacion',
     orden: 50,
+    nombre: 'Calendarización',
     tituloAdmin: 'Gestión Logística',
     tituloPorRol: {
-      jefe_local: 'Calendarización de traslados',
-      logistica: 'Calendarización de traslados',
+      jefe_local: 'Sigue aquí la programación de tus traslados',
+      logistica: 'Programa y despacha aquí tus traslados',
     },
     descripcion:
       'Seguimiento visual del traslado: calendarización, despacho, tránsito y entrega en destino.',
@@ -162,6 +183,7 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'BarChart3',
     grupo: 'operacion',
     orden: 55,
+    nombre: 'Reportería',
     tituloAdmin: 'Reportería de Logística',
     tituloPorRol: {},
     descripcion:
@@ -179,11 +201,12 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'CarFront',
     grupo: 'soporte',
     orden: 40,
+    nombre: 'Vehículos',
     tituloAdmin: 'Gestión de Vehículos',
     tituloPorRol: {
-      jefe_local: 'Carga de vehículos',
-      logistica: 'Vehículos: ubicación y control',
-      operaciones: 'Carga de vehículos',
+      jefe_local: 'Carga aquí tus vehículos al inventario',
+      logistica: 'Ubica y controla aquí los vehículos',
+      operaciones: 'Carga aquí los vehículos al inventario',
     },
     descripcion:
       'Alta de vehículos al inventario interno con sus datos completos y control de dónde están ubicados.',
@@ -201,10 +224,11 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'Grid2x2',
     grupo: 'soporte',
     orden: 41,
+    nombre: 'Slots de estacionamiento',
     tituloAdmin: 'Slots de Estacionamiento',
     tituloPorRol: {
-      jefe_local: 'Slots de Estacionamiento',
-      logistica: 'Slots de Estacionamiento',
+      jefe_local: 'Revisa aquí los espacios de tus sucursales',
+      logistica: 'Revisa aquí los espacios de todas las sucursales',
     },
     descripcion:
       'Capacidad de estacionamiento de tus sucursales: slots ocupados, reservados y disponibles.',
@@ -219,6 +243,7 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'Users',
     grupo: 'soporte',
     orden: 42,
+    nombre: 'Usuarios',
     tituloAdmin: 'Gestión de Usuarios',
     tituloPorRol: {},
     descripcion:
@@ -237,6 +262,7 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     icono: 'History',
     grupo: 'soporte',
     orden: 43,
+    nombre: 'Historial',
     tituloAdmin: 'Historial y Trazabilidad',
     tituloPorRol: {},
     descripcion:
@@ -259,6 +285,15 @@ export const LINKS_SOPORTE: Array<{ href: string; icono: string; titulo: string 
 /** Título visible de una card para el rol indicado. */
 export function tituloDeCard(card: DashboardCard, rol: UserRole): string {
   return card.tituloPorRol[rol] ?? card.tituloAdmin;
+}
+
+/**
+ * Etiqueta pequeña sobre el título. El administrador ve el título técnico, así
+ * que lleva "Módulo"; el resto ve una frase de acción y la etiqueta le dice en
+ * qué módulo entra.
+ */
+export function etiquetaDeCard(card: DashboardCard, rol: UserRole): string {
+  return card.tituloPorRol[rol] !== undefined ? card.nombre : 'Módulo';
 }
 
 /** `true` si el rol debe ver la card en su dashboard. */

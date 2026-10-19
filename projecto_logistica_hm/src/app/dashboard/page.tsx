@@ -14,11 +14,12 @@ import { ReporteService } from '@/services/reporte.service';
 import IndicadoresLogistica from '@/components/IndicadoresLogistica';
 import DashboardLogistica from '@/components/DashboardLogistica';
 import PanelCuentasPendientes from '@/components/PanelCuentasPendientes';
-import PanelSlotsJefeLocal from '@/components/PanelSlotsJefeLocal';
+import PanelSlotsSucursales from '@/components/PanelSlotsSucursales';
 import { UsersService } from '@/services/users.service';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { calcularReporte, indicadoresDeEncargado } from '@/lib/reporteLogistica';
+import { slotsConZona } from '@/lib/slots';
 import { hoyISO, ZONA_HORARIA } from '@/lib/fechas';
 import { sumarDias } from '@/lib/calendario';
 
@@ -83,13 +84,17 @@ export default async function DashboardPage() {
   // R17: Logística ve los mismos indicadores con que lo mide el administrador (últimos 30 días).
   let indicadores: { reporte: ReturnType<typeof calcularReporte>; propios: ReturnType<typeof indicadoresDeEncargado> } | null = null;
   let pendientesLogistica: { solicitudes: SolicitudLista[]; traslados: TrasladoInterno[] } | null = null;
+  // Logística necesita la vista global: los espacios de todas las sucursales.
+  let slotsTodas: ReturnType<typeof slotsConZona>[] = [];
   if (rol === 'logistica') {
-    const [solicitudesZona, eventos, trasladosPropios] = await Promise.all([
+    const [solicitudesZona, eventos, trasladosPropios, sucursales] = await Promise.all([
       SolicitudesService.getSolicitudesFiltradas(profile.id, 'logistica'),
       ReporteService.getEventosLogistica(),
       TrasladoService.getTrasladosByLogistica(profile.id),
+      SucursalesService.getSucursales(),
     ]);
     pendientesLogistica = { solicitudes: solicitudesZona, traslados: trasladosPropios };
+    slotsTodas = sucursales.map(slotsConZona);
     const hasta = hoyISO();
     const reporte = calcularReporte(
       solicitudesZona,
@@ -159,7 +164,24 @@ export default async function DashboardPage() {
           />
         )}
 
-        {vePanel && <PanelSlotsJefeLocal sucursales={slots} actualizado={timestamp} />}
+        {vePanel && (
+          <PanelSlotsSucursales
+            titulo="Espacios disponibles en tus sucursales"
+            sucursales={slots}
+            textoVacio="No tienes sucursales asignadas. Solicita a un Administrador que te asigne una."
+            actualizado={timestamp}
+          />
+        )}
+
+        {rol === 'logistica' && (
+          <PanelSlotsSucursales
+            titulo="Espacios disponibles en todas las sucursales"
+            sucursales={slotsTodas}
+            conZona
+            textoVacio="No hay sucursales registradas."
+            actualizado={timestamp}
+          />
+        )}
 
         {indicadores && (
           <IndicadoresLogistica

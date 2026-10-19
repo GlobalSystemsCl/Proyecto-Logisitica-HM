@@ -28,6 +28,7 @@ import type { UserRole } from '@/types/auth.types';
 import {
   LINKS_SOPORTE,
   cardsPorRol,
+  etiquetaDeCard,
   tituloDeCard,
   type DashboardCard,
   type DashboardCardGrupo,
@@ -117,7 +118,7 @@ function ModuleCard({ card, rol }: { card: DashboardCard; rol: UserRole }) {
         {/* Jerarquía: Etiqueta secundaria 'Módulo', Título principal y Descripción */}
         <div className="flex-1 flex flex-col">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 mb-1">
-            Módulo
+            {etiquetaDeCard(card, rol)}
           </span>
           <h3 className="text-base sm:text-lg font-bold text-[#1a2b4b] tracking-tight leading-snug group-hover:text-blue-600 transition-colors duration-200">
             {titulo}

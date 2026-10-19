@@ -215,3 +215,21 @@ export function filaSlots<T extends SlotSucursalResumen>(sucursal: T): FilaSlots
     porcentajeUso: total > 0 ? Math.round((uso / total) * 100) : 0,
   };
 }
+
+/** Sucursal tal como la devuelve `SucursalesService.getSucursales` (con zona). */
+interface SucursalConZona extends SlotSucursalResumen {
+  id: number;
+  zona?: { nombre: string | null } | null;
+}
+
+/** Fila de slots con el nombre de la zona, para las vistas de todas las sucursales. */
+export function slotsConZona(sucursal: SucursalConZona): SlotSucursalResumen & { id: number; zona_nombre: string | null } {
+  return {
+    id: sucursal.id,
+    nombre: sucursal.nombre,
+    zona_nombre: sucursal.zona?.nombre ?? null,
+    slots: sucursal.slots,
+    slots_ocupados: sucursal.slots_ocupados,
+    slots_reservados: sucursal.slots_reservados,
+  };
+}

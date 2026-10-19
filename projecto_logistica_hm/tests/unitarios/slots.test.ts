@@ -11,6 +11,7 @@ import {
   estadoCapacidad,
   extraLibres,
   filaSlots,
+  slotsConZona,
   type SlotSucursalResumen,
 } from '@/lib/slots';
 
@@ -242,5 +243,31 @@ describe('filaSlots', () => {
   it('should_devolver_ceros_when_valores_nulos', () => {
     const fila = filaSlots({ nombre: null, slots: null, slots_ocupados: null, slots_reservados: null });
     expect(fila).toMatchObject({ real: 0, extra: 0, uso: 0, libres: 0, porcentajeUso: 0, estado: 'sin_capacidad' });
+  });
+});
+
+describe('slotsConZona', () => {
+  it('should_copiar_slots_y_nombre_de_zona', () => {
+    const fila = slotsConZona({
+      id: 3,
+      nombre: 'Norte',
+      slots: 10,
+      slots_ocupados: 2,
+      slots_reservados: 1,
+      zona: { nombre: 'Zona Centro' },
+    });
+    expect(fila).toEqual({
+      id: 3,
+      nombre: 'Norte',
+      zona_nombre: 'Zona Centro',
+      slots: 10,
+      slots_ocupados: 2,
+      slots_reservados: 1,
+    });
+  });
+
+  it('should_dejar_zona_nula_when_sucursal_sin_zona', () => {
+    expect(slotsConZona({ id: 1, nombre: 'Sur', slots: 5, slots_ocupados: 0, slots_reservados: 0 }).zona_nombre).toBeNull();
+    expect(slotsConZona({ id: 1, nombre: 'Sur', slots: 5, slots_ocupados: 0, slots_reservados: 0, zona: null }).zona_nombre).toBeNull();
   });
 });

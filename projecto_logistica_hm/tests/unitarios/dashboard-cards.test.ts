@@ -3,6 +3,7 @@ import {
   cardsPorRol,
   puedeVerCard,
   seccionesPorRol,
+  etiquetaDeCard,
   tituloDeCard,
   DASHBOARD_CARDS,
   SECCIONES,
@@ -60,8 +61,8 @@ describe('config/dashboard-cards', () => {
   describe('tituloDeCard', () => {
     it('debería_devolver_el_titulo_por_rol_cuando_existe', () => {
       const solicitudes = DASHBOARD_CARDS.find((c) => c.clave === 'solicitudes')!;
-      expect(tituloDeCard(solicitudes, 'jefe_local')).toBe('Solicitudes');
-      expect(tituloDeCard(solicitudes, 'logistica')).toBe('Solicitudes');
+      expect(tituloDeCard(solicitudes, 'jefe_local')).toBe('Solicita aquí tu traslado y haz su seguimiento');
+      expect(tituloDeCard(solicitudes, 'logistica')).toBe('Visualiza y rastrea tus solicitudes');
     });
 
     it('debería_caer_al_titulo_admin_cuando_el_rol_no_tiene_titulo_propio', () => {
@@ -70,17 +71,45 @@ describe('config/dashboard-cards', () => {
       expect(tituloDeCard(historial, 'jefe_local')).toBe('Historial y Trazabilidad');
     });
 
-    it('debería_denombrar_operaciones_como_carga_de_vehiculos', () => {
+    it('debería_invitar_a_operaciones_a_cargar_vehiculos', () => {
       const vehiculos = DASHBOARD_CARDS.find((c) => c.clave === 'vehiculos')!;
-      expect(tituloDeCard(vehiculos, 'operaciones')).toBe('Carga de vehículos');
+      expect(tituloDeCard(vehiculos, 'operaciones')).toBe('Carga aquí los vehículos al inventario');
       expect(tituloDeCard(vehiculos, 'administrador')).toBe('Gestión de Vehículos');
     });
 
-    it('debería_nombrar_la_gestion_logistica_calendarizacion_para_no_admin', () => {
+    it('debería_titular_la_calendarizacion_con_una_accion_para_no_admin', () => {
       const logistica = DASHBOARD_CARDS.find((c) => c.clave === 'logistica')!;
-      expect(tituloDeCard(logistica, 'jefe_local')).toBe('Calendarización de traslados');
-      expect(tituloDeCard(logistica, 'logistica')).toBe('Calendarización de traslados');
+      expect(tituloDeCard(logistica, 'jefe_local')).toBe('Sigue aquí la programación de tus traslados');
+      expect(tituloDeCard(logistica, 'logistica')).toBe('Programa y despacha aquí tus traslados');
       expect(tituloDeCard(logistica, 'administrador')).toBe('Gestión Logística');
+    });
+
+    it('debería_usar_titulos_en_segunda_persona_con_aqui_para_jefe_local', () => {
+      for (const card of cardsPorRol('jefe_local')) {
+        expect(tituloDeCard(card, 'jefe_local')).not.toBe(card.nombre);
+      }
+      const aprobaciones = DASHBOARD_CARDS.find((c) => c.clave === 'aprobaciones')!;
+      const recepciones = DASHBOARD_CARDS.find((c) => c.clave === 'recepciones')!;
+      expect(tituloDeCard(aprobaciones, 'jefe_local')).toBe('Revisa aquí tus solicitudes pendientes de aprobar');
+      expect(tituloDeCard(recepciones, 'jefe_local')).toBe('Revisa aquí tus vehículos en tránsito');
+    });
+  });
+
+  describe('etiquetaDeCard', () => {
+    it('debería_mostrar_el_nombre_del_modulo_cuando_el_rol_tiene_titulo_propio', () => {
+      const aprobaciones = DASHBOARD_CARDS.find((c) => c.clave === 'aprobaciones')!;
+      expect(etiquetaDeCard(aprobaciones, 'jefe_local')).toBe('Aprobaciones');
+    });
+
+    it('debería_mostrar_modulo_al_administrador', () => {
+      const aprobaciones = DASHBOARD_CARDS.find((c) => c.clave === 'aprobaciones')!;
+      expect(etiquetaDeCard(aprobaciones, 'administrador')).toBe('Módulo');
+    });
+
+    it('debería_tener_nombre_no_vacio_en_todas_las_cards', () => {
+      for (const card of DASHBOARD_CARDS) {
+        expect(card.nombre.trim().length).toBeGreaterThan(0);
+      }
     });
   });
 
