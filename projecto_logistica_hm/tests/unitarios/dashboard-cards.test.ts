@@ -158,6 +158,7 @@ describe('config/dashboard-cards', () => {
     it('debería_logistica_ver_solicitudes_traslados_calendarizacion_y_slots', () => {
       expect(cardsPorRol('logistica').map((c) => c.clave).sort()).toEqual([
         'logistica',
+        'movimientos',
         'slots',
         'solicitudes',
         'traslados',

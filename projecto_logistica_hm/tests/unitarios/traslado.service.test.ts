@@ -215,6 +215,38 @@ describe('TrasladoService', () => {
     });
   });
 
+  describe('getTrasladosDespachados', () => {
+    it('should_query_dispatch_range_with_one_day_margin_and_origin_scope', async () => {
+      admin.results.traslado_interno = [fila([filaTraslado({ estado: 'en_transito', fecha_despacho: '2026-10-05T15:00:00Z' })])];
+
+      const res = await TrasladoService.getTrasladosDespachados('2026-10-01', '2026-10-15', [6, 7]);
+
+      expect(res).toHaveLength(1);
+      const llamadas = admin.callsTo('traslado_interno');
+      expect(llamadas).toContainEqual(['gte', 'fecha_despacho', '2026-09-30']);
+      expect(llamadas).toContainEqual(['lte', 'fecha_despacho', '2026-10-16T23:59:59.999Z']);
+      expect(llamadas).toContainEqual(['in', 'origen_id', [6, 7]]);
+      expect(llamadas.some((c) => c[0] === 'range')).toBe(true);
+    });
+
+    it('should_not_filter_origin_when_scope_is_all', async () => {
+      admin.results.traslado_interno = [fila([])];
+      await TrasladoService.getTrasladosDespachados('2026-10-01', '2026-10-15', null);
+      expect(admin.callsTo('traslado_interno').some((c) => c[0] === 'in')).toBe(false);
+    });
+
+    it('should_return_empty_without_querying_when_scope_is_empty', async () => {
+      expect(await TrasladoService.getTrasladosDespachados('2026-10-01', '2026-10-15', [])).toEqual([]);
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
+    });
+
+    it('should_return_empty_when_query_fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      admin.results.traslado_interno = [{ data: null, error: { message: 'boom' } }];
+      expect(await TrasladoService.getTrasladosDespachados('2026-10-01', '2026-10-15', null)).toEqual([]);
+    });
+  });
+
   describe('crearTraslado', () => {
     it('should_crear_traslado_cuando_todos_los_vehiculos_estan_liberados_sin_validar_slots', async () => {
       admin.results.transportista = [fila({ id: 'tr-1', activo: true })];

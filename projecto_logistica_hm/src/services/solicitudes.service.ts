@@ -14,7 +14,8 @@ import { DisponibilidadVehiculo } from '@/types/sucursal.types';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
 import { mensajeErrorUsuario } from '@/lib/errores';
-import { obtenerTodasLasFilas } from '@/lib/paginacion';
+import { obtenerTodasLasFilas, type ConsultaPaginable } from '@/lib/paginacion';
+import { sumarDias } from '@/lib/calendario';
 import { TransportistaService } from '@/services/transportista.service';
 import { validarContenidoArchivo } from '@/lib/archivos';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
@@ -208,6 +209,14 @@ export interface OpcionesListado {
   /** Fecha de despacho programada (`fecha_tentativa_despacho`) desde/hasta, `YYYY-MM-DD` inclusive. */
   programadasDesde?: string;
   programadasHasta?: string;
+  /**
+   * Fecha de despacho real (`fecha_despacho`, con hora) desde/hasta,
+   * `YYYY-MM-DD`. Se consulta con un día de margen a cada lado porque el día
+   * se cuenta en hora de Chile; quien llama filtra el día exacto
+   * (`lib/reporteTraslados.unirMovimientos`).
+   */
+  despachadasDesde?: string;
+  despachadasHasta?: string;
 }
 
 type ConsultaFiltrable = {
@@ -223,7 +232,23 @@ function aplicarOpcionesListado<T>(consulta: T, o: OpcionesListado): T {
   if (o.estados && o.estados.length > 0) q = q.in('estado', o.estados);
   if (o.programadasDesde) q = q.gte('fecha_tentativa_despacho', o.programadasDesde);
   if (o.programadasHasta) q = q.lte('fecha_tentativa_despacho', `${o.programadasHasta}T23:59:59.999Z`);
+  if (o.despachadasDesde) q = q.gte('fecha_despacho', sumarDias(o.despachadasDesde, -1));
+  if (o.despachadasHasta) q = q.lte('fecha_despacho', `${sumarDias(o.despachadasHasta, 1)}T23:59:59.999Z`);
   return q as T;
+}
+
+type ConsultaOrdenable = {
+  order(columna: string, opciones: { ascending: boolean }): ConsultaOrdenable;
+};
+
+/**
+ * Orden de los listados: la más reciente primero, con `id` como desempate
+ * para que la paginación de `obtenerTodasLasFilas` no repita ni salte filas.
+ */
+function ordenListado<T>(consulta: T): T & ConsultaPaginable {
+  return (consulta as unknown as ConsultaOrdenable)
+    .order('fecha_creacion', { ascending: false })
+    .order('id', { ascending: true }) as unknown as T & ConsultaPaginable;
 }
 
 export class SolicitudesService {
@@ -315,15 +340,11 @@ export class SolicitudesService {
   static async getSolicitudes(opciones: OpcionesListado = {}): Promise<SolicitudLista[]> {
     try {
       const admin = createAdminClient();
-      const { data, error } = await aplicarOpcionesListado(admin.from('solicitud').select(SOLICITUD_SELECT), opciones)
-        .order('fecha_creacion', { ascending: false });
-
-      if (error) {
-        console.error('Error al listar solicitudes:', error);
-        return [];
-      }
-
-      return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
+      const filas = await obtenerTodasLasFilas<SolicitudRawRow>(
+        ordenListado(aplicarOpcionesListado(admin.from('solicitud').select(SOLICITUD_SELECT), opciones)),
+        (error) => console.error('Error al listar solicitudes:', error)
+      );
+      return (filas ?? []).map(mapRow);
     } catch (err) {
       console.error('Error en getSolicitudes:', err);
       return [];
@@ -491,16 +512,11 @@ export class SolicitudesService {
   /** Ejecutivo: únicamente las solicitudes que él mismo creó. */
   private static async getSolicitudesPorEjecutivo(userId: string, opciones: OpcionesListado = {}): Promise<SolicitudLista[]> {
     const admin = createAdminClient();
-    const { data, error } = await aplicarOpcionesListado(
-      admin.from('solicitud').select(SOLICITUD_SELECT).eq('ejecutivo_id', userId),
-      opciones
-    ).order('fecha_creacion', { ascending: false });
-
-    if (error) {
-      console.error('Error al listar solicitudes del ejecutivo:', error);
-      return [];
-    }
-    return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
+    const filas = await obtenerTodasLasFilas<SolicitudRawRow>(
+      ordenListado(aplicarOpcionesListado(admin.from('solicitud').select(SOLICITUD_SELECT).eq('ejecutivo_id', userId), opciones)),
+      (error) => console.error('Error al listar solicitudes del ejecutivo:', error)
+    );
+    return (filas ?? []).map(mapRow);
   }
 
   /**
@@ -515,19 +531,19 @@ export class SolicitudesService {
     if (ids.length === 0) return [];
 
     const admin = createAdminClient();
-    const { data, error } = await aplicarOpcionesListado(
-      admin
-        .from('solicitud')
-        .select(SOLICITUD_SELECT)
-        .or(`sucursal.in.(${ids.join(',')}),sucursal_destino.in.(${ids.join(',')})`),
-      opciones
-    ).order('fecha_creacion', { ascending: false });
-
-    if (error) {
-      console.error('Error al listar solicitudes del jefe de local:', error);
-      return [];
-    }
-    return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
+    const filas = await obtenerTodasLasFilas<SolicitudRawRow>(
+      ordenListado(
+        aplicarOpcionesListado(
+          admin
+            .from('solicitud')
+            .select(SOLICITUD_SELECT)
+            .or(`sucursal.in.(${ids.join(',')}),sucursal_destino.in.(${ids.join(',')})`),
+          opciones
+        )
+      ),
+      (error) => console.error('Error al listar solicitudes del jefe de local:', error)
+    );
+    return (filas ?? []).map(mapRow);
   }
 
   /**
@@ -557,17 +573,11 @@ export class SolicitudesService {
     const sucursalIds = ((sucursales || []) as Array<{ id: number }>).map((s) => s.id);
     if (sucursalIds.length === 0) return [];
 
-    const { data, error } = await aplicarOpcionesListado(
-      admin.from('solicitud').select(SOLICITUD_SELECT).in('sucursal', sucursalIds),
-      opciones
-    ).order('fecha_creacion', { ascending: false });
-
-    if (error) {
-      console.error('Error al listar solicitudes de logística:', error);
-      return [];
-    }
-
-    return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
+    const filas = await obtenerTodasLasFilas<SolicitudRawRow>(
+      ordenListado(aplicarOpcionesListado(admin.from('solicitud').select(SOLICITUD_SELECT).in('sucursal', sucursalIds), opciones)),
+      (error) => console.error('Error al listar solicitudes de logística:', error)
+    );
+    return (filas ?? []).map(mapRow);
   }
 
   /**

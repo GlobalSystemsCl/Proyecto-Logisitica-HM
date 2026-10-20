@@ -270,6 +270,39 @@ describe('SolicitudesService.getSolicitudes', () => {
   });
 });
 
+describe('SolicitudesService.getSolicitudes: paginación y filtros de despacho', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should_read_all_pages_ordered_with_id_tiebreak_when_there_are_more_than_1000', async () => {
+    const pagina = (desde: number, n: number) => Array.from({ length: n }, (_, i) => rawRow({ id: `s-${desde + i}` }));
+    admin.results.solicitud = [fila(pagina(0, 1000)), fila(pagina(1000, 5))];
+
+    const res = await SolicitudesService.getSolicitudes();
+
+    expect(res).toHaveLength(1005);
+    const llamadas = admin.callsTo('solicitud');
+    expect(llamadas.filter((c) => c[0] === 'order').map((c) => c[1])).toEqual(['fecha_creacion', 'id']);
+    expect(llamadas.filter((c) => c[0] === 'range').map((c) => c[1])).toEqual([0, 1000]);
+  });
+
+  it('should_filter_dispatch_date_with_one_day_margin_when_option_is_given', async () => {
+    admin.results.solicitud = [fila([])];
+
+    await SolicitudesService.getSolicitudes({ despachadasDesde: '2026-10-01', despachadasHasta: '2026-10-15' });
+
+    const llamadas = admin.callsTo('solicitud');
+    expect(llamadas).toContainEqual(['gte', 'fecha_despacho', '2026-09-30']);
+    expect(llamadas).toContainEqual(['lte', 'fecha_despacho', '2026-10-16T23:59:59.999Z']);
+  });
+});
+
 describe('SolicitudesService.getVehiculosInventario', () => {
   beforeEach(() => {
     admin.reset();

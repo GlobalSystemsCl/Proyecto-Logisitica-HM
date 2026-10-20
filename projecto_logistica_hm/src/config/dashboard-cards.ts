@@ -178,6 +178,26 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     ],
   },
   {
+    clave: 'movimientos',
+    href: '/logistica/movimientos',
+    icono: 'FileText',
+    grupo: 'operacion',
+    orden: 52,
+    nombre: 'Movimientos',
+    tituloAdmin: 'Movimientos de traslados',
+    tituloPorRol: {
+      logistica: 'Revisa aquí los movimientos para validar la factura del transportista',
+    },
+    descripcion:
+      'Todo lo despachado en un período (solicitudes y traslados internos), un vehículo por fila, con su transportista.',
+    acciones: [
+      'Elegir el período por fecha de despacho',
+      'Filtrar por transportista, origen, destino, tipo, estado o chasis',
+      'Ver cuántos vehículos movió cada transportista',
+      'Exportar a Excel lo filtrado',
+    ],
+  },
+  {
     clave: 'reportes',
     href: '/logistica/reportes',
     icono: 'BarChart3',

@@ -547,7 +547,7 @@ Resumen de controles existentes:
 - `getCurrentUserProfile()` hace 3 consultas por request y se llama en cada action y página.
 - Reescritura de la cola: N updates secuenciales.
 - Importación CSV: lee todos los chasis (2.261+) en cada importación.
-- PostgREST corta cada respuesta en 1000 filas aunque se pida `limit(100000)`. Toda lectura que pueda superar ese tamaño debe usar `obtenerTodasLasFilas` (`src/lib/paginacion.ts`) con un orden único. Corregidos el inventario de solicitudes y la búsqueda de traslados (sección 32); quedan `getSolicitudes` (reportes), `getSolicitudesFiltradas` sin rango y `getAvailableVehicles` (fase J del plan del 2026-10-20).
+- PostgREST corta cada respuesta en 1000 filas aunque se pida `limit(100000)`. Toda lectura que pueda superar ese tamaño debe usar `obtenerTodasLasFilas` (`src/lib/paginacion.ts`) con un orden único. Corregidos el inventario de solicitudes y la búsqueda de traslados (sección 32) y todos los listados de solicitudes (`getSolicitudes` y `getSolicitudesFiltradas` por rol, sección 34). Queda `getAvailableVehicles`, que no tiene llamadores.
 - 19 policies con `auth.uid()` reevaluado por fila; 12 FKs sin índice; 9 índices sin uso.
 
 ## 24. Problemas de escalabilidad
@@ -659,6 +659,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-14 | "Encargado" pasa a "Iniciada por" (columna `solicitud.creado_por`) y "Encargado de solicitud" a "Logística asignada"; se retira "Responsable" (sinónimo). Nueva sección 31 | Claude (asistido) |
 | 2026-10-20 | Pedidos del cliente del 2026-10-19, fase A: vehículos sin patente que no aparecían al buscar por chasis, búsqueda de traslados sin lista de ids en la URL (migración `20261020120000`), botones "Volver a la cola" y "Revertir despacho", y cuadro de rechazadas del panel del ejecutivo. Nueva sección 32; secciones 20 y 23 | Claude (asistido) |
 | 2026-10-20 | Fase C: transportista (nombre y RUT) obligatorio al programar una solicitud y al crear un traslado interno (migración `20261020130000`). Nueva sección 33 | Claude (asistido) |
+| 2026-10-20 | Fase D: Excel de la calendarización por rango y reporte de movimientos para revisar la factura del transportista (`/logistica/movimientos`). Listados de solicitudes paginados. Nueva sección 34; sección 23 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -834,3 +835,33 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
   - Se muestra en el detalle de la solicitud, en las tarjetas del calendario y en las tarjetas y el detalle de los traslados internos.
 - **Datos de prueba:** las solicitudes programadas por los scripts de `seed/` no tienen transportista (la columna es nula).
 - **Tests:** `rut.test.ts`, `transportista.service.test.ts`, `transportistas.actions.test.ts`, `migracion-transportista.test.ts`, `notificaciones.actions.test.ts` (programar sin transportista se rechaza), `solicitudes.service.test.ts`, `solicitudes.fase2.test.ts` y `traslado.service.test.ts`.
+
+## 34. Exportes de Logística (2026-10-20, fase D)
+
+### 34.1 Excel de la calendarización
+- Botón **"Descargar Excel"** en el calendario (`DescargarCalendarizacion`). Pide un rango desde/hasta; por defecto, **mañana a mañana** ("de un día para otro").
+- La acción `exportarCalendarizacionAction` (`exportes.actions.ts`) consulta en el servidor las solicitudes `calendarizada` y `en_transito` con fecha programada en el rango, no solo lo cargado en pantalla. El alcance es el mismo del calendario: Logística ve sus zonas, el jefe de local sus sucursales y el administrador todo.
+- Una fila por vehículo, ordenada por fecha programada. Columnas: solicitud, fecha programada, origen, destino, chasis, patente, marca, modelo, color, tipo, transportista, RUT, Logística asignada y estado.
+- Rango máximo: 93 días (`MAX_DIAS_RANGO_EXPORTE`).
+
+### 34.2 Reporte de movimientos (factura del transportista)
+- Página nueva **`/logistica/movimientos`**, para Logística y el administrador, con su tarjeta en el dashboard ("Movimientos").
+- Muestra todo lo **despachado** en el período elegido (por defecto, el mes en curso): solicitudes y traslados internos, **una fila por vehículo**. Columnas: fecha de despacho, tipo, código, origen, destino, chasis, patente, marca, modelo, transportista, RUT, Logística, estado y fecha de recepción.
+- Filtros: transportista (incluye "Sin transportista"), origen, destino, tipo, estado y chasis o patente.
+- Panel "Vehículos por transportista", para cuadrar con la factura.
+- "Exportar a Excel" descarga lo filtrado, en dos hojas: Movimientos y Por transportista.
+- **Alcance:** Logística ve las sucursales de origen de sus zonas (`OrganizacionService.getSucursalIdsDeZonasUsuario`); el administrador ve todas.
+- **Día del despacho:** se cuenta en hora de Chile (`diaChile`). La consulta trae un día de margen a cada lado y `unirMovimientos` deja el día exacto.
+- **Datos:**
+  - `OpcionesListado` suma `despachadasDesde` y `despachadasHasta`, sobre `fecha_despacho`.
+  - `TrasladoService.getTrasladosDespachados`.
+  - Una solicitud con el despacho revertido no aparece, porque al revertir se limpia `fecha_despacho`.
+- Lo programado antes del 2026-10-20 no tiene transportista: aparece como "Sin registrar".
+
+### 34.3 Listados de solicitudes paginados
+`getSolicitudes` y los listados por rol (ejecutivo, jefe de local, Logística) leen con `obtenerTodasLasFilas`, ordenados por `fecha_creacion` descendente con `id` de desempate (`ordenListado`). Antes se cortaban en 1000 filas sin aviso. Con 1.440 solicitudes al mes, eso habría pasado en menos de un mes.
+
+### 34.4 Código
+- Lógica pura en `src/lib/reporteTraslados.ts`: filas de Excel, movimientos, filtros, opciones, resumen, rango por defecto y validación.
+- `src/lib/excel.ts` (`crearLibroExcel`, `descargarExcel`): encabezados en negrita, ancho de columnas y hoja con solo los títulos si no hay filas.
+- **Tests:** `reporteTraslados.test.ts`, `excel.test.ts`, `exportes.actions.test.ts`, `traslado.service.test.ts` (`getTrasladosDespachados`), `organizacion.service.test.ts`, `solicitudes.service.test.ts` (paginación y filtro de despacho) y `dashboard-cards.test.ts`.

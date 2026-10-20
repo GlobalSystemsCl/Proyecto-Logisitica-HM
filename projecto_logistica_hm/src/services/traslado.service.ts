@@ -9,6 +9,7 @@ import type {
 } from '@/types/traslado.types';
 import { esFuncionInexistente, mensajeErrorUsuario } from '@/lib/errores';
 import { obtenerTodasLasFilas } from '@/lib/paginacion';
+import { sumarDias } from '@/lib/calendario';
 import { TransportistaService } from '@/services/transportista.service';
 import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
 import { validarMotivoCancelacion, validarRecepcion, type DatosRecepcion } from '@/lib/recepcion';
@@ -490,6 +491,38 @@ export class TrasladoService {
       return ((data || []) as unknown as TrasladoRawRow[]).map(mapTraslado);
     } catch (err) {
       console.error('Error en getTrasladosByLogistica:', err);
+      return [];
+    }
+  }
+
+  /**
+   * Traslados internos despachados entre dos fechas (`YYYY-MM-DD`), para el
+   * reporte de movimientos. `origenIds`: sucursales de origen del alcance
+   * (`null` = todas, administrador; vacía = ninguna). Consulta con un día de
+   * margen: el día exacto, en hora de Chile, lo filtra `unirMovimientos`.
+   */
+  static async getTrasladosDespachados(
+    desde: string,
+    hasta: string,
+    origenIds: number[] | null
+  ): Promise<TrasladoInterno[]> {
+    if (origenIds !== null && origenIds.length === 0) return [];
+    try {
+      const admin = createAdminClient();
+      let query = admin
+        .from('traslado_interno')
+        .select(TRASLADO_SELECT)
+        .gte('fecha_despacho', sumarDias(desde, -1))
+        .lte('fecha_despacho', `${sumarDias(hasta, 1)}T23:59:59.999Z`);
+      if (origenIds !== null) query = query.in('origen_id', origenIds);
+
+      const filas = await obtenerTodasLasFilas<TrasladoRawRow>(
+        query.order('fecha_despacho', { ascending: true }).order('id', { ascending: true }),
+        (error) => console.error('Error al listar traslados despachados:', error)
+      );
+      return (filas ?? []).map(mapTraslado);
+    } catch (err) {
+      console.error('Error en getTrasladosDespachados:', err);
       return [];
     }
   }

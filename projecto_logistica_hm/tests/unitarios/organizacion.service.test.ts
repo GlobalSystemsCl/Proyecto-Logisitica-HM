@@ -140,3 +140,31 @@ describe('OrganizacionService.usuarioTieneSucursal', () => {
     expect(res).toBe(false);
   });
 });
+
+describe('OrganizacionService.getSucursalIdsDeZonasUsuario', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_return_branches_of_user_zones', async () => {
+    admin.results.usuario_zona = [fila([{ zona_id: 1, zona: { id: 1, nombre: 'Zona 1' } }])];
+    admin.results.sucursal = [fila([{ id: 6 }, { id: 7 }, { id: 9 }])];
+
+    expect(await OrganizacionService.getSucursalIdsDeZonasUsuario('lg-1')).toEqual([6, 7, 9]);
+    expect(admin.callsTo('sucursal')).toContainEqual(['in', 'zona_id', [1]]);
+  });
+
+  it('should_return_empty_without_querying_branches_when_user_has_no_zones', async () => {
+    admin.results.usuario_zona = [fila([])];
+    expect(await OrganizacionService.getSucursalIdsDeZonasUsuario('lg-1')).toEqual([]);
+    expect(admin.callsTo('sucursal')).toHaveLength(0);
+  });
+
+  it('should_return_empty_when_branch_query_fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.usuario_zona = [fila([{ zona_id: 1, zona: { id: 1, nombre: 'Zona 1' } }])];
+    admin.results.sucursal = [{ data: null, error: { message: 'boom' } }];
+    expect(await OrganizacionService.getSucursalIdsDeZonasUsuario('lg-1')).toEqual([]);
+  });
+});

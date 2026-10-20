@@ -23,6 +23,7 @@ import type { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
 import type { UserRole } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import BadgeEvento from '@/components/BadgeEvento';
+import DescargarCalendarizacion from '@/components/DescargarCalendarizacion';
 import {
   calendarizarSolicitudAction,
   descalendarizarSolicitudAction,
@@ -441,6 +442,7 @@ export default function CalendarizacionesClient({
           >
             <Filter className="w-4 h-4" /> Filtros{hayFiltrosCalendario(filtros) ? ` (${Object.keys(filtrosAParams(filtros)).length})` : ''}
           </button>
+          <DescargarCalendarizacion />
         </div>
       </div>
 

@@ -340,6 +340,27 @@ export class OrganizacionService {
     }
   }
 
+  /**
+   * Sucursales de las zonas del usuario (alcance de Logística). Lista vacía si
+   * no tiene zonas o si la consulta falla.
+   */
+  static async getSucursalIdsDeZonasUsuario(usuarioId: string): Promise<number[]> {
+    const zonaIds = (await this.getUserZones(usuarioId)).map((z) => z.id);
+    if (zonaIds.length === 0) return [];
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin.from('sucursal').select('id').in('zona_id', zonaIds);
+      if (error) {
+        console.error('Error al obtener las sucursales de las zonas:', error);
+        return [];
+      }
+      return ((data || []) as Array<{ id: number }>).map((s) => s.id);
+    } catch (err) {
+      console.error('Error en getSucursalIdsDeZonasUsuario:', err);
+      return [];
+    }
+  }
+
   /** Valida que un usuario gestiona (o pertenece a) una sucursal determinada. Usa la funcion SQL SECURITY DEFINER. */
   static async usuarioTieneSucursal(usuarioId: string, sucursalId: number): Promise<boolean> {
     if (!usuarioId || !sucursalId) return false;
