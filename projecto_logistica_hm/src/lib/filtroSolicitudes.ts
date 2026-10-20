@@ -1,4 +1,5 @@
 import type { EstadoSolicitud, SolicitudLista } from '@/types/solicitud.types';
+import type { UserRole } from '@/types/auth.types';
 
 /**
  * Filtro por **grupos de estado** de la lista de solicitudes.
@@ -28,36 +29,47 @@ export interface GrupoFiltroDef {
   estados: EstadoSolicitud[];
 }
 
+const ESTADOS_PENDIENTES: EstadoSolicitud[] = ['pendiente_aprobacion', 'pendiente'];
+const ESTADOS_EN_CURSO: EstadoSolicitud[] = ['aprobada', 'priorizada', 'asignada', 'calendarizada', 'despachada', 'en_transito'];
+const ESTADOS_POR_ENTREGAR: EstadoSolicitud[] = ['entregada'];
+
+/**
+ * Estados cerrados: ya no esperan ninguna acción. No suman en el total
+ * ("Activas") para no confundir con trabajo pendiente.
+ */
+export const ESTADOS_CERRADOS: readonly EstadoSolicitud[] = ['finalizada', 'rechazada', 'cancelada'];
+
 export const GRUPOS_FILTRO_SOLICITUDES: GrupoFiltroDef[] = [
   {
+    // El id se mantiene por compatibilidad con `?grupo=todas`.
     id: 'todas',
-    label: 'Todas',
-    descripcion: 'Todas las solicitudes',
-    estados: [],
+    label: 'Activas',
+    descripcion: 'Solicitudes sin cerrar: pendientes, en curso y por entregar',
+    estados: [...ESTADOS_PENDIENTES, ...ESTADOS_EN_CURSO, ...ESTADOS_POR_ENTREGAR],
   },
   {
     id: 'pendientes',
     label: 'Pendientes de aprobación',
     descripcion: 'Esperando aprobación del jefe de local',
-    estados: ['pendiente_aprobacion', 'pendiente'],
+    estados: ESTADOS_PENDIENTES,
   },
   {
     id: 'en_curso',
     label: 'En curso',
     descripcion: 'Aprobadas y en camino',
-    estados: ['aprobada', 'priorizada', 'asignada', 'calendarizada', 'despachada', 'en_transito'],
+    estados: ESTADOS_EN_CURSO,
   },
   {
     id: 'por_entregar',
     label: 'Por entregar',
     descripcion: 'Ya recepcionadas, falta la entrega al cliente',
-    estados: ['entregada'],
+    estados: ESTADOS_POR_ENTREGAR,
   },
   {
     id: 'rechazadas',
-    label: 'Rechazadas',
-    descripcion: 'Rechazadas con su motivo',
-    estados: ['rechazada'],
+    label: 'Rechazadas / canceladas',
+    descripcion: 'Rechazadas o canceladas, con su motivo',
+    estados: ['rechazada', 'cancelada'],
   },
   {
     id: 'finalizadas',
@@ -67,16 +79,26 @@ export const GRUPOS_FILTRO_SOLICITUDES: GrupoFiltroDef[] = [
   },
 ];
 
+/**
+ * Grupo con que abre la lista: el de la URL (`?grupo=`) si es válido; si no,
+ * "Por entregar" para Ejecutivo y Jefe de Local (su acción pendiente) y
+ * "Activas" para el resto.
+ */
+export function grupoInicialSolicitudes(grupoUrl: unknown, rol: UserRole): GrupoFiltroSolicitud {
+  if (typeof grupoUrl === 'string' && GRUPOS_FILTRO_SOLICITUDES.some((g) => g.id === grupoUrl)) {
+    return grupoUrl as GrupoFiltroSolicitud;
+  }
+  return rol === 'ejecutivo' || rol === 'jefe_local' ? 'por_entregar' : 'todas';
+}
+
 /** Definición de un grupo por id; `todas` si el id no existe. */
 export function grupoFiltro(id: GrupoFiltroSolicitud | string): GrupoFiltroDef {
   return GRUPOS_FILTRO_SOLICITUDES.find((g) => g.id === id) ?? GRUPOS_FILTRO_SOLICITUDES[0];
 }
 
-/** `true` si el estado pertenece al grupo (o si el grupo es "todas"). */
+/** `true` si el estado pertenece al grupo ("todas" = cualquier estado no cerrado). */
 export function estadoEnGrupo(estado: EstadoSolicitud, id: GrupoFiltroSolicitud | string): boolean {
-  const grupo = grupoFiltro(id);
-  if (grupo.id === 'todas') return true;
-  return grupo.estados.includes(estado);
+  return grupoFiltro(id).estados.includes(estado);
 }
 
 /** Filtra la lista por grupo de estado, sin mutar el arreglo original. */
@@ -85,24 +107,16 @@ export function filtrarPorGrupo<T extends { estado: EstadoSolicitud }>(
   id: GrupoFiltroSolicitud | string
 ): T[] {
   const grupo = grupoFiltro(id);
-  if (grupo.id === 'todas') return [...solicitudes];
   return solicitudes.filter((s) => grupo.estados.includes(s.estado));
 }
 
-/** Cuántas solicitudes hay en cada grupo (incluido "todas"). */
+/** Cuántas solicitudes hay en cada grupo ("todas" cuenta solo las activas). */
 export function contarPorGrupo(
   solicitudes: Array<{ estado: EstadoSolicitud }>
 ): Record<GrupoFiltroSolicitud, number> {
   const conteo = {} as Record<GrupoFiltroSolicitud, number>;
-  for (const grupo of GRUPOS_FILTRO_SOLICITUDES) conteo[grupo.id] = 0;
-  conteo.todas = solicitudes.length;
-  for (const sol of solicitudes) {
-    for (const grupo of GRUPOS_FILTRO_SOLICITUDES) {
-      if (grupo.id !== 'todas' && grupo.estados.includes(sol.estado)) {
-        conteo[grupo.id] += 1;
-        break;
-      }
-    }
+  for (const grupo of GRUPOS_FILTRO_SOLICITUDES) {
+    conteo[grupo.id] = solicitudes.filter((s) => grupo.estados.includes(s.estado)).length;
   }
   return conteo;
 }

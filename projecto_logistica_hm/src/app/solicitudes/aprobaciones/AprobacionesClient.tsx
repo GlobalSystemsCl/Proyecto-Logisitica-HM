@@ -20,7 +20,7 @@ import { SolicitudLista, EstadoSolicitud, TipoSolicitud, VehiculoInventario } fr
 import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import BadgeEvento from '@/components/BadgeEvento';
-import { hoyISO } from '@/lib/fechas';
+import { formatFecha, hoyISO } from '@/lib/fechas';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { iniciadorNombre } from '@/lib/iniciador';
 
@@ -51,11 +51,6 @@ const PRE_DESPACHO: EstadoSolicitud[] = [
   'pendiente',
   'priorizada',
 ];
-
-function formatFecha(iso: string | null): string {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('es-CL');
-}
 
 function fechaInputValue(iso: string | null): string {
   if (!iso) return '';

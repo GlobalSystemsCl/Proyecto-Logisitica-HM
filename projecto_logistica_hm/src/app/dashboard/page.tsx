@@ -6,7 +6,6 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
 import { ROL_LABEL } from '@/types/auth.types';
-import type { SlotSucursalResumen } from '@/lib/slots';
 import PageHeader from '@/components/PageHeader';
 import DashboardCardGrid from '@/components/DashboardCardGrid';
 import DashboardJefeLocal from '@/components/DashboardJefeLocal';
@@ -15,11 +14,13 @@ import { ReporteService } from '@/services/reporte.service';
 import IndicadoresLogistica from '@/components/IndicadoresLogistica';
 import DashboardLogistica from '@/components/DashboardLogistica';
 import PanelCuentasPendientes from '@/components/PanelCuentasPendientes';
+import PanelSlotsSucursales from '@/components/PanelSlotsSucursales';
 import { UsersService } from '@/services/users.service';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { calcularReporte, indicadoresDeEncargado } from '@/lib/reporteLogistica';
-import { hoyISO } from '@/lib/fechas';
+import { slotsConZona } from '@/lib/slots';
+import { hoyISO, ZONA_HORARIA } from '@/lib/fechas';
 import { sumarDias } from '@/lib/calendario';
 
 export const dynamic = 'force-dynamic';
@@ -57,38 +58,43 @@ export default async function DashboardPage() {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: ZONA_HORARIA,
   }).format(new Date());
 
   const sucursalesAsignadas = veSlots
     ? (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
     : [];
 
-  const slots: SlotSucursalResumen[] = veSlots
+  const slots = veSlots
     ? await SucursalesService.getSlotsPorSucursales(sucursalesAsignadas)
     : [];
 
-  // R3 + R11: panel de pendientes del Jefe de Local (el administrador ve todas las sucursales).
-  const vePanel = rol === 'jefe_local' || rol === 'administrador';
-  const alcance = rol === 'administrador' ? null : sucursalesAsignadas;
+  // R3 + R11: panel de pendientes del Jefe de Local. El administrador no lo
+  // ve: su dashboard es de visualización y solo muestra las cuentas por activar.
+  const vePanel = rol === 'jefe_local';
   const [pendientesAprobar, recepcionesSolicitudes, recepcionesTraslados, porPriorizar] = vePanel
     ? await Promise.all([
-        SolicitudesService.getSolicitudesPendientesAprobacion(alcance),
-        SolicitudesService.getRecepcionesPendientes(alcance),
-        TrasladoService.getTrasladosEnTransitoHacia(alcance),
-        SolicitudesService.getSolicitudesPorPriorizar(alcance),
+        SolicitudesService.getSolicitudesPendientesAprobacion(sucursalesAsignadas),
+        SolicitudesService.getRecepcionesPendientes(sucursalesAsignadas),
+        TrasladoService.getTrasladosEnTransitoHacia(sucursalesAsignadas),
+        SolicitudesService.getSolicitudesPorPriorizar(sucursalesAsignadas),
       ])
     : [[], [], [], []];
 
   // R17: Logística ve los mismos indicadores con que lo mide el administrador (últimos 30 días).
   let indicadores: { reporte: ReturnType<typeof calcularReporte>; propios: ReturnType<typeof indicadoresDeEncargado> } | null = null;
   let pendientesLogistica: { solicitudes: SolicitudLista[]; traslados: TrasladoInterno[] } | null = null;
+  // Logística necesita la vista global: los espacios de todas las sucursales.
+  let slotsTodas: ReturnType<typeof slotsConZona>[] = [];
   if (rol === 'logistica') {
-    const [solicitudesZona, eventos, trasladosPropios] = await Promise.all([
+    const [solicitudesZona, eventos, trasladosPropios, sucursales] = await Promise.all([
       SolicitudesService.getSolicitudesFiltradas(profile.id, 'logistica'),
       ReporteService.getEventosLogistica(),
       TrasladoService.getTrasladosByLogistica(profile.id),
+      SucursalesService.getSucursales(),
     ]);
     pendientesLogistica = { solicitudes: solicitudesZona, traslados: trasladosPropios };
+    slotsTodas = sucursales.map(slotsConZona);
     const hasta = hoyISO();
     const reporte = calcularReporte(
       solicitudesZona,
@@ -155,6 +161,25 @@ export default async function DashboardPage() {
             recepcionesSolicitudes={recepcionesSolicitudes}
             recepcionesTraslados={recepcionesTraslados}
             porPriorizar={porPriorizar}
+          />
+        )}
+
+        {vePanel && (
+          <PanelSlotsSucursales
+            titulo="Espacios disponibles en tus sucursales"
+            sucursales={slots}
+            textoVacio="No tienes sucursales asignadas. Solicita a un Administrador que te asigne una."
+            actualizado={timestamp}
+          />
+        )}
+
+        {rol === 'logistica' && (
+          <PanelSlotsSucursales
+            titulo="Espacios disponibles en todas las sucursales"
+            sucursales={slotsTodas}
+            conZona
+            textoVacio="No hay sucursales registradas."
+            actualizado={timestamp}
           />
         )}
 

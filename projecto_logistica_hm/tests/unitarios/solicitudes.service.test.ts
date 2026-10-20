@@ -798,13 +798,35 @@ describe('SolicitudesService.priorizarEnPosicion', () => {
       fila(null),
       fila(null),
       fila(null),
+      fila(null),
     ];
     spyRegistrarAuditoria();
 
     const res = await SolicitudesService.priorizarEnPosicion('s-1', 2, USUARIO_ID);
     expect(res).toEqual({ success: true, posicion: 2 });
-    const stateUpdate = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
-    expect(stateUpdate[0]?.[1]).toEqual({ estado: 'priorizada' });
+    const updates = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
+    // Primero libera las posiciones que conservan solicitudes fuera de la cola.
+    expect(updates[0]?.[1]).toEqual({ posicion_prioridad: null });
+    expect(updates[1]?.[1]).toEqual({ estado: 'priorizada' });
+  });
+
+  it('should_revertir_el_estado_when_falla_la_reescritura_de_la_cola', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud = [
+      fila(minimo({ estado: 'aprobada', sucursal: 1 })),
+      fila([{ id: 'c1', posicion_prioridad: 1 }]),
+      fila(null), // liberar posiciones ajenas
+      fila(null), // estado → priorizada
+      errorResult('duplicate key value violates unique constraint'), // reescritura
+    ];
+    const auditoria = spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.priorizarEnPosicion('s-1', 1, USUARIO_ID);
+
+    expect(res.success).toBe(false);
+    const updates = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
+    expect(updates).toContainEqual(['update', { estado: 'aprobada', posicion_prioridad: null }]);
+    expect(auditoria).not.toHaveBeenCalled();
   });
 });
 
@@ -1730,6 +1752,76 @@ describe('SolicitudesService.calendarizarSolicitud', () => {
       posicion_prioridad: null,
     });
     expect(auditoria).toHaveBeenCalled();
+  });
+});
+
+describe('SolicitudesService.asignarEncargadoLogistica', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should_limpiar_posicion_y_renumerar_cola_when_se_asigna_desde_priorizada', async () => {
+    admin.results.solicitud = [
+      fila(minimo({ estado: 'priorizada', sucursal: 1, posicion_prioridad: 2 })),
+      fila(null),
+      fila(null),
+      fila([]),
+    ];
+    admin.results.usuario = [fila({ id: 'lg-1', rol: 'logistica', activo: true })];
+    const auditoria = spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.asignarEncargadoLogistica('s-1', 'lg-1', USUARIO_ID);
+
+    expect(res).toEqual({ success: true });
+    const updates = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
+    expect(updates[0]?.[1]).toMatchObject({ estado: 'asignada', logistica_id: 'lg-1', posicion_prioridad: null });
+    // La renumeración vuelve a escribir la cola de la sucursal.
+    expect(updates.length).toBeGreaterThan(1);
+    expect(auditoria).toHaveBeenCalledWith(
+      USUARIO_ID,
+      'solicitud',
+      's-1',
+      'asignacion_logistica',
+      expect.objectContaining({ posicion_prioridad: 2 }),
+      expect.objectContaining({ estado: 'asignada', posicion_prioridad: null })
+    );
+  });
+
+  it('should_no_renumerar_cola_when_la_solicitud_no_estaba_en_la_cola', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'aprobada', posicion_prioridad: null })), fila(null)];
+    admin.results.usuario = [fila({ id: 'lg-1', rol: 'logistica', activo: true })];
+    spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.asignarEncargadoLogistica('s-1', 'lg-1', USUARIO_ID);
+
+    expect(res).toEqual({ success: true });
+    const updates = admin.callsTo('solicitud').filter((c) => c[0] === 'update');
+    expect(updates).toHaveLength(1);
+    expect(updates[0]?.[1]).toMatchObject({ estado: 'asignada', posicion_prioridad: null });
+  });
+
+  it('should_rechazar_when_el_estado_no_es_asignable', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'calendarizada' }))];
+
+    const res = await SolicitudesService.asignarEncargadoLogistica('s-1', 'lg-1', USUARIO_ID);
+
+    expect(res.success).toBe(false);
+    expect(admin.callsTo('solicitud').filter((c) => c[0] === 'update')).toHaveLength(0);
+  });
+
+  it('should_rechazar_when_el_responsable_no_es_de_logistica', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'priorizada', posicion_prioridad: 1 }))];
+    admin.results.usuario = [fila({ id: 'ej-1', rol: 'ejecutivo', activo: true })];
+
+    const res = await SolicitudesService.asignarEncargadoLogistica('s-1', 'ej-1', USUARIO_ID);
+
+    expect(res.error).toBe('El responsable debe tener el rol Logística.');
+    expect(admin.callsTo('solicitud').filter((c) => c[0] === 'update')).toHaveLength(0);
   });
 });
 

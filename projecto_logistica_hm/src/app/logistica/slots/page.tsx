@@ -3,6 +3,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { redirect } from 'next/navigation';
 import SlotsClient from './SlotsClient';
+import { slotsConZona } from '@/lib/slots';
 import PageHeader from '@/components/PageHeader';
 
 export const dynamic = 'force-dynamic';
@@ -22,29 +23,13 @@ export default async function LogisticaSlotsPage() {
     redirect('/dashboard');
   }
 
-  const sucursalesAsignadas = await OrganizacionService.getUserAssignedBranches(profile.id);
-  const slots = await SucursalesService.getSlotsPorSucursales(
-    profile.rol === 'administrador' ? [] : sucursalesAsignadas.map((s) => s.id)
-  );
-  const todas = await SucursalesService.getSucursales();
-
-  const datos = profile.rol === 'administrador'
-    ? todas.map((s) => ({
-        id: s.id,
-        nombre: s.nombre,
-        zona_nombre: s.zona?.nombre ?? null,
-        slots: s.slots,
-        slots_ocupados: s.slots_ocupados,
-        slots_reservados: s.slots_reservados,
-      }))
-    : slots.map((s) => ({
-        id: s.id,
-        nombre: s.nombre,
-        zona_nombre: null,
-        slots: s.slots,
-        slots_ocupados: s.slots_ocupados,
-        slots_reservados: s.slots_reservados,
-      }));
+  // Administrador y Logística ven todas las sucursales; el Jefe de Local, las suyas.
+  const vistaGlobal = profile.rol === 'administrador' || profile.rol === 'logistica';
+  const datos = vistaGlobal
+    ? (await SucursalesService.getSucursales()).map(slotsConZona)
+    : (await SucursalesService.getSlotsPorSucursales(
+        (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
+      )).map((s) => ({ ...s, zona_nombre: null }));
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
@@ -59,7 +44,7 @@ export default async function LogisticaSlotsPage() {
 
       <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8">
         <SlotsClient
-          esAdmin={profile.rol === 'administrador'}
+          vistaGlobal={vistaGlobal}
           sucursales={datos}
         />
       </main>

@@ -182,3 +182,54 @@ export function ordenarPorDisponibilidad(
 ): SlotSucursalResumen[] {
   return [...sucursales].sort((a, b) => slotsLibres(a) - slotsLibres(b));
 }
+
+/** Fila de la tabla de slots: la sucursal con todos sus valores ya calculados. */
+export type FilaSlots<T extends SlotSucursalResumen> = T & {
+  real: number;
+  extra: number;
+  uso: number;
+  libres: number;
+  extraLibres: number;
+  estado: EstadoCapacidad;
+  /** Uso sobre capacidad real + extra, en porcentaje (0 si no hay capacidad; puede superar 100). */
+  porcentajeUso: number;
+};
+
+/**
+ * Calcula una fila de la tabla de slots. La usan `/logistica/slots` y el panel
+ * del Jefe de Local para que ambas vistas muestren exactamente lo mismo.
+ */
+export function filaSlots<T extends SlotSucursalResumen>(sucursal: T): FilaSlots<T> {
+  const real = aNumero(sucursal.slots);
+  const extra = capacidadExtra(sucursal);
+  const uso = usoSlots(sucursal);
+  const total = real + extra;
+  return {
+    ...sucursal,
+    real,
+    extra,
+    uso,
+    libres: slotsLibres(sucursal),
+    extraLibres: extraLibres(sucursal),
+    estado: estadoCapacidad(sucursal),
+    porcentajeUso: total > 0 ? Math.round((uso / total) * 100) : 0,
+  };
+}
+
+/** Sucursal tal como la devuelve `SucursalesService.getSucursales` (con zona). */
+interface SucursalConZona extends SlotSucursalResumen {
+  id: number;
+  zona?: { nombre: string | null } | null;
+}
+
+/** Fila de slots con el nombre de la zona, para las vistas de todas las sucursales. */
+export function slotsConZona(sucursal: SucursalConZona): SlotSucursalResumen & { id: number; zona_nombre: string | null } {
+  return {
+    id: sucursal.id,
+    nombre: sucursal.nombre,
+    zona_nombre: sucursal.zona?.nombre ?? null,
+    slots: sucursal.slots,
+    slots_ocupados: sucursal.slots_ocupados,
+    slots_reservados: sucursal.slots_reservados,
+  };
+}
