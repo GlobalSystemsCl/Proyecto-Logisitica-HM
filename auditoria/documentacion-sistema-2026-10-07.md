@@ -660,6 +660,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-20 | Pedidos del cliente del 2026-10-19, fase A: vehículos sin patente que no aparecían al buscar por chasis, búsqueda de traslados sin lista de ids en la URL (migración `20261020120000`), botones "Volver a la cola" y "Revertir despacho", y cuadro de rechazadas del panel del ejecutivo. Nueva sección 32; secciones 20 y 23 | Claude (asistido) |
 | 2026-10-20 | Fase C: transportista (nombre y RUT) obligatorio al programar una solicitud y al crear un traslado interno (migración `20261020130000`). Nueva sección 33 | Claude (asistido) |
 | 2026-10-20 | Fase D: Excel de la calendarización por rango y reporte de movimientos para revisar la factura del transportista (`/logistica/movimientos`). Listados de solicitudes paginados. Nueva sección 34; sección 23 | Claude (asistido) |
+| 2026-10-20 | Fase E: el número de una solicitud abre su detalle (modo consulta) en los paneles del dashboard, Prioridades, Recepciones, Reportes y Sucursales (`AbrirSolicitudDetalle`, `getSolicitudDetalleAction`, `codigoSolicitud`). Nueva sección 35 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -865,3 +866,27 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
 - Lógica pura en `src/lib/reporteTraslados.ts`: filas de Excel, movimientos, filtros, opciones, resumen, rango por defecto y validación.
 - `src/lib/excel.ts` (`crearLibroExcel`, `descargarExcel`): encabezados en negrita, ancho de columnas y hoja con solo los títulos si no hay filas.
 - **Tests:** `reporteTraslados.test.ts`, `excel.test.ts`, `exportes.actions.test.ts`, `traslado.service.test.ts` (`getTrasladosDespachados`), `organizacion.service.test.ts`, `solicitudes.service.test.ts` (paginación y filtro de despacho) y `dashboard-cards.test.ts`.
+
+## 35. Detalle de solicitud desde todas las secciones (2026-10-20, fase E)
+
+### 35.1 Qué cambia
+- El **número de la solicitud** (`#XXXXXXXX`, subrayado punteado) abre su detalle en un modal, en modo consulta, en:
+  - **Dashboard del Ejecutivo** (`PanelEjecutivo`): sus 4 cuadros.
+  - **Dashboard del Jefe de Local** (`DashboardJefeLocal`): pendientes de aprobar, recepciones (solo las solicitudes, no los traslados internos) y priorizaciones pendientes.
+  - **Dashboard de Logística** (`DashboardLogistica`): por programar y por despachar. El botón "Ver" sigue llevando al calendario con la solicitud buscada (`?q=`).
+  - **Prioridades**: tarjetas de la cola y de "por priorizar". El clic en el número no inicia el arrastre.
+  - **Recepciones**: solicitudes en tránsito.
+  - **Reportes de Logística**: "Pendientes que más esperan".
+  - **Sucursales** (admin): solicitudes del modal de la sucursal.
+- Antes, el detalle solo se abría desde Solicitudes, Aprobaciones y el calendario, que no cambian.
+- Las celdas del mes del calendario siguen sin enlace porque solo muestran conteos.
+
+### 35.2 Cómo funciona
+- `getSolicitudDetalleAction(id)` (`solicitudes.actions.ts`): exige sesión y `requireSolicitudAccess` (el mismo alcance del resto del detalle), y devuelve la solicitud (`getSolicitudCompleta`) y el id y rol de quien consulta.
+- `AbrirSolicitudDetalle` (`src/components/`): botón que carga el detalle al hacer clic y muestra `SolicitudDetalleModal` sin acciones (no cancela ni gestiona vehículos; las observaciones y documentos funcionan igual que en el calendario). Si no se puede cargar, muestra el error junto al número.
+  - El modal se monta con un portal en `document.body`, para que no quede dentro de enlaces, tarjetas u otros modales.
+  - Corta la propagación de clics, arrastre y teclado hacia la fila o tarjeta que lo contiene (necesario en Prioridades, que usa dnd-kit).
+- `codigoSolicitud(id)` (`src/lib/codigoSolicitud.ts`): único lugar que arma el número visible (`#` + 8 primeros caracteres en mayúsculas). La fase B (código por sucursal) lo cambiará ahí. Las pantallas que aún usan `id.slice(0, 8)` se migran en esa fase.
+
+### 35.3 Tests
+`solicitudes.actions.test.ts` (`getSolicitudDetalleAction`: con acceso, sin acceso, sin sesión, detalle no encontrado) y `codigoSolicitud.test.ts`.

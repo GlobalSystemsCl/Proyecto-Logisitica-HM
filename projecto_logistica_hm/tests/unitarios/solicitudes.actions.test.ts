@@ -5,6 +5,7 @@ import type { SolicitudMinima } from '@/services/solicitudes.service';
 const getCurrentUserProfile = vi.fn();
 const svc = {
   getSolicitudById: vi.fn(),
+  getSolicitudCompleta: vi.fn(),
   getObservaciones: vi.fn(async () => [{ id: 'o-1' }]),
   getAuditoria: vi.fn(async () => [{ id: 'a-1' }]),
   getDocumentos: vi.fn(async () => [{ id: 'd-1' }]),
@@ -119,6 +120,48 @@ describe('getObservacionesAction / getAuditoriaAction (brecha 004)', () => {
 
     expect(await actions.getObservacionesAction('s-1')).toEqual([{ id: 'o-1' }]);
     expect(await actions.getAuditoriaAction('s-1')).toEqual([{ id: 'a-1' }]);
+  });
+});
+
+describe('getSolicitudDetalleAction', () => {
+  it('should_return_solicitud_and_viewer_when_user_has_access', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    svc.getSolicitudById.mockResolvedValue(solicitud());
+    svc.getSolicitudCompleta.mockResolvedValue({ id: 's-1' });
+
+    expect(await actions.getSolicitudDetalleAction('s-1')).toEqual({
+      success: true,
+      solicitud: { id: 's-1' },
+      usuario: { id: 'e-1', rol: 'ejecutivo' },
+    });
+  });
+
+  it('should_reject_without_loading_detail_when_solicitud_belongs_to_another_ejecutivo', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ id: 'e-2' }));
+    svc.getSolicitudById.mockResolvedValue(solicitud());
+
+    const res = await actions.getSolicitudDetalleAction('s-1');
+
+    expect(res.success).toBe(false);
+    expect(svc.getSolicitudCompleta).not.toHaveBeenCalled();
+  });
+
+  it('should_reject_when_there_is_no_session', async () => {
+    getCurrentUserProfile.mockResolvedValue(null);
+
+    expect((await actions.getSolicitudDetalleAction('s-1')).success).toBe(false);
+    expect(svc.getSolicitudCompleta).not.toHaveBeenCalled();
+  });
+
+  it('should_return_error_when_detail_cannot_be_loaded', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    svc.getSolicitudById.mockResolvedValue(solicitud());
+    svc.getSolicitudCompleta.mockResolvedValue(null);
+
+    expect(await actions.getSolicitudDetalleAction('s-1')).toEqual({
+      success: false,
+      error: 'No se pudo cargar la solicitud.',
+    });
   });
 });
 

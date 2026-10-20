@@ -7,6 +7,8 @@ import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import BadgeEvento from '@/components/BadgeEvento';
+import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { RecepcionModal } from '@/components/ModalesTraslado';
 import { recibirTrasladoAction } from '@/app/actions/traslados.actions';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
@@ -97,9 +99,12 @@ export default function DashboardJefeLocal({
           {aprobar.items.map((s) => (
             <li key={s.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                {s.tipo_solicitud === 'evento' && (
-                  <span className="flex mb-0.5"><BadgeEvento tamano="sm" /></span>
-                )}
+                <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                  <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
+                    {codigoSolicitud(s.id)}
+                  </AbrirSolicitudDetalle>
+                  {s.tipo_solicitud === 'evento' && <BadgeEvento tamano="sm" />}
+                </div>
                 <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
                 <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
                 <p className="text-[11px] text-neutral-400 flex items-center gap-1">
@@ -130,6 +135,11 @@ export default function DashboardJefeLocal({
           {recepciones.items.map((r) => (
             <li key={r.clave} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
+                {r.tipo === 'solicitud' && (
+                  <AbrirSolicitudDetalle solicitudId={r.id} className="font-mono text-[11px] font-bold text-neutral-900">
+                    {codigoSolicitud(r.id)}
+                  </AbrirSolicitudDetalle>
+                )}
                 <p className="text-sm font-semibold text-neutral-900 truncate">
                   {r.tipo === 'traslado' && (
                     <span className="mr-1.5 px-1.5 py-0.5 rounded bg-neutral-100 text-[10px] text-neutral-600">Traslado interno</span>
@@ -166,9 +176,12 @@ export default function DashboardJefeLocal({
           {priorizar.items.map((s) => (
             <li key={s.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                {s.tipo_solicitud === 'evento' && (
-                  <span className="flex mb-0.5"><BadgeEvento tamano="sm" /></span>
-                )}
+                <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                  <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
+                    {codigoSolicitud(s.id)}
+                  </AbrirSolicitudDetalle>
+                  {s.tipo_solicitud === 'evento' && <BadgeEvento tamano="sm" />}
+                </div>
                 <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
                 <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
                 <p className="text-[11px] text-neutral-400">

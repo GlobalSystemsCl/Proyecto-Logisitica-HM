@@ -41,6 +41,8 @@ import { formatFecha } from '@/lib/fechas';
 import { nombreVehiculoConAnio } from '@/lib/vehiculo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import BadgeEvento from '@/components/BadgeEvento';
+import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { colaDeSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
 import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
@@ -539,7 +541,9 @@ function SolicitudCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
+            <AbrirSolicitudDetalle solicitudId={sol.id} className="font-mono text-xs text-neutral-500">
+              {codigoSolicitud(sol.id)}
+            </AbrirSolicitudDetalle>
             {sol.tipo_solicitud === 'evento' ? (
               <BadgeEvento tamano="sm" />
             ) : (
@@ -641,7 +645,7 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs text-neutral-500">#{sol.id.slice(0, 8)}</span>
+            <span className="font-mono text-xs text-neutral-500">{codigoSolicitud(sol.id)}</span>
             {sol.tipo_solicitud === 'evento' ? (
               <BadgeEvento tamano="sm" />
             ) : (

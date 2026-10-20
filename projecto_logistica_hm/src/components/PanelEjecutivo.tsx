@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Clock, Flag, Loader2, PackageCheck, Truck, X, XCircle } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import PanelAcciones from '@/components/PanelAcciones';
+import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { finalizarSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { gruposPanelEjecutivo, recortar, LIMITE_PANEL_EJECUTIVO } from '@/lib/panel';
 import { formatFecha } from '@/lib/fechas';
@@ -48,7 +50,7 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
   const rechazadas = recortar(grupos.rechazadas, LIMITE_PANEL_EJECUTIVO);
 
   async function entregar(s: SolicitudLista) {
-    if (!window.confirm(`¿Confirmas la entrega al cliente de la solicitud #${s.id.slice(0, 8)}?`)) return;
+    if (!window.confirm(`¿Confirmas la entrega al cliente de la solicitud ${codigoSolicitud(s.id)}?`)) return;
     setEntregando(s.id);
     try {
       const res = await finalizarSolicitudAction(s.id);
@@ -89,6 +91,9 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
         >
           {pendientes.items.map((s) => (
             <li key={s.id} className="px-5 py-3">
+              <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
+                {codigoSolicitud(s.id)}
+              </AbrirSolicitudDetalle>
               <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
               <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
               <p className="text-[11px] text-neutral-400">Creada {formatFecha(s.fecha_creacion)}</p>
@@ -108,6 +113,9 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
         >
           {enCurso.items.map((s) => (
             <li key={s.id} className="px-5 py-3">
+              <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
+                {codigoSolicitud(s.id)}
+              </AbrirSolicitudDetalle>
               <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
               <p className="text-xs text-neutral-500 truncate">
                 <span className="font-semibold text-blue-700">{ESTADO_EN_CURSO[s.estado] ?? s.estado}</span> · {vehiculos(s)}
@@ -134,6 +142,9 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
           {porEntregar.items.map((s) => (
             <li key={s.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
+                <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
+                  {codigoSolicitud(s.id)}
+                </AbrirSolicitudDetalle>
                 <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
                 <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
                 <p className="text-[11px] text-neutral-400">Recibida {formatFecha(s.fecha_recepcion ?? s.fecha_entrega)}</p>
@@ -162,6 +173,9 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
         >
           {rechazadas.items.map((s) => (
             <li key={s.id} className="px-5 py-3">
+              <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
+                {codigoSolicitud(s.id)}
+              </AbrirSolicitudDetalle>
               <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
               <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
             </li>

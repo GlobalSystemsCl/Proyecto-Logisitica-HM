@@ -4,6 +4,8 @@ import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import BadgeEvento from '@/components/BadgeEvento';
+import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { recortar, LIMITE_PANEL_LOGISTICA } from '@/lib/panel';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
@@ -28,10 +30,6 @@ function vehiculos(s: SolicitudLista): string {
   return s.vehiculos.map((v) => etiquetaVehiculo(v)).filter(Boolean).join(' · ') || 'Sin vehículos';
 }
 
-function numero(id: string): string {
-  return `#${id.slice(0, 8).toUpperCase()}`;
-}
-
 /** Abre el calendario con la solicitud ya buscada (y en su día, si tiene fecha). */
 function hrefCalendario(s: SolicitudLista): string {
   const p = new URLSearchParams({ q: s.id.slice(0, 8) });
@@ -52,7 +50,9 @@ function FilaSolicitud({ s, detalle }: { s: SolicitudLista; detalle: string }) {
     <li className="px-5 py-3 flex items-center gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="font-mono text-[11px] font-bold text-neutral-900">{numero(s.id)}</span>
+          <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
+            {codigoSolicitud(s.id)}
+          </AbrirSolicitudDetalle>
           {s.tipo_solicitud === 'evento' && <BadgeEvento tamano="sm" />}
         </div>
         <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
@@ -94,7 +94,7 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
     <div className="space-y-4">
       <div>
         <h2 className="text-lg font-bold text-[#1a2b4b] tracking-tight">Tus pendientes</h2>
-        <p className="text-sm text-neutral-500">Lo que tienes por gestionar. Usa “Ver” para ir a la vista de cada acción.</p>
+        <p className="text-sm text-neutral-500">Lo que tienes por gestionar. Haz clic en el número para ver el detalle, o en “Ver” para ir a la vista de cada acción.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -149,7 +149,7 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
           {trasladosPendientes.items.map((t) => (
             <li key={t.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <span className="font-mono text-[11px] font-bold text-neutral-900">{numero(t.id)}</span>
+                <span className="font-mono text-[11px] font-bold text-neutral-900">{codigoSolicitud(t.id)}</span>
                 <p className="text-sm font-semibold text-neutral-900 truncate">
                   {t.origen_nombre ?? `Sucursal ${t.origen_id}`} → {t.destino_nombre ?? `Sucursal ${t.destino_id}`}
                 </p>

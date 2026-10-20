@@ -31,6 +31,8 @@ import {
   SucursalSolicitudItem,
   Zona,
 } from '@/types/sucursal.types';
+import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { formatFecha } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
@@ -995,9 +997,9 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                       className="border border-neutral-200 rounded-2xl p-4 space-y-3 hover:border-neutral-300 transition-colors"
                     >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-mono font-bold text-neutral-400 uppercase">
-                          #{sol.id.slice(0, 8)}
-                        </span>
+                        <AbrirSolicitudDetalle solicitudId={sol.id} className="text-[10px] font-mono font-bold text-neutral-500">
+                          {codigoSolicitud(sol.id)}
+                        </AbrirSolicitudDetalle>
                         <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-600 border border-neutral-300">
                           {tipoLabel[sol.tipo_solicitud] || sol.tipo_solicitud}
                         </span>

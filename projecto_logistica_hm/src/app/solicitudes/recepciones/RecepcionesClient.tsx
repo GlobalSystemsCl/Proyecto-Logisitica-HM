@@ -8,6 +8,8 @@ import { recibirTrasladoAction } from '@/app/actions/traslados.actions';
 import { RecepcionModal } from '@/components/ModalesTraslado';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import type { DatosRecepcion } from '@/lib/recepcion';
+import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
@@ -87,7 +89,9 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                     <li key={s.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs text-neutral-500">#{s.id.slice(0, 8)}</span>
+                          <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-xs text-neutral-500">
+                            {codigoSolicitud(s.id)}
+                          </AbrirSolicitudDetalle>
                           {chip && (
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${chip.clase}`}>{chip.texto}</span>
                           )}

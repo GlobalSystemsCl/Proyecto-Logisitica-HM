@@ -30,3 +30,8 @@ Convenciones de test (ver `tests/plan_maestro_testing.md`):
 - Sin `test.only` / `test.skip`
 - Funciones puras (`lib/fechas.ts`, parsers CSV, helpers de `types/`) NO se mockean
 - Para fechas fijas usar `vi.setSystemTime(...)` + `vi.useRealTimers()` en `afterEach`
+
+## Solicitudes en la UI
+
+- El número visible de una solicitud se arma solo con `codigoSolicitud` (`src/lib/codigoSolicitud.ts`); no usar `id.slice(0, 8)` en código nuevo.
+- Para que una solicitud se pueda abrir desde cualquier lista, envolver su número en `AbrirSolicitudDetalle` (`src/components/`).

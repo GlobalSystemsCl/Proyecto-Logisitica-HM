@@ -539,6 +539,23 @@ export async function getAuditoriaAction(solicitudId: string) {
 }
 
 /**
+ * Detalle de una solicitud para abrirlo desde cualquier sección
+ * (`AbrirSolicitudDetalle`). Devuelve también quién la consulta, que el modal
+ * necesita para mostrar el rol de cada participante.
+ */
+export async function getSolicitudDetalleAction(solicitudId: string) {
+  try {
+    const profile = await requireProfile();
+    await requireSolicitudAccess(profile, solicitudId);
+    const solicitud = await SolicitudesService.getSolicitudCompleta(solicitudId);
+    if (!solicitud) return { success: false as const, error: 'No se pudo cargar la solicitud.' };
+    return { success: true as const, solicitud, usuario: { id: profile.id, rol: profile.rol } };
+  } catch (err: unknown) {
+    return { success: false as const, error: mensajeErrorUsuario(err, 'No se pudo cargar la solicitud.') };
+  }
+}
+
+/**
  * Devuelve el detalle de contacto de un usuario (nombre, rol, sucursal,
  * teléfono y correo) para tarjetas y popups de datos de usuario.
  *
