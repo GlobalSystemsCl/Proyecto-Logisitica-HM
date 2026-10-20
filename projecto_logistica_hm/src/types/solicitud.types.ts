@@ -3,6 +3,7 @@ import type {
   TipoSolicitud,
   VehiculoAsociado,
 } from './sucursal.types';
+import type { TransportistaResumen } from './transportista.types';
 
 export type { EstadoSolicitud, TipoSolicitud, VehiculoAsociado };
 
@@ -24,6 +25,8 @@ export interface SolicitudLista {
   /** Quién inició la solicitud (ejecutivo, jefe de local o administrador). UI: "Iniciada por". */
   creado_por: string | null;
   creado_por_nombre: string | null;
+  /** Transportista del traslado: lo indica Logística al programar. */
+  transportista: TransportistaResumen | null;
   fecha_creacion: string | null;
   /** Fecha estimada de despacho (UI: "Fecha estimada"). La fija Logística al calendarizar. */
   fecha_tentativa_despacho: string | null;

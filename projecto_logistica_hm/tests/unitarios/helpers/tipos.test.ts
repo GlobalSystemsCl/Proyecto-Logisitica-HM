@@ -21,6 +21,7 @@ function solicitud(overrides: Partial<SolicitudLista> = {}): SolicitudLista {
     logistica_nombre: null,
     creado_por: null,
     creado_por_nombre: null,
+    transportista: null,
     fecha_creacion: '2026-01-15T10:00:00Z',
     fecha_tentativa_despacho: null,
     fecha_despacho: null,

@@ -144,6 +144,7 @@ Sucursales: 6 = 15 NORTE, 7 = CONCON, 8 = SANTIAGO CENTRO, 9 = VALPARAISO.
    - Por eso ningún usuario de Logística ve las solicitudes con origen en esas sucursales.
    - Los escenarios usan 15 Norte, Concón y Valparaíso (zona 1) como origen.
 5. **Ningún vehículo del inventario tiene patente:** la UI muestra el chasis.
+   Tampoco hay transportista en las solicitudes programadas (`transportista_id` nulo, columna del 2026-10-20).
 6. **Comportamientos reales reproducidos tal cual:**
    - revertir un despacho dejaba `fecha_inicio_transito` (S12). Desde el 2026-10-20 la app lo limpia; los datos de S12 lo conservan;
    - `fecha_actualizacion` no se actualiza en las transiciones.

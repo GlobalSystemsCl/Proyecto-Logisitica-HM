@@ -14,6 +14,7 @@ const svc = {
   aprobarSolicitud: vi.fn(),
   rechazarSolicitud: vi.fn(),
   recalendarizarSolicitud: vi.fn(),
+  calendarizarSolicitud: vi.fn(),
   cancelarEnTransito: vi.fn(),
   recibirSolicitud: vi.fn(),
   priorizarSolicitud: vi.fn(),
@@ -131,6 +132,37 @@ describe('notificaciones desde las actions', () => {
       'u-1',
       expect.objectContaining({ motivo: 'Lluvia', fechaAnterior: expect.stringContaining('12') })
     );
+  });
+
+  it('should_reject_scheduling_when_transportista_is_missing', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'logistica' }));
+    const res = await actions.calendarizarSolicitudAction('s-1', '2099-01-01', null);
+    expect(res).toEqual({ success: false, error: 'Indica el transportista del traslado.' });
+    expect(svc.calendarizarSolicitud).not.toHaveBeenCalled();
+  });
+
+  it('should_pass_transportista_and_notify_when_scheduling', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'logistica' }));
+    getBranch.mockResolvedValue({ id: 1, nombre: 'Centro', zona_id: 7 });
+    svc.getSolicitudById.mockResolvedValue({ ...solicitud, estado: 'priorizada' });
+    svc.calendarizarSolicitud.mockResolvedValue({ success: true });
+
+    const res = await actions.calendarizarSolicitudAction('s-1', '2099-01-01', 'tr-1');
+    await tick();
+
+    expect(res.success).toBe(true);
+    expect(svc.calendarizarSolicitud).toHaveBeenCalledWith('s-1', '2099-01-01', 'u-1', 'logistica', 'tr-1');
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_calendarizada', 's-1', 'u-1', undefined);
+  });
+
+  it('should_pass_new_transportista_when_rescheduling', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'logistica' }));
+    getBranch.mockResolvedValue({ id: 1, nombre: 'Centro', zona_id: 7 });
+    svc.recalendarizarSolicitud.mockResolvedValue({ success: true, fechaAnterior: null });
+
+    await actions.recalendarizarSolicitudAction('s-1', '2026-10-15', 'Lluvia', 'tr-2');
+
+    expect(svc.recalendarizarSolicitud).toHaveBeenCalledWith('s-1', '2026-10-15', 'u-1', 'Lluvia', 'tr-2');
   });
 
   it('should_send_cancellation_with_reason_and_final_location_name', async () => {

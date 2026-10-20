@@ -3,6 +3,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import { getTrasladosAction, getVehiculosParaTrasladoAction, getSucursalesTrasladoAction } from '@/app/actions/traslados.actions';
 import TrasladosClient from './TrasladosClient';
+import { TransportistaService } from '@/services/transportista.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,13 +26,14 @@ export default async function TrasladosPage() {
       ? (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id)
       : [];
 
-  const [traslados, sucursales, vehiculosIniciales, marcas] = await Promise.all([
+  const [traslados, sucursales, vehiculosIniciales, marcas, transportistas] = await Promise.all([
     getTrasladosAction(),
     getSucursalesTrasladoAction(),
     esOperador
       ? getVehiculosParaTrasladoAction('', 1, 12)
       : Promise.resolve({ vehiculos: [], total: 0, page: 1, pageSize: 12, totalPages: 0 }),
     esOperador ? OrganizacionService.getMarcasCatalogo() : Promise.resolve([]),
+    esOperador ? TransportistaService.listarActivos() : Promise.resolve([]),
   ]);
 
   return (
@@ -43,6 +45,7 @@ export default async function TrasladosPage() {
       esOperador={esOperador}
       viewerRol={profile.rol}
       viewerSucursales={viewerSucursales}
+      transportistas={transportistas}
     />
   );
 }

@@ -31,6 +31,9 @@ import { Marca } from '@/types/vehiculo.types';
 import { formatFecha } from '@/lib/fechas';
 import { CancelarTransitoModal, RecepcionModal } from '@/components/ModalesTraslado';
 import type { DatosRecepcion } from '@/lib/recepcion';
+import SelectorTransportista from '@/components/SelectorTransportista';
+import { formatearRut } from '@/lib/rut';
+import type { Transportista } from '@/types/transportista.types';
 
 const PAGE_SIZE = 12;
 
@@ -49,6 +52,8 @@ interface TrasladosClientProps {
   esOperador: boolean;
   viewerRol: string;
   viewerSucursales: number[];
+  /** Transportistas activos (solo se cargan para Logística y el administrador). */
+  transportistas?: Transportista[];
 }
 
 export default function TrasladosClient({
@@ -59,6 +64,7 @@ export default function TrasladosClient({
   esOperador,
   viewerRol,
   viewerSucursales,
+  transportistas = [],
 }: TrasladosClientProps) {
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -72,6 +78,8 @@ export default function TrasladosClient({
   const [origen, setOrigen] = useState<number | ''>('');
   const [destino, setDestino] = useState<number | ''>('');
   const [observacion, setObservacion] = useState('');
+  const [transportistaId, setTransportistaId] = useState<string | null>(null);
+  const [listaTransportistas, setListaTransportistas] = useState<Transportista[]>(transportistas);
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
 
   // Búsqueda y paginación de vehículos
@@ -117,7 +125,7 @@ export default function TrasladosClient({
     setSeleccionados((prev) => (prev.includes(id) ? [] : [id]));
   };
 
-  const puedeCrear = esOperador && origen !== '' && destino !== '' && seleccionados.length === 1;
+  const puedeCrear = esOperador && origen !== '' && destino !== '' && seleccionados.length === 1 && !!transportistaId;
 
   const handleBusqueda = (valor: string) => {
     setBusqueda(valor);
@@ -139,13 +147,14 @@ export default function TrasladosClient({
 
   const handleCrear = async () => {
     if (!puedeCrear) {
-      setFeedback({ tipo: 'error', mensaje: 'Selecciona origen, destino y el vehículo a trasladar.' });
+      setFeedback({ tipo: 'error', mensaje: 'Selecciona origen, destino, transportista y el vehículo a trasladar.' });
       return;
     }
     const input: CreateTrasladoInput = {
       origen_id: Number(origen),
       destino_id: Number(destino),
       observacion: observacion.trim() || null,
+      transportista_id: transportistaId,
     };
     setLoading('crear');
     try {
@@ -158,6 +167,7 @@ export default function TrasladosClient({
       setFormOpen(false);
       setSeleccionados([]);
       setObservacion('');
+      setTransportistaId(null);
     } finally {
       setLoading(null);
     }
@@ -279,6 +289,15 @@ export default function TrasladosClient({
                     <option key={s.id} value={s.id}>{s.nombre}</option>
                   ))}
               </select>
+            </div>
+            <div className="sm:col-span-2">
+              <SelectorTransportista
+                transportistas={listaTransportistas}
+                valor={transportistaId}
+                onCambiar={setTransportistaId}
+                onCreado={(t) => setListaTransportistas((prev) => [...prev, t].sort((a, b) => a.nombre.localeCompare(b.nombre)))}
+                obligatorio
+              />
             </div>
             <div className="sm:col-span-2 space-y-1.5">
               <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Observación</label>
@@ -467,6 +486,7 @@ export default function TrasladosClient({
                     </div>
                     <p className="mt-1 text-xs text-neutral-500">
                       Logística: {t.logistica_nombre ?? t.logistica_id} · Creado: {formatFecha(t.created_at)}
+                      {t.transportista && <> · Transportista: {t.transportista.nombre} ({formatearRut(t.transportista.rut)})</>}
                     </p>
                     {t.observacion && (
                       <p className="mt-1 text-xs text-neutral-500 italic">“{t.observacion}”</p>
@@ -574,6 +594,12 @@ export default function TrasladosClient({
                 </div>
                 <p className="mt-1 text-xs text-neutral-500">
                   Logística: {detalle.logistica_nombre ?? detalle.logistica_id} · Creado: {formatFecha(detalle.created_at)}
+                </p>
+                <p className="mt-1 text-xs text-neutral-500">
+                  Transportista:{' '}
+                  {detalle.transportista
+                    ? `${detalle.transportista.nombre} · RUT ${formatearRut(detalle.transportista.rut)}`
+                    : 'Sin registrar'}
                 </p>
                 {detalle.observacion && (
                   <p className="mt-1 text-xs text-neutral-500 italic">“{detalle.observacion}”</p>

@@ -15,6 +15,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { obtenerTodasLasFilas } from '@/lib/paginacion';
+import { TransportistaService } from '@/services/transportista.service';
 import { validarContenidoArchivo } from '@/lib/archivos';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import {
@@ -100,6 +101,7 @@ interface SolicitudRawRow {
   jefe: { nombre: string; apellido: string } | null;
   logistica: { nombre: string; apellido: string } | null;
   creador: { nombre: string; apellido: string } | null;
+  transportista?: { id: string; nombre: string; rut: string } | null;
   solicitud_vehiculo: Array<{
     id: string;
     disponibilidad: DisponibilidadVehiculo;
@@ -119,7 +121,7 @@ function persona(p: { nombre: string; apellido: string } | null): string | null 
 }
 
 const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
-  ejecutivo_id, jefe_local_id, logistica_id, creado_por,
+  ejecutivo_id, jefe_local_id, logistica_id, creado_por, transportista_id,
   fecha_creacion, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_limite, motivo_cancelacion,
   fecha_confirmacion, fecha_inicio_transito, fecha_recepcion, fecha_entrega_cliente,
   direccion_evento, titulo_evento,
@@ -129,6 +131,7 @@ const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud
   jefe:jefe_local_id(nombre, apellido),
   logistica:logistica_id(nombre, apellido),
   creador:creado_por(nombre, apellido),
+  transportista:transportista_id(id, nombre, rut),
   solicitud_vehiculo(id, disponibilidad, vehiculo(chasis, patente, marca, modelo, anio, color))`;
 
 function mapRow(row: SolicitudRawRow): SolicitudLista {
@@ -149,6 +152,7 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
     logistica_nombre: persona(row.logistica),
     creado_por: row.creado_por ?? null,
     creado_por_nombre: persona(row.creador),
+    transportista: row.transportista ?? null,
     fecha_creacion: row.fecha_creacion,
     fecha_tentativa_despacho: row.fecha_tentativa_despacho,
     fecha_despacho: row.fecha_despacho,
@@ -191,6 +195,7 @@ export interface SolicitudMinima {
   fecha_despacho: string | null;
   fecha_entrega: string | null;
   fecha_inicio_transito: string | null;
+  transportista_id?: string | null;
 }
 
 /**
@@ -625,7 +630,7 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('solicitud')
-        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, logistica_id, tipo_solicitud, posicion_prioridad, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_inicio_transito')
+        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, logistica_id, tipo_solicitud, posicion_prioridad, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_inicio_transito, transportista_id')
         .eq('id', id)
         .maybeSingle();
 
@@ -1784,17 +1789,27 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * Programa el traslado: `priorizada`/`asignada` -> `calendarizada`.
+   * `transportistaId`: quién hace el traslado (lo exige la action al programar
+   * desde el calendario); si se indica, debe existir y estar activo.
+   */
   static async calendarizarSolicitud(
     id: string,
     fechaDespacho: string,
     usuarioId: string,
-    rolActor?: UserRole
+    rolActor?: UserRole,
+    transportistaId?: string | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
+      if (transportistaId) {
+        const errTransportista = await TransportistaService.validarAsignable(transportistaId);
+        if (errTransportista) return { success: false, error: errTransportista };
+      }
       if (esFechaAnteriorAHoy(fechaDespacho)) {
         return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
       }
@@ -1817,6 +1832,7 @@ export class SolicitudesService {
           logistica_id: actual.logistica_id ?? (rolActor === 'jefe_local' ? null : usuarioId),
           // Al calendarizar sale de la cola: libera el slot de prioridad
           posicion_prioridad: null,
+          ...(transportistaId ? { transportista_id: transportistaId } : {}),
         });
       if (errEstado) return { success: false, error: errEstado };
 
@@ -1834,7 +1850,12 @@ export class SolicitudesService {
           fecha_tentativa_despacho: actual.fecha_tentativa_despacho,
           posicion_prioridad: actual.posicion_prioridad ?? null,
         },
-        { estado: 'calendarizada', fecha_tentativa_despacho: fechaDespacho, posicion_prioridad: null }
+        {
+          estado: 'calendarizada',
+          fecha_tentativa_despacho: fechaDespacho,
+          posicion_prioridad: null,
+          ...(transportistaId ? { transportista_id: transportistaId } : {}),
+        }
       );
 
       return { success: true };
@@ -2059,12 +2080,14 @@ export class SolicitudesService {
    * calendarizada sin sacarla de ese estado. La fecha anterior, la nueva y el
    * motivo quedan en la auditoría (`accion = 'recalendarizacion'`), que es la
    * fuente de las métricas de recalendarizaciones.
+   * `transportistaId` (opcional): cambia el transportista junto con la fecha.
    */
   static async recalendarizarSolicitud(
     id: string,
     nuevaFecha: string,
     usuarioId: string,
-    motivo?: string | null
+    motivo?: string | null,
+    transportistaId?: string | null
   ): Promise<{ success: boolean; fechaAnterior?: string | null; error?: string }> {
     try {
       const admin = createAdminClient();
@@ -2087,8 +2110,15 @@ export class SolicitudesService {
         return { success: false, error: 'La nueva fecha es igual a la fecha programada.' };
       }
 
+      const cambiaTransportista = !!transportistaId && transportistaId !== (actual.transportista_id ?? null);
+      if (cambiaTransportista) {
+        const errTransportista = await TransportistaService.validarAsignable(transportistaId);
+        if (errTransportista) return { success: false, error: errTransportista };
+      }
+
       const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
         fecha_tentativa_despacho: nuevaFecha,
+        ...(cambiaTransportista ? { transportista_id: transportistaId } : {}),
       });
       if (errEstado) return { success: false, error: errEstado };
 
@@ -2097,8 +2127,15 @@ export class SolicitudesService {
         'solicitud',
         id,
         'recalendarizacion',
-        { fecha_tentativa_despacho: fechaAnterior },
-        { fecha_tentativa_despacho: nuevaFecha, motivo: motivo?.trim() || null }
+        {
+          fecha_tentativa_despacho: fechaAnterior,
+          ...(cambiaTransportista ? { transportista_id: actual.transportista_id ?? null } : {}),
+        },
+        {
+          fecha_tentativa_despacho: nuevaFecha,
+          motivo: motivo?.trim() || null,
+          ...(cambiaTransportista ? { transportista_id: transportistaId } : {}),
+        }
       );
 
       return { success: true, fechaAnterior };

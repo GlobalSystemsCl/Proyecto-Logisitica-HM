@@ -9,6 +9,7 @@ import type {
 } from '@/types/traslado.types';
 import { esFuncionInexistente, mensajeErrorUsuario } from '@/lib/errores';
 import { obtenerTodasLasFilas } from '@/lib/paginacion';
+import { TransportistaService } from '@/services/transportista.service';
 import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
 import { validarMotivoCancelacion, validarRecepcion, type DatosRecepcion } from '@/lib/recepcion';
 
@@ -38,7 +39,8 @@ import { validarMotivoCancelacion, validarRecepcion, type DatosRecepcion } from 
  */
 const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
   fecha_despacho, fecha_recepcion, observacion, created_at, updated_at,
-  motivo_cancelacion, fecha_cancelacion, recepcion_con_novedades, observacion_recepcion,
+  motivo_cancelacion, fecha_cancelacion, recepcion_con_novedades, observacion_recepcion, transportista_id,
+  transportista:transportista_id(id, nombre, rut),
   origen:sucursal!traslado_interno_origen_id_fkey(nombre),
   destino:sucursal!traslado_interno_destino_id_fkey(nombre),
   logistica:usuario!traslado_interno_logistica_id_fkey(nombre, apellido),
@@ -75,6 +77,7 @@ interface TrasladoRawRow {
   fecha_cancelacion?: string | null;
   recepcion_con_novedades?: boolean | null;
   observacion_recepcion?: string | null;
+  transportista?: { id: string; nombre: string; rut: string } | null;
   origen: { nombre: string | null } | null;
   destino: { nombre: string | null } | null;
   logistica: { nombre: string; apellido: string } | null;
@@ -118,6 +121,7 @@ function mapTraslado(row: TrasladoRawRow): TrasladoInterno {
     fecha_cancelacion: row.fecha_cancelacion ?? null,
     recepcion_con_novedades: row.recepcion_con_novedades ?? null,
     observacion_recepcion: row.observacion_recepcion ?? null,
+    transportista: row.transportista ?? null,
     vehiculos: (row.traslado_interno_vehiculo || [])
       .filter((tv) => tv.vehiculo)
       .map((tv) => ({
@@ -163,6 +167,9 @@ export class TrasladoService {
       if (input.origen_id === input.destino_id) {
         return { success: false, error: 'El origen y el destino del traslado deben ser distintos.' };
       }
+      // Pedido del cliente (2026-10-19): todo traslado registra su transportista.
+      const errTransportista = await TransportistaService.validarAsignable(input.transportista_id);
+      if (errTransportista) return { success: false, error: errTransportista };
 
       const { data: sucursales, error: sucError } = await admin
         .from('sucursal')
@@ -238,6 +245,7 @@ export class TrasladoService {
           logistica_id: logisticaId,
           estado: 'pendiente',
           observacion: input.observacion?.trim() || null,
+          transportista_id: input.transportista_id,
         })
         .select('id')
         .single();

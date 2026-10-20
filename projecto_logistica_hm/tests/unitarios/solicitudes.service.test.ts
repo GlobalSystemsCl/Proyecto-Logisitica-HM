@@ -1770,7 +1770,32 @@ describe('SolicitudesService.calendarizarSolicitud', () => {
       logistica_id: USUARIO_ID,
       posicion_prioridad: null,
     });
+    expect(update[0]?.[1]).not.toHaveProperty('transportista_id');
     expect(auditoria).toHaveBeenCalled();
+  });
+
+  it('should_store_transportista_when_scheduling_with_one', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud = [fila(minimo({ estado: 'priorizada', sucursal: 1 })), fila(null), fila(null), fila([])];
+    admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
+    const auditoria = spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.calendarizarSolicitud('s-1', '2099-01-01', USUARIO_ID, 'logistica', 'tr-1');
+
+    expect(res).toEqual({ success: true });
+    const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
+    expect(update?.[1]).toMatchObject({ estado: 'calendarizada', transportista_id: 'tr-1' });
+    expect(auditoria.mock.calls[0][5]).toMatchObject({ transportista_id: 'tr-1' });
+  });
+
+  it('should_reject_scheduling_when_transportista_is_inactive', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'priorizada' }))];
+    admin.results.transportista = [fila(null)];
+
+    const res = await SolicitudesService.calendarizarSolicitud('s-1', '2099-01-01', USUARIO_ID, 'logistica', 'tr-x');
+
+    expect(res).toEqual({ success: false, error: 'El transportista no existe o está inactivo.' });
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
   });
 });
 

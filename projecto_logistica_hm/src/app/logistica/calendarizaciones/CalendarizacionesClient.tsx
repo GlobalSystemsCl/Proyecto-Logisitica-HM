@@ -3,7 +3,6 @@
 import { useMemo, useState, DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  AlertTriangle,
   Calendar,
   CalendarClock,
   Car,
@@ -32,7 +31,9 @@ import {
   recalendarizarSolicitudAction,
   cancelarEnTransitoAction,
 } from '@/app/actions/solicitudes.actions';
-import { CancelarTransitoModal, RecepcionModal, ReprogramarModal } from '@/components/ModalesTraslado';
+import { CancelarTransitoModal, ProgramarModal, RecepcionModal, ReprogramarModal } from '@/components/ModalesTraslado';
+import { formatearRut } from '@/lib/rut';
+import type { Transportista } from '@/types/transportista.types';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
 import {
@@ -75,6 +76,8 @@ interface Props {
   encargados: Array<{ id: string; nombre: string }>;
   viewer: { id: string; rol: string; sucursal_id: number | null };
   sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
+  /** Transportistas activos (solo se cargan para Logística). */
+  transportistas?: Transportista[];
 }
 
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -128,6 +131,7 @@ export default function CalendarizacionesClient({
   encargados,
   viewer,
   sucursales_asignadas = [],
+  transportistas = [],
 }: Props) {
   const router = useRouter();
   const hoy = hoyISO();
@@ -138,7 +142,8 @@ export default function CalendarizacionesClient({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
-  const [advertencia, setAdvertencia] = useState<{ id: string; fecha: string } | null>(null);
+  const [programar, setProgramar] = useState<{ id: string; fecha: string } | null>(null);
+  const [listaTransportistas, setListaTransportistas] = useState<Transportista[]>(transportistas);
   const [recibirTarget, setRecibirTarget] = useState<SolicitudLista | null>(null);
   const [reprogramar, setReprogramar] = useState<{ sol: SolicitudLista; fecha: string | null } | null>(null);
   const [cancelarTarget, setCancelarTarget] = useState<SolicitudLista | null>(null);
@@ -204,14 +209,8 @@ export default function CalendarizacionesClient({
     setDropTarget(dia);
   }
 
-  async function ejecutarCalendarizar(id: string, dia: string) {
-    setLoading(id);
-    try {
-      const result = await calendarizarSolicitudAction(id, dia);
-      if (!result.success) alert(result.error);
-    } finally {
-      setLoading(null);
-    }
+  function agregarTransportista(t: Transportista) {
+    setListaTransportistas((prev) => [...prev, t].sort((a, b) => a.nombre.localeCompare(b.nombre)));
   }
 
   async function handleDrop(e: DragEvent<HTMLDivElement>, dia: string) {
@@ -221,13 +220,10 @@ export default function CalendarizacionesClient({
     const id = e.dataTransfer.getData('text/plain');
     if (!id || dia < hoy) return;
 
+    // Programar pide el transportista (y avisa si el día supera la fecha límite).
     const pendiente = pendientes.find((s) => s.id === id);
     if (pendiente) {
-      if (pendiente.fecha_limite && dia > pendiente.fecha_limite.slice(0, 10)) {
-        setAdvertencia({ id, fecha: dia });
-        return;
-      }
-      await ejecutarCalendarizar(id, dia);
+      setProgramar({ id, fecha: dia });
       return;
     }
     // Arrastrar una ya programada a otro día = reprogramarla (con motivo y aviso urgente).
@@ -338,6 +334,11 @@ export default function CalendarizacionesClient({
           {s.fecha_despacho && <span>Despachado: {formatFecha(s.fecha_despacho)}</span>}
           {s.fecha_recepcion && <span>Recibido: {formatFecha(s.fecha_recepcion)}</span>}
           {s.logistica_nombre && <span>Logística: {s.logistica_nombre}</span>}
+          {s.transportista && (
+            <span className="flex items-center gap-1">
+              <Truck className="w-3 h-3" /> {s.transportista.nombre} · {formatearRut(s.transportista.rut)}
+            </span>
+          )}
         </div>
         {s.vehiculos.length > 0 && (
           <p className="text-xs text-neutral-500 flex items-center gap-1">
@@ -716,9 +717,12 @@ export default function CalendarizacionesClient({
           subtitulo={ruta(reprogramar.sol)}
           fechaActual={reprogramar.sol.fecha_tentativa_despacho}
           fechaPropuesta={reprogramar.fecha}
+          transportistas={listaTransportistas}
+          transportistaActualId={reprogramar.sol.transportista?.id ?? null}
+          onTransportistaCreado={agregarTransportista}
           onCerrar={() => setReprogramar(null)}
-          onConfirmar={async (nuevaFecha, motivo) => {
-            const result = await recalendarizarSolicitudAction(reprogramar.sol.id, nuevaFecha, motivo);
+          onConfirmar={async (nuevaFecha, motivo, transportistaId) => {
+            const result = await recalendarizarSolicitudAction(reprogramar.sol.id, nuevaFecha, motivo, transportistaId);
             if (!result.success) return result.error ?? 'No se pudo reprogramar.';
             setReprogramar(null);
             return null;
@@ -742,45 +746,23 @@ export default function CalendarizacionesClient({
         />
       )}
 
-      {advertencia && (() => {
-        const sol = pendientes.find((s) => s.id === advertencia.id);
+      {programar && (() => {
+        const sol = pendientes.find((x) => x.id === programar.id);
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAdvertencia(null)}>
-            <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-              <div className="p-5 border-b border-neutral-200 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-5 h-5 text-red-700" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-neutral-900">Fecha posterior a la propuesta</h3>
-                  <p className="text-xs text-neutral-500">Estás programando el traslado después de la fecha límite de entrega propuesta</p>
-                </div>
-              </div>
-              <div className="p-5 space-y-3 text-sm">
-                {sol && <p className="font-semibold text-neutral-900">{ruta(sol)}</p>}
-                <div className="flex gap-3">
-                  <div className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-3">
-                    <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Fecha programada</p>
-                    <p className="font-bold text-neutral-900 mt-0.5">{formatFechaLarga(advertencia.fecha + 'T12:00:00Z')}</p>
-                  </div>
-                  <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-3">
-                    <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">{ETIQUETA_FECHA_LIMITE}</p>
-                    <p className="font-bold text-red-700 mt-0.5">{sol?.fecha_limite ? formatFechaLarga(sol.fecha_limite) : '—'}</p>
-                  </div>
-                </div>
-                <p className="text-xs text-neutral-500">Si confirmas, la solicitud quedará programada en esa fecha aunque supere la fecha límite de entrega propuesta.</p>
-              </div>
-              <div className="p-4 border-t border-neutral-200 flex justify-end gap-2">
-                <button onClick={() => setAdvertencia(null)} className="px-4 py-2 text-sm font-semibold text-neutral-600 rounded-xl hover:bg-neutral-100 cursor-pointer">Volver</button>
-                <button
-                  onClick={async () => { const a = advertencia; setAdvertencia(null); await ejecutarCalendarizar(a.id, a.fecha); }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl cursor-pointer"
-                >
-                  <Truck className="w-4 h-4" /> Programar igual
-                </button>
-              </div>
-            </div>
-          </div>
+          <ProgramarModal
+            subtitulo={sol ? `${numero(sol)} · ${ruta(sol)}` : undefined}
+            fecha={programar.fecha}
+            fechaLimite={sol?.fecha_limite ?? null}
+            transportistas={listaTransportistas}
+            onTransportistaCreado={agregarTransportista}
+            onCerrar={() => setProgramar(null)}
+            onConfirmar={async (transportistaId) => {
+              const result = await calendarizarSolicitudAction(programar.id, programar.fecha, transportistaId);
+              if (!result.success) return result.error ?? 'No se pudo programar el traslado.';
+              setProgramar(null);
+              return null;
+            }}
+          />
         );
       })()}
     </div>

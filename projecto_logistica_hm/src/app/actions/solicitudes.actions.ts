@@ -21,6 +21,7 @@ import type { DatosCorreo } from '@/lib/notificaciones';
 import type { EventoApp } from '@/lib/notificaciones-app';
 import { enSegundoPlano } from '@/lib/segundoPlano';
 import { ocultarContacto, puedeVerContacto } from '@/lib/auth/contacto';
+import { MENSAJE_TRANSPORTISTA_REQUERIDO } from '@/services/transportista.service';
 
 /**
  * Dev 2 — Validación multi-sucursal del Jefe Local.
@@ -603,7 +604,15 @@ export async function getEjecutivosPorSucursalAction(sucursalId: number | null):
   }
 }
 
-export async function calendarizarSolicitudAction(solicitudId: string, fechaDespacho: string) {
+/**
+ * Programa el traslado de una solicitud. El transportista es obligatorio
+ * (pedido del cliente, 2026-10-19): lo usa el reporte para revisar su factura.
+ */
+export async function calendarizarSolicitudAction(
+  solicitudId: string,
+  fechaDespacho: string,
+  transportistaId: string | null
+) {
   try {
     const profile = await requireProfile();
 
@@ -617,6 +626,9 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
     if (esFechaAnteriorAHoy(fechaDespacho)) {
       return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
     }
+    if (!transportistaId) {
+      return { success: false, error: MENSAJE_TRANSPORTISTA_REQUERIDO };
+    }
 
     await requireSolicitudAccess(profile, solicitudId);
 
@@ -624,7 +636,8 @@ export async function calendarizarSolicitudAction(solicitudId: string, fechaDesp
       solicitudId,
       fechaDespacho,
       profile.id,
-      profile.rol
+      profile.rol,
+      transportistaId
     );
     if (!result.success) return { success: false, error: result.error };
 
@@ -738,14 +751,15 @@ export async function recibirSolicitudAction(solicitudId: string, recepcion?: Da
 export async function recalendarizarSolicitudAction(
   solicitudId: string,
   nuevaFecha: string,
-  motivo?: string | null
+  motivo?: string | null,
+  transportistaId?: string | null
 ) {
   try {
     const profile = await requireProfile();
     requireRole(profile, ['logistica'], 'Solo Logística puede reprogramar traslados.');
     await requireSolicitudAccess(profile, solicitudId);
 
-    const result = await SolicitudesService.recalendarizarSolicitud(solicitudId, nuevaFecha, profile.id, motivo);
+    const result = await SolicitudesService.recalendarizarSolicitud(solicitudId, nuevaFecha, profile.id, motivo, transportistaId);
     if (!result.success) return { success: false, error: result.error };
 
     notificar('solicitud_recalendarizada', solicitudId, profile.id, {

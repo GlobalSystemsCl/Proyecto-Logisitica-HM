@@ -83,6 +83,12 @@ Se aplicó con la versión `20261013150000`, la misma de `brecha_011_trigger_veh
 |---|---|---|
 | 20 | `20261020120000_fn_vehiculos_disponibles_traslado.sql` | Bajo: crea la función `fn_vehiculos_disponibles_traslado` (solo `service_role`). Excluye reservados y vendidos en SQL, ordena por chasis y pagina. Mientras no esté aplicada, la app usa la consulta anterior, así que el orden de despliegue no importa. Ensayada en producción (revertida): 2.113 vehículos disponibles. Después de aplicarla, volver a ejecutar `scripts/01_alinear_historial_migraciones.sql` |
 
+## Transportista
+
+| # | Archivo | Riesgo |
+|---|---|---|
+| 21 | `20261020130000_transportista.sql` | Bajo: tabla `transportista` (nombre, RUT único normalizado `12345678-9`, activo) y `transportista_id` en `solicitud` y `traslado_interno` (nulas, ON DELETE RESTRICT). **Aplicarla antes de desplegar el código**: las listas de solicitudes y traslados leen `transportista_id` y, sin la columna, quedan vacías. Después, volver a ejecutar `scripts/01_alinear_historial_migraciones.sql` |
+
 ## Historial de migraciones (brecha 015)
 
 Las migraciones aplicadas desde el SQL Editor no quedan registradas en `supabase_migrations.schema_migrations`. **Ejecutado el 2026-10-14**, junto con `scripts/02_limpiar_sucursales_test.sql`: las 17 migraciones están aplicadas y registradas. `scripts/01_alinear_historial_migraciones.sql` registra los archivos de `migrations/` con su versión y nombre exactos. Un test (`tests/unitarios/script-historial-migraciones.test.ts`) falla si se agrega una migración sin registrarla en el script.

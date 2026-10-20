@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, CalendarClock, Camera, Loader2, PackageCheck, X } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Camera, Loader2, PackageCheck, Truck, X } from 'lucide-react';
 import type { DatosRecepcion } from '@/lib/recepcion';
 import { validarMotivoCancelacion, validarRecepcion } from '@/lib/recepcion';
-import { hoyISO } from '@/lib/fechas';
+import { formatFechaLarga, hoyISO } from '@/lib/fechas';
+import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import SelectorTransportista from '@/components/SelectorTransportista';
+import type { Transportista } from '@/types/transportista.types';
 
 /**
  * Modales compartidos por el calendario de logística, la bandeja de
@@ -266,12 +269,26 @@ interface ReprogramarModalProps {
   fechaActual: string | null;
   /** Fecha precargada (por ejemplo, el día al que se arrastró la tarjeta). */
   fechaPropuesta?: string | null;
+  /** Para cambiar el transportista junto con la fecha (opcional). */
+  transportistas?: Transportista[];
+  transportistaActualId?: string | null;
+  onTransportistaCreado?: (t: Transportista) => void;
   onCerrar: () => void;
-  onConfirmar: (nuevaFecha: string, motivo: string) => Promise<string | null>;
+  onConfirmar: (nuevaFecha: string, motivo: string, transportistaId: string | null) => Promise<string | null>;
 }
 
-export function ReprogramarModal({ subtitulo, fechaActual, fechaPropuesta, onCerrar, onConfirmar }: ReprogramarModalProps) {
+export function ReprogramarModal({
+  subtitulo,
+  fechaActual,
+  fechaPropuesta,
+  transportistas,
+  transportistaActualId,
+  onTransportistaCreado,
+  onCerrar,
+  onConfirmar,
+}: ReprogramarModalProps) {
   const [fecha, setFecha] = useState((fechaPropuesta ?? fechaActual ?? '').slice(0, 10));
+  const [transportistaId, setTransportistaId] = useState<string | null>(transportistaActualId ?? null);
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -284,7 +301,7 @@ export function ReprogramarModal({ subtitulo, fechaActual, fechaPropuesta, onCer
     }
     setEnviando(true);
     try {
-      const resultado = await onConfirmar(fecha, motivo.trim());
+      const resultado = await onConfirmar(fecha, motivo.trim(), transportistaId);
       if (resultado) setError(resultado);
     } finally {
       setEnviando(false);
@@ -319,11 +336,113 @@ export function ReprogramarModal({ subtitulo, fechaActual, fechaPropuesta, onCer
             className="w-full rounded-xl border border-neutral-300 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-neutral-900"
           />
         </div>
+        {transportistas && (
+          <SelectorTransportista
+            transportistas={transportistas}
+            valor={transportistaId}
+            onCambiar={setTransportistaId}
+            onCreado={(t) => onTransportistaCreado?.(t)}
+          />
+        )}
         <p className="text-xs text-neutral-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
           Se enviará un aviso urgente por correo al ejecutivo y a los jefes de local.
         </p>
         <MensajeError mensaje={error} />
         <Botones onCancelar={onCerrar} enviando={enviando} textoConfirmar="Reprogramar" />
+      </form>
+    </Marco>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Programación de una solicitud (al soltarla en un día del calendario)
+// -----------------------------------------------------------------------------
+
+interface ProgramarModalProps {
+  subtitulo?: string;
+  /** Día elegido, `YYYY-MM-DD`. */
+  fecha: string;
+  /** Fecha límite propuesta: si el día la supera, se muestra el aviso. */
+  fechaLimite: string | null;
+  transportistas: Transportista[];
+  onTransportistaCreado: (t: Transportista) => void;
+  onCerrar: () => void;
+  onConfirmar: (transportistaId: string) => Promise<string | null>;
+}
+
+/**
+ * Programar el traslado pide el transportista (obligatorio, pedido del
+ * cliente del 2026-10-19) y avisa si el día supera la fecha límite propuesta.
+ */
+export function ProgramarModal({
+  subtitulo,
+  fecha,
+  fechaLimite,
+  transportistas,
+  onTransportistaCreado,
+  onCerrar,
+  onConfirmar,
+}: ProgramarModalProps) {
+  const [transportistaId, setTransportistaId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [enviando, setEnviando] = useState(false);
+  const fueraDePlazo = !!fechaLimite && fecha > fechaLimite.slice(0, 10);
+
+  async function enviar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!transportistaId) {
+      setError('Indica el transportista del traslado.');
+      return;
+    }
+    setEnviando(true);
+    try {
+      const resultado = await onConfirmar(transportistaId);
+      if (resultado) setError(resultado);
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <Marco
+      titulo="Programar traslado"
+      subtitulo={subtitulo}
+      icono={<Truck className="w-5 h-5 text-sky-700" />}
+      onCerrar={onCerrar}
+    >
+      <form onSubmit={enviar} className="space-y-4">
+        <div className="flex gap-3">
+          <div className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-3">
+            <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Fecha programada</p>
+            <p className="font-bold text-neutral-900 mt-0.5 text-sm">{formatFechaLarga(fecha + 'T12:00:00Z')}</p>
+          </div>
+          {fueraDePlazo && (
+            <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">{ETIQUETA_FECHA_LIMITE}</p>
+              <p className="font-bold text-red-700 mt-0.5 text-sm">{formatFechaLarga(fechaLimite)}</p>
+            </div>
+          )}
+        </div>
+        {fueraDePlazo && (
+          <p className="flex items-start gap-2 text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            La fecha supera la fecha límite de entrega propuesta. Si confirmas, quedará programada igual.
+          </p>
+        )}
+        <SelectorTransportista
+          transportistas={transportistas}
+          valor={transportistaId}
+          onCambiar={setTransportistaId}
+          onCreado={onTransportistaCreado}
+          obligatorio
+        />
+        <MensajeError mensaje={error} />
+        <Botones
+          onCancelar={onCerrar}
+          enviando={enviando}
+          textoConfirmar={fueraDePlazo ? 'Programar igual' : 'Programar'}
+          peligro={fueraDePlazo}
+        />
       </form>
     </Marco>
   );

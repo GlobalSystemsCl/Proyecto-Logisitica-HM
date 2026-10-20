@@ -50,6 +50,7 @@ import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
+import { formatearRut } from '@/lib/rut';
 import BadgeEvento from '@/components/BadgeEvento';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
@@ -830,6 +831,17 @@ export default function SolicitudDetalleModal({
                       <span className="text-neutral-400 italic">Sin asignar</span>
                     )}
                   </p>
+                </div>
+                <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Transportista</p>
+                  {solicitud.transportista ? (
+                    <>
+                      <p className="text-sm text-neutral-900 font-medium">{solicitud.transportista.nombre}</p>
+                      <p className="text-xs text-neutral-500">RUT {formatearRut(solicitud.transportista.rut)}</p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-neutral-400 italic">Sin asignar</p>
+                  )}
                 </div>
               </div>
 

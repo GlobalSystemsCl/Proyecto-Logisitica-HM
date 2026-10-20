@@ -1,4 +1,5 @@
 import type { DisponibilidadVehiculo } from './sucursal.types';
+import type { TransportistaResumen } from './transportista.types';
 
 /**
  * Estados de `public.traslado_interno` (enum PostgreSQL `estado_traslado`).
@@ -45,6 +46,8 @@ export interface TrasladoInterno {
   /** R13: registro de la recepción en destino. */
   recepcion_con_novedades: boolean | null;
   observacion_recepcion: string | null;
+  /** Transportista del traslado (obligatorio desde el 2026-10-20; los anteriores no tienen). */
+  transportista: TransportistaResumen | null;
   /** R14: los traslados nuevos llevan un solo vehículo; los históricos pueden tener varios. */
   vehiculos: TrasladoVehiculo[];
 }
@@ -53,6 +56,8 @@ export interface CreateTrasladoInput {
   origen_id: number;
   destino_id: number;
   observacion?: string | null;
+  /** Obligatorio: quién realiza el traslado. */
+  transportista_id: string | null;
 }
 
 /**

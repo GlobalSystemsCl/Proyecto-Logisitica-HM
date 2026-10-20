@@ -2,6 +2,7 @@ import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
+import { TransportistaService } from '@/services/transportista.service';
 import { redirect } from 'next/navigation';
 import CalendarizacionesClient from './CalendarizacionesClient';
 import PageHeader from '@/components/PageHeader';
@@ -67,7 +68,11 @@ export default async function LogisticaCalendarizacionesPage({
     OrganizacionService.getZonas(),
   ]);
 
-  const reprogramaciones = await SolicitudesService.getConteoReprogramaciones(programadas.map((s) => s.id));
+  const [reprogramaciones, transportistas] = await Promise.all([
+    SolicitudesService.getConteoReprogramaciones(programadas.map((s) => s.id)),
+    // Solo Logística programa y reprograma.
+    profile.rol === 'logistica' ? TransportistaService.listarActivos() : Promise.resolve([]),
+  ]);
 
   const encargados = new Map<string, string>();
   [...programadas, ...porProgramar].forEach((s) => {
@@ -105,6 +110,7 @@ export default async function LogisticaCalendarizacionesPage({
           encargados={[...encargados.entries()].map(([id, nombre]) => ({ id, nombre }))}
           viewer={{ id: profile.id, rol: profile.rol, sucursal_id: profile.sucursal_id ?? null }}
           sucursales_asignadas={sucursalesAsignadas}
+          transportistas={transportistas}
         />
       </main>
     </div>

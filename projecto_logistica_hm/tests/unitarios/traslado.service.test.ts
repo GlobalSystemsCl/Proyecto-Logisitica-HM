@@ -217,6 +217,7 @@ describe('TrasladoService', () => {
 
   describe('crearTraslado', () => {
     it('should_crear_traslado_cuando_todos_los_vehiculos_estan_liberados_sin_validar_slots', async () => {
+      admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
       admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
       admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
       admin.results.traslado_interno_vehiculo = [fila([]), fila(null)];
@@ -225,7 +226,7 @@ describe('TrasladoService', () => {
       const auditoria = vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
 
       const res = await TrasladoService.crearTraslado(
-        { origen_id: 1, destino_id: 2 },
+        { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' },
         ['veh-1'],
         'log-1'
       );
@@ -236,19 +237,22 @@ describe('TrasladoService', () => {
         [{ traslado_id: 't-1', vehiculo_id: 'veh-1' }],
       ]);
       expect(res.traslado?.id).toBe('t-1');
+      const insert = admin.callsTo('traslado_interno').find((c) => c[0] === 'insert');
+      expect(insert?.[1]).toMatchObject({ transportista_id: 'tr-1' });
       expect(JSON.stringify(admin.callsTo('sucursal'))).not.toContain('slots');
       expect(admin.callsTo('solicitud_vehiculo').length).toBeGreaterThan(0);
       expect(auditoria).toHaveBeenCalled();
     });
 
     it('should_rechazar_traslado_cuando_un_vehiculo_esta_vendido', async () => {
+      admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
       admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
       admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
       admin.results.traslado_interno_vehiculo = [fila([])];
       admin.results.solicitud_vehiculo = [fila([]), fila([{ vehiculo_id: 'veh-2' }])];
 
       const res = await TrasladoService.crearTraslado(
-        { origen_id: 1, destino_id: 2 },
+        { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' },
         ['veh-2'],
         'log-1'
       );
@@ -259,13 +263,14 @@ describe('TrasladoService', () => {
     });
 
     it('should_rechazar_traslado_cuando_un_vehiculo_esta_reservado_en_solicitud_activa', async () => {
+      admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
       admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
       admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
       admin.results.traslado_interno_vehiculo = [fila([])];
       admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'veh-2' }]), fila([])];
 
       const res = await TrasladoService.crearTraslado(
-        { origen_id: 1, destino_id: 2 },
+        { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' },
         ['veh-2'],
         'log-1'
       );
@@ -276,15 +281,30 @@ describe('TrasladoService', () => {
     });
   });
 
+  describe('crearTraslado: transportista obligatorio', () => {
+    it('should_reject_when_transportista_is_missing', async () => {
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: null }, ['veh-1'], 'log-1');
+      expect(res).toEqual({ success: false, error: 'Indica el transportista del traslado.' });
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
+    });
+
+    it('should_reject_when_transportista_is_inactive_or_unknown', async () => {
+      admin.results.transportista = [fila({ id: 'tr-1', activo: false })];
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: 'tr-1' }, ['veh-1'], 'log-1');
+      expect(res).toEqual({ success: false, error: 'El transportista no existe o está inactivo.' });
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
+    });
+  });
+
   describe('crearTraslado: un vehículo por traslado (R14)', () => {
     it('should_reject_when_more_than_one_vehicle_is_selected', async () => {
-      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2 }, ['veh-1', 'veh-2'], 'log-1');
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: 'tr-1' }, ['veh-1', 'veh-2'], 'log-1');
       expect(res).toEqual({ success: false, error: 'Cada traslado interno lleva un solo vehículo.' });
       expect(admin.callsTo('traslado_interno')).toHaveLength(0);
     });
 
     it('should_reject_when_no_vehicle_is_selected', async () => {
-      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2 }, [], 'log-1');
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: 'tr-1' }, [], 'log-1');
       expect(res).toEqual({ success: false, error: 'Debes seleccionar el vehículo del traslado.' });
     });
   });

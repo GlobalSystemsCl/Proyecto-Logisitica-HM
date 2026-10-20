@@ -658,6 +658,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-14 | Notificaciones en la app por cambios de estado (campana con Realtime) y registro sin correo de Supabase. Nueva sección 30; secciones 8, 9, 25 y 27; brecha 018 | Claude (asistido) |
 | 2026-10-14 | "Encargado" pasa a "Iniciada por" (columna `solicitud.creado_por`) y "Encargado de solicitud" a "Logística asignada"; se retira "Responsable" (sinónimo). Nueva sección 31 | Claude (asistido) |
 | 2026-10-20 | Pedidos del cliente del 2026-10-19, fase A: vehículos sin patente que no aparecían al buscar por chasis, búsqueda de traslados sin lista de ids en la URL (migración `20261020120000`), botones "Volver a la cola" y "Revertir despacho", y cuadro de rechazadas del panel del ejecutivo. Nueva sección 32; secciones 20 y 23 | Claude (asistido) |
+| 2026-10-20 | Fase C: transportista (nombre y RUT) obligatorio al programar una solicitud y al crear un traslado interno (migración `20261020130000`). Nueva sección 33 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -809,3 +810,27 @@ El cuadro "Rechazadas" contaba solo `rechazada`, pero su "Ver todas" abre el gru
 
 ### 32.4 Tests
 `paginacion.test.ts`, `migracion-vehiculos-traslado.test.ts`, `textos.test.ts`, `errores.test.ts` (`esFuncionInexistente`), `traslado.service.test.ts` (RPC y respaldo), `solicitudes.service.test.ts` (inventario con 2.261 vehículos y reversión del despacho) y `panel.test.ts`. También se corrigió un test que el merge del compañero dejó con el texto anterior ("El responsable…" → "El usuario asignado…").
+
+## 33. Transportista de cada traslado (2026-10-20, fase C)
+
+Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del transportista. Lo usará el reporte con el que Logística revisa su factura (fase D).
+
+- **BD:** migración `20261020130000_transportista.sql` (+ rollback).
+  - Tabla `transportista`: `nombre` (3 a 120 caracteres), `rut` único y normalizado (`12345678-9`, verificado con un `check`), `activo` y `creado_por`. RLS de solo lectura para usuarios activos; la app escribe con service_role.
+  - `solicitud.transportista_id` y `traslado_interno.transportista_id`: FK con ON DELETE RESTRICT (un transportista con traslados se desactiva, no se borra). Son nulas: lo programado antes no tiene transportista.
+  - **Orden de despliegue:** aplicar la migración antes del código. `SOLICITUD_SELECT` y `TRASLADO_SELECT` leen la columna.
+  - No se pudo ensayar en producción: el conector rechazó el bloque de ensayo. Revisarla antes de aplicarla.
+- **RUT:** `src/lib/rut.ts` (`normalizarRut`, `validarRut`, `formatearRut`, `calcularDigitoVerificador`, módulo 11).
+- **Servicio y acciones:** `TransportistaService` (`listarActivos`, `crear`, `validarAsignable`) y `transportistas.actions.ts` (solo Logística y el administrador).
+- **Reglas (decisión provisoria, por confirmar con el cliente):**
+  - **Obligatorio al programar** una solicitud (`calendarizarSolicitudAction` lo exige) y al **crear un traslado interno** (`TrasladoService.crearTraslado`).
+  - **Opcional al reprogramar:** se mantiene el actual o se cambia junto con la fecha. El cambio queda en la auditoría de la recalendarización.
+  - El transportista debe existir y estar activo.
+- **UI:**
+  - Componente `SelectorTransportista`: elegir uno registrado o registrar uno nuevo (nombre y RUT con validación en vivo).
+  - Calendario: soltar una solicitud en un día abre el modal "Programar traslado" (`ProgramarModal`), que pide el transportista y reemplaza al aviso anterior de fecha posterior a la propuesta (ahora el aviso va dentro del mismo modal).
+  - "Reprogramar" permite cambiar el transportista.
+  - Formulario de traslado interno: selector obligatorio.
+  - Se muestra en el detalle de la solicitud, en las tarjetas del calendario y en las tarjetas y el detalle de los traslados internos.
+- **Datos de prueba:** las solicitudes programadas por los scripts de `seed/` no tienen transportista (la columna es nula).
+- **Tests:** `rut.test.ts`, `transportista.service.test.ts`, `transportistas.actions.test.ts`, `migracion-transportista.test.ts`, `notificaciones.actions.test.ts` (programar sin transportista se rechaza), `solicitudes.service.test.ts`, `solicitudes.fase2.test.ts` y `traslado.service.test.ts`.
