@@ -76,10 +76,15 @@ describe('TrasladoService', () => {
   });
 
   describe('getVehiculosParaTraslado', () => {
+    function filaRpc(overrides: Record<string, unknown> = {}) {
+      const { sucursal, ...v } = filaVehiculo(overrides);
+      return { ...v, ubicacion_nombre: (sucursal as { nombre: string } | null)?.nombre ?? null, total: 25 };
+    }
+
+    const SIN_FUNCION = { data: null, error: { message: 'Could not find the function', code: 'PGRST202' } };
+
     it('should_return_vehiculos_paginated_when_no_filter', async () => {
-      admin.results.vehiculo = [
-        filaConCount(25, [filaVehiculo({ id: 'veh-1' }), filaVehiculo({ id: 'veh-2' })]),
-      ];
+      admin.rpc.mockResolvedValueOnce({ data: [filaRpc({ id: 'veh-1' }), filaRpc({ id: 'veh-2' })], error: null });
       admin.results.traslado_interno_vehiculo = [fila([])];
 
       const res = await TrasladoService.getVehiculosParaTraslado('', 1, 12);
@@ -94,44 +99,50 @@ describe('TrasladoService', () => {
         ubicacion_nombre: 'Sucursal Centro',
         en_traslado_activo: false,
       });
+      expect(res.vehiculos[0]).not.toHaveProperty('total');
+    });
+
+    it('should_call_rpc_with_filters_and_offset_when_searching', async () => {
+      admin.rpc.mockResolvedValueOnce({ data: [], error: null });
+
+      await TrasladoService.getVehiculosParaTraslado(' ab%c ', 3, 12, { sucursalId: 3, marca: 'Toyota' });
+
+      expect(admin.rpc).toHaveBeenCalledWith('fn_vehiculos_disponibles_traslado', {
+        p_busqueda: 'abc',
+        p_sucursal_id: 3,
+        p_marca: 'Toyota',
+        p_limite: 12,
+        p_desplazamiento: 24,
+      });
+    });
+
+    it('should_send_null_filters_when_none_provided', async () => {
+      admin.rpc.mockResolvedValueOnce({ data: [], error: null });
+
+      await TrasladoService.getVehiculosParaTraslado('', 1, 12);
+
+      expect(admin.rpc).toHaveBeenCalledWith('fn_vehiculos_disponibles_traslado', expect.objectContaining({
+        p_busqueda: null,
+        p_sucursal_id: null,
+        p_marca: null,
+      }));
     });
 
     it('should_clamp_page_and_page_size_before_querying', async () => {
-      admin.results.vehiculo = [filaConCount(0, [])];
+      admin.rpc.mockResolvedValueOnce({ data: [], error: null });
 
       const res = await TrasladoService.getVehiculosParaTraslado('', 0, 500);
 
       expect(res.page).toBe(1);
       expect(res.pageSize).toBe(100);
-      const range = admin.callsTo('vehiculo').find((c) => c[0] === 'range');
-      expect(range?.[1]).toBe(0);
-      expect(range?.[2]).toBe(99);
-    });
-
-    it('should_filter_by_patente_or_chasis_when_query_provided', async () => {
-      admin.results.vehiculo = [filaConCount(1, [filaVehiculo()])];
-      admin.results.traslado_interno_vehiculo = [fila([])];
-
-      await TrasladoService.getVehiculosParaTraslado('abc', 1, 12);
-
-      const orCall = admin.callsTo('vehiculo').find((c) => c[0] === 'or');
-      expect(orCall?.[1]).toBe('patente.ilike.%abc%,chasis.ilike.%abc%');
-    });
-
-    it('should_sanitize_percent_wildcards_from_query', async () => {
-      admin.results.vehiculo = [filaConCount(1, [filaVehiculo()])];
-      admin.results.traslado_interno_vehiculo = [fila([])];
-
-      await TrasladoService.getVehiculosParaTraslado('a%bc', 1, 12);
-
-      const orCall = admin.callsTo('vehiculo').find((c) => c[0] === 'or');
-      expect(orCall?.[1]).toBe('patente.ilike.%abc%,chasis.ilike.%abc%');
+      expect(admin.rpc).toHaveBeenCalledWith('fn_vehiculos_disponibles_traslado', expect.objectContaining({
+        p_limite: 100,
+        p_desplazamiento: 0,
+      }));
     });
 
     it('should_mark_vehicles_in_active_traslado_when_they_are_in_table', async () => {
-      admin.results.vehiculo = [
-        filaConCount(2, [filaVehiculo({ id: 'veh-1' }), filaVehiculo({ id: 'veh-2' })]),
-      ];
+      admin.rpc.mockResolvedValueOnce({ data: [filaRpc({ id: 'veh-1' }), filaRpc({ id: 'veh-2' })], error: null });
       admin.results.traslado_interno_vehiculo = [fila([nodoTraslado('veh-1')])];
 
       const res = await TrasladoService.getVehiculosParaTraslado('', 1, 12);
@@ -141,7 +152,7 @@ describe('TrasladoService', () => {
     });
 
     it('should_return_empty_result_when_no_vehiculos_match', async () => {
-      admin.results.vehiculo = [filaConCount(0, [])];
+      admin.rpc.mockResolvedValueOnce({ data: [], error: null });
 
       const res = await TrasladoService.getVehiculosParaTraslado('sin-resultado', 1, 12);
 
@@ -151,48 +162,56 @@ describe('TrasladoService', () => {
       expect(admin.callsTo('traslado_interno_vehiculo')).toHaveLength(0);
     });
 
-    it('should_filter_by_sucursal_when_sucursal_filter_provided', async () => {
-      admin.results.vehiculo = [filaConCount(1, [filaVehiculo()])];
-      admin.results.traslado_interno_vehiculo = [fila([])];
+    it('should_return_empty_result_when_rpc_fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      admin.rpc.mockResolvedValueOnce({ data: null, error: { message: 'boom', code: 'XX000' } });
 
-      await TrasladoService.getVehiculosParaTraslado('', 1, 12, { sucursalId: 3 });
+      const res = await TrasladoService.getVehiculosParaTraslado('', 1, 12);
 
-      const eqCalls = admin.callsTo('vehiculo').filter((c) => c[0] === 'eq');
-      expect(eqCalls.some((c) => c[1] === 'ubicacion' && c[2] === 3)).toBe(true);
+      expect(res.vehiculos).toEqual([]);
+      expect(res.total).toBe(0);
+      expect(admin.callsTo('vehiculo')).toHaveLength(0);
     });
 
-    it('should_filter_by_marca_when_marca_filter_provided', async () => {
-      admin.results.vehiculo = [filaConCount(1, [filaVehiculo()])];
+    it('should_use_previous_query_when_rpc_does_not_exist', async () => {
+      admin.rpc.mockResolvedValueOnce(SIN_FUNCION);
+      admin.results.vehiculo = [filaConCount(25, [filaVehiculo({ id: 'veh-1' })])];
       admin.results.traslado_interno_vehiculo = [fila([])];
 
-      await TrasladoService.getVehiculosParaTraslado('', 1, 12, { marca: 'Toyota' });
+      const res = await TrasladoService.getVehiculosParaTraslado('abc', 1, 12);
 
-      const eqCalls = admin.callsTo('vehiculo').filter((c) => c[0] === 'eq');
-      expect(eqCalls.some((c) => c[1] === 'marca' && c[2] === 'Toyota')).toBe(true);
+      expect(res.total).toBe(25);
+      expect(res.vehiculos[0]).toMatchObject({ id: 'veh-1', ubicacion_nombre: 'Sucursal Centro' });
+      const orCall = admin.callsTo('vehiculo').find((c) => c[0] === 'or');
+      expect(orCall?.[1]).toBe('patente.ilike.%abc%,chasis.ilike.%abc%');
+      const order = admin.callsTo('vehiculo').find((c) => c[0] === 'order');
+      expect(order?.[1]).toBe('chasis');
     });
 
-    it('should_return_empty_result_when_vehiculo_query_fails', async () => {
+    it('should_exclude_reservados_y_vendidos_when_using_previous_query', async () => {
+      admin.rpc.mockResolvedValueOnce(SIN_FUNCION);
+      admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'veh-res' }]), fila([{ vehiculo_id: 'veh-vend' }])];
+      admin.results.vehiculo = [filaConCount(1, [filaVehiculo({ id: 'veh-1' })])];
+      admin.results.traslado_interno_vehiculo = [fila([])];
+
+      const res = await TrasladoService.getVehiculosParaTraslado('', 1, 12, { sucursalId: 3, marca: 'Toyota' });
+
+      expect(res.vehiculos).toHaveLength(1);
+      const notCall = admin.callsTo('vehiculo').find((c) => c[0] === 'not');
+      expect(notCall).toEqual(['not', 'id', 'in', '(veh-res,veh-vend)']);
+      const eqCalls = admin.callsTo('vehiculo').filter((c) => c[0] === 'eq');
+      expect(eqCalls).toEqual(expect.arrayContaining([['eq', 'ubicacion', 3], ['eq', 'marca', 'Toyota']]));
+    });
+
+    it('should_return_empty_result_when_previous_query_fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      admin.rpc.mockResolvedValueOnce(SIN_FUNCION);
       admin.results.vehiculo = [{ data: null, error: { message: 'boom' } }];
 
       const res = await TrasladoService.getVehiculosParaTraslado('', 1, 12);
 
       expect(res.vehiculos).toEqual([]);
       expect(res.total).toBe(0);
-    });
-
-    it('should_exclude_reservados_y_vendidos_al_listar_vehiculos_para_traslado', async () => {
-      admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'veh-res' }]), fila([{ vehiculo_id: 'veh-vend' }])];
-      admin.results.vehiculo = [filaConCount(1, [filaVehiculo({ id: 'veh-1' })])];
-      admin.results.traslado_interno_vehiculo = [fila([])];
-
-      const res = await TrasladoService.getVehiculosParaTraslado('', 1, 12);
-
-      expect(res.vehiculos).toHaveLength(1);
-      expect(res.vehiculos[0].id).toBe('veh-1');
-      const notCall = admin.callsTo('vehiculo').find((c) => c[0] === 'not');
-      expect(notCall?.[1]).toBe('id');
-      expect(notCall?.[2]).toBe('in');
-      expect(notCall?.[3]).toBe('(veh-res,veh-vend)');
     });
   });
 

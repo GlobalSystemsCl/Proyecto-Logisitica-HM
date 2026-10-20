@@ -41,12 +41,13 @@ values
   ('20261013160000', 'brecha_011_recalculo_global'),
   ('20261013170000', 'brecha_014_funciones_rol_y_sucursal'),
   ('20261014120000', 'notificaciones_en_app'),
-  ('20261014130000', 'solicitud_creado_por')
+  ('20261014130000', 'solicitud_creado_por'),
+  ('20261020120000', 'fn_vehiculos_disponibles_traslado')
 on conflict (version) do nothing;
 
 commit;
 
 -- -----------------------------------------------------------------------------
--- Verificación (ejecutar por separado): una fila por archivo de migrations/ (19 al 2026-10-14)
+-- Verificación (ejecutar por separado): una fila por archivo de migrations/ (20 al 2026-10-20)
 -- -----------------------------------------------------------------------------
 -- select version, name from supabase_migrations.schema_migrations order by version;

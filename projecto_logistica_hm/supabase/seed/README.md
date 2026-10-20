@@ -145,7 +145,7 @@ Sucursales: 6 = 15 NORTE, 7 = CONCON, 8 = SANTIAGO CENTRO, 9 = VALPARAISO.
    - Los escenarios usan 15 Norte, Concón y Valparaíso (zona 1) como origen.
 5. **Ningún vehículo del inventario tiene patente:** la UI muestra el chasis.
 6. **Comportamientos reales reproducidos tal cual:**
-   - revertir un despacho deja `fecha_inicio_transito` (S12);
+   - revertir un despacho dejaba `fecha_inicio_transito` (S12). Desde el 2026-10-20 la app lo limpia; los datos de S12 lo conservan;
    - `fecha_actualizacion` no se actualiza en las transiciones.
 7. **Asignar un encargado desde `priorizada` no limpia `posicion_prioridad`.**
    - La solicitud queda con un número de cola huérfano hasta la siguiente renumeración.

@@ -151,13 +151,13 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
         </PanelAcciones>
 
         <PanelAcciones
-          titulo="Rechazadas"
+          titulo="Rechazadas / canceladas"
           descripcion="Sin apelación: crea una nueva si la necesitas"
           icono={<XCircle className="w-5 h-5 text-red-600" />}
           total={rechazadas.total}
           restantes={rechazadas.restantes}
           verTodasHref="/solicitudes?grupo=rechazadas#lista"
-          textoVacio="No tienes solicitudes rechazadas."
+          textoVacio="No tienes solicitudes rechazadas ni canceladas."
           tono="rojo"
         >
           {rechazadas.items.map((s) => (

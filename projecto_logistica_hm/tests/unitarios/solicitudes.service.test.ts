@@ -297,6 +297,25 @@ describe('SolicitudesService.getVehiculosInventario', () => {
     expect(map.has('v3')).toBe(false);
   });
 
+  it('should_include_vehicles_beyond_first_1000_when_inventory_is_large', async () => {
+    const pagina = (desde: number, n: number) =>
+      Array.from({ length: n }, (_, i) => ({
+        id: `v${desde + i}`, chasis: `CH${String(desde + i).padStart(5, '0')}`, patente: null,
+        marca: 'Toyota', modelo: 'Yaris', anio: 2025, color: null, ubicacion: null,
+      }));
+    admin.results.vehiculo = [fila(pagina(0, 1000)), fila(pagina(1000, 1000)), fila(pagina(2000, 261))];
+    admin.results.solicitud_vehiculo = [fila([]), fila([])];
+
+    const res = await SolicitudesService.getVehiculosInventario();
+
+    expect(res).toHaveLength(2261);
+    expect(res.some((v) => v.chasis === 'CH02260')).toBe(true);
+    const llamadas = admin.callsTo('vehiculo');
+    expect(llamadas.find((c) => c[0] === 'order')?.[1]).toBe('chasis');
+    expect(llamadas.filter((c) => c[0] === 'range').map((c) => c[1])).toEqual([0, 1000, 2000]);
+    expect(llamadas.some((c) => c[0] === 'limit')).toBe(false);
+  });
+
   it('should_devolver_lista_vacia_con_error_en_vehiculos', async () => {
     admin.results.vehiculo = [errorResult('boom')];
     const res = await SolicitudesService.getVehiculosInventario();
@@ -1820,7 +1839,7 @@ describe('SolicitudesService.asignarEncargadoLogistica', () => {
 
     const res = await SolicitudesService.asignarEncargadoLogistica('s-1', 'ej-1', USUARIO_ID);
 
-    expect(res.error).toBe('El responsable debe tener el rol Logística.');
+    expect(res.error).toBe('El usuario asignado debe tener el rol Logística.');
     expect(admin.callsTo('solicitud').filter((c) => c[0] === 'update')).toHaveLength(0);
   });
 });
@@ -1951,8 +1970,38 @@ describe('SolicitudesService.cancelarDespacharSolicitud', () => {
     const res = await SolicitudesService.cancelarDespacharSolicitud('s-1', USUARIO_ID);
     expect(res).toEqual({ success: true });
     const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
-    expect(update?.[1]).toEqual({ estado: 'calendarizada', fecha_despacho: null, posicion_prioridad: null });
+    expect(update?.[1]).toEqual({
+      estado: 'calendarizada',
+      fecha_despacho: null,
+      fecha_inicio_transito: null,
+      posicion_prioridad: null,
+    });
     expect(auditoria).toHaveBeenCalled();
+  });
+
+  it('should_clear_transit_start_and_keep_scheduled_date_when_dispatch_is_reverted', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud = [
+      fila(minimo({
+        estado: 'en_transito',
+        fecha_despacho: '2026-01-01T10:00:00Z',
+        fecha_inicio_transito: '2026-01-01T10:00:00Z',
+        fecha_tentativa_despacho: '2026-01-01',
+      })),
+      fila(null),
+    ];
+    const auditoria = spyRegistrarAuditoria();
+
+    await SolicitudesService.cancelarDespacharSolicitud('s-1', USUARIO_ID);
+
+    const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
+    expect(update?.[1]).toMatchObject({ fecha_inicio_transito: null });
+    expect(update?.[1]).not.toHaveProperty('fecha_tentativa_despacho');
+    expect(auditoria).toHaveBeenCalledWith(
+      USUARIO_ID, 'solicitud', 's-1', 'despacho',
+      expect.objectContaining({ fecha_inicio_transito: '2026-01-01T10:00:00Z' }),
+      expect.objectContaining({ fecha_inicio_transito: null })
+    );
   });
 });
 

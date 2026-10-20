@@ -506,6 +506,7 @@ Resumen de controles existentes:
 | 016 | Borrar sucursal elimina solicitudes en cascada y deja archivos huérfanos | Medium |
 | 018 | Auditoría best-effort; notificaciones sin implementar | Low |
 | 026 | `NEXT_PUBLIC_APP_URL` ausente → enlaces de reset a localhost (en local) | Informational |
+| — | Al crear o editar una solicitud no aparecían los vehículos sin patente (1.261 de 2.261) por el corte de 1000 filas de PostgREST — **corregido el 2026-10-20 (sección 32)** | High |
 
 ## 21. Vulnerabilidades encontradas
 
@@ -546,6 +547,7 @@ Resumen de controles existentes:
 - `getCurrentUserProfile()` hace 3 consultas por request y se llama en cada action y página.
 - Reescritura de la cola: N updates secuenciales.
 - Importación CSV: lee todos los chasis (2.261+) en cada importación.
+- PostgREST corta cada respuesta en 1000 filas aunque se pida `limit(100000)`. Toda lectura que pueda superar ese tamaño debe usar `obtenerTodasLasFilas` (`src/lib/paginacion.ts`) con un orden único. Corregidos el inventario de solicitudes y la búsqueda de traslados (sección 32); quedan `getSolicitudes` (reportes), `getSolicitudesFiltradas` sin rango y `getAvailableVehicles` (fase J del plan del 2026-10-20).
 - 19 policies con `auth.uid()` reevaluado por fila; 12 FKs sin índice; 9 índices sin uso.
 
 ## 24. Problemas de escalabilidad
@@ -655,6 +657,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-14 | Aplicadas en producción la migración de la brecha 014 y los scripts de historial (brecha 015) y de limpieza TEST-SUC. Secciones 25, 27 y 29.1; brechas 014 y 015 | Claude (asistido) |
 | 2026-10-14 | Notificaciones en la app por cambios de estado (campana con Realtime) y registro sin correo de Supabase. Nueva sección 30; secciones 8, 9, 25 y 27; brecha 018 | Claude (asistido) |
 | 2026-10-14 | "Encargado" pasa a "Iniciada por" (columna `solicitud.creado_por`) y "Encargado de solicitud" a "Logística asignada"; se retira "Responsable" (sinónimo). Nueva sección 31 | Claude (asistido) |
+| 2026-10-20 | Pedidos del cliente del 2026-10-19, fase A: vehículos sin patente que no aparecían al buscar por chasis, búsqueda de traslados sin lista de ids en la URL (migración `20261020120000`), botones "Volver a la cola" y "Revertir despacho", y cuadro de rechazadas del panel del ejecutivo. Nueva sección 32; secciones 20 y 23 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -779,3 +782,30 @@ Decisión del responsable: "Encargado" era confuso porque nombraba dos cosas dis
 - El "encargado" de una **sucursal** (administración de sucursales) no cambia: es otro concepto.
 - **Orden de despliegue:** aplicar la migración antes del código. La consulta de listas lee `creado_por`: sin la columna, las listas de solicitudes quedan vacías.
 - **Tests:** `helpers/tipos.test.ts` (`iniciadorNombre`, `iniciadorId`), `solicitudes.service.test.ts` (guarda y mapea el creador), `migracion-creado-por.test.ts`.
+
+## 32. Pedidos del cliente del 2026-10-19 — fase A: errores (2026-10-20)
+
+El plan completo de los pedidos está organizado en fases (A a J). Los puntos "total sin cerradas", "filtro inicial Por entregar" y "sin panel de conteo por estado" los resolvió el compañero (commit `e495710`).
+
+### 32.1 Vehículo que no aparece al buscar por chasis
+- **Causa:** `SolicitudesService.getVehiculosInventario` (crear o editar una solicitud) pedía `.order('patente').limit(100000)`, pero PostgREST devuelve como máximo 1000 filas. Los 2.261 vehículos de producción no tienen patente (los importa el Excel de stock), así que llegaban 1000 en un orden arbitrario. La búsqueda, que se hace en el navegador, no encontraba los otros 1.261.
+- **Corrección:** nuevo helper `obtenerTodasLasFilas` (`src/lib/paginacion.ts`), que pagina de a 1000 con `.range()`. Lo usan el inventario (ordenado por `chasis`, que es único), sus consultas de reservas y vendidos, y `VehiculoService` (que ya tenía la misma lógica como método privado).
+- **Búsqueda de traslados internos:** excluía los reservados y vendidos con `not id in (uuid, …)` dentro de la URL. Esas listas crecen con cada venta (unas 1200 al mes), así que la petición iba a fallar por el largo de la URL. La migración `20261020120000_fn_vehiculos_disponibles_traslado.sql` crea la RPC `fn_vehiculos_disponibles_traslado(p_busqueda, p_sucursal_id, p_marca, p_limite, p_desplazamiento)`: excluye en SQL con `fn_estados_reserva_activos()`, ordena por chasis, pagina (de 1 a 100 filas) y devuelve el total. `TrasladoService.getVehiculosParaTraslado` la usa. Si la función no existe (`PGRST202`, helper `esFuncionInexistente` en `lib/errores.ts`), usa la consulta anterior, ya con las listas paginadas y el orden por chasis.
+- `TrasladosClient` descarta las respuestas de búsquedas anteriores: antes, una respuesta lenta podía pisar la más reciente.
+
+### 32.2 "Volver a la cola" y "Revertir despacho" (antes "Descalendarizar" y "Deshacer despacho")
+No son redundantes y nunca aparecen en la misma tarjeta del calendario:
+
+| Botón | Estado | Qué hace |
+|---|---|---|
+| **Volver a la cola** | `calendarizada` → `priorizada` | Quita la fecha programada y la Logística asignada. La solicitud vuelve al final de la cola de su sucursal |
+| **Revertir despacho** | `en_transito` → `calendarizada` | El vehículo no salió. Conserva la fecha programada y limpia `fecha_despacho` y `fecha_inicio_transito` |
+
+- Los nombres, la ayuda (`title`) y la confirmación salen de `ACCIONES_DESHACER_TRASLADO` y `textoConfirmacionDeshacer` (`src/lib/textos.ts`). Ahora ambos piden confirmación.
+- `cancelarDespacharSolicitud` ahora también limpia `fecha_inicio_transito` y lo registra en la auditoría. Antes quedaba sellado un tránsito que no ocurrió (hallazgo 6 del README de datos de prueba). El trigger `fn_registrar_fechas_flujo` solo lo completa si está vacío.
+
+### 32.3 Panel del ejecutivo
+El cuadro "Rechazadas" contaba solo `rechazada`, pero su "Ver todas" abre el grupo de la tabla que también incluye `cancelada`. Ahora es "Rechazadas / canceladas" y cuenta ambos estados (`ESTADOS_GRUPO_EJECUTIVO` en `lib/panel.ts`).
+
+### 32.4 Tests
+`paginacion.test.ts`, `migracion-vehiculos-traslado.test.ts`, `textos.test.ts`, `errores.test.ts` (`esFuncionInexistente`), `traslado.service.test.ts` (RPC y respaldo), `solicitudes.service.test.ts` (inventario con 2.261 vehículos y reversión del despacho) y `panel.test.ts`. También se corrigió un test que el merge del compañero dejó con el texto anterior ("El responsable…" → "El usuario asignado…").

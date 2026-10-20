@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ErrorUsuario, mensajeErrorUsuario } from '@/lib/errores';
+import { ErrorUsuario, esFuncionInexistente, mensajeErrorUsuario } from '@/lib/errores';
 
 describe('mensajeErrorUsuario', () => {
   beforeEach(() => {
@@ -60,5 +60,25 @@ describe('mensajeErrorUsuario', () => {
 
   it('should_return_fallback_when_P0001_has_no_message', () => {
     expect(mensajeErrorUsuario({ code: 'P0001' }, 'Fallo').startsWith('Fallo')).toBe(true);
+  });
+});
+
+describe('esFuncionInexistente', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_return_true_when_postgrest_cannot_find_the_function', () => {
+    expect(esFuncionInexistente({ code: 'PGRST202', message: 'Could not find the function' })).toBe(true);
+  });
+
+  it('should_return_true_when_postgres_reports_undefined_function', () => {
+    expect(esFuncionInexistente({ code: '42883' })).toBe(true);
+  });
+
+  it('should_return_false_when_error_is_other_or_missing', () => {
+    expect(esFuncionInexistente({ code: 'P0001', message: 'negocio' })).toBe(false);
+    expect(esFuncionInexistente(null)).toBe(false);
+    expect(esFuncionInexistente('texto')).toBe(false);
   });
 });

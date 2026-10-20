@@ -75,7 +75,8 @@ const ESTADOS_GRUPO_EJECUTIVO: Record<GrupoPanelEjecutivo, readonly string[]> = 
   pendientes: ['pendiente_aprobacion', 'pendiente'],
   en_curso: ['aprobada', 'priorizada', 'asignada', 'calendarizada', 'despachada', 'en_transito'],
   por_entregar: ['entregada'],
-  rechazadas: ['rechazada'],
+  // Igual que el grupo `rechazadas` del filtro de la tabla ("Ver todas").
+  rechazadas: ['rechazada', 'cancelada'],
 };
 
 function tiempo(fecha: string | null | undefined, siFalta: number): number {

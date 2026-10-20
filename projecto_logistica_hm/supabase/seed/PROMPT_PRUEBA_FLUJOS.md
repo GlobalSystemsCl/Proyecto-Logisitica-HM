@@ -126,7 +126,7 @@ correos en tiempo real. Anota el id completo de cada una (está en la URL del de
    - como EJ, una solicitud pendiente;
    - como JL, una solicitud en la cola (la cola se debe compactar a 1..N);
    - como LG, una solicitud en tránsito, indicando la ubicación final.
-6. **Despacho revertido.** LG despacha y luego usa "Deshacer despacho". La solicitud debe volver a Programada.
+6. **Despacho revertido.** LG despacha y luego usa "Revertir despacho" (antes "Deshacer despacho"). La solicitud debe volver a Programada, con la misma fecha y sin `fecha_inicio_transito`.
 7. **Quitar programación.** LG quita la programación de una solicitud: vuelve a la cola, al final.
 8. **Traslado interno.** LG crea un traslado (1 vehículo) Valparaíso → 15 Norte y lo despacha. JL6 lo recibe desde el dashboard. Crea otro y cancélalo en tránsito.
 9. **Insistencia.** EJ insiste en una solicitud propia. Un segundo intento antes de 24 h debe estar bloqueado.

@@ -35,7 +35,12 @@ import {
 import { CancelarTransitoModal, RecepcionModal, ReprogramarModal } from '@/components/ModalesTraslado';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
-import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import {
+  ACCIONES_DESHACER_TRASLADO,
+  ETIQUETA_FECHA_LIMITE,
+  textoConfirmacionDeshacer,
+  type AccionDeshacerTraslado,
+} from '@/lib/textos';
 import {
   FILTROS_CALENDARIO_INICIALES,
   agruparPorDia,
@@ -242,6 +247,12 @@ export default function CalendarizacionesClient({
     }
   }
 
+  /** Las acciones que deshacen un paso piden confirmación (explican qué hacen). */
+  function deshacer(s: SolicitudLista, tipo: AccionDeshacerTraslado, fn: () => Promise<{ success: boolean; error?: string }>) {
+    if (!window.confirm(textoConfirmacionDeshacer(tipo, numero(s)))) return;
+    void accion(s.id, fn);
+  }
+
   // --- Tarjetas ---
   function chips(s: SolicitudLista) {
     const plazo = CHIP_PLAZO[estadoPlazo(s, hoy)];
@@ -277,18 +288,23 @@ export default function CalendarizacionesClient({
           </button>
         )}
         {puedeCalendarizar && s.estado === 'calendarizada' && (
-          <button onClick={() => accion(s.id, () => descalendarizarSolicitudAction(s.id))} disabled={ocupado} className={`${btn} text-red-600 border border-red-200 hover:bg-red-50`}>
-            <RotateCcw className="w-3 h-3" /> Descalendarizar
+          <button
+            onClick={() => deshacer(s, 'volver_a_cola', () => descalendarizarSolicitudAction(s.id))}
+            disabled={ocupado}
+            title={ACCIONES_DESHACER_TRASLADO.volver_a_cola.ayuda}
+            className={`${btn} text-red-600 border border-red-200 hover:bg-red-50`}
+          >
+            <RotateCcw className="w-3 h-3" /> {ACCIONES_DESHACER_TRASLADO.volver_a_cola.etiqueta}
           </button>
         )}
         {puedeDespachar && s.estado === 'en_transito' && (
           <button
-            onClick={() => accion(s.id, () => cancelarDespachoSolicitudAction(s.id))}
+            onClick={() => deshacer(s, 'revertir_despacho', () => cancelarDespachoSolicitudAction(s.id))}
             disabled={ocupado}
-            title="Volver a Programada (el vehículo no salió)"
+            title={ACCIONES_DESHACER_TRASLADO.revertir_despacho.ayuda}
             className={`${btn} text-neutral-700 bg-neutral-100 border border-neutral-300 hover:bg-neutral-200`}
           >
-            <RotateCcw className="w-3 h-3" /> Deshacer despacho
+            <RotateCcw className="w-3 h-3" /> {ACCIONES_DESHACER_TRASLADO.revertir_despacho.etiqueta}
           </button>
         )}
         {puedeCalendarizar && s.estado === 'en_transito' && (

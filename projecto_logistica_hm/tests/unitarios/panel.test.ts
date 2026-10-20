@@ -7,6 +7,7 @@ import {
   itemsRecepcion,
   recortar,
 } from '@/lib/panel';
+import { GRUPOS_FILTRO_SOLICITUDES } from '@/lib/filtroSolicitudes';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 
@@ -105,7 +106,13 @@ describe('gruposPanelEjecutivo', () => {
     expect(g.pendientes.map((x) => x.id)).toEqual(['p']);
     expect(g.en_curso.map((x) => x.id).sort()).toEqual(['c', 't']);
     expect(g.por_entregar.map((x) => x.id)).toEqual(['e']);
-    expect(g.rechazadas.map((x) => x.id)).toEqual(['r']);
+    expect(g.rechazadas.map((x) => x.id)).toEqual(['r', 'x']);
+  });
+
+  it('should_match_table_filter_group_when_counting_rejected_and_cancelled', () => {
+    const g = gruposPanelEjecutivo([s('r', 'rechazada'), s('x', 'cancelada'), s('f', 'finalizada')]);
+    const grupoTabla = GRUPOS_FILTRO_SOLICITUDES.find((x) => x.id === 'rechazadas');
+    expect(g.rechazadas.map((x) => x.estado).sort()).toEqual([...(grupoTabla?.estados ?? [])].sort());
   });
 
   it('should_order_pending_oldest_first_and_closed_newest_first', () => {

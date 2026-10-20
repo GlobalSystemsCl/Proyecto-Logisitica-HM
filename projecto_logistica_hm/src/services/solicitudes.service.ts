@@ -14,6 +14,7 @@ import { DisponibilidadVehiculo } from '@/types/sucursal.types';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { esFechaAnteriorAHoy } from '@/lib/fechas';
 import { mensajeErrorUsuario } from '@/lib/errores';
+import { obtenerTodasLasFilas } from '@/lib/paginacion';
 import { validarContenidoArchivo } from '@/lib/archivos';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import {
@@ -564,51 +565,50 @@ export class SolicitudesService {
     return ((data || []) as unknown as SolicitudRawRow[]).map(mapRow);
   }
 
+  /**
+   * Inventario completo para elegir vehículos al crear o editar una solicitud.
+   * Pagina de a 1000: PostgREST corta cada respuesta en 1000 filas, y como los
+   * vehículos importados no tienen patente, antes quedaban fuera justo esos
+   * (no se encontraban al buscar por chasis). Orden por `chasis`, que es único.
+   */
   static async getVehiculosInventario(): Promise<VehiculoInventario[]> {
     try {
       const admin = createAdminClient();
 
-      const { data: vehiculos, error } = await admin
-        .from('vehiculo')
-        .select('id, chasis, patente, marca, modelo, anio, color, ubicacion')
-        .order('patente', { ascending: true })
-        .limit(100000);
-
-      if (error) {
-        console.error('Error al listar vehículos:', error);
-        return [];
-      }
-
-      const { data: reservas, error: reservasError } = await admin
-        .from('solicitud_vehiculo')
-        .select('vehiculo_id, solicitud!inner(estado)')
-        .eq('disponibilidad', 'reservado')
-        .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
-        .limit(100000);
-
-      if (reservasError) {
-        console.error('Error al consultar reservas activas:', reservasError);
-      }
-
-      const ocupados = new Set<string>(
-        (reservas || []).map((r) => (r as unknown as { vehiculo_id: string }).vehiculo_id)
+      const vehiculos = await obtenerTodasLasFilas<VehiculoInventario>(
+        admin
+          .from('vehiculo')
+          .select('id, chasis, patente, marca, modelo, anio, color, ubicacion')
+          .order('chasis', { ascending: true }),
+        (error) => console.error('Error al listar vehículos:', error)
       );
 
-      const { data: vendidos, error: vendidosError } = await admin
-        .from('solicitud_vehiculo')
-        .select('vehiculo_id')
-        .eq('disponibilidad', 'vendido')
-        .limit(100000);
+      if (vehiculos === null) return [];
 
-      if (vendidosError) {
-        console.error('Error al consultar vehículos vendidos:', vendidosError);
-      }
-
-      const vendidoSet = new Set<string>(
-        (vendidos || []).map((r) => (r as unknown as { vehiculo_id: string }).vehiculo_id)
+      const reservas = await obtenerTodasLasFilas<{ vehiculo_id: string }>(
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id, solicitud!inner(estado)')
+          .eq('disponibilidad', 'reservado')
+          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
+          .order('id', { ascending: true }),
+        (error) => console.error('Error al consultar reservas activas:', error)
       );
 
-      return ((vehiculos || []) as VehiculoInventario[])
+      const ocupados = new Set<string>((reservas ?? []).map((r) => r.vehiculo_id));
+
+      const vendidos = await obtenerTodasLasFilas<{ vehiculo_id: string }>(
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id')
+          .eq('disponibilidad', 'vendido')
+          .order('id', { ascending: true }),
+        (error) => console.error('Error al consultar vehículos vendidos:', error)
+      );
+
+      const vendidoSet = new Set<string>((vendidos ?? []).map((r) => r.vehiculo_id));
+
+      return vehiculos
         .filter((v) => !vendidoSet.has(v.id))
         .map((v) => ({
           ...v,
@@ -1932,7 +1932,12 @@ export class SolicitudesService {
     }
   }
 
-  /** Revierte el despacho: `en_transito` -> `calendarizada`. */
+  /**
+   * Revierte el despacho: `en_transito` -> `calendarizada` (UI: "Revertir
+   * despacho"; el vehículo no salió). Conserva la fecha programada y limpia
+   * `fecha_despacho` y `fecha_inicio_transito`, que el despacho había sellado:
+   * si no, el reporte contaría un tránsito que no ocurrió.
+   */
   static async cancelarDespacharSolicitud(
     id: string,
     usuarioId: string
@@ -1949,6 +1954,7 @@ export class SolicitudesService {
       const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
           estado: 'calendarizada',
           fecha_despacho: null,
+          fecha_inicio_transito: null,
           posicion_prioridad: null,
         });
       if (errEstado) return { success: false, error: errEstado };
@@ -1958,8 +1964,8 @@ export class SolicitudesService {
         'solicitud',
         id,
         'despacho',
-        { estado: actual.estado, fecha_despacho: actual.fecha_despacho },
-        { estado: 'calendarizada', fecha_despacho: null }
+        { estado: actual.estado, fecha_despacho: actual.fecha_despacho, fecha_inicio_transito: actual.fecha_inicio_transito },
+        { estado: 'calendarizada', fecha_despacho: null, fecha_inicio_transito: null }
       );
 
       return { success: true };

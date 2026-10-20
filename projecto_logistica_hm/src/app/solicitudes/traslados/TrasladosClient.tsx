@@ -89,6 +89,8 @@ export default function TrasladosClient({
       primerRender.current = false;
       return;
     }
+    // Una respuesta lenta de una búsqueda anterior no debe pisar la actual.
+    let vigente = true;
     const timer = setTimeout(async () => {
       setCargandoVehiculos(true);
       try {
@@ -96,12 +98,15 @@ export default function TrasladosClient({
           sucursalId: sucursalFiltro === 'todas' ? null : sucursalFiltro,
           marca: marcaFiltro === 'todas' ? null : marcaFiltro,
         });
-        setResultados(res);
+        if (vigente) setResultados(res);
       } finally {
-        setCargandoVehiculos(false);
+        if (vigente) setCargandoVehiculos(false);
       }
     }, 250);
-    return () => clearTimeout(timer);
+    return () => {
+      vigente = false;
+      clearTimeout(timer);
+    };
   }, [busqueda, pagina, sucursalFiltro, marcaFiltro, esOperador]);
 
   const visibles = traslados.filter((t) => filtro === 'todos' || t.estado === filtro);

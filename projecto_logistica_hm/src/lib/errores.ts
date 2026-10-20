@@ -53,3 +53,12 @@ export function mensajeErrorUsuario(err: unknown, fallback: string): string {
   console.error(`[soporte ${id}] ${fallback}`, err);
   return `${fallback} (código de soporte ${id})`;
 }
+
+/**
+ * La función RPC llamada no existe en la BD (migración aún no aplicada).
+ * PostgREST responde `PGRST202`; Postgres directo, `42883`.
+ */
+export function esFuncionInexistente(err: unknown): boolean {
+  const codigo = (err && typeof err === 'object' ? (err as ErrorConCodigo).code : undefined);
+  return codigo === 'PGRST202' || codigo === '42883';
+}

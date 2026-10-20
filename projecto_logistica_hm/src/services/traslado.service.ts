@@ -7,7 +7,8 @@ import type {
   TrasladoInterno,
   VehiculosParaTrasladoResult,
 } from '@/types/traslado.types';
-import { mensajeErrorUsuario } from '@/lib/errores';
+import { esFuncionInexistente, mensajeErrorUsuario } from '@/lib/errores';
+import { obtenerTodasLasFilas } from '@/lib/paginacion';
 import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
 import { validarMotivoCancelacion, validarRecepcion, type DatosRecepcion } from '@/lib/recepcion';
 
@@ -45,6 +46,19 @@ const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
     id, disponibilidad, vehiculo_id,
     vehiculo:vehiculo_id(id, chasis, patente, marca, modelo, anio, color, ubicacion)
   )`;
+
+/** Vehículo de la búsqueda para traslados, antes de marcar `en_traslado_activo`. */
+interface FilaVehiculoTraslado {
+  id: string;
+  chasis: string;
+  patente: string | null;
+  marca: string;
+  modelo: string;
+  anio: number;
+  color: string | null;
+  ubicacion: number | null;
+  ubicacion_nombre: string | null;
+}
 
 interface TrasladoRawRow {
   id: string;
@@ -540,6 +554,10 @@ export class TrasladoService {
    * (inventario disponible), con búsqueda por patente o chasis, filtros por
    * sucursal y marca, y paginación. Marca `en_traslado_activo` a los que ya
    * integran un traslado pendiente/en tránsito para deshabilitarlos en la UI.
+   *
+   * La exclusión de reservados y vendidos, el orden (por chasis) y la
+   * paginación los hace la RPC `fn_vehiculos_disponibles_traslado`. Si la
+   * migración aún no está aplicada, usa la consulta anterior.
    */
   static async getVehiculosParaTraslado(
     q = '',
@@ -547,80 +565,35 @@ export class TrasladoService {
     pageSize = 12,
     opciones?: { sucursalId?: number | null; marca?: string | null }
   ): Promise<VehiculosParaTrasladoResult> {
+    page = Math.max(1, page);
+    pageSize = Math.min(Math.max(1, pageSize), 100);
     const vacio: VehiculosParaTrasladoResult = { vehiculos: [], total: 0, page, pageSize, totalPages: 0 };
     try {
       const admin = createAdminClient();
+      // Brecha 021: solo alfanuméricos y guiones.
+      const seguro = sanitizarTerminoBusqueda(q.trim());
 
-      // Vehículos NO trasladables: reservados en una solicitud activa o vendidos.
-      const [reservados, vendidos] = await Promise.all([
-        admin
-          .from('solicitud_vehiculo')
-          .select('vehiculo_id, solicitud!inner(estado)')
-          .eq('disponibilidad', 'reservado')
-          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
-          .limit(100000),
-        admin
-          .from('solicitud_vehiculo')
-          .select('vehiculo_id')
-          .eq('disponibilidad', 'vendido')
-          .limit(100000),
-      ]);
+      const { data, error } = await admin.rpc('fn_vehiculos_disponibles_traslado', {
+        p_busqueda: seguro || null,
+        p_sucursal_id: opciones?.sucursalId || null,
+        p_marca: opciones?.marca || null,
+        p_limite: pageSize,
+        p_desplazamiento: (page - 1) * pageSize,
+      });
 
-      const excluidos = new Set<string>([
-        ...((reservados?.data || []) as unknown as Array<{ vehiculo_id: string }>).map((r) => r.vehiculo_id),
-        ...((vendidos?.data || []) as unknown as Array<{ vehiculo_id: string }>).map((v) => v.vehiculo_id),
-      ]);
-
-      const filtro = q.trim();
-      page = Math.max(1, page);
-      pageSize = Math.min(Math.max(1, pageSize), 100);
-
-      let query = admin
-        .from('vehiculo')
-        .select(
-          'id, chasis, patente, marca, modelo, anio, color, ubicacion, sucursal:ubicacion(nombre)',
-          { count: 'exact' }
-        );
-
-      if (excluidos.size > 0) {
-        query = query.not('id', 'in', `(${Array.from(excluidos).join(',')})`);
-      }
-
-      if (opciones?.sucursalId) {
-        query = query.eq('ubicacion', opciones.sucursalId);
-      }
-      if (opciones?.marca) {
-        query = query.eq('marca', opciones.marca);
-      }
-      if (filtro) {
-        // Brecha 021: solo alfanuméricos y guiones; nada que altere el .or().
-        const seguro = sanitizarTerminoBusqueda(filtro);
-        if (seguro) {
-          query = query.or(`patente.ilike.%${seguro}%,chasis.ilike.%${seguro}%`);
-        }
-      }
-
-      const { data, error, count } = await query
-        .order('patente', { ascending: true })
-        .range((page - 1) * pageSize, page * pageSize - 1);
-
-      if (error) {
+      let pagina: { filas: FilaVehiculoTraslado[]; total: number } | null;
+      if (error && esFuncionInexistente(error)) {
+        pagina = await this.getVehiculosParaTrasladoSinRpc(seguro, page, pageSize, opciones);
+      } else if (error) {
         console.error('Error al listar vehículos para traslado:', error);
-        return vacio;
+        pagina = null;
+      } else {
+        const filas = (data || []) as Array<FilaVehiculoTraslado & { total: number | string }>;
+        pagina = { filas, total: filas.length > 0 ? Number(filas[0].total) : 0 };
       }
 
-      const total = count ?? 0;
-      const filas = (data || []) as unknown as Array<{
-        id: string;
-        chasis: string;
-        patente: string | null;
-        marca: string;
-        modelo: string;
-        anio: number;
-        color: string | null;
-        ubicacion: number | null;
-        sucursal: { nombre: string | null } | null;
-      }>;
+      if (!pagina) return vacio;
+      const { filas, total } = pagina;
 
       const ids = filas.map((v) => v.id);
       const ocupados = new Set<string>();
@@ -647,7 +620,7 @@ export class TrasladoService {
           anio: v.anio,
           color: v.color,
           ubicacion: v.ubicacion,
-          ubicacion_nombre: v.sucursal?.nombre ?? null,
+          ubicacion_nombre: v.ubicacion_nombre,
           en_traslado_activo: ocupados.has(v.id),
         })),
         total,
@@ -659,5 +632,80 @@ export class TrasladoService {
       console.error('Error en getVehiculosParaTraslado:', err);
       return vacio;
     }
+  }
+
+  /**
+   * Consulta anterior a `fn_vehiculos_disponibles_traslado` (solo mientras la
+   * migración 20261020120000 no esté aplicada). Excluye con `not id in (...)`,
+   * que se vuelve demasiado largo para la URL cuando hay muchos vendidos.
+   */
+  private static async getVehiculosParaTrasladoSinRpc(
+    seguro: string,
+    page: number,
+    pageSize: number,
+    opciones?: { sucursalId?: number | null; marca?: string | null }
+  ): Promise<{ filas: FilaVehiculoTraslado[]; total: number } | null> {
+    const admin = createAdminClient();
+
+    // Vehículos NO trasladables: reservados en una solicitud activa o vendidos.
+    const [reservados, vendidos] = await Promise.all([
+      obtenerTodasLasFilas<{ vehiculo_id: string }>(
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id, solicitud!inner(estado)')
+          .eq('disponibilidad', 'reservado')
+          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
+          .order('id', { ascending: true }),
+        (error) => console.error('Error al consultar reservas activas:', error)
+      ),
+      obtenerTodasLasFilas<{ vehiculo_id: string }>(
+        admin
+          .from('solicitud_vehiculo')
+          .select('vehiculo_id')
+          .eq('disponibilidad', 'vendido')
+          .order('id', { ascending: true }),
+        (error) => console.error('Error al consultar vehículos vendidos:', error)
+      ),
+    ]);
+
+    const excluidos = new Set<string>([
+      ...(reservados ?? []).map((r) => r.vehiculo_id),
+      ...(vendidos ?? []).map((v) => v.vehiculo_id),
+    ]);
+
+    let query = admin
+      .from('vehiculo')
+      .select(
+        'id, chasis, patente, marca, modelo, anio, color, ubicacion, sucursal:ubicacion(nombre)',
+        { count: 'exact' }
+      );
+
+    if (excluidos.size > 0) {
+      query = query.not('id', 'in', `(${Array.from(excluidos).join(',')})`);
+    }
+    if (opciones?.sucursalId) {
+      query = query.eq('ubicacion', opciones.sucursalId);
+    }
+    if (opciones?.marca) {
+      query = query.eq('marca', opciones.marca);
+    }
+    if (seguro) {
+      query = query.or(`patente.ilike.%${seguro}%,chasis.ilike.%${seguro}%`);
+    }
+
+    const { data, error, count } = await query
+      .order('chasis', { ascending: true })
+      .range((page - 1) * pageSize, page * pageSize - 1);
+
+    if (error) {
+      console.error('Error al listar vehículos para traslado:', error);
+      return null;
+    }
+
+    const filas = ((data || []) as unknown as Array<
+      Omit<FilaVehiculoTraslado, 'ubicacion_nombre'> & { sucursal: { nombre: string | null } | null }
+    >).map(({ sucursal, ...v }) => ({ ...v, ubicacion_nombre: sucursal?.nombre ?? null }));
+
+    return { filas, total: count ?? 0 };
   }
 }

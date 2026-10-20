@@ -3,6 +3,7 @@ import { Vehiculo, VehiculoConDisponibilidad, CreateVehiculoInput, UpdateVehicul
 import { OrganizacionService } from '@/services/organizacion.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mensajeErrorUsuario } from '@/lib/errores';
+import { obtenerTodasLasFilas } from '@/lib/paginacion';
 
 export class VehiculoService {
   /**
@@ -79,21 +80,7 @@ export class VehiculoService {
     },
     onError: (error: { message: string }) => void,
   ): Promise<Array<Record<string, unknown>> | null> {
-    const TAMANO_PAGINA = 1000;
-    const filas: Array<Record<string, unknown>> = [];
-
-    for (let desde = 0; ; desde += TAMANO_PAGINA) {
-      const { data, error } = await query.range(desde, desde + TAMANO_PAGINA - 1);
-      if (error) {
-        onError(error);
-        return null;
-      }
-      const pagina = (data as Array<Record<string, unknown>> | null) ?? [];
-      filas.push(...pagina);
-      if (pagina.length < TAMANO_PAGINA) break;
-    }
-
-    return filas;
+    return obtenerTodasLasFilas(query, onError);
   }
 
   /**
