@@ -664,6 +664,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-20 | Fase E: el número de una solicitud abre su detalle (modo consulta) en los paneles del dashboard, Prioridades, Recepciones, Reportes y Sucursales (`AbrirSolicitudDetalle`, `getSolicitudDetalleAction`, `codigoSolicitud`). Nueva sección 35 | Claude (asistido) |
 | 2026-10-21 | Fase F: dominio de correo permitido (`DOMINIOS_CORREO_PERMITIDOS`), mensaje de registro pendiente con rol y sucursal, notificación `NUEVO_USUARIO` al administrador (migración `20261020140000`), activación masiva, contador de pendientes corregido y carga masiva de usuarios desde Excel. Nueva sección 36; variables de entorno | Claude (asistido) |
 | 2026-10-21 | Fase G: cambio de ubicación masivo en el inventario (`cambiarUbicacionMasivaAction`, auditoría por vehículo) y "Vendido" pasa a mostrarse como "Entregado al cliente". Sin migración. Nueva sección 37 | Claude (asistido) |
+| 2026-10-21 | Fase H: preguntas frecuentes por rol y por pantalla (`src/config/faq.ts`), `/faq?vista=` y botón flotante de ayuda en todas las páginas con sesión. Sin migración. Nueva sección 38 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -957,3 +958,13 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
 
 ### 37.3 Tests
 `ubicacionMasiva.test.ts`, `vehiculo.service.test.ts` (`cambiarUbicacionMasiva`), `vehiculo.actions.test.ts` (`cambiarUbicacionMasivaAction`), `solicitudes.service.test.ts` (`registrarAuditoriaMasiva`), `paginacion.test.ts` (`enLotes`) y `vehiculo.test.ts`.
+
+## 38. Preguntas frecuentes por rol y por pantalla (2026-10-21, fase H)
+
+- **Contenido:** `src/config/faq.ts` (`PREGUNTAS_FAQ`) es la única fuente. Cada pregunta tiene su vista (pantalla) y, si corresponde, los roles que la ven; sin roles, la ven todos. Hay 16 vistas: generales, inicio, solicitudes, aprobaciones, prioridades, recepciones, calendario, traslados internos, movimientos, reportes, slots, inventario, usuarios, sucursales, historial y perfil.
+- El contenido se escribió a partir del código y de esta documentación, y se verificaron en el código los nombres de los botones citados. Reemplaza el FAQ anterior, que tenía errores: decía que solo los vehículos vendidos se trasladan (es al revés: solo los disponibles) y que el administrador cancela despachos en tránsito.
+- **`/faq`** muestra solo las preguntas del rol del usuario, agrupadas por pantalla, con un índice de pantallas. Con `?vista=<vista>` pone primero las de esa pantalla, abiertas y destacadas. Una vista desconocida se ignora (`vistaDesdeParam`, que usa `hasOwnProperty` para no aceptar `toString` y similares).
+- **Botón de ayuda** (`BotonAyuda`): botón flotante abajo a la derecha, en todas las páginas con sesión (lo monta `PageHeader`). Calcula la vista desde la ruta (`vistaDesdeRuta`, `hrefAyuda`) y abre `/faq?vista=…` en una pestaña nueva. No aparece en `/faq` ni en login o registro.
+- El pie de `/faq` muestra el correo de soporte (`NEXT_PUBLIC_SOPORTE_EMAIL`) si está configurado.
+- **Mantenimiento:** al cambiar una regla de negocio o un texto visible, actualizar la respuesta que lo explica en `faq.ts`. Está anotado en `AGENTS.md`.
+- **Tests:** `faq.test.ts`: preguntas únicas y no vacías por rol, todos los roles con generales y perfil, sin el término antiguo "vendido", mapeo de rutas, parámetro `vista`, enlace del botón, visibilidad por rol y orden de los grupos.

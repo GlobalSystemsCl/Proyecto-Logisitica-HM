@@ -40,3 +40,7 @@ Convenciones de test (ver `tests/plan_maestro_testing.md`):
 
 - Toda creación de cuentas valida el dominio con `validarDominioCorreo` (`src/lib/dominios.ts`, variable `DOMINIOS_CORREO_PERMITIDOS`). El login nunca se restringe por dominio.
 - El administrador solo recibe la notificación `NUEVO_USUARIO` (campana, sin correo); no agregarlo a los destinatarios del flujo de solicitudes.
+
+## Ayuda
+
+- Las preguntas frecuentes están en `src/config/faq.ts`, por rol y por vista. Si un cambio modifica lo que el usuario ve o una regla de negocio, actualizar ahí la respuesta que lo explica. Una ruta nueva se agrega a `RUTAS_VISTA` para que el botón de ayuda la reconozca.

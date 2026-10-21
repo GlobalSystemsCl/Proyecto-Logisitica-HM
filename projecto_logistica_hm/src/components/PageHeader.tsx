@@ -5,6 +5,7 @@ import { logoutAction } from '@/app/actions/auth.actions';
 import { ROL_LABEL, UserRole } from '@/types/auth.types';
 import SlotsResumen from '@/components/SlotsResumen';
 import CampanaNotificaciones from '@/components/CampanaNotificaciones';
+import BotonAyuda from '@/components/BotonAyuda';
 import type { SlotSucursalResumen } from '@/lib/slots';
 
 interface PageHeaderProps {
@@ -82,6 +83,8 @@ export default function PageHeader({
               </span>
             </Link>
           </div>
+
+          {autenticado && <BotonAyuda />}
 
           {autenticado && (
             <div className="flex items-center gap-2 sm:gap-3">

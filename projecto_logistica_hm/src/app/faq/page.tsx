@@ -1,87 +1,23 @@
 import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
 import { HelpCircle, ChevronRight, Circle } from 'lucide-react';
 import PageHeader from '@/components/PageHeader';
+import { ROL_LABEL } from '@/types/auth.types';
+import { ETIQUETA_VISTA, gruposFaq, vistaDesdeParam } from '@/config/faq';
+import { getSoporteEmail } from '@/lib/soporte';
 
 export const dynamic = 'force-dynamic';
 
-const CATEGORIAS = [
-  {
-    titulo: 'Solicitudes',
-    preguntas: [
-      {
-        p: '¿Qué es una solicitud de traslado?',
-        r: 'Es el pedido formal que realiza un ejecutivo para mover uno o más vehículos desde una sucursal (origen) hacia otra o hacia un evento (destino). Una vez creada, pasa por un flujo controlado: aprobación, priorización, asignación, calendarización, despacho, tránsito y entrega.',
-      },
-      {
-        p: '¿Quién puede crear una solicitud?',
-        r: 'El Ejecutivo crea solicitudes para su sucursal y el Jefe de Local puede crearlas para cualquiera de sus sucursales asignadas. Logística no crea solicitudes: recibe las que ya pasaron la aprobación.',
-      },
-      {
-        p: '¿Cómo funciona la aprobación?',
-        r: 'El Jefe de Local (o el Administrador) aprueba o rechaza la solicitud y acepta o modifica la fecha límite de entrega propuesta. Al aprobarse se registra automáticamente la fecha de confirmación.',
-      },
-      {
-        p: '¿Puedo cancelar una solicitud?',
-        r: 'Sí. El Ejecutivo puede cancelar su propia solicitud antes del despacho; el Jefe de Local puede cancelar solicitudes de sus sucursales; Logística y Administrador pueden cancelar en cualquier momento previo a la recepción. Al cancelar, los slots reservados se liberan.',
-      },
-    ],
-  },
-  {
-    titulo: 'Estados del flujo',
-    preguntas: [
-      {
-        p: '¿Qué significa el estado "Despachada"?',
-        r: 'Logística ya preparó los vehículos y los marcó como despachados desde la sucursal origen. Aún no se confirma el inicio de ruta. Es el paso intermedio entre Calendarizada y En tránsito.',
-      },
-      {
-        p: '¿Por qué "Entregada" se muestra como "Recepcionada"?',
-        r: 'Es la nueva nomenclatura: cuando el Jefe de Local del destino recibe los vehículos, el sistema registra el estado "entregada" en la base de datos pero en pantalla se muestra como "Recepcionada" para ser más claro.',
-      },
-      {
-        p: '¿Qué diferencia hay entre "Recepcionada" y "Entregado a cliente"?',
-        r: 'Recepcionada significa que los vehículos llegaron a la sucursal destino. Entregado a cliente es el cierre final del proceso, cuando el ejecutivo o el jefe de local confirman que el vehículo fue entregado al cliente final.',
-      },
-      {
-        p: '¿Puedo revolver el despacho de una solicitud?',
-        r: 'Logística y el Administrador pueden cancelar el despacho mientras la solicitud esté "Despachada" o "En tránsito", lo que la devuelve a "Calendarizada".',
-      },
-    ],
-  },
-  {
-    titulo: 'Vehículos y slots',
-    preguntas: [
-      {
-        p: '¿Qué es un slot en la sucursal destino?',
-        r: 'Es la capacidad de almacenamiento disponible en una sucursal (cuántos vehículos puede recibir). Al crear una solicitud o traslado se reserva un slot; al recepcionar se libera la reserva.',
-      },
-      {
-        p: '¿Qué vehículos pueden trasladarse?',
-        r: 'Solo vehículos vendidos pueden moverse vía traslado interno entre sucursales. Los vehículos en reserva para una solicitud normal se liberan al recepcionar la solicitud en destino.',
-      },
-      {
-        p: '¿Dónde veo la disponibilidad de slots?',
-        r: 'El Jefe de Local y el Administrador ven un badge de slots libres en el encabezado de cada página, y el detalle por sucursal en la card "Slots de Estacionamiento" del dashboard (ruta /logistica/slots).',
-      },
-    ],
-  },
-  {
-    titulo: 'Insistencias y trazabilidad',
-    preguntas: [
-      {
-        p: '¿Qué es "Insistir" en una solicitud?',
-        r: 'Es la herramienta del Ejecutivo para marcar que su solicitud lleva demasiado tiempo sin avanzar. Solo aplica a solicitudes propias y está limitada a 1 vez cada 24 horas por solicitud.',
-      },
-      {
-        p: '¿Dónde puedo ver el historial con fechas?',
-        r: 'En el detalle de cada solicitud, la sección de trazabilidad muestra los timestamps de confirmación, despacho, inicio de tránsito, recepción y entrega al cliente, además de la auditoría completa de acciones.',
-      },
-    ],
-  },
-];
-
-export default async function FaqPage() {
+/**
+ * Preguntas frecuentes (fase H): solo las del rol del usuario, agrupadas por
+ * pantalla. `?vista=` (lo usa el botón de ayuda) pone primero las de esa
+ * pantalla y las deja abiertas. El contenido está en `src/config/faq.ts`.
+ */
+export default async function FaqPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const profile = await AuthService.getCurrentUserProfile();
 
   if (!profile) {
@@ -91,6 +27,11 @@ export default async function FaqPage() {
   if (!profile.activo) {
     redirect('/dashboard?error=unauthorized');
   }
+
+  const vista = vistaDesdeParam((await searchParams).vista);
+  const grupos = gruposFaq(profile.rol, vista);
+  const actual = vista && grupos[0]?.vista === vista ? grupos[0] : null;
+  const soporte = getSoporteEmail();
 
   return (
     <div className="min-h-screen bg-neutral-100 text-neutral-900 flex flex-col">
@@ -111,37 +52,75 @@ export default async function FaqPage() {
             </div>
             <h1 className="text-3xl font-bold text-neutral-900">Preguntas Frecuentes</h1>
             <p className="text-neutral-500 text-sm mt-2">
-              Respuestas sobre el flujo de solicitudes, estados, vehículos y slots del sistema.
+              {actual
+                ? `Ayuda de la pantalla "${ETIQUETA_VISTA[actual.vista]}" para tu rol (${ROL_LABEL[profile.rol]}).`
+                : `Respuestas para tu rol (${ROL_LABEL[profile.rol]}), ordenadas por pantalla.`}
             </p>
           </header>
 
-          {CATEGORIAS.map((cat) => (
-            <section key={cat.titulo} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
-              <h2 className="px-5 py-3.5 border-b border-neutral-200 bg-neutral-50 text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2">
-                <Circle className="w-3 h-3 text-neutral-400" />
-                {cat.titulo}
-              </h2>
-              <div className="divide-y divide-neutral-100">
-                {cat.preguntas.map((item) => (
-                  <details key={item.p} className="group px-5 py-4">
-                    <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-sm font-semibold text-neutral-900 hover:text-neutral-600 transition-colors">
-                      {item.p}
-                      <ChevronRight className="w-4 h-4 text-neutral-400 group-open:rotate-90 transition-transform shrink-0" />
-                    </summary>
-                    <p className="mt-2 text-sm text-neutral-600 leading-relaxed">{item.r}</p>
-                  </details>
-                ))}
-              </div>
-            </section>
-          ))}
+          {grupos.length > 1 && (
+            <nav aria-label="Pantallas" className="flex flex-wrap justify-center gap-2">
+              {grupos.map((g) => (
+                <a
+                  key={g.vista}
+                  href={`#${g.vista}`}
+                  className={`px-3 py-1.5 rounded-full border text-xs font-semibold ${
+                    actual?.vista === g.vista
+                      ? 'bg-neutral-900 border-neutral-900 text-white'
+                      : 'bg-white border-neutral-300 text-neutral-700 hover:border-neutral-900'
+                  }`}
+                >
+                  {g.titulo}
+                </a>
+              ))}
+            </nav>
+          )}
+
+          {grupos.map((grupo) => {
+            const esActual = actual?.vista === grupo.vista;
+            return (
+              <section
+                key={grupo.vista}
+                id={grupo.vista}
+                className={`bg-white border rounded-2xl overflow-hidden shadow-sm scroll-mt-6 ${
+                  esActual ? 'border-neutral-900 ring-2 ring-neutral-900/10' : 'border-neutral-200'
+                }`}
+              >
+                <h2 className="px-5 py-3.5 border-b border-neutral-200 bg-neutral-50 text-xs font-semibold text-neutral-500 uppercase tracking-wider flex items-center gap-2">
+                  <Circle className="w-3 h-3 text-neutral-400" />
+                  {grupo.titulo}
+                  {esActual && <span className="ml-auto normal-case tracking-normal text-neutral-900">Esta pantalla</span>}
+                </h2>
+                <div className="divide-y divide-neutral-100">
+                  {grupo.preguntas.map((item) => (
+                    <details key={item.pregunta} open={esActual} className="group px-5 py-4">
+                      <summary className="flex items-center justify-between gap-3 cursor-pointer list-none text-sm font-semibold text-neutral-900 hover:text-neutral-600 transition-colors">
+                        {item.pregunta}
+                        <ChevronRight className="w-4 h-4 text-neutral-400 group-open:rotate-90 transition-transform shrink-0" />
+                      </summary>
+                      <p className="mt-2 text-sm text-neutral-600 leading-relaxed">{item.respuesta}</p>
+                    </details>
+                  ))}
+                </div>
+              </section>
+            );
+          })}
 
           <footer className="text-center pb-4">
             <p className="text-sm text-neutral-500">
-              ¿Necesitas más ayuda? Consulta a tu Jefe de Local o al equipo de Logística.
+              ¿No encontraste lo que buscabas?{' '}
+              {soporte ? (
+                <>
+                  Escribe a{' '}
+                  <a href={`mailto:${soporte}`} className="font-semibold text-neutral-900 underline underline-offset-4">
+                    {soporte}
+                  </a>
+                  .
+                </>
+              ) : (
+                'Consulta al administrador de la plataforma.'
+              )}
             </p>
-            <Link href="/solicitudes" className="inline-block mt-2 text-sm font-semibold text-neutral-900 underline underline-offset-4 hover:text-neutral-600">
-              Ir al módulo de solicitudes
-            </Link>
           </footer>
         </div>
       </main>
