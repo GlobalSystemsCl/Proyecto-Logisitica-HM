@@ -7,6 +7,7 @@ import { mensajeErrorUsuario } from '@/lib/errores';
 import { esAdminPrincipal } from '@/lib/auth/admin-principal';
 import { getAppUrl } from '@/lib/env';
 import { mensajeCuentaDesactivada } from '@/lib/soporte';
+import { validarDominioCorreo } from '@/lib/dominios';
 
 export const MAX_INTENTOS_FALLIDOS = 5;
 export const MINUTOS_BLOQUEO = 15;
@@ -186,7 +187,7 @@ export class AuthService {
     email: string;
     password: string;
     sucursal_id?: number | null;
-  }): Promise<{ success: boolean; error?: string }> {
+  }): Promise<{ success: boolean; error?: string; usuarioId?: string; sucursalNombre?: string | null }> {
     try {
       const admin = createAdminClient();
       const cleanEmail = data.email.trim().toLowerCase();
@@ -201,6 +202,10 @@ export class AuthService {
 
       const errorEmail = validarEmailFormato(data.email);
       if (errorEmail) return { success: false, error: errorEmail };
+
+      // Fase F: solo correos corporativos (`DOMINIOS_CORREO_PERMITIDOS`).
+      const errorDominio = validarDominioCorreo(cleanEmail);
+      if (errorDominio) return { success: false, error: errorDominio };
 
       const errorPassword = validarPassword(data.password);
       if (errorPassword) return { success: false, error: errorPassword };
@@ -225,15 +230,17 @@ export class AuthService {
       }
 
       // Validar que la sucursal seleccionada exista
+      let sucursalNombre: string | null = null;
       if (sucursalId !== null) {
         const { data: sucursal } = await admin
           .from('sucursal')
-          .select('id')
+          .select('id, nombre')
           .eq('id', sucursalId)
           .maybeSingle();
         if (!sucursal) {
           return { success: false, error: 'La sucursal seleccionada no es válida.' };
         }
+        sucursalNombre = (sucursal as { nombre: string | null }).nombre ?? null;
       }
 
       // La cuenta se crea con service_role y ya confirmada, en vez de
@@ -294,7 +301,7 @@ export class AuthService {
         };
       }
 
-      return { success: true };
+      return { success: true, usuarioId: authData.user.id, sucursalNombre };
     } catch (err: unknown) {
       return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al registrar usuario') };
     }

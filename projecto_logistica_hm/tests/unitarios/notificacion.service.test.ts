@@ -295,6 +295,53 @@ describe('NotificacionService.crearNotificaciones', () => {
   });
 });
 
+describe('NotificacionService.notificarNuevoUsuario', () => {
+  const nuevo = { id: 'u-new', nombre: 'Ana Soto', email: 'ana@hmotores.cl', sucursal: 'Centro' };
+
+  it('should_insert_one_bell_notification_per_active_admin_without_email', async () => {
+    admin.results.usuario = [fila([{ id: 'adm-1' }, { id: 'adm-2' }])];
+    admin.results.notificacion = [fila(null)];
+
+    const n = await NotificacionService.notificarNuevoUsuario(nuevo);
+
+    expect(n).toBe(2);
+    expect(admin.callsTo('usuario')).toContainEqual(['eq', 'rol', 'administrador']);
+    expect(admin.callsTo('usuario')).toContainEqual(['eq', 'activo', true]);
+    const insert = admin.callsTo('notificacion').find((c) => c[0] === 'insert');
+    expect(insert?.[1]).toEqual([
+      expect.objectContaining({
+        usuario_id: 'adm-1',
+        emisor_id: 'u-new',
+        tipo: 'NUEVO_USUARIO',
+        entidad: 'usuario',
+        entidad_id: 'u-new',
+        ruta: '/admin/usuarios?estado=pendientes',
+        titulo: 'Nueva cuenta por activar',
+      }),
+      expect.objectContaining({ usuario_id: 'adm-2' }),
+    ]);
+    expect(enviarCorreo).not.toHaveBeenCalled();
+  });
+
+  it('should_not_insert_when_there_are_no_active_admins', async () => {
+    admin.results.usuario = [fila([])];
+    expect(await NotificacionService.notificarNuevoUsuario(nuevo)).toBe(0);
+    expect(admin.callsTo('notificacion')).toHaveLength(0);
+  });
+
+  it('should_return_zero_without_throwing_when_insert_fails', async () => {
+    admin.results.usuario = [fila([{ id: 'adm-1' }])];
+    admin.results.notificacion = [{ data: null, error: { message: 'boom' } }];
+    expect(await NotificacionService.notificarNuevoUsuario(nuevo)).toBe(0);
+  });
+
+  it('should_return_zero_when_admin_query_fails', async () => {
+    admin.results.usuario = [{ data: null, error: { message: 'boom' } }];
+    expect(await NotificacionService.notificarNuevoUsuario(nuevo)).toBe(0);
+    expect(admin.callsTo('notificacion')).toHaveLength(0);
+  });
+});
+
 describe('NotificacionService.getBandeja', () => {
   it('should_return_latest_notifications_and_unread_count_of_the_user', async () => {
     const item = { id: 'n1', tipo: 'SOLICITUD_APROBADA', titulo: 'T', mensaje: 'M', leida: false, ruta: '/x', created_at: '2026-10-14' };

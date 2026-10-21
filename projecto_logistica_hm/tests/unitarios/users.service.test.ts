@@ -154,6 +154,68 @@ describe('UsersService', () => {
     });
   });
 
+  describe('activarCuentasMasivo', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it('should_update_and_approve_each_pending_account_keeping_registration_branch', async () => {
+      admin.results.usuario = [
+        fila([
+          { id: 'u-1', email: 'a@hmotores.cl', sucursal_id: 3, aprobado: false },
+          { id: 'u-2', email: 'b@hmotores.cl', sucursal_id: 5, aprobado: false },
+        ]),
+      ];
+      const update = vi.spyOn(UsersService, 'updateUser').mockResolvedValue({ success: true });
+      const approve = vi.spyOn(UsersService, 'approveUser').mockResolvedValue({ success: true });
+
+      const res = await UsersService.activarCuentasMasivo(['u-1', 'u-2', 'u-1'], { rol: 'ejecutivo', sucursal: 'registro' });
+
+      expect(res).toEqual({ success: true, activadas: ['a@hmotores.cl', 'b@hmotores.cl'], fallidas: [] });
+      expect(update).toHaveBeenCalledWith('u-1', { rol: 'ejecutivo', sucursal_id: 3, sucursales_ids: [], zonas_ids: [] });
+      expect(update).toHaveBeenCalledWith('u-2', { rol: 'ejecutivo', sucursal_id: 5, sucursales_ids: [], zonas_ids: [] });
+      expect(approve).toHaveBeenCalledTimes(2);
+    });
+
+    it('should_skip_approved_or_missing_accounts_and_continue_after_a_failure', async () => {
+      admin.results.usuario = [
+        fila([
+          { id: 'u-1', email: 'a@hmotores.cl', sucursal_id: 3, aprobado: true },
+          { id: 'u-2', email: 'b@hmotores.cl', sucursal_id: 5, aprobado: false },
+          { id: 'u-3', email: 'c@hmotores.cl', sucursal_id: 5, aprobado: false },
+        ]),
+      ];
+      vi.spyOn(UsersService, 'updateUser')
+        .mockResolvedValueOnce({ success: false, error: 'Debes asignar la sucursal base del usuario.' })
+        .mockResolvedValueOnce({ success: true });
+      vi.spyOn(UsersService, 'approveUser').mockResolvedValue({ success: true });
+
+      const res = await UsersService.activarCuentasMasivo(['u-1', 'u-2', 'u-3', 'u-9'], { rol: 'logistica', sucursal: 4, zonaId: 2 });
+
+      expect(res.activadas).toEqual(['c@hmotores.cl']);
+      expect(res.fallidas).toEqual([
+        { email: 'a@hmotores.cl', error: 'La cuenta ya estaba activada.' },
+        { email: 'b@hmotores.cl', error: 'Debes asignar la sucursal base del usuario.' },
+        { email: 'u-9', error: 'Usuario no encontrado.' },
+      ]);
+    });
+
+    it('should_reject_invalid_assignment_without_querying', async () => {
+      const res = await UsersService.activarCuentasMasivo(['u-1'], { rol: 'jefe_local', sucursal: 1 });
+
+      expect(res.success).toBe(false);
+      expect(res.error).toMatch(/solo admite/);
+      expect(admin.callsTo('usuario')).toHaveLength(0);
+    });
+
+    it('should_return_error_when_accounts_cannot_be_read', async () => {
+      admin.results.usuario = [{ data: null, error: { message: 'boom' } }];
+      const res = await UsersService.activarCuentasMasivo(['u-1'], { rol: 'ejecutivo', sucursal: 'registro' });
+      expect(res.success).toBe(false);
+      expect(res.activadas).toEqual([]);
+    });
+  });
+
   describe('createUser', () => {
     it('should_create_admin_user_as_pre_approved', async () => {
       admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-2' })];
@@ -177,6 +239,16 @@ describe('UsersService', () => {
       expect(metadata).toEqual({ nombre: 'Ana', apellido: 'Díaz' });
       const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
       expect(upsert?.[1]).toMatchObject({ aprobado: true, activo: true, rol: 'administrador' });
+    });
+
+    it('should_reject_email_outside_allowed_domains_before_creating_account', async () => {
+      vi.stubEnv('DOMINIOS_CORREO_PERMITIDOS', 'hmotores.cl');
+
+      const res = await UsersService.createUser({ nombre: 'Ana', apellido: 'Díaz', email: 'ana@gmail.com', rol: 'ejecutivo', sucursal_id: 1 });
+
+      expect(res).toEqual({ success: false, error: 'Solo se pueden crear cuentas con correo corporativo (@hmotores.cl).' });
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
     });
 
     it('should_not_return_temp_password_when_email_was_sent', async () => {

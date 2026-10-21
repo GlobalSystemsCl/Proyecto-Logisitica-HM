@@ -4,6 +4,26 @@ import { requireProfile, requireRole } from '@/lib/auth/guards';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { UsersService } from '@/services/users.service';
 import { CreateUserInput, UserRole } from '@/types/auth.types';
+import type { AsignacionMasiva } from '@/lib/activacionMasiva';
+import { SucursalesService } from '@/services/sucursales.service';
+import { OrganizacionService } from '@/services/organizacion.service';
+import { getDominiosPermitidos } from '@/lib/dominios';
+import { sucursalesOcupadasPorJefes } from '@/lib/asignaciones';
+import {
+  TAMANO_LOTE_IMPORTACION,
+  inputDesdeFila,
+  validarFilasImportacion,
+  type FilaPlantilla,
+} from '@/lib/importUsuarios';
+
+export interface ResultadoFilaImportacion {
+  fila: number;
+  email: string;
+  ok: boolean;
+  error?: string;
+  /** Solo si el correo con las credenciales no se pudo enviar (brecha 013). */
+  tempPassword?: string;
+}
 import { revalidatePath } from 'next/cache';
 
 async function verifyAdminPermission() {
@@ -103,6 +123,77 @@ export async function approveUserAction(userId: string) {
   } catch (err: unknown) {
     const msg = mensajeErrorUsuario(err, 'Error al autorizar usuario');
     return { success: false, error: msg };
+  }
+}
+
+/** Fase F: activa varias cuentas pendientes con un rol y sucursal en común. */
+export async function approveUsersBulkAction(ids: string[], asignacion: AsignacionMasiva) {
+  try {
+    await verifyAdminPermission();
+    const result = await UsersService.activarCuentasMasivo(ids, asignacion);
+    if (result.activadas.length > 0) revalidatePath('/admin/usuarios');
+    return result;
+  } catch (err: unknown) {
+    return { success: false, activadas: [], fallidas: [], error: mensajeErrorUsuario(err, 'Error al activar las cuentas') };
+  }
+}
+
+/**
+ * Fase F: crea un lote de cuentas desde la carga masiva (máximo
+ * `TAMANO_LOTE_IMPORTACION` filas por llamada; el navegador envía los lotes
+ * de a uno). Vuelve a validar cada fila con los datos actuales y crea las
+ * válidas con `createUser`, que envía las credenciales por correo.
+ */
+export async function importUsuariosAction(filas: FilaPlantilla[]) {
+  try {
+    await verifyAdminPermission();
+    if (!Array.isArray(filas) || filas.length === 0) {
+      return { success: false, error: 'No hay filas para importar.', resultados: [] as ResultadoFilaImportacion[] };
+    }
+    if (filas.length > TAMANO_LOTE_IMPORTACION) {
+      return {
+        success: false,
+        error: `Envía como máximo ${TAMANO_LOTE_IMPORTACION} filas por lote.`,
+        resultados: [] as ResultadoFilaImportacion[],
+      };
+    }
+
+    const [usuarios, sucursales, zonas] = await Promise.all([
+      UsersService.getUsers(),
+      SucursalesService.getSucursales(),
+      OrganizacionService.getZonas(),
+    ]);
+    const validadas = validarFilasImportacion(filas, {
+      sucursales,
+      zonas,
+      emailsExistentes: new Set(usuarios.map((u) => u.email.toLowerCase())),
+      sucursalesConJefe: sucursalesOcupadasPorJefes(
+        usuarios.map((u) => ({ id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim(), rol: u.rol, sucursal_id: u.sucursal_id, sucursales: u.sucursales }))
+      ),
+      dominios: getDominiosPermitidos(),
+    });
+
+    const resultados: ResultadoFilaImportacion[] = [];
+    for (const fila of validadas) {
+      if (fila.errores.length > 0) {
+        resultados.push({ fila: fila.fila, email: fila.email, ok: false, error: fila.errores.join(' ') });
+        continue;
+      }
+      const res = await UsersService.createUser(inputDesdeFila(fila));
+      resultados.push(
+        res.success
+          ? { fila: fila.fila, email: fila.email, ok: true, tempPassword: res.tempPassword }
+          : { fila: fila.fila, email: fila.email, ok: false, error: res.error ?? 'No se pudo crear la cuenta.' }
+      );
+    }
+
+    if (resultados.some((r) => r.ok)) {
+      revalidatePath('/admin/usuarios');
+      revalidatePath('/admin/zonas');
+    }
+    return { success: true, resultados };
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error al importar usuarios'), resultados: [] as ResultadoFilaImportacion[] };
   }
 }
 

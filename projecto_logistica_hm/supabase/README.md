@@ -88,6 +88,7 @@ Se aplicó con la versión `20261013150000`, la misma de `brecha_011_trigger_veh
 | # | Archivo | Riesgo |
 |---|---|---|
 | 21 | `20261020130000_transportista.sql` | Bajo: tabla `transportista` (nombre, RUT único normalizado `12345678-9`, activo) y `transportista_id` en `solicitud` y `traslado_interno` (nulas, ON DELETE RESTRICT). **Aplicarla antes de desplegar el código**: las listas de solicitudes y traslados leen `transportista_id` y, sin la columna, quedan vacías. Después, volver a ejecutar `scripts/01_alinear_historial_migraciones.sql` |
+| 22 | `20261020140000_notificacion_nuevo_usuario.sql` | Bajo: agrega `NUEVO_USUARIO` al enum `tipo_notificacion` (notificación al administrador cuando alguien se registra). Sin transacción explícita. Si el código se despliega antes, el registro funciona igual y solo se pierde la notificación (el error queda en el log). Después, volver a ejecutar `scripts/01_alinear_historial_migraciones.sql` |
 
 ## Historial de migraciones (brecha 015)
 

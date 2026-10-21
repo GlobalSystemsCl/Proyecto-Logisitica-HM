@@ -35,3 +35,8 @@ Convenciones de test (ver `tests/plan_maestro_testing.md`):
 
 - El número visible de una solicitud se arma solo con `codigoSolicitud` (`src/lib/codigoSolicitud.ts`); no usar `id.slice(0, 8)` en código nuevo.
 - Para que una solicitud se pueda abrir desde cualquier lista, envolver su número en `AbrirSolicitudDetalle` (`src/components/`).
+
+## Cuentas
+
+- Toda creación de cuentas valida el dominio con `validarDominioCorreo` (`src/lib/dominios.ts`, variable `DOMINIOS_CORREO_PERMITIDOS`). El login nunca se restringe por dominio.
+- El administrador solo recibe la notificación `NUEVO_USUARIO` (campana, sin correo); no agregarlo a los destinatarios del flujo de solicitudes.

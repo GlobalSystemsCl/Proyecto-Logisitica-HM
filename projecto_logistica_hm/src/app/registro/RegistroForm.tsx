@@ -5,9 +5,12 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { registerAction } from '@/app/actions/auth.actions';
 import { Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, MapPin } from 'lucide-react';
+import { textoDominios } from '@/lib/dominios';
 
 interface Props {
   sucursales: { id: number; nombre: string | null }[];
+  /** Dominios de correo permitidos, o `null` si no hay restricción. */
+  dominios: string[] | null;
 }
 
 /**
@@ -15,18 +18,19 @@ interface Props {
  * misma solicitud dos veces. "Registrar otra cuenta" vuelve a montar el
  * formulario (cambia la `key`), lo que limpia el estado de la action.
  */
-export default function RegistroForm({ sucursales }: Props) {
+export default function RegistroForm({ sucursales, dominios }: Props) {
   const [intento, setIntento] = useState(0);
   return (
     <FormularioRegistro
       key={intento}
       sucursales={sucursales}
+      dominios={dominios}
       onRegistrarOtra={() => setIntento((n) => n + 1)}
     />
   );
 }
 
-function FormularioRegistro({ sucursales, onRegistrarOtra }: Props & { onRegistrarOtra: () => void }) {
+function FormularioRegistro({ sucursales, dominios, onRegistrarOtra }: Props & { onRegistrarOtra: () => void }) {
   const [state, formAction, isPending] = useActionState(registerAction, null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -142,10 +146,13 @@ function FormularioRegistro({ sucursales, onRegistrarOtra }: Props & { onRegistr
                   autoComplete="email"
                   required
                   maxLength={254}
-                  placeholder="usuario@gmail.com"
+                  placeholder={dominios ? `nombre.apellido@${dominios[0]}` : 'nombre.apellido@hmotores.cl'}
                   className="block w-full pl-10 pr-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
               </div>
+              {dominios && (
+                <p className="text-[11px] text-neutral-500">Usa tu correo corporativo ({textoDominios(dominios)}).</p>
+              )}
             </div>
 
             <div className="space-y-1.5">

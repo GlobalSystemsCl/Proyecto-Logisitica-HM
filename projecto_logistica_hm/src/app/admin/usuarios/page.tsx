@@ -4,6 +4,7 @@ import { SucursalesService } from '@/services/sucursales.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import { getAdminPrincipalEmail } from '@/lib/auth/admin-principal';
+import { getDominiosPermitidos } from '@/lib/dominios';
 import UsersTableClient from './UsersTableClient';
 import PageHeader from '@/components/PageHeader';
 
@@ -45,6 +46,7 @@ export default async function AdminUsuariosPage() {
           zonas={zonas}
           currentAdminId={profile.id}
           adminPrincipalEmail={getAdminPrincipalEmail()}
+          dominiosCorreo={getDominiosPermitidos()}
         />
       </main>
     </div>

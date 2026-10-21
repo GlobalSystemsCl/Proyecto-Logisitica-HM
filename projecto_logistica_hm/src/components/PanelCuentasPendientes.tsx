@@ -7,6 +7,7 @@ import { ROL_LABEL, type UserProfile, type UserRole } from '@/types/auth.types';
 import type { Sucursal, Zona } from '@/types/sucursal.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import AsignacionesFields from '@/components/AsignacionesUsuarioFields';
+import ActivacionMasivaModal from '@/components/ActivacionMasivaModal';
 import { approveUserAction, updateUserAction } from '@/app/actions/users.actions';
 import { sucursalesOcupadasPorJefes, validarAsignacionesFormulario } from '@/lib/asignaciones';
 import { recortar, LIMITE_PANEL_CUENTAS } from '@/lib/panel';
@@ -48,6 +49,9 @@ export default function PanelCuentasPendientes({ usuarios, sucursales, zonas }: 
   const [zonasIds, setZonasIds] = useState<number[]>([]);
   const [confirmado, setConfirmado] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Fase F: activación masiva de las cuentas visibles.
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [masiva, setMasiva] = useState(false);
 
   const pendientes = useMemo(
     () =>
@@ -57,6 +61,21 @@ export default function PanelCuentasPendientes({ usuarios, sucursales, zonas }: 
     [usuarios]
   );
   const lista = recortar(pendientes, LIMITE_PANEL_CUENTAS);
+  const seleccionadas = lista.items.filter((u) => seleccion.has(u.id));
+  const todasSeleccionadas = lista.items.length > 0 && seleccionadas.length === lista.items.length;
+
+  function alternar(id: string) {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function alternarTodas() {
+    setSeleccion(todasSeleccionadas ? new Set() : new Set(lista.items.map((u) => u.id)));
+  }
 
   const jefes = useMemo(
     () => usuarios.map((u) => ({ id: u.id, nombre: `${u.nombre} ${u.apellido}`.trim(), rol: u.rol, sucursal_id: u.sucursal_id, sucursales: u.sucursales })),
@@ -185,6 +204,22 @@ export default function PanelCuentasPendientes({ usuarios, sucursales, zonas }: 
         </div>
       )}
 
+      {lista.items.length > 1 && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <label className="inline-flex items-center gap-2 text-neutral-700 cursor-pointer">
+            <input type="checkbox" checked={todasSeleccionadas} onChange={alternarTodas} />
+            Seleccionar todas las visibles
+          </label>
+          <button
+            onClick={() => setMasiva(true)}
+            disabled={seleccionadas.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" /> Activar seleccionadas ({seleccionadas.length})
+          </button>
+        </div>
+      )}
+
       <PanelAcciones
         titulo="Pendientes de activar"
         descripcion="Cuentas creadas desde el registro, aún sin acceso al sistema"
@@ -197,6 +232,15 @@ export default function PanelCuentasPendientes({ usuarios, sucursales, zonas }: 
       >
         {lista.items.map((u) => (
           <li key={u.id} className="px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-3">
+            {lista.items.length > 1 && (
+              <input
+                type="checkbox"
+                checked={seleccion.has(u.id)}
+                onChange={() => alternar(u.id)}
+                aria-label={`Seleccionar ${u.email}`}
+                className="shrink-0"
+              />
+            )}
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-neutral-900 truncate">
                 {u.nombre} {u.apellido}
@@ -222,6 +266,16 @@ export default function PanelCuentasPendientes({ usuarios, sucursales, zonas }: 
           </li>
         ))}
       </PanelAcciones>
+
+      {masiva && (
+        <ActivacionMasivaModal
+          cuentas={seleccionadas}
+          sucursales={sucursales}
+          zonas={zonas}
+          onCerrar={() => setMasiva(false)}
+          onActivadas={() => setSeleccion(new Set())}
+        />
+      )}
 
       {usuario && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={cerrar}>

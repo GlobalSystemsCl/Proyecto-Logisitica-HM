@@ -278,7 +278,7 @@ describe('AuthService', () => {
       admin.results.usuario = [{ data: null, error: null }];
       admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       const res = await AuthService.register(datos());
-      expect(res).toEqual({ success: true });
+      expect(res).toEqual({ success: true, usuarioId: authUser().id, sucursalNombre: null });
       const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
       expect(upsert?.[1]).toMatchObject({
         email: 'user@test.com',
@@ -300,6 +300,41 @@ describe('AuthService', () => {
       expect(admin.callsTo('sucursal')).toContainEqual(['eq', 'id', 5]);
       const upsert = admin.callsTo('usuario').find((c) => c[0] === 'upsert');
       expect(upsert?.[1]).toMatchObject({ sucursal_id: 5 });
+    });
+
+    it('should_return_branch_name_for_the_confirmation_message', async () => {
+      admin.results.usuario = [{ data: null, error: null }];
+      admin.results.sucursal = [fila({ id: 5, nombre: 'Centro' })];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
+
+      const res = await AuthService.register(datos({ sucursal_id: 5 }));
+
+      expect(res.sucursalNombre).toBe('Centro');
+    });
+
+    it('should_reject_email_outside_allowed_domains_without_querying', async () => {
+      vi.stubEnv('DOMINIOS_CORREO_PERMITIDOS', 'hmotores.cl');
+
+      const res = await AuthService.register(datos({ email: 'juan@gmail.com' }));
+
+      expect(res).toEqual({
+        success: false,
+        error: 'Solo se pueden crear cuentas con correo corporativo (@hmotores.cl).',
+      });
+      expect(admin.callsTo('usuario')).toHaveLength(0);
+      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
+    });
+
+    it('should_accept_corporate_email_when_domain_is_restricted', async () => {
+      vi.stubEnv('DOMINIOS_CORREO_PERMITIDOS', 'hmotores.cl');
+      admin.results.usuario = [{ data: null, error: null }];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
+
+      const res = await AuthService.register(datos({ email: 'juan@hmotores.cl' }));
+
+      expect(res.success).toBe(true);
+      vi.unstubAllEnvs();
     });
 
     it('should_reject_when_sucursal_does_not_exist', async () => {

@@ -43,7 +43,8 @@ values
   ('20261014120000', 'notificaciones_en_app'),
   ('20261014130000', 'solicitud_creado_por'),
   ('20261020120000', 'fn_vehiculos_disponibles_traslado'),
-  ('20261020130000', 'transportista')
+  ('20261020130000', 'transportista'),
+  ('20261020140000', 'notificacion_nuevo_usuario')
 on conflict (version) do nothing;
 
 commit;

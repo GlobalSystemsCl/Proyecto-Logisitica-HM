@@ -7,6 +7,22 @@ import { validarCampoTexto, validarPassword } from '@/lib/validaciones';
 import { esAdminPrincipal } from '@/lib/auth/admin-principal';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { conflictoJefeLocal, normalizarAsignaciones, type AsignacionesNormalizadas } from '@/lib/asignaciones';
+import { validarDominioCorreo } from '@/lib/dominios';
+import {
+  asignacionParaUsuario,
+  idsUnicos,
+  validarAsignacionMasiva,
+  type AsignacionMasiva,
+} from '@/lib/activacionMasiva';
+
+export interface ResultadoActivacionMasiva {
+  success: boolean;
+  /** Correos de las cuentas activadas. */
+  activadas: string[];
+  /** Cuentas que no se pudieron activar, con el motivo. */
+  fallidas: Array<{ email: string; error: string }>;
+  error?: string;
+}
 
 export class UsersService {
   /**
@@ -139,6 +155,10 @@ export class UsersService {
       const errorNombre =
         validarCampoTexto(input.nombre, 'nombre', 100) || validarCampoTexto(input.apellido, 'apellido', 100);
       if (errorNombre) return { success: false, error: errorNombre };
+
+      // Fase F: solo correos corporativos (`DOMINIOS_CORREO_PERMITIDOS`).
+      const errorDominio = validarDominioCorreo(cleanEmail);
+      if (errorDominio) return { success: false, error: errorDominio };
 
       // Brecha 013: la contraseña elegida por el admin cumple la misma política.
       const custom = customPassword?.trim();
@@ -507,6 +527,61 @@ export class UsersService {
     } catch (err: unknown) {
       const msg = mensajeErrorUsuario(err, 'Error al actualizar usuario');
       return { success: false, error: msg };
+    }
+  }
+
+  /**
+   * Activa varias cuentas pendientes con un rol y sucursal en común (fase F).
+   * Cada cuenta pasa por `updateUser` y `approveUser`, con sus mismas
+   * validaciones; una que falla no detiene a las demás. Las cuentas que ya
+   * estaban aprobadas se omiten.
+   */
+  static async activarCuentasMasivo(ids: string[], asignacion: AsignacionMasiva): Promise<ResultadoActivacionMasiva> {
+    const unicos = idsUnicos(ids);
+    const errorAsignacion = validarAsignacionMasiva(asignacion, unicos.length);
+    if (errorAsignacion) return { success: false, activadas: [], fallidas: [], error: errorAsignacion };
+
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('usuario')
+        .select('id, email, sucursal_id, aprobado')
+        .in('id', unicos);
+      if (error) {
+        return { success: false, activadas: [], fallidas: [], error: mensajeErrorUsuario(error, 'No se pudieron leer las cuentas.') };
+      }
+
+      const filas = (data as Array<{ id: string; email: string; sucursal_id: number | null; aprobado: boolean | null }> | null) ?? [];
+      const porId = new Map(filas.map((f) => [f.id, f]));
+      const activadas: string[] = [];
+      const fallidas: Array<{ email: string; error: string }> = [];
+
+      for (const id of unicos) {
+        const cuenta = porId.get(id);
+        if (!cuenta) {
+          fallidas.push({ email: id, error: 'Usuario no encontrado.' });
+          continue;
+        }
+        if (cuenta.aprobado !== false) {
+          fallidas.push({ email: cuenta.email, error: 'La cuenta ya estaba activada.' });
+          continue;
+        }
+        const actualizado = await this.updateUser(id, asignacionParaUsuario(asignacion, cuenta.sucursal_id));
+        if (!actualizado.success) {
+          fallidas.push({ email: cuenta.email, error: actualizado.error ?? 'No se pudo guardar la asignación.' });
+          continue;
+        }
+        const aprobado = await this.approveUser(id);
+        if (!aprobado.success) {
+          fallidas.push({ email: cuenta.email, error: aprobado.error ?? 'No se pudo activar la cuenta.' });
+          continue;
+        }
+        activadas.push(cuenta.email);
+      }
+
+      return { success: true, activadas, fallidas };
+    } catch (err: unknown) {
+      return { success: false, activadas: [], fallidas: [], error: mensajeErrorUsuario(err, 'Error inesperado al activar las cuentas') };
     }
   }
 

@@ -13,12 +13,16 @@ import {
   type RolDestinatario,
 } from '@/lib/notificaciones';
 import {
+  RUTA_CUENTAS_PENDIENTES,
   TIPO_NOTIFICACION_POR_EVENTO,
+  TIPO_NUEVO_USUARIO,
   esEventoConCorreo,
   resolverDestinatariosApp,
   rutaNotificacion,
   textoNotificacion,
+  textoNotificacionNuevoUsuario,
   type DatosNotificacionApp,
+  type DatosNuevoUsuario,
   type EventoApp,
 } from '@/lib/notificaciones-app';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
@@ -169,6 +173,48 @@ export class NotificacionService {
       return 0;
     }
     return filas.length;
+  }
+
+  /**
+   * Avisa a los administradores activos que se registró un usuario nuevo
+   * (fase F). Solo en la campana, sin correo. Devuelve cuántas se crearon.
+   */
+  static async notificarNuevoUsuario(usuario: { id: string } & DatosNuevoUsuario): Promise<number> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('usuario')
+        .select('id')
+        .eq('rol', 'administrador')
+        .eq('activo', true);
+      if (error) {
+        console.error('[notificación nuevo usuario] No se pudieron leer los administradores:', error);
+        return 0;
+      }
+      const ids = ((data as Array<{ id: string }> | null) ?? []).map((u) => u.id).filter((id) => id !== usuario.id);
+      if (ids.length === 0) return 0;
+
+      const { titulo, mensaje } = textoNotificacionNuevoUsuario(usuario);
+      const filas = ids.map((id) => ({
+        usuario_id: id,
+        emisor_id: usuario.id,
+        tipo: TIPO_NUEVO_USUARIO,
+        titulo,
+        mensaje,
+        entidad: 'usuario',
+        entidad_id: usuario.id,
+        ruta: RUTA_CUENTAS_PENDIENTES,
+      }));
+      const { error: insertError } = await admin.from('notificacion').insert(filas);
+      if (insertError) {
+        console.error('[notificación nuevo usuario] No se pudieron crear las notificaciones:', insertError);
+        return 0;
+      }
+      return filas.length;
+    } catch (err) {
+      console.error('[notificación nuevo usuario] Error inesperado:', err);
+      return 0;
+    }
   }
 
   /**

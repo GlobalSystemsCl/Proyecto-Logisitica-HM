@@ -4,6 +4,9 @@ import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { validarCampoTexto, validarEmailFormato, validarPassword } from '@/lib/validaciones';
+import { mensajeRegistroPendiente } from '@/lib/soporte';
+import { enSegundoPlano } from '@/lib/segundoPlano';
+import { NotificacionService } from '@/services/notificacion.service';
 
 export interface UpdateProfileState {
   success?: boolean;
@@ -93,10 +96,20 @@ export async function registerAction(
     return { success: false, error: result.error || 'No se pudo registrar la cuenta.' };
   }
 
-  return {
-    success: true,
-    message: 'Solicitud de acceso enviada. Espera la autorización del administrador para poder ingresar.',
-  };
+  // Fase F: aviso en la campana de los administradores (sin correo).
+  const usuarioId = result.usuarioId;
+  if (usuarioId) {
+    enSegundoPlano(() =>
+      NotificacionService.notificarNuevoUsuario({
+        id: usuarioId,
+        nombre: `${nombre.trim()} ${apellido.trim()}`,
+        email: email.trim().toLowerCase(),
+        sucursal: result.sucursalNombre ?? null,
+      })
+    );
+  }
+
+  return { success: true, message: mensajeRegistroPendiente(result.sucursalNombre ?? null) };
 }
 
 export async function loginAction(prevState: unknown, formData: FormData) {

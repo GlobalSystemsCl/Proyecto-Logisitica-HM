@@ -8,6 +8,7 @@ import {
   rutaNotificacion,
   textoNotificacion,
   tiempoRelativo,
+  textoNotificacionNuevoUsuario,
   type EventoApp,
 } from '@/lib/notificaciones-app';
 import { DESTINATARIOS_POR_EVENTO } from '@/lib/notificaciones';
@@ -138,5 +139,20 @@ describe('rutaNotificacion', () => {
 
   it('should_open_transfers_inbox_for_internal_transfers', () => {
     expect(rutaNotificacion('traslado_interno', 't-1')).toBe('/solicitudes/traslados');
+  });
+});
+
+describe('textoNotificacionNuevoUsuario', () => {
+  it('should_include_name_email_and_branch_when_branch_is_known', () => {
+    expect(textoNotificacionNuevoUsuario({ nombre: 'Ana Soto', email: 'ana@hmotores.cl', sucursal: 'Centro' })).toEqual({
+      titulo: 'Nueva cuenta por activar',
+      mensaje: 'Ana Soto (ana@hmotores.cl) se registró en Centro y espera que le asignes rol y sucursal.',
+    });
+  });
+
+  it('should_omit_branch_when_it_is_unknown', () => {
+    expect(textoNotificacionNuevoUsuario({ nombre: 'Ana', email: 'a@hmotores.cl', sucursal: null }).mensaje).toBe(
+      'Ana (a@hmotores.cl) se registró y espera que le asignes rol y sucursal.'
+    );
   });
 });

@@ -16,6 +16,8 @@ const ENV_TEST: Record<string, string> = {
   BREVO_API_KEY: 'test-brevo-key',
   BREVO_SENDER_EMAIL: 'no-reply@test.invalid',
   BREVO_SENDER_NAME: 'Test',
+  // Los datos de prueba usan correos ficticios; los tests de dominio fijan su valor.
+  DOMINIOS_CORREO_PERMITIDOS: '*',
 };
 
 for (const [key, value] of Object.entries(ENV_TEST)) {

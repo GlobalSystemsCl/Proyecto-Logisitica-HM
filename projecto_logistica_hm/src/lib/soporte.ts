@@ -21,3 +21,18 @@ export function mensajeCuentaDesactivada(): string {
     : 'contacta a un encargado de la plataforma';
   return `Tu cuenta fue desactivada. Para consultas o para volver a activarla, ${contacto}.`;
 }
+
+/**
+ * Mensaje al terminar el registro (fase F). La cuenta queda pendiente de
+ * aprobación: el administrador la activa y puede corregir rol y sucursal.
+ */
+export function mensajeRegistroPendiente(sucursal: string | null): string {
+  const email = getSoporteEmail();
+  const donde = sucursal ? ` en la sucursal ${sucursal}` : '';
+  const contacto = email ? `escribe al administrador a ${email}` : 'contacta al administrador';
+  return (
+    `Tu solicitud de acceso quedó registrada con el perfil Ejecutivo (vendedor)${donde}. ` +
+    `El administrador debe activarla antes de que puedas ingresar. ` +
+    `Si el rol o la sucursal no corresponden, ${contacto}.`
+  );
+}

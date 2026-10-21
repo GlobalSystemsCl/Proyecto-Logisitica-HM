@@ -479,7 +479,8 @@ Detalle: brecha 017.
 | BREVO_SMTP_HOST / PORT / USER | No | **No se usan en el código** | Sí |
 | NEXT_PUBLIC_APP_URL | Sí | Enlaces de correo y reset (obligatoria en producción desde la brecha 026) | **No** |
 | ADMIN_PRINCIPAL_EMAIL | No | Protege al administrador principal de ser desactivado; no otorga permisos (brecha 025, agregada 2026-10-07) | No determinado |
-| NEXT_PUBLIC_SOPORTE_EMAIL | Sí | Correo de soporte que se muestra a una cuenta desactivada (requisito de la fase 1, agregada 2026-10) | No determinado |
+| NEXT_PUBLIC_SOPORTE_EMAIL | Sí | Correo de soporte que se muestra a una cuenta desactivada (requisito de la fase 1, agregada 2026-10) y en el mensaje al registrarse | No determinado |
+| DOMINIOS_CORREO_PERMITIDOS | No | Dominios con los que se pueden crear cuentas, separados por coma (registro, creación por el admin y carga masiva). Sin la variable rige `hmotores.cl`; `*` quita la restricción (desarrollo). El login no se restringe (fase F, 2026-10-21) | No determinado |
 
 `.env.local` está en `.gitignore`. Si estuvo alguna vez en el historial de git: No determinado (no hubo acceso a la carpeta del repositorio git).
 
@@ -661,6 +662,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-20 | Fase C: transportista (nombre y RUT) obligatorio al programar una solicitud y al crear un traslado interno (migración `20261020130000`). Nueva sección 33 | Claude (asistido) |
 | 2026-10-20 | Fase D: Excel de la calendarización por rango y reporte de movimientos para revisar la factura del transportista (`/logistica/movimientos`). Listados de solicitudes paginados. Nueva sección 34; sección 23 | Claude (asistido) |
 | 2026-10-20 | Fase E: el número de una solicitud abre su detalle (modo consulta) en los paneles del dashboard, Prioridades, Recepciones, Reportes y Sucursales (`AbrirSolicitudDetalle`, `getSolicitudDetalleAction`, `codigoSolicitud`). Nueva sección 35 | Claude (asistido) |
+| 2026-10-21 | Fase F: dominio de correo permitido (`DOMINIOS_CORREO_PERMITIDOS`), mensaje de registro pendiente con rol y sucursal, notificación `NUEVO_USUARIO` al administrador (migración `20261020140000`), activación masiva, contador de pendientes corregido y carga masiva de usuarios desde Excel. Nueva sección 36; variables de entorno | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -890,3 +892,44 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
 
 ### 35.3 Tests
 `solicitudes.actions.test.ts` (`getSolicitudDetalleAction`: con acceso, sin acceso, sin sesión, detalle no encontrado) y `codigoSolicitud.test.ts`.
+
+## 36. Cuentas y administración (2026-10-21, fase F)
+
+### 36.1 Dominio de correo
+- `src/lib/dominios.ts`: `parsearDominios`, `getDominiosPermitidos`, `esCorreoPermitido`, `validarDominioCorreo`.
+- Variable `DOMINIOS_CORREO_PERMITIDOS` (lista separada por coma). Sin la variable rige **`hmotores.cl`**; con `*` no hay restricción (para desarrollo con correos de prueba).
+- Se aplica en `AuthService.register`, `UsersService.createUser` (creación por el admin) y en la carga masiva. Mensaje: "Solo se pueden crear cuentas con correo corporativo (@hmotores.cl)."
+- **El login no se restringe:** las cuentas existentes con gmail siguen entrando (al 2026-10-21 hay cuentas con los dominios gmail.com y hmotores.cl).
+- El formulario de registro muestra el dominio en el placeholder y en una ayuda; el de creación por el admin ofrece solo los dominios permitidos.
+- Los tests fijan `DOMINIOS_CORREO_PERMITIDOS='*'` en `tests/setup-env.ts`; los que prueban la restricción la fijan con `vi.stubEnv`.
+
+### 36.2 Registro y mensaje
+- **Decisión del usuario (2026-10-20):** quien se registra queda **pendiente de aprobación** (`activo = false`, `aprobado = false`, rol ejecutivo), como antes. No se activa sola.
+- Mensaje (`mensajeRegistroPendiente`, `lib/soporte.ts`): "Tu solicitud de acceso quedó registrada con el perfil Ejecutivo (vendedor) en la sucursal X. El administrador debe activarla antes de que puedas ingresar. Si el rol o la sucursal no corresponden, escribe al administrador a `<NEXT_PUBLIC_SOPORTE_EMAIL>`."
+- `AuthService.register` devuelve también `usuarioId` y `sucursalNombre`.
+
+### 36.3 Notificación al administrador
+- Migración `20261020140000_notificacion_nuevo_usuario.sql`: agrega `NUEVO_USUARIO` al enum `tipo_notificacion`. Rollback: borra esas notificaciones (el valor del enum no se puede quitar).
+- `NotificacionService.notificarNuevoUsuario`: una fila por administrador activo, `entidad = 'usuario'`, `emisor_id` = el usuario registrado, ruta `/admin/usuarios?estado=pendientes`. **Solo en la campana, sin correo.** Se llama en segundo plano desde `registerAction`.
+- Es la única notificación del administrador: no participa del flujo de solicitudes (`DESTINATARIOS_APP` no cambia).
+- Textos en `lib/notificaciones-app.ts` (`textoNotificacionNuevoUsuario`, `TIPO_NUEVO_USUARIO`, `RUTA_CUENTAS_PENDIENTES`).
+- La creación por el admin y la carga masiva no notifican (las hace el mismo administrador).
+
+### 36.4 Activación masiva y contador de pendientes
+- **Dashboard (`PanelCuentasPendientes`)** y **`/admin/usuarios`**: casillas en las cuentas pendientes, "Seleccionar todas" (las visibles) y "Activar seleccionadas".
+- `ActivacionMasivaModal`: rol en común (Ejecutivo, Logística u Operaciones), sucursal en común o **"Mantener la que indicó cada uno al registrarse"** (por defecto) y zona si es Logística. Muestra cuántas se activaron y el motivo de cada una que falló.
+- Jefe de Local y Administrador se activan de a uno: el jefe tiene sucursales a cargo propias y el administrador es un permiso que se da individualmente.
+- `approveUsersBulkAction` → `UsersService.activarCuentasMasivo`: hasta 100 cuentas; cada una pasa por `updateUser` y `approveUser` (mismas validaciones), omite las ya aprobadas y una falla no detiene a las demás. Reglas puras en `lib/activacionMasiva.ts`.
+- **Contador corregido:** "Pendientes de autorización" exigía `activo = true`, pero una cuenta registrada queda inactiva, así que siempre daba 0. Ahora cuenta `aprobado = false` (`lib/usuariosAdmin.ts`). Activos, pendientes e inactivos suman el total.
+- Filtro **Estado** (todos, pendientes, activos, inactivos) en `/admin/usuarios`; la tarjeta de pendientes lo activa y `?estado=pendientes` (la notificación) abre filtrado.
+
+### 36.5 Carga masiva de usuarios desde Excel
+- Botón **"Carga masiva (Excel)"** en `/admin/usuarios` (`CargaMasivaUsuarios`).
+- **Plantilla descargable:** hoja "Usuarios" (Nombre, Apellido, Email, Rol, Sucursal, Zona, con 2 filas de ejemplo) y hoja "Opciones" con los roles, sucursales y zonas válidos.
+- El archivo se lee en el navegador y se muestra una **vista previa** con el estado de cada fila. Se valida: nombre y apellido, formato y dominio del correo, correo ya registrado o repetido en el archivo, rol (acepta "Vendedor" como Ejecutivo; no admite Administrador), sucursal y zona (por nombre sin importar tildes ni mayúsculas, o por id) según las reglas de cada rol, y que una sucursal no quede con dos jefes de local.
+- Máximo **200 filas** por archivo. Se crean en lotes de 20 (`importUsuariosAction`), con barra de progreso, para no exceder el tiempo de una función. El servidor vuelve a validar cada lote con los datos actuales.
+- Cada cuenta se crea con `UsersService.createUser` (contraseña provisoria, cambio obligatorio al entrar) y recibe sus credenciales por correo. Si un correo falla, el informe final muestra esa contraseña provisoria para entregarla.
+- Lógica pura en `lib/importUsuarios.ts`.
+
+### 36.6 Tests
+`dominios.test.ts`, `activacionMasiva.test.ts`, `usuariosAdmin.test.ts`, `importUsuarios.test.ts`, `users.actions.test.ts`, `auth.actions.test.ts`, `migracion-nuevo-usuario.test.ts`; casos nuevos en `auth.service.test.ts`, `users.service.test.ts` (`activarCuentasMasivo`, dominio), `notificacion.service.test.ts`, `notificaciones-app.test.ts` y `soporte.test.ts`.

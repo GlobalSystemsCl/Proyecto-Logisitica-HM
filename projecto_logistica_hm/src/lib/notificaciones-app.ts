@@ -40,7 +40,8 @@ export type TipoNotificacion =
   | 'SOLICITUD_FINALIZADA'
   | 'SOLICITUD_CANCELADA'
   | 'SOLICITUD_CANCELADA_TRANSITO'
-  | 'TRASLADO_INTERNO_CANCELADO';
+  | 'TRASLADO_INTERNO_CANCELADO'
+  | 'NUEVO_USUARIO';
 
 /** Quién recibe la notificación en la app por cada evento (acordado el 2026-10-14). */
 export const DESTINATARIOS_APP: Record<EventoApp, RolDestinatario[]> = {
@@ -182,6 +183,28 @@ export function tiempoRelativo(fechaIso: string, ahora: Date = new Date()): stri
 }
 
 /** Ruta que abre la notificación: el detalle de la solicitud o la bandeja de traslados. */
+/**
+ * Usuario nuevo registrado (fase F): solo para los administradores, solo en la
+ * campana y sin correo. No forma parte de `DESTINATARIOS_APP` porque no es un
+ * evento de solicitud.
+ */
+export const TIPO_NUEVO_USUARIO: TipoNotificacion = 'NUEVO_USUARIO';
+export const RUTA_CUENTAS_PENDIENTES = '/admin/usuarios?estado=pendientes';
+
+export interface DatosNuevoUsuario {
+  nombre: string;
+  email: string;
+  sucursal: string | null;
+}
+
+export function textoNotificacionNuevoUsuario(d: DatosNuevoUsuario): TextoNotificacion {
+  const sucursal = d.sucursal ? ` en ${d.sucursal}` : '';
+  return {
+    titulo: 'Nueva cuenta por activar',
+    mensaje: `${d.nombre} (${d.email}) se registró${sucursal} y espera que le asignes rol y sucursal.`,
+  };
+}
+
 export function rutaNotificacion(entidad: 'solicitud' | 'traslado_interno', entidadId: string): string {
   return entidad === 'solicitud'
     ? `/solicitudes?solicitud=${encodeURIComponent(entidadId)}`

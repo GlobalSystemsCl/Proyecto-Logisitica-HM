@@ -6,6 +6,9 @@ import {
   validarAsignacionesFormulario,
 } from '@/lib/asignaciones';
 import AsignacionesFields from '@/components/AsignacionesUsuarioFields';
+import ActivacionMasivaModal from '@/components/ActivacionMasivaModal';
+import CargaMasivaUsuarios from '@/components/CargaMasivaUsuarios';
+import { contarUsuarios, cumpleEstado, esPendiente, estadoDesdeParam, type EstadoUsuarioFiltro } from '@/lib/usuariosAdmin';
 import { UserProfile, UserRole } from '@/types/auth.types';
 import { Sucursal, Zona } from '@/types/sucursal.types';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
@@ -27,6 +30,7 @@ import {
   Lock,
   Building2,
   Pencil,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface Props {
@@ -36,7 +40,12 @@ interface Props {
   /** Correo del administrador principal (ADMIN_PRINCIPAL_EMAIL), o null si no está configurado. */
   adminPrincipalEmail: string | null;
   currentAdminId: string;
+  /** Dominios de correo permitidos (`DOMINIOS_CORREO_PERMITIDOS`), o `null` si no hay restricción. */
+  dominiosCorreo: string[] | null;
 }
+
+/** Sin restricción se ofrecen el corporativo y el de pruebas. */
+const DOMINIOS_SIN_RESTRICCION = ['hmotores.cl', 'gmail.com'];
 
 const roleLabels: Record<UserRole, { label: string; color: string }> = {
   administrador: {
@@ -61,12 +70,18 @@ const roleLabels: Record<UserRole, { label: string; color: string }> = {
   },
 };
 
-export default function UsersTableClient({ users, sucursales, zonas, currentAdminId, adminPrincipalEmail }: Props) {
+export default function UsersTableClient({ users, sucursales, zonas, currentAdminId, adminPrincipalEmail, dominiosCorreo }: Props) {
+  const opcionesDominio = dominiosCorreo ?? DOMINIOS_SIN_RESTRICCION;
   const esAdminPrincipal = (email: string) =>
     adminPrincipalEmail !== null && email.toLowerCase() === adminPrincipalEmail;
   const [isHydrated, setIsHydrated] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('todos');
+  const [estado, setEstado] = useState<EstadoUsuarioFiltro>('todos');
+  // Fase F: activación masiva y carga desde Excel.
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [masiva, setMasiva] = useState(false);
+  const [cargaMasiva, setCargaMasiva] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
@@ -80,7 +95,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   const [nombre, setNombre] = useState('');
   const [apellido, setApellido] = useState('');
   const [emailPrefix, setEmailPrefix] = useState('');
-  const [emailDomain, setEmailDomain] = useState('gmail.com');
+  const [emailDomain, setEmailDomain] = useState(opcionesDominio[0]);
   const [customPassword, setCustomPassword] = useState('');
   const [rol, setRol] = useState<UserRole>('ejecutivo');
   const [sucursalId, setSucursalId] = useState<number | null>(null);
@@ -111,6 +126,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsHydrated(true);
+    // La notificación de usuario nuevo abre `?estado=pendientes`.
+    setEstado(estadoDesdeParam(new URLSearchParams(window.location.search).get('estado')));
   }, []);
 
   // Filter users - only apply filters after hydration to avoid SSR mismatch
@@ -123,13 +140,31 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
       u.email.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesRole = selectedRole === 'todos' || u.rol === selectedRole;
-    return matchesSearch && matchesRole;
+    return matchesSearch && matchesRole && cumpleEstado(u, estado);
   });
 
-  const totalUsers = users.length;
-  const activeUsers = users.filter((u) => u.activo).length;
-  const inactiveUsers = totalUsers - activeUsers;
-  const pendingUsers = users.filter((u) => u.activo && u.aprobado === false).length;
+  const conteo = contarUsuarios(users);
+  const totalUsers = conteo.total;
+  const activeUsers = conteo.activos;
+  const inactiveUsers = conteo.inactivos;
+  const pendingUsers = conteo.pendientes;
+
+  const pendientesVisibles = filteredUsers.filter(esPendiente);
+  const seleccionadas = pendientesVisibles.filter((u) => seleccion.has(u.id));
+  const todasSeleccionadas = pendientesVisibles.length > 0 && seleccionadas.length === pendientesVisibles.length;
+
+  function alternarSeleccion(id: string) {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function alternarTodas() {
+    setSeleccion(todasSeleccionadas ? new Set() : new Set(pendientesVisibles.map((u) => u.id)));
+  }
 
   const resetForm = () => {
     setNombre('');
@@ -342,13 +377,22 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-semibold rounded-xl transition-all cursor-pointer"
-        >
-          <UserPlus className="w-4 h-4" />
-          <span>Registrar Nuevo Usuario</span>
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setCargaMasiva(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-neutral-300 hover:border-neutral-900 text-neutral-900 text-sm font-semibold rounded-xl transition-all cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>Carga masiva (Excel)</span>
+          </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-semibold rounded-xl transition-all cursor-pointer"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Registrar Nuevo Usuario</span>
+          </button>
+        </div>
       </div>
 
       {/* Metric Cards */}
@@ -373,7 +417,15 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           </div>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-center justify-between">
+        <button
+          type="button"
+          onClick={() => setEstado(estado === 'pendientes' ? 'todos' : 'pendientes')}
+          aria-pressed={estado === 'pendientes'}
+          title="Ver solo las cuentas pendientes"
+          className={`text-left bg-amber-50 border rounded-2xl p-5 flex items-center justify-between cursor-pointer ${
+            estado === 'pendientes' ? 'border-amber-500 ring-2 ring-amber-400' : 'border-amber-200 hover:border-amber-400'
+          }`}
+        >
           <div>
             <p className="text-xs font-medium text-amber-600 uppercase tracking-wider">Pendientes de autorización</p>
             <p className="text-3xl font-bold text-amber-700 mt-1">{pendingUsers}</p>
@@ -381,7 +433,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           <div className="w-11 h-11 rounded-xl bg-amber-100 flex items-center justify-center text-amber-700">
             <ShieldCheck className="w-5 h-5" />
           </div>
-        </div>
+        </button>
 
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
@@ -493,8 +545,36 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
             <option value="logistica">Logística</option>
             <option value="operaciones">Operaciones</option>
           </select>
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider ml-2">
+            Estado:
+          </label>
+          <select
+            value={estado}
+            onChange={(e) => setEstado(e.target.value as EstadoUsuarioFiltro)}
+            className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+          >
+            <option value="todos">Todos</option>
+            <option value="pendientes">Pendientes</option>
+            <option value="activos">Activos</option>
+            <option value="inactivos">Inactivos</option>
+          </select>
         </div>
       </div>
+
+      {seleccionadas.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 p-3 rounded-2xl border border-emerald-200 bg-emerald-50 text-sm text-emerald-900">
+          <span className="font-semibold">{seleccionadas.length} cuenta{seleccionadas.length === 1 ? '' : 's'} pendiente{seleccionadas.length === 1 ? '' : 's'} seleccionada{seleccionadas.length === 1 ? '' : 's'}</span>
+          <button
+            onClick={() => setMasiva(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer"
+          >
+            <CheckCircle2 className="w-3.5 h-3.5" /> Activar seleccionadas
+          </button>
+          <button onClick={() => setSeleccion(new Set())} className="text-xs font-semibold text-emerald-800 hover:underline cursor-pointer">
+            Quitar selección
+          </button>
+        </div>
+      )}
 
       {/* Users Table */}
       <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
@@ -502,6 +582,17 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase font-semibold text-neutral-500 tracking-wider">
+                <th className="py-3.5 pl-4 w-8">
+                  {pendientesVisibles.length > 0 && (
+                    <input
+                      type="checkbox"
+                      checked={todasSeleccionadas}
+                      onChange={alternarTodas}
+                      title="Seleccionar las cuentas pendientes visibles"
+                      aria-label="Seleccionar las cuentas pendientes visibles"
+                    />
+                  )}
+                </th>
                 <th className="py-3.5 px-4">Usuario</th>
                 <th className="py-3.5 px-4">Correo</th>
                 <th className="py-3.5 px-4">Rol</th>
@@ -515,7 +606,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filteredUsers.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-8 text-center text-neutral-400">
+                  <td colSpan={9} className="py-8 text-center text-neutral-400">
                     No se encontraron usuarios que coincidan con la búsqueda.
                   </td>
                 </tr>
@@ -532,6 +623,17 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                       key={user.id}
                       className="hover:bg-neutral-50 transition-colors"
                     >
+                      <td className="py-3.5 pl-4 w-8">
+                        {esPendiente(user) && (
+                          <input
+                            type="checkbox"
+                            checked={seleccion.has(user.id)}
+                            onChange={() => alternarSeleccion(user.id)}
+                            aria-label={`Seleccionar ${user.email}`}
+                          />
+                        )}
+                      </td>
+
                       {/* Name & Avatar */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
@@ -777,8 +879,9 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                     onChange={(e) => setEmailDomain(e.target.value)}
                     className="px-3 py-2 bg-neutral-50 text-sm text-neutral-900 border-l border-neutral-300 focus:outline-none"
                   >
-                    <option value="gmail.com">gmail.com (Pruebas)</option>
-                    <option value="hmotores.cl">hmotores.cl (Corporativo)</option>
+                    {opcionesDominio.map((d) => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -975,6 +1078,26 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
             </form>
           </div>
         </div>
+      )}
+
+      {masiva && (
+        <ActivacionMasivaModal
+          cuentas={seleccionadas}
+          sucursales={sucursales}
+          zonas={zonas}
+          onCerrar={() => setMasiva(false)}
+          onActivadas={() => setSeleccion(new Set())}
+        />
+      )}
+
+      {cargaMasiva && (
+        <CargaMasivaUsuarios
+          usuarios={users}
+          sucursales={sucursales}
+          zonas={zonas}
+          dominios={dominiosCorreo}
+          onCerrar={() => setCargaMasiva(false)}
+        />
       )}
     </div>
   );
