@@ -2,6 +2,7 @@ import type { CreateUserInput, UserRole } from '@/types/auth.types';
 import { normalizarAsignaciones } from '@/lib/asignaciones';
 import { validarCampoTexto, validarEmailFormato } from '@/lib/validaciones';
 import { validarDominioCorreo } from '@/lib/dominios';
+import { enLotes as partirEnLotes } from '@/lib/paginacion';
 
 /**
  * Carga masiva de usuarios desde Excel (fase F). El archivo se lee en el
@@ -205,11 +206,9 @@ export function inputDesdeFila(f: FilaValidada): CreateUserInput {
   };
 }
 
-/** Parte una lista en lotes del tamaño indicado. */
+/** Parte las filas en lotes de importación (por defecto, `TAMANO_LOTE_IMPORTACION`). */
 export function enLotes<T>(items: T[], tamano: number = TAMANO_LOTE_IMPORTACION): T[][] {
-  const lotes: T[][] = [];
-  for (let i = 0; i < items.length; i += tamano) lotes.push(items.slice(i, i + tamano));
-  return lotes;
+  return partirEnLotes(items, tamano);
 }
 
 /** Filas de ejemplo de la plantilla descargable. */

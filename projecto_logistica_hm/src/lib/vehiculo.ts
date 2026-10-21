@@ -37,18 +37,20 @@ export function etiquetaVehiculo(v: VehiculoAsociado): string | null {
 /**
  * Estados de un vehículo tal como los ve el usuario. En la BD el estado
  * disponible se llama `liberado` (lo usan los triggers); en pantalla siempre
- * es "Disponible". "Vendido" corresponde al vehículo entregado al cliente.
+ * es "Disponible". `vendido` se muestra como "Entregado al cliente" (fase G):
+ * lo escribe el trigger al finalizar una solicitud de venta, cuando el
+ * ejecutivo registra la entrega, y el vehículo sale del inventario.
  */
 export const ETIQUETA_DISPONIBILIDAD: Record<DisponibilidadVehiculo, string> = {
   liberado: 'Disponible',
   reservado: 'Reservado',
-  vendido: 'Vendido',
+  vendido: 'Entregado al cliente',
 };
 
 export const DESCRIPCION_DISPONIBILIDAD: Record<DisponibilidadVehiculo, string> = {
   liberado: 'Disponible para una nueva solicitud o traslado',
   reservado: 'Reservado en una solicitud activa',
-  vendido: 'Vendido: entregado al cliente',
+  vendido: 'Entregado al cliente: ya salió del inventario',
 };
 
 /** Etiqueta visible del estado; un valor desconocido se muestra tal cual. */

@@ -1624,6 +1624,32 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * Varias filas de auditoría en un solo insert (fase G: cambio de ubicación
+   * masivo). Best-effort como `registrarAuditoria`.
+   */
+  static async registrarAuditoriaMasiva(
+    filas: Array<{ usuarioId: string; entidad: string; entidadId: string; accion: string; anterior?: unknown; nuevo?: unknown }>
+  ): Promise<void> {
+    if (filas.length === 0) return;
+    try {
+      const admin = createAdminClient();
+      const { error } = await admin.from('auditoria').insert(
+        filas.map((f) => ({
+          usuario_id: f.usuarioId,
+          entidad: f.entidad,
+          entidad_id: f.entidadId,
+          accion: f.accion,
+          valor_anterior: f.anterior ?? null,
+          valor_nuevo: f.nuevo ?? null,
+        }))
+      );
+      if (error) console.error('Error al registrar auditoría masiva:', error);
+    } catch (err) {
+      console.error('Error al registrar auditoría masiva:', err);
+    }
+  }
+
   static async getEjecutivosPorSucursal(sucursalId: number | null): Promise<Array<{ id: string; nombre: string; apellido: string }>> {
     try {
       const admin = createAdminClient();

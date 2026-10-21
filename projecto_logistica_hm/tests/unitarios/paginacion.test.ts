@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { obtenerTodasLasFilas, type ConsultaPaginable } from '@/lib/paginacion';
+import { enLotes, obtenerTodasLasFilas, type ConsultaPaginable } from '@/lib/paginacion';
 
 /** Consulta falsa que sirve `filas` en páginas según el rango pedido. */
 function consultaFalsa(filas: number[], fallaEnPagina?: number) {
@@ -15,6 +15,16 @@ function consultaFalsa(filas: number[], fallaEnPagina?: number) {
   };
   return { consulta, rangos };
 }
+
+describe('enLotes', () => {
+  it('should_split_in_groups_of_given_size_keeping_order', () => {
+    expect(enLotes(['a', 'b', 'c'], 2)).toEqual([['a', 'b'], ['c']]);
+  });
+
+  it('should_return_no_groups_when_list_is_empty', () => {
+    expect(enLotes([], 100)).toEqual([]);
+  });
+});
 
 describe('obtenerTodasLasFilas', () => {
   beforeEach(() => {

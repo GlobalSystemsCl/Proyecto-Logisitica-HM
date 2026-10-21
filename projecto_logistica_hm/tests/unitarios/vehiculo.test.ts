@@ -74,8 +74,8 @@ describe('etiquetaDisponibilidad', () => {
 
   it('should_show_reservado_and_vendido_labels', () => {
     expect(etiquetaDisponibilidad('reservado')).toBe('Reservado');
-    expect(etiquetaDisponibilidad('vendido')).toBe('Vendido');
-    expect(DESCRIPCION_DISPONIBILIDAD.vendido).toContain('entregado al cliente');
+    expect(etiquetaDisponibilidad('vendido')).toBe('Entregado al cliente');
+    expect(DESCRIPCION_DISPONIBILIDAD.vendido).toContain('Entregado al cliente');
   });
 
   it('should_return_dash_when_state_is_missing', () => {

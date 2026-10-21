@@ -3,7 +3,23 @@ import { Vehiculo, VehiculoConDisponibilidad, CreateVehiculoInput, UpdateVehicul
 import { OrganizacionService } from '@/services/organizacion.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mensajeErrorUsuario } from '@/lib/errores';
-import { obtenerTodasLasFilas } from '@/lib/paginacion';
+import { enLotes, obtenerTodasLasFilas } from '@/lib/paginacion';
+import {
+  TAMANO_GRUPO_IDS,
+  bloqueosDesdeVinculos,
+  clasificarCambioUbicacion,
+  validarCambioUbicacion,
+  type Omitido,
+  type VehiculoUbicacion,
+} from '@/lib/ubicacionMasiva';
+
+export interface ResultadoCambioUbicacion {
+  success: boolean;
+  /** Vehículos movidos, con su ubicación anterior. */
+  movidos: VehiculoUbicacion[];
+  omitidos: Omitido[];
+  error?: string;
+}
 
 export class VehiculoService {
   /**
@@ -223,6 +239,76 @@ export class VehiculoService {
   }
 
   /**
+   * Fase G: mueve varios vehículos a una sucursal. Omite (con el motivo) los
+   * reservados en una solicitud activa, los entregados al cliente, los que
+   * están en un traslado interno pendiente o en tránsito y los que ya están
+   * en esa sucursal. Consulta y actualiza en grupos de ids para no alargar la
+   * URL; el recálculo de slots lo hace el trigger por sentencia.
+   */
+  static async cambiarUbicacionMasiva(ids: string[], sucursalId: number): Promise<ResultadoCambioUbicacion> {
+    const unicos = [...new Set(ids.filter(Boolean))];
+    const errorValidacion = validarCambioUbicacion(unicos, sucursalId);
+    if (errorValidacion) return { success: false, movidos: [], omitidos: [], error: errorValidacion };
+
+    try {
+      const admin = createAdminClient();
+      const { data: sucursal } = await admin.from('sucursal').select('id').eq('id', sucursalId).maybeSingle();
+      if (!sucursal) return { success: false, movidos: [], omitidos: [], error: 'La sucursal de destino no existe.' };
+
+      const vehiculos: VehiculoUbicacion[] = [];
+      const vinculosSolicitud: Array<{ vehiculo_id: string; disponibilidad: string }> = [];
+      const vinculosTraslado: Array<{ vehiculo_id: string }> = [];
+      for (const grupo of enLotes(unicos, TAMANO_GRUPO_IDS)) {
+        const [v, sv, tv] = await Promise.all([
+          admin.from('vehiculo').select('id, chasis, ubicacion').in('id', grupo),
+          admin
+            .from('solicitud_vehiculo')
+            .select('vehiculo_id, disponibilidad')
+            .in('vehiculo_id', grupo)
+            .in('disponibilidad', ['reservado', 'vendido']),
+          admin
+            .from('traslado_interno_vehiculo')
+            .select('vehiculo_id')
+            .in('vehiculo_id', grupo)
+            .eq('disponibilidad', 'reservado'),
+        ]);
+        const error = v.error || sv.error || tv.error;
+        if (error) {
+          return { success: false, movidos: [], omitidos: [], error: mensajeErrorUsuario(error, 'No se pudieron leer los vehículos.') };
+        }
+        vehiculos.push(...((v.data as VehiculoUbicacion[] | null) ?? []));
+        vinculosSolicitud.push(...((sv.data as Array<{ vehiculo_id: string; disponibilidad: string }> | null) ?? []));
+        vinculosTraslado.push(...((tv.data as Array<{ vehiculo_id: string }> | null) ?? []));
+      }
+
+      const { mover, omitidos } = clasificarCambioUbicacion(
+        unicos,
+        vehiculos,
+        bloqueosDesdeVinculos(vinculosSolicitud, vinculosTraslado),
+        sucursalId
+      );
+
+      const movidos: VehiculoUbicacion[] = [];
+      for (const grupo of enLotes(mover, TAMANO_GRUPO_IDS)) {
+        const { error } = await admin
+          .from('vehiculo')
+          .update({ ubicacion: sucursalId })
+          .in('id', grupo.map((v) => v.id));
+        if (error) {
+          const motivo = mensajeErrorUsuario(error, 'No se pudo actualizar.');
+          omitidos.push(...grupo.map((v) => ({ id: v.id, chasis: v.chasis, motivo })));
+        } else {
+          movidos.push(...grupo);
+        }
+      }
+
+      return { success: true, movidos, omitidos };
+    } catch (err: unknown) {
+      return { success: false, movidos: [], omitidos: [], error: mensajeErrorUsuario(err, 'Error inesperado al cambiar la ubicación') };
+    }
+  }
+
+  /**
    * Crea un nuevo vehículo
    */
   static async createVehiculo(input: CreateVehiculoInput): Promise<{
@@ -358,7 +444,7 @@ export class VehiculoService {
       if (disponibilidad.vendido) {
         return {
           success: false,
-          error: 'No se puede modificar un vehículo que ya fue vendido.',
+          error: 'No se puede modificar un vehículo que ya fue entregado al cliente.',
         };
       }
 
@@ -474,7 +560,7 @@ export class VehiculoService {
       if (disponibilidad.vendido) {
         return {
           success: false,
-          error: 'No se puede eliminar un vehículo que ya fue vendido.',
+          error: 'No se puede eliminar un vehículo que ya fue entregado al cliente.',
         };
       }
 

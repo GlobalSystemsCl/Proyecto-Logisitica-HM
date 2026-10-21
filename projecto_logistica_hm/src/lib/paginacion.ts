@@ -38,3 +38,10 @@ export async function obtenerTodasLasFilas<T = Record<string, unknown>>(
 
   return filas;
 }
+
+/** Parte una lista en grupos del tamaño indicado (lotes o consultas `in`). */
+export function enLotes<T>(items: T[], tamano: number): T[][] {
+  const lotes: T[][] = [];
+  for (let i = 0; i < items.length; i += tamano) lotes.push(items.slice(i, i + tamano));
+  return lotes;
+}

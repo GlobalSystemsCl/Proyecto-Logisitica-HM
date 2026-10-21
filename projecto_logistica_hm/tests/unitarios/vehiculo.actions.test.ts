@@ -3,12 +3,14 @@ import type { UserProfile } from '@/types/auth.types';
 
 const getCurrentUserProfile = vi.fn();
 const registrarAuditoria = vi.fn(async () => undefined);
+const registrarAuditoriaMasiva = vi.fn<(...a: unknown[]) => Promise<void>>(async () => undefined);
 const svc = {
   createVehiculo: vi.fn(),
   updateVehiculo: vi.fn(),
   deleteVehiculo: vi.fn(),
   importVehiculosCSV: vi.fn(),
   getVehiculoById: vi.fn(),
+  cambiarUbicacionMasiva: vi.fn(),
 };
 
 vi.mock('@/services/auth.service', () => ({
@@ -16,7 +18,10 @@ vi.mock('@/services/auth.service', () => ({
 }));
 vi.mock('@/services/vehiculo.service', () => ({ VehiculoService: svc }));
 vi.mock('@/services/solicitudes.service', () => ({
-  SolicitudesService: { registrarAuditoria: (...a: unknown[]) => registrarAuditoria(...(a as [])) },
+  SolicitudesService: {
+    registrarAuditoria: (...a: unknown[]) => registrarAuditoria(...(a as [])),
+    registrarAuditoriaMasiva: (...a: unknown[]) => registrarAuditoriaMasiva(...a),
+  },
 }));
 vi.mock('@/services/organizacion.service', () => ({ OrganizacionService: {} }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
@@ -141,5 +146,42 @@ describe('importVehiculosAction (auditoría R2)', () => {
     expect([usuario, entidad, accion, anterior]).toEqual(['log-1', 'vehiculo', 'importacion', null]);
     expect(entidadId).toMatch(/^[0-9a-f-]{36}$/);
     expect(nuevo).toEqual({ total: 10, importados: 8, duplicados: 1, errores: 1 });
+  });
+});
+
+describe('cambiarUbicacionMasivaAction (fase G)', () => {
+  it('should_audit_each_moved_vehicle_with_previous_and_new_location', async () => {
+    svc.cambiarUbicacionMasiva.mockResolvedValue({
+      success: true,
+      movidos: [{ id: 'v1', chasis: 'C1', ubicacion: 1 }, { id: 'v2', chasis: 'C2', ubicacion: null }],
+      omitidos: [{ id: 'v3', chasis: 'C3', motivo: 'Reservado en una solicitud activa.' }],
+    });
+
+    const res = await actions.cambiarUbicacionMasivaAction(['v1', 'v2', 'v3'], 5);
+
+    expect(res.success).toBe(true);
+    expect(svc.cambiarUbicacionMasiva).toHaveBeenCalledWith(['v1', 'v2', 'v3'], 5);
+    expect(registrarAuditoriaMasiva).toHaveBeenCalledWith([
+      { usuarioId: 'log-1', entidad: 'vehiculo', entidadId: 'v1', accion: 'cambio_ubicacion', anterior: { ubicacion: 1 }, nuevo: { ubicacion: 5 } },
+      { usuarioId: 'log-1', entidad: 'vehiculo', entidadId: 'v2', accion: 'cambio_ubicacion', anterior: { ubicacion: null }, nuevo: { ubicacion: 5 } },
+    ]);
+  });
+
+  it('should_not_audit_when_service_fails', async () => {
+    svc.cambiarUbicacionMasiva.mockResolvedValue({ success: false, movidos: [], omitidos: [], error: 'Elige la sucursal de destino.' });
+
+    const res = await actions.cambiarUbicacionMasivaAction(['v1'], 0);
+
+    expect(res).toEqual({ success: false, movidos: [], omitidos: [], error: 'Elige la sucursal de destino.' });
+    expect(registrarAuditoriaMasiva).not.toHaveBeenCalled();
+  });
+
+  it('should_reject_roles_without_vehicle_permission', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'ejecutivo' }));
+
+    const res = await actions.cambiarUbicacionMasivaAction(['v1'], 5);
+
+    expect(res.success).toBe(false);
+    expect(svc.cambiarUbicacionMasiva).not.toHaveBeenCalled();
   });
 });

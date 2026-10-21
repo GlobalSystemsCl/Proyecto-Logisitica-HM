@@ -99,6 +99,34 @@ export async function updateVehiculoAction(id: string, data: UpdateVehiculoInput
   }
 }
 
+/**
+ * Fase G: cambio de ubicación masivo. Registra la auditoría de cada vehículo
+ * movido (`cambio_ubicacion`, con la ubicación anterior y la nueva).
+ */
+export async function cambiarUbicacionMasivaAction(ids: string[], sucursalId: number) {
+  try {
+    const profile = await verifyVehiculoPermission();
+    const result = await VehiculoService.cambiarUbicacionMasiva(ids, sucursalId);
+    if (!result.success) return result;
+
+    await SolicitudesService.registrarAuditoriaMasiva(
+      result.movidos.map((v) => ({
+        usuarioId: profile.id,
+        entidad: 'vehiculo',
+        entidadId: v.id,
+        accion: 'cambio_ubicacion',
+        anterior: { ubicacion: v.ubicacion },
+        nuevo: { ubicacion: sucursalId },
+      }))
+    );
+
+    if (result.movidos.length > 0) revalidatePath('/admin/vehiculos');
+    return result;
+  } catch (err: unknown) {
+    return { success: false, movidos: [], omitidos: [], error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
 export async function deleteVehiculoAction(id: string) {
   try {
     const profile = await verifyVehiculoPermission();

@@ -202,6 +202,75 @@ describe('VehiculoService', () => {
     });
   });
 
+  describe('cambiarUbicacionMasiva', () => {
+    it('should_move_free_vehicles_and_skip_blocked_ones_with_reason', async () => {
+      admin.results.sucursal = [fila({ id: 5 })];
+      admin.results.vehiculo = [
+        fila([
+          { id: 'v1', chasis: 'C1', ubicacion: 1 },
+          { id: 'v2', chasis: 'C2', ubicacion: 1 },
+          { id: 'v3', chasis: 'C3', ubicacion: 2 },
+          { id: 'v4', chasis: 'C4', ubicacion: 5 },
+        ]),
+        fila(null),
+      ];
+      admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'v2', disponibilidad: 'vendido' }])];
+      admin.results.traslado_interno_vehiculo = [fila([{ vehiculo_id: 'v3' }])];
+
+      const res = await VehiculoService.cambiarUbicacionMasiva(['v1', 'v2', 'v3', 'v4'], 5);
+
+      expect(res.success).toBe(true);
+      expect(res.movidos).toEqual([{ id: 'v1', chasis: 'C1', ubicacion: 1 }]);
+      expect(res.omitidos.map((o) => [o.id, o.motivo])).toEqual([
+        ['v2', 'Entregado al cliente.'],
+        ['v3', 'En un traslado interno pendiente o en tránsito.'],
+        ['v4', 'Ya está en esa sucursal.'],
+      ]);
+      const llamadas = admin.callsTo('vehiculo');
+      expect(llamadas).toContainEqual(['update', { ubicacion: 5 }]);
+      expect(llamadas).toContainEqual(['in', 'id', ['v1']]);
+      expect(admin.callsTo('solicitud_vehiculo')).toContainEqual(['in', 'disponibilidad', ['reservado', 'vendido']]);
+      expect(admin.callsTo('traslado_interno_vehiculo')).toContainEqual(['eq', 'disponibilidad', 'reservado']);
+    });
+
+    it('should_reject_when_destination_branch_does_not_exist', async () => {
+      admin.results.sucursal = [fila(null)];
+      const res = await VehiculoService.cambiarUbicacionMasiva(['v1'], 99);
+      expect(res).toEqual({ success: false, movidos: [], omitidos: [], error: 'La sucursal de destino no existe.' });
+      expect(admin.callsTo('vehiculo')).toHaveLength(0);
+    });
+
+    it('should_reject_invalid_request_without_querying', async () => {
+      const res = await VehiculoService.cambiarUbicacionMasiva([], 5);
+      expect(res.error).toBe('Selecciona al menos un vehículo.');
+      expect(admin.callsTo('sucursal')).toHaveLength(0);
+    });
+
+    it('should_report_vehicles_whose_update_failed', async () => {
+      admin.results.sucursal = [fila({ id: 5 })];
+      admin.results.vehiculo = [fila([{ id: 'v1', chasis: 'C1', ubicacion: 1 }]), { data: null, error: { message: 'boom' } }];
+      admin.results.solicitud_vehiculo = [fila([])];
+      admin.results.traslado_interno_vehiculo = [fila([])];
+
+      const res = await VehiculoService.cambiarUbicacionMasiva(['v1'], 5);
+
+      expect(res.movidos).toEqual([]);
+      expect(res.omitidos).toHaveLength(1);
+      expect(res.omitidos[0].id).toBe('v1');
+    });
+
+    it('should_return_error_when_reading_vehicles_fails', async () => {
+      admin.results.sucursal = [fila({ id: 5 })];
+      admin.results.vehiculo = [{ data: null, error: { message: 'boom' } }];
+      admin.results.solicitud_vehiculo = [fila([])];
+      admin.results.traslado_interno_vehiculo = [fila([])];
+
+      const res = await VehiculoService.cambiarUbicacionMasiva(['v1'], 5);
+
+      expect(res.success).toBe(false);
+    });
+  });
+
   describe('verificarDisponibilidad', () => {
     it('should_return_available_when_vehicle_has_no_reservations', async () => {
       encolarDisponibilidad([{ solicitud_id: 'sol-1', disponibilidad: 'liberado' }]);
@@ -249,7 +318,7 @@ describe('VehiculoService', () => {
       encolarVendido();
       const res = await VehiculoService.updateVehiculo('veh-1', { marca: 'Kia' });
       expect(res.success).toBe(false);
-      expect(res.error).toBe('No se puede modificar un vehículo que ya fue vendido.');
+      expect(res.error).toBe('No se puede modificar un vehículo que ya fue entregado al cliente.');
     });
 
     it('should_reject_when_new_chasis_is_invalid', async () => {
@@ -336,7 +405,7 @@ describe('VehiculoService', () => {
       encolarVendido();
       const res = await VehiculoService.deleteVehiculo('veh-1');
       expect(res.success).toBe(false);
-      expect(res.error).toBe('No se puede eliminar un vehículo que ya fue vendido.');
+      expect(res.error).toBe('No se puede eliminar un vehículo que ya fue entregado al cliente.');
     });
 
     it('should_return_success_when_vehicle_is_free', async () => {

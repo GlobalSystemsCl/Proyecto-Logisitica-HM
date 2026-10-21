@@ -17,7 +17,9 @@ import {
   updateVehiculoAction,
   deleteVehiculoAction,
   importVehiculosAction,
+  cambiarUbicacionMasivaAction,
 } from '@/app/actions/vehiculo.actions';
+import { esSeleccionableParaMover } from '@/lib/ubicacionMasiva';
 import {
   Car,
   Plus,
@@ -33,6 +35,7 @@ import {
   Upload,
   ChevronLeft,
   ChevronRight,
+  MapPin,
 } from 'lucide-react';
 
 interface Props {
@@ -62,6 +65,10 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   const [isSubmitting, startTransition] = useTransition();
 
   const PAGE_SIZE = 20;
+  // Fase G: cambio de ubicación masivo.
+  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
+  const [destinoMasivo, setDestinoMasivo] = useState('');
+  const [moviendo, setMoviendo] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
   const handleSearchChange = (value: string) => {
@@ -253,6 +260,58 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   const currentPageClamped = Math.min(currentPage, totalPages);
   const pageStart = (currentPageClamped - 1) * PAGE_SIZE;
   const pageVehiculos = filteredVehiculos.slice(pageStart, pageStart + PAGE_SIZE);
+
+  const seleccionablesFiltrados = filteredVehiculos.filter(esSeleccionableParaMover);
+  const seleccionablesPagina = pageVehiculos.filter(esSeleccionableParaMover);
+  const paginaSeleccionada =
+    seleccionablesPagina.length > 0 && seleccionablesPagina.every((v) => seleccion.has(v.id));
+
+  function alternarSeleccion(id: string) {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function alternarPagina() {
+    setSeleccion((prev) => {
+      const next = new Set(prev);
+      seleccionablesPagina.forEach((v) => (paginaSeleccionada ? next.delete(v.id) : next.add(v.id)));
+      return next;
+    });
+  }
+
+  async function moverSeleccionados() {
+    const sucursalId = Number(destinoMasivo);
+    const nombre = sucursales.find((s) => s.id === sucursalId)?.nombre ?? 'la sucursal elegida';
+    if (!sucursalId || seleccion.size === 0) return;
+    if (!window.confirm(`¿Mover ${seleccion.size} vehículo(s) a ${nombre}?`)) return;
+    setMoviendo(true);
+    try {
+      const res = await cambiarUbicacionMasivaAction([...seleccion], sucursalId);
+      if (!res.success) {
+        setFeedback({ type: 'error', message: res.error ?? 'No se pudo cambiar la ubicación.' });
+        return;
+      }
+      const detalle = res.omitidos
+        .slice(0, 5)
+        .map((o) => `${o.chasis || o.id}: ${o.motivo}`)
+        .join(' · ');
+      const resto = res.omitidos.length > 5 ? ` · y ${res.omitidos.length - 5} más` : '';
+      setFeedback({
+        type: res.omitidos.length > 0 && res.movidos.length === 0 ? 'error' : 'success',
+        message:
+          `${res.movidos.length} vehículo(s) movidos a ${nombre}.` +
+          (res.omitidos.length > 0 ? ` No se movieron ${res.omitidos.length}: ${detalle}${resto}` : ''),
+      });
+      setSeleccion(new Set());
+      setDestinoMasivo('');
+    } finally {
+      setMoviendo(false);
+    }
+  }
 
   const resetForm = () => {
     setChasis('');
@@ -557,7 +616,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
 
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Vendidos</p>
+            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Entregados al cliente</p>
             <p className="text-3xl font-bold text-neutral-900 mt-1">{vendidos}</p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-500">
@@ -646,7 +705,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 <option value="liberado">Disponibles</option>
                 <option value="reservado">Reservados</option>
                 <option value={FILTRO_EN_TRANSITO}>En tránsito</option>
-                <option value="vendido">Vendidos (entregados al cliente)</option>
+                <option value="vendido">Entregados al cliente</option>
               </select>
             </div>
 
@@ -720,12 +779,66 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
         </div>
       </div>
 
+      {/* Fase G: cambio de ubicación masivo */}
+      {seleccionablesFiltrados.length > 0 && (
+        <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center gap-3 text-sm">
+          <div className="flex flex-wrap items-center gap-3 flex-1">
+            <span className="font-semibold text-neutral-900 flex items-center gap-1.5">
+              <MapPin className="w-4 h-4" /> Cambiar ubicación
+            </span>
+            <span className="text-neutral-500">{seleccion.size} seleccionado(s)</span>
+            <button
+              onClick={() => setSeleccion(new Set(seleccionablesFiltrados.map((v) => v.id)))}
+              className="text-xs font-semibold text-neutral-700 hover:underline cursor-pointer"
+            >
+              Seleccionar los {seleccionablesFiltrados.length} disponibles del filtro
+            </button>
+            {seleccion.size > 0 && (
+              <button onClick={() => setSeleccion(new Set())} className="text-xs font-semibold text-neutral-500 hover:underline cursor-pointer">
+                Quitar selección
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={destinoMasivo}
+              onChange={(e) => setDestinoMasivo(e.target.value)}
+              aria-label="Sucursal de destino"
+              className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            >
+              <option value="">Sucursal de destino</option>
+              {sucursales.map((s) => (
+                <option key={s.id} value={s.id}>{s.nombre ?? `Sucursal #${s.id}`}</option>
+              ))}
+            </select>
+            <button
+              onClick={moverSeleccionados}
+              disabled={moviendo || seleccion.size === 0 || !destinoMasivo}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {moviendo ? 'Moviendo...' : `Mover ${seleccion.size}`}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Vehiculos Table */}
       <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50 text-xs uppercase font-semibold text-neutral-500 tracking-wider">
+                <th className="py-3.5 pl-4 w-8">
+                  {seleccionablesPagina.length > 0 && (
+                    <input
+                      type="checkbox"
+                      checked={paginaSeleccionada}
+                      onChange={alternarPagina}
+                      title="Seleccionar los disponibles de esta página"
+                      aria-label="Seleccionar los disponibles de esta página"
+                    />
+                  )}
+                </th>
                 <th className="py-3.5 px-4">Vehículo</th>
                 <th className="py-3.5 px-4">Chasis</th>
                 <th className="py-3.5 px-4">Patente</th>
@@ -740,7 +853,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filteredVehiculos.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-neutral-400">
+                  <td colSpan={10} className="py-8 text-center text-neutral-400">
                     No se encontraron vehículos que coincidan con la búsqueda.
                   </td>
                 </tr>
@@ -754,6 +867,17 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                       key={vehiculo.id}
                       className="hover:bg-neutral-50 transition-colors"
                     >
+                      <td className="py-3.5 pl-4 w-8">
+                        {esSeleccionableParaMover(vehiculo) && (
+                          <input
+                            type="checkbox"
+                            checked={seleccion.has(vehiculo.id)}
+                            onChange={() => alternarSeleccion(vehiculo.id)}
+                            aria-label={`Seleccionar ${vehiculo.chasis}`}
+                          />
+                        )}
+                      </td>
+
                       {/* Vehículo */}
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
@@ -849,7 +973,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                       <td className="py-3.5 px-4 text-right space-x-2">
                         {isReserved || isSold ? (
                           <span
-                            title={isReserved ? 'No disponible: vehículo reservado en una solicitud' : 'No disponible: vehículo ya vendido'}
+                            title={isReserved ? 'No disponible: vehículo reservado en una solicitud' : 'No disponible: vehículo ya entregado al cliente'}
                             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-neutral-400 bg-neutral-50 cursor-not-allowed"
                           >
                             <Lock className="w-3 h-3" />

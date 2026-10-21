@@ -663,6 +663,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-20 | Fase D: Excel de la calendarización por rango y reporte de movimientos para revisar la factura del transportista (`/logistica/movimientos`). Listados de solicitudes paginados. Nueva sección 34; sección 23 | Claude (asistido) |
 | 2026-10-20 | Fase E: el número de una solicitud abre su detalle (modo consulta) en los paneles del dashboard, Prioridades, Recepciones, Reportes y Sucursales (`AbrirSolicitudDetalle`, `getSolicitudDetalleAction`, `codigoSolicitud`). Nueva sección 35 | Claude (asistido) |
 | 2026-10-21 | Fase F: dominio de correo permitido (`DOMINIOS_CORREO_PERMITIDOS`), mensaje de registro pendiente con rol y sucursal, notificación `NUEVO_USUARIO` al administrador (migración `20261020140000`), activación masiva, contador de pendientes corregido y carga masiva de usuarios desde Excel. Nueva sección 36; variables de entorno | Claude (asistido) |
+| 2026-10-21 | Fase G: cambio de ubicación masivo en el inventario (`cambiarUbicacionMasivaAction`, auditoría por vehículo) y "Vendido" pasa a mostrarse como "Entregado al cliente". Sin migración. Nueva sección 37 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -933,3 +934,26 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
 
 ### 36.6 Tests
 `dominios.test.ts`, `activacionMasiva.test.ts`, `usuariosAdmin.test.ts`, `importUsuarios.test.ts`, `users.actions.test.ts`, `auth.actions.test.ts`, `migracion-nuevo-usuario.test.ts`; casos nuevos en `auth.service.test.ts`, `users.service.test.ts` (`activarCuentasMasivo`, dominio), `notificacion.service.test.ts`, `notificaciones-app.test.ts` y `soporte.test.ts`.
+
+## 37. Ubicaciones de stock (2026-10-21, fase G)
+
+### 37.1 Cambio de ubicación masivo
+- En el inventario (`/admin/vehiculos`, roles administrador, jefe de local, Logística y operaciones) hay una casilla en cada vehículo **disponible que no va en camino** (`esSeleccionableParaMover`), una casilla para la página y "Seleccionar los N disponibles del filtro", que respeta los filtros (marca, ubicación, fecha, búsqueda).
+- La barra "Cambiar ubicación" elige la sucursal de destino y pide confirmación. El resultado se muestra en el aviso de la página: cuántos se movieron y los primeros 5 omitidos con su motivo.
+- `cambiarUbicacionMasivaAction(ids, sucursalId)` → `VehiculoService.cambiarUbicacionMasiva`:
+  - hasta 500 vehículos por vez;
+  - verifica que la sucursal exista;
+  - omite, con el motivo, los **reservados** en una solicitud activa, los **entregados al cliente**, los que están en un **traslado interno pendiente o en tránsito** (`traslado_interno_vehiculo.disponibilidad = 'reservado'`) y los que **ya están** en esa sucursal;
+  - lee y actualiza en grupos de 100 ids (`enLotes`, `lib/paginacion.ts`) para no alargar la URL de PostgREST;
+  - un `update ... in (...)` por grupo; el recálculo de slots lo hace el trigger por sentencia (`20261013150000`).
+- **Auditoría:** una fila `cambio_ubicacion` por vehículo movido, con la ubicación anterior y la nueva, en un solo insert (`SolicitudesService.registrarAuditoriaMasiva`).
+- Lógica pura en `src/lib/ubicacionMasiva.ts` (`validarCambioUbicacion`, `clasificarCambioUbicacion`, `bloqueosDesdeVinculos`).
+- Igual que la edición individual, no se limita por zona: cualquier rol con acceso al inventario puede mover a cualquier sucursal.
+
+### 37.2 "Vendido" → "Entregado al cliente"
+- Verificado en producción (2026-10-21): `solicitud_vehiculo.disponibilidad = 'vendido'` solo lo escribe el trigger `fn_finalizar_solicitud_vehiculos` al **finalizar** una solicitud de venta (el ejecutivo registra la entrega al cliente), que además deja `vehiculo.ubicacion = null`. Había 36 vínculos `vendido`.
+- Solo cambia el texto visible (`ETIQUETA_DISPONIBILIDAD`, `lib/vehiculo.ts`): badge, tarjeta "Entregados al cliente", filtro de estado y mensajes de bloqueo. El valor `vendido` de la BD no cambia.
+- El mensaje de la BD "El vehículo ya fue vendido y no se puede reservar" (`fn_validar_reserva_unica_vehiculo`) sigue igual porque viene de la función.
+
+### 37.3 Tests
+`ubicacionMasiva.test.ts`, `vehiculo.service.test.ts` (`cambiarUbicacionMasiva`), `vehiculo.actions.test.ts` (`cambiarUbicacionMasivaAction`), `solicitudes.service.test.ts` (`registrarAuditoriaMasiva`), `paginacion.test.ts` (`enLotes`) y `vehiculo.test.ts`.

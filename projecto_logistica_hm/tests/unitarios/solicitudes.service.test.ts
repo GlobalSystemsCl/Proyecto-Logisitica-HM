@@ -1496,6 +1496,44 @@ describe('SolicitudesService.getURLDescarga', () => {
   });
 });
 
+describe('SolicitudesService.registrarAuditoriaMasiva', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should_insert_all_rows_in_a_single_call', async () => {
+    admin.results.auditoria = [fila(null)];
+    await SolicitudesService.registrarAuditoriaMasiva([
+      { usuarioId: 'u-1', entidad: 'vehiculo', entidadId: 'v1', accion: 'cambio_ubicacion', anterior: { ubicacion: 1 }, nuevo: { ubicacion: 2 } },
+      { usuarioId: 'u-1', entidad: 'vehiculo', entidadId: 'v2', accion: 'cambio_ubicacion' },
+    ]);
+    const inserts = admin.callsTo('auditoria').filter((c) => c[0] === 'insert');
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0][1]).toEqual([
+      { usuario_id: 'u-1', entidad: 'vehiculo', entidad_id: 'v1', accion: 'cambio_ubicacion', valor_anterior: { ubicacion: 1 }, valor_nuevo: { ubicacion: 2 } },
+      { usuario_id: 'u-1', entidad: 'vehiculo', entidad_id: 'v2', accion: 'cambio_ubicacion', valor_anterior: null, valor_nuevo: null },
+    ]);
+  });
+
+  it('should_not_query_when_there_are_no_rows', async () => {
+    await SolicitudesService.registrarAuditoriaMasiva([]);
+    expect(admin.callsTo('auditoria')).toHaveLength(0);
+  });
+
+  it('should_not_throw_when_insert_fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.auditoria = [{ data: null, error: { message: 'boom' } }];
+    await expect(
+      SolicitudesService.registrarAuditoriaMasiva([{ usuarioId: 'u', entidad: 'vehiculo', entidadId: 'v', accion: 'x' }])
+    ).resolves.toBeUndefined();
+  });
+});
+
 describe('SolicitudesService.registrarAuditoria', () => {
   beforeEach(() => {
     admin.reset();
