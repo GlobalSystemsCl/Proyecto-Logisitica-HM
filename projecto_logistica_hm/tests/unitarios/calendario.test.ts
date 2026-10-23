@@ -4,6 +4,7 @@ import {
   agruparPorDia,
   cumpleFiltros,
   desplazar,
+  errorFechaProgramacion,
   esFechaValida,
   estadoPlazo,
   filtrosAParams,
@@ -62,6 +63,23 @@ describe('esFechaValida', () => {
     expect(esFechaValida('2026-02-30')).toBe(false);
     expect(esFechaValida('09-10-2026')).toBe(false);
     expect(esFechaValida(undefined)).toBe(false);
+  });
+});
+
+describe('errorFechaProgramacion', () => {
+  it('should_return_null_when_date_is_today_or_later', () => {
+    expect(errorFechaProgramacion('2026-10-22', '2026-10-22')).toBeNull();
+    expect(errorFechaProgramacion('2026-11-03', '2026-10-22')).toBeNull();
+  });
+
+  it('should_reject_when_date_is_before_today', () => {
+    expect(errorFechaProgramacion('2026-10-21', '2026-10-22')).toBe('La fecha de despacho no puede ser anterior a hoy.');
+  });
+
+  it('should_ask_for_date_when_empty_or_invalid', () => {
+    expect(errorFechaProgramacion('', '2026-10-22')).toBe('Indica la fecha de despacho.');
+    expect(errorFechaProgramacion(null, '2026-10-22')).toBe('Indica la fecha de despacho.');
+    expect(errorFechaProgramacion('2026-02-30', '2026-10-22')).toBe('Indica la fecha de despacho.');
   });
 });
 

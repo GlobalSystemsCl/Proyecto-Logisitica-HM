@@ -44,7 +44,7 @@ export default async function FaqPage({
         backHref="/dashboard"
       />
 
-      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8">
+      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 pt-8 pb-24 sm:pb-8">
         <div className="max-w-3xl mx-auto space-y-8">
           <header className="text-center">
             <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-neutral-900 text-white mb-4">

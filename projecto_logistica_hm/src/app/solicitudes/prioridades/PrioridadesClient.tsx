@@ -6,7 +6,8 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   KeyboardSensor,
   useSensor,
   useSensors,
@@ -145,7 +146,9 @@ export default function PrioridadesClient({
   }, [cola, porPriorizar, pendingOps]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    // En pantallas táctiles el arrastre parte con una pulsación larga, así deslizar sobre las tarjetas sigue desplazando la página.
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
     useSensor(KeyboardSensor)
   );
 
@@ -394,6 +397,8 @@ export default function PrioridadesClient({
       )}
 
       <DndContext
+        // Id fijo: el autogenerado difiere entre servidor y cliente y rompe la hidratación.
+        id="cola-prioridades"
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
@@ -480,17 +485,20 @@ export default function PrioridadesClient({
 function LineaVehiculo({ v }: { v: VehiculoAsociado }) {
   const patente = v.patente?.trim();
   return (
-    <div className="flex items-center gap-2 text-xs">
-      <Car className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-      {patente ? (
-        <>
-          <span className="font-semibold text-neutral-900">{patente}</span>
-          <span className="text-neutral-400">·</span>
-        </>
-      ) : null}
-      <span className="font-semibold text-neutral-900">{nombreVehiculoConAnio(v)}</span>
-      <span className="text-neutral-400">·</span>
-      <span className="text-neutral-500 font-mono text-[11px]">{v.chasis}</span>
+    <div className="flex items-start gap-2 text-xs">
+      <Car className="w-3.5 h-3.5 mt-px text-neutral-400 shrink-0" />
+      {/* En pantallas angostas cada dato salta de línea y los separadores sobran. */}
+      <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        {patente ? (
+          <>
+            <span className="font-semibold text-neutral-900">{patente}</span>
+            <span className="hidden sm:inline text-neutral-400">·</span>
+          </>
+        ) : null}
+        <span className="font-semibold text-neutral-900">{nombreVehiculoConAnio(v)}</span>
+        <span className="hidden sm:inline text-neutral-400">·</span>
+        <span className="text-neutral-500 font-mono text-[11px] break-all">{v.chasis}</span>
+      </div>
     </div>
   );
 }

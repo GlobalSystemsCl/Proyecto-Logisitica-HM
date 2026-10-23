@@ -19,6 +19,7 @@ import { AuditoriaRegistro } from '@/types/auditoria.types';
 import { AuditoriaMetricas } from '@/services/auditoria.service';
 import { getAuditoriaAction } from '@/app/actions/auditoria.actions';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { utils, writeFile } from 'xlsx';
 
 const accionConfig: Record<string, { label: string; color: string }> = {
@@ -69,10 +70,6 @@ function formatFechaHora(iso: string | null): string {
   return d.toLocaleDateString('es-CL') + ' ' + d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatId(id: string): string {
-  return '#' + id.slice(0, 8);
-}
-
 function getDetalle(reg: AuditoriaRegistro): { texto: string; esCambioEstado: boolean; anterior?: string; nuevo?: string } {
   if (reg.accion === 'CAMBIO_ESTADO') {
     const anterior = (reg.valor_anterior?.estado as string) || '?';
@@ -118,6 +115,41 @@ function JsonBlock({ label, data }: { label: string; data: Record<string, unknow
 }
 
 const ITEMS_PER_PAGE = 25;
+
+/** Entidad, acción y cambio de un registro: lo comparten la tabla y las tarjetas móviles. */
+function DetalleRegistro({ reg }: { reg: AuditoriaRegistro }) {
+  const detalle = getDetalle(reg);
+  const accCfg = accionConfig[reg.accion] || { label: reg.accion, color: 'bg-neutral-100 text-neutral-600' };
+  const entCfg = entidadConfig[reg.entidad] || { label: reg.entidad, color: 'bg-neutral-100 text-neutral-600' };
+  return (
+    <>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold ${entCfg.color}`}>
+          {entCfg.label}
+        </span>
+        <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold ${accCfg.color}`}>
+          {accCfg.label}
+        </span>
+      </div>
+      <p className="text-xs text-neutral-600 mt-1.5 font-medium">
+        {reg.accion === 'CAMBIO_ESTADO' ? (
+          <>
+            <span className={`font-semibold ${estadoColores[detalle.anterior || ''] || ''}`}>{detalle.anterior}</span>
+            <span className="text-neutral-400 mx-1">→</span>
+            <span className={`font-semibold ${estadoColores[detalle.nuevo || ''] || ''}`}>{detalle.nuevo}</span>
+          </>
+        ) : (
+          detalle.texto
+        )}
+      </p>
+      {reg.solicitud_id && (
+        <p className="text-[10px] text-neutral-400 font-mono mt-0.5">
+          Solicitud {codigoSolicitud(reg.solicitud_id)}
+        </p>
+      )}
+    </>
+  );
+}
 
 export default function HistorialClient({ registros, metricas }: HistorialClientProps) {
   const [filtrosEntidad, setFiltrosEntidad] = useState('');
@@ -330,7 +362,46 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
       </div>
 
       {/* Table */}
-      <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+      {/* Tarjetas (móvil y tablet): en la tabla el detalle queda fuera de la pantalla */}
+      <div className="lg:hidden bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+        {registrosPagina.length === 0 ? (
+          <p className="py-8 px-4 text-center text-sm text-neutral-400">
+            No se encontraron registros que coincidan con los filtros.
+          </p>
+        ) : (
+          <ul className="divide-y divide-neutral-200">
+            {registrosPagina.map((reg) => (
+              <li key={reg.id} className="p-4 space-y-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <DetalleRegistro reg={reg} />
+                  </div>
+                  <button
+                    onClick={() => setDetailRegistro(reg)}
+                    title="Ver detalle"
+                    aria-label="Ver detalle"
+                    className="p-2.5 -m-1 shrink-0 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+                  <span>{formatFechaHora(reg.created_at)}</span>
+                  <UsuarioNombreBoton usuarioId={reg.usuario_id} nombre={`${reg.usuario_nombre || ''} ${reg.usuario_apellido || ''}`.trim() || null} muted />
+                  {reg.patente && (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white font-mono">
+                      {reg.patente}
+                    </span>
+                  )}
+                  {reg.chasis && <span className="font-mono break-all">{reg.chasis}</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="hidden lg:block bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -353,10 +424,6 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
                 </tr>
               ) : (
                 registrosPagina.map((reg) => {
-                  const detalle = getDetalle(reg);
-                  const accCfg = accionConfig[reg.accion] || { label: reg.accion, color: 'bg-neutral-100 text-neutral-600' };
-                  const entCfg = entidadConfig[reg.entidad] || { label: reg.entidad, color: 'bg-neutral-100 text-neutral-600' };
-
                   return (
                     <tr key={reg.id} className="hover:bg-neutral-50 transition-colors">
                       {/* Fecha Solicitud */}
@@ -400,30 +467,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
 
                       {/* Detalle */}
                       <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold ${entCfg.color}`}>
-                            {entCfg.label}
-                          </span>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold ${accCfg.color}`}>
-                            {accCfg.label}
-                          </span>
-                        </div>
-                        <p className="text-xs text-neutral-600 mt-1.5 font-medium">
-                          {reg.accion === 'CAMBIO_ESTADO' ? (
-                            <>
-                              <span className={`font-semibold ${estadoColores[detalle.anterior || ''] || ''}`}>{detalle.anterior}</span>
-                              <span className="text-neutral-400 mx-1">→</span>
-                              <span className={`font-semibold ${estadoColores[detalle.nuevo || ''] || ''}`}>{detalle.nuevo}</span>
-                            </>
-                          ) : (
-                            detalle.texto
-                          )}
-                        </p>
-                        {reg.solicitud_id && (
-                          <p className="text-[10px] text-neutral-400 font-mono mt-0.5">
-                            Solicitud {formatId(reg.solicitud_id)}
-                          </p>
-                        )}
+                        <DetalleRegistro reg={reg} />
                       </td>
 
                       {/* Acciones */}
@@ -509,7 +553,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
                   <p className="text-xs text-neutral-500">
                     {accionConfig[detailRegistro.accion]?.label || detailRegistro.accion}
                     {detailRegistro.solicitud_id && (
-                      <> · Solicitud {formatId(detailRegistro.solicitud_id)}</>
+                      <> · Solicitud {codigoSolicitud(detailRegistro.solicitud_id)}</>
                     )}
                   </p>
                 </div>

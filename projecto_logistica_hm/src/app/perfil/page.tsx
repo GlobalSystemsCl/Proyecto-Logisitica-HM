@@ -32,7 +32,7 @@ export default async function PerfilPage() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 lg:px-12 py-8">
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-8 lg:px-12 pt-8 pb-24 sm:pb-8">
         <PerfilClient
           profile={{
             id: profile.id,

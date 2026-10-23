@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   Calendar,
   CalendarClock,
+  CalendarPlus,
   Car,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +38,7 @@ import { formatearRut } from '@/lib/rut';
 import type { Transportista } from '@/types/transportista.types';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import {
   ACCIONES_DESHACER_TRASLADO,
   ETIQUETA_FECHA_LIMITE,
@@ -107,7 +109,7 @@ function ruta(s: SolicitudLista): string {
 
 /** N° visible de la solicitud: el mismo que muestra su detalle. */
 function numero(s: SolicitudLista): string {
-  return `#${s.id.slice(0, 8).toUpperCase()}`;
+  return codigoSolicitud(s.id);
 }
 
 function TipoChip({ s, tamano = 'sm' }: { s: SolicitudLista; tamano?: 'sm' | 'md' }) {
@@ -143,7 +145,7 @@ export default function CalendarizacionesClient({
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
-  const [programar, setProgramar] = useState<{ id: string; fecha: string } | null>(null);
+  const [programar, setProgramar] = useState<{ id: string; fecha: string; elegirFecha?: boolean } | null>(null);
   const [listaTransportistas, setListaTransportistas] = useState<Transportista[]>(transportistas);
   const [recibirTarget, setRecibirTarget] = useState<SolicitudLista | null>(null);
   const [reprogramar, setReprogramar] = useState<{ sol: SolicitudLista; fecha: string | null } | null>(null);
@@ -519,7 +521,7 @@ export default function CalendarizacionesClient({
                 <h3 className="font-bold text-neutral-900 text-sm flex items-center gap-2">
                   <GripVertical className="w-4 h-4" /> Por programar ({pendientes.length})
                 </h3>
-                <p className="text-[10px] text-neutral-500 mt-0.5">Arrastra al calendario para programar · clic para ver el detalle</p>
+                <p className="text-[10px] text-neutral-500 mt-0.5">Arrastra al calendario o usa «Programar» · clic para ver el detalle</p>
               </div>
               <div className="max-h-[560px] overflow-y-auto p-2 space-y-2">
                 {pendientes.length === 0 ? (
@@ -553,6 +555,18 @@ export default function CalendarizacionesClient({
                           <Clock className="w-3 h-3" /> {ETIQUETA_FECHA_LIMITE}: {formatFecha(s.fecha_limite)}
                         </p>
                       )}
+                      {/* Alternativa al arrastre: en pantallas táctiles arrastrar no es confiable. */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const sugerida = diaSeleccionado && diaSeleccionado >= hoy ? diaSeleccionado : hoy;
+                          setProgramar({ id: s.id, fecha: sugerida, elegirFecha: true });
+                        }}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors cursor-pointer"
+                      >
+                        <CalendarPlus className="w-3.5 h-3.5" /> Programar
+                      </button>
                     </div>
                   ))
                 )}
@@ -754,12 +768,13 @@ export default function CalendarizacionesClient({
           <ProgramarModal
             subtitulo={sol ? `${numero(sol)} · ${ruta(sol)}` : undefined}
             fecha={programar.fecha}
+            elegirFecha={programar.elegirFecha}
             fechaLimite={sol?.fecha_limite ?? null}
             transportistas={listaTransportistas}
             onTransportistaCreado={agregarTransportista}
             onCerrar={() => setProgramar(null)}
-            onConfirmar={async (transportistaId) => {
-              const result = await calendarizarSolicitudAction(programar.id, programar.fecha, transportistaId);
+            onConfirmar={async (transportistaId, dia) => {
+              const result = await calendarizarSolicitudAction(programar.id, dia, transportistaId);
               if (!result.success) return result.error ?? 'No se pudo programar el traslado.';
               setProgramar(null);
               return null;

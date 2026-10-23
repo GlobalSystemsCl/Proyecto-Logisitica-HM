@@ -44,6 +44,7 @@ import {
 import { VehiculoAsociado } from '@/types/sucursal.types';
 import { ROL_LABEL, UserRole, UsuarioDetalle } from '@/types/auth.types';
 import { formatFecha } from '@/lib/fechas';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { extraerMotivoRechazo } from '@/lib/motivoRechazo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
@@ -502,20 +503,21 @@ export default function SolicitudDetalleModal({
   const rechazo = esRechazada ? extraerMotivoRechazo(observaciones) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-      <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-5xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+      {/* En móvil todo el modal desplaza junto: cabecera, franja y pestañas no se comen el alto. */}
+      <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-5xl shadow-2xl overflow-y-auto sm:overflow-hidden max-h-[94vh] sm:max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
 
         {/* Top Header */}
-        <div className="px-8 pt-6 pb-5 border-b border-neutral-200 shrink-0">
-          <div className="flex items-center justify-between mb-5">
+        <div className="px-5 sm:px-8 pt-5 sm:pt-6 pb-5 border-b border-neutral-200 shrink-0">
+          <div className="flex items-center justify-between gap-3 mb-4 sm:mb-5">
             <button
               onClick={onClose}
-              className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 -ml-2 px-2 py-2 rounded-lg text-sm text-neutral-500 hover:text-neutral-900 transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Volver</span>
             </button>
-            <p className="text-sm font-bold tracking-widest text-neutral-900 uppercase">
+            <p className="hidden sm:block text-sm font-bold tracking-widest text-neutral-900 uppercase">
               Detalle de Solicitud
             </p>
             {/* Acciones */}
@@ -531,9 +533,9 @@ export default function SolicitudDetalleModal({
           </div>
 
           {/* Title + badge */}
-          <div className="flex items-center gap-4 mb-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-1">
             <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900">
-              Solicitud #{solicitud.id.slice(0, 8).toUpperCase()}
+              Solicitud {codigoSolicitud(solicitud.id)}
             </h1>
             <span className={`inline-flex items-center px-3.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${estadoConfig[solicitud.estado].color}`}>
               {estadoConfig[solicitud.estado].label}
@@ -553,7 +555,7 @@ export default function SolicitudDetalleModal({
 
         {/* Motivo de rechazo: visible en la parte superior y en todas las pestañas */}
         {esRechazada && (
-          <div className="mx-8 mt-5 mb-1 shrink-0 rounded-2xl border border-red-300 bg-red-50 p-5">
+          <div className="mx-5 sm:mx-8 mt-5 mb-1 shrink-0 rounded-2xl border border-red-300 bg-red-50 p-5">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0">
                 <XCircle className="w-5 h-5" />
@@ -612,14 +614,14 @@ export default function SolicitudDetalleModal({
         )}
 
         {/* Info Cards Strip */}
-        <div className="px-8 py-5 border-b border-neutral-200 shrink-0 overflow-x-auto">
-          <div className="flex gap-6 min-w-max">
+        <div className="px-5 sm:px-8 py-5 border-b border-neutral-200 shrink-0 lg:overflow-x-auto">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 lg:flex lg:gap-6 lg:min-w-max">
             {/* Vehicle */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
                 <Car className="w-5 h-5 text-amber-600" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[11px] text-neutral-400 font-medium">Vehículo</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {vehiculosLocal.length > 0 ? vehiculosLocal[0].patente : '—'}
@@ -631,26 +633,26 @@ export default function SolicitudDetalleModal({
                 </p>
               </div>
             </div>
-            <div className="w-px bg-neutral-200 self-stretch" />
+            <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
             {/* Origin */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
                 <MapPin className="w-5 h-5 text-amber-600" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[11px] text-neutral-400 font-medium">Origen de solicitud</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.sucursal_nombre || `#${solicitud.sucursal}`}
                 </p>
               </div>
             </div>
-            <div className="w-px bg-neutral-200 self-stretch" />
+            <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
             {/* Destination */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
                 <MapPin className="w-5 h-5 text-amber-600" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[11px] text-neutral-400 font-medium">Destino</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {destino}
@@ -660,7 +662,7 @@ export default function SolicitudDetalleModal({
                 )}
               </div>
             </div>
-            <div className="w-px bg-neutral-200 self-stretch" />
+            <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
             {/* Priority (oculta para el Ejecutivo) */}
             {puedeVerPrioridad && (
               <>
@@ -680,7 +682,7 @@ export default function SolicitudDetalleModal({
                     </p>
                   </div>
                 </div>
-                <div className="w-px bg-neutral-200 self-stretch" />
+                <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
               </>
             )}
             {/* Logística asignada (logistica_id) */}
@@ -688,7 +690,7 @@ export default function SolicitudDetalleModal({
               <div className="w-11 h-11 rounded-full bg-sky-50 border border-sky-200 flex items-center justify-center shrink-0">
                 <UserCheck className="w-5 h-5 text-sky-700" />
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="text-[11px] text-neutral-400 font-medium">Logística asignada</p>
                 <p className="text-sm font-bold text-neutral-900">
                   {solicitud.logistica_nombre ? (
@@ -700,7 +702,7 @@ export default function SolicitudDetalleModal({
                 <p className="text-[11px] text-neutral-500">Logística</p>
               </div>
             </div>
-            <div className="w-px bg-neutral-200 self-stretch" />
+            <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
             {/* Contacto actual: Logística, jefe de local o ejecutivo según la etapa */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-neutral-200 flex items-center justify-center shrink-0">
@@ -724,15 +726,15 @@ export default function SolicitudDetalleModal({
         </div>
 
         {/* Tabs */}
-        <div className="px-8 border-b border-neutral-200 shrink-0">
-          <div className="flex gap-8">
+        <div className="px-5 sm:px-8 border-b border-neutral-200 shrink-0">
+          <div className="flex gap-6 sm:gap-8 overflow-x-auto">
             {(['info', 'historial', 'obs', 'docs'] as const).map((tab) => {
               const labels = { info: 'Información', historial: 'Historial', obs: 'Observaciones', docs: 'Documentos' };
               return (
                 <button
                   key={tab}
                   onClick={() => setDetailTab(tab)}
-                  className={`py-3.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                  className={`py-3.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors cursor-pointer ${
                     detailTab === tab
                       ? 'border-neutral-900 text-neutral-900'
                       : 'border-transparent text-neutral-400 hover:text-neutral-600'
@@ -746,7 +748,7 @@ export default function SolicitudDetalleModal({
         </div>
 
         {/* Tab Content */}
-        <div className="overflow-y-auto flex-1 p-8">
+        <div className="sm:overflow-y-auto flex-1 p-5 sm:p-8">
           {/* === INFO TAB === */}
           {detailTab === 'info' && (
             <div className="space-y-6">

@@ -41,6 +41,17 @@ export function esFechaValida(fecha: string | null | undefined): fecha is string
   return aTexto(aUTC(fecha)) === fecha;
 }
 
+/**
+ * Valida el día elegido al programar un traslado sin arrastrar (selector de
+ * fecha): debe ser una fecha real y no anterior a hoy, igual que al soltar en
+ * el calendario. Devuelve el mensaje de error o `null`.
+ */
+export function errorFechaProgramacion(fecha: string | null | undefined, hoy: string): string | null {
+  if (!esFechaValida(fecha)) return 'Indica la fecha de despacho.';
+  if (fecha < hoy) return 'La fecha de despacho no puede ser anterior a hoy.';
+  return null;
+}
+
 export function sumarDias(fecha: string, dias: number): string {
   const d = aUTC(fecha);
   d.setUTCDate(d.getUTCDate() + dias);

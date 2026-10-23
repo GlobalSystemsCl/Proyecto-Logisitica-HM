@@ -110,21 +110,21 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
             Tiempo de respuesta, pendientes y atrasos de cada usuario de Logística. Plazo objetivo: calendarizar dentro de {sla} h desde la aprobación.
           </p>
         </div>
-        <div className="flex items-end gap-2 flex-wrap">
-          <form onSubmit={aplicarPeriodo} className="flex items-end gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:flex-wrap">
+          <form onSubmit={aplicarPeriodo} className="grid grid-cols-2 gap-2 sm:flex sm:items-end">
             <label className="text-xs font-semibold text-neutral-600">
               Desde
-              <input type="date" value={rango.desde} onChange={(e) => setRango((r) => ({ ...r, desde: e.target.value }))} className="block mt-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm bg-white" />
+              <input type="date" value={rango.desde} onChange={(e) => setRango((r) => ({ ...r, desde: e.target.value }))} className="block w-full mt-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm bg-white" />
             </label>
             <label className="text-xs font-semibold text-neutral-600">
               Hasta
-              <input type="date" value={rango.hasta} onChange={(e) => setRango((r) => ({ ...r, hasta: e.target.value }))} className="block mt-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm bg-white" />
+              <input type="date" value={rango.hasta} onChange={(e) => setRango((r) => ({ ...r, hasta: e.target.value }))} className="block w-full mt-1 rounded-xl border border-neutral-300 px-3 py-2 text-sm bg-white" />
             </label>
-            <button type="submit" className="px-4 py-2 rounded-xl bg-neutral-900 text-white text-sm font-semibold cursor-pointer hover:bg-neutral-700">
+            <button type="submit" className="col-span-2 px-4 py-2.5 sm:py-2 rounded-xl bg-neutral-900 text-white text-sm font-semibold cursor-pointer hover:bg-neutral-700">
               Aplicar
             </button>
           </form>
-          <button onClick={exportar} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl border border-neutral-300 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer">
+          <button onClick={exportar} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-xl border border-neutral-300 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer">
             <Download className="w-4 h-4" /> Exportar Excel
           </button>
         </div>
@@ -145,7 +145,33 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
 
       <section className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
         <h2 className="px-5 py-3 border-b border-neutral-200 font-semibold text-sm">Por usuario de Logística ({formatFecha(desde)} – {formatFecha(hasta)})</h2>
-        <div className="overflow-x-auto">
+        {/* Tarjetas (móvil y tablet): la tabla de 11 columnas no cabe */}
+        {reporte.porEncargado.length === 0 ? (
+          <p className="lg:hidden px-4 py-8 text-center text-sm text-neutral-400">No hay usuarios de Logística activos.</p>
+        ) : (
+          <ul className="lg:hidden divide-y divide-neutral-100">
+            {reporte.porEncargado.map((f) => (
+              <li key={f.id} className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="font-semibold text-neutral-900 min-w-0 break-words">{f.nombre}</p>
+                  <Semaforito valor={f.semaforo} />
+                </div>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div><dt className="text-neutral-400">Pendientes</dt><dd className="tabular-nums text-neutral-800">{f.pendientes}</dd></div>
+                  <div><dt className="text-neutral-400">Más de {sla} h</dt><dd className={`tabular-nums ${f.pendientesFueraDeSla > 0 ? 'font-bold text-red-700' : 'text-neutral-800'}`}>{f.pendientesFueraDeSla}</dd></div>
+                  <div><dt className="text-neutral-400">Esperando más</dt><dd className="text-neutral-800">{formatoHoras(f.antiguedadMaximaHoras)}</dd></div>
+                  <div><dt className="text-neutral-400">Respuesta prom.</dt><dd className="text-neutral-800">{formatoHoras(f.respuestaPromedioHoras)}</dd></div>
+                  <div><dt className="text-neutral-400">Dentro del plazo</dt><dd className="text-neutral-800">{porcentaje(f.respuestasDentroDeSla, f.respondidas)} <span className="text-neutral-400">({f.respondidas})</span></dd></div>
+                  <div><dt className="text-neutral-400">En curso</dt><dd className="tabular-nums text-neutral-800">{f.enCurso}</dd></div>
+                  <div><dt className="text-neutral-400">Atrasadas</dt><dd className={`tabular-nums ${f.atrasadas > 0 ? 'font-bold text-red-700' : 'text-neutral-800'}`}>{f.atrasadas}</dd></div>
+                  <div><dt className="text-neutral-400">Recibidas a tiempo</dt><dd className="text-neutral-800">{porcentaje(f.recibidasATiempo, f.recibidas)} <span className="text-neutral-400">({f.recibidas})</span></dd></div>
+                  <div><dt className="text-neutral-400">Reprog.</dt><dd className="tabular-nums text-neutral-800">{f.reprogramaciones}</dd></div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="hidden lg:block overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-neutral-50 text-left text-xs uppercase tracking-wider text-neutral-500">

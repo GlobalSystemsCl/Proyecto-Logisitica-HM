@@ -17,3 +17,15 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * iOS Safari hace zoom al enfocar un campo con letra menor a 16px. Va fuera de
+ * las capas de Tailwind para imponerse a `text-sm`/`text-xs` solo en móvil.
+ */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}

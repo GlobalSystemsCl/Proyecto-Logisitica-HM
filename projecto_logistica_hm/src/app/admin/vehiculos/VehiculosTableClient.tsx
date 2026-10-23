@@ -541,6 +541,98 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     }
   };
 
+  /** Ubicación, estado y acciones de un vehículo: los comparten la tabla y las tarjetas móviles. */
+  function ubicacionVehiculo(vehiculo: VehiculoConDisponibilidad) {
+    const isSold = vehiculo.estado_disponibilidad === 'vendido';
+    return (
+      <>
+        {isSold ? (
+          <span className="text-neutral-400">—</span>
+        ) : vehiculo.en_transito_hacia ? (
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-sky-50 text-sky-800 border border-sky-200"
+            title={`Sale de ${vehiculo.ubicacion_nombre ?? 'sin sucursal'}`}
+          >
+            <Truck className="w-3 h-3" />
+            En camino a {vehiculo.en_transito_hacia}
+          </span>
+        ) : vehiculo.ubicacion != null ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-100 text-neutral-900 border border-neutral-200">
+            <Car className="w-3 h-3" />
+            {vehiculo.ubicacion_nombre || `Sucursal #${vehiculo.ubicacion}`}
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+            <Truck className="w-3 h-3" />
+            En viaje / Container
+          </span>
+        )}
+      </>
+    );
+  }
+
+  function estadoVehiculo(vehiculo: VehiculoConDisponibilidad) {
+    const isReserved = vehiculo.estado_disponibilidad === 'reservado';
+    const isSold = vehiculo.estado_disponibilidad === 'vendido';
+    return (
+      <>
+        {isReserved ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
+            <Lock className="w-3 h-3" />
+            Reservado
+          </span>
+        ) : isSold ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white border border-neutral-900">
+            <CheckCircle2 className="w-3 h-3" />
+            <span title={DESCRIPCION_DISPONIBILIDAD.vendido}>{ETIQUETA_DISPONIBILIDAD.vendido}</span>
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-500 border border-neutral-200">
+            <Unlock className="w-3 h-3" />
+            {ETIQUETA_DISPONIBILIDAD.liberado}
+          </span>
+        )}
+      </>
+    );
+  }
+
+  function accionesVehiculo(vehiculo: VehiculoConDisponibilidad) {
+    const isReserved = vehiculo.estado_disponibilidad === 'reservado';
+    const isSold = vehiculo.estado_disponibilidad === 'vendido';
+    return (
+      <>
+        {isReserved || isSold ? (
+          <span
+            title={isReserved ? 'No disponible: vehículo reservado en una solicitud' : 'No disponible: vehículo ya entregado al cliente'}
+            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-neutral-400 bg-neutral-50 cursor-not-allowed"
+          >
+            <Lock className="w-3 h-3" />
+            Bloqueado
+          </span>
+        ) : (
+          <>
+            <button
+              onClick={() => openEditModal(vehiculo)}
+              title="Editar vehículo"
+              className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+            >
+              <Edit3 className="w-4 h-4" />
+            </button>
+            {userRole === 'administrador' && (
+              <button
+                onClick={() => openDeleteModal(vehiculo)}
+                title="Eliminar vehículo"
+                className="p-1.5 rounded-lg text-neutral-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header & Stats */}
@@ -822,8 +914,66 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
         </div>
       )}
 
+      {/* Tarjetas (móvil y tablet): la tabla de 10 columnas deja las acciones fuera de la pantalla */}
+      <div className="lg:hidden bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+        {seleccionablesPagina.length > 0 && (
+          <label className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200 bg-neutral-50 text-xs font-semibold text-neutral-600 cursor-pointer">
+            <input type="checkbox" checked={paginaSeleccionada} onChange={alternarPagina} className="w-4 h-4" />
+            Seleccionar los disponibles de esta página
+          </label>
+        )}
+        {filteredVehiculos.length === 0 ? (
+          <p className="py-8 px-4 text-center text-sm text-neutral-400">
+            No se encontraron vehículos que coincidan con la búsqueda.
+          </p>
+        ) : (
+          <ul className="divide-y divide-neutral-200">
+            {pageVehiculos.map((vehiculo) => (
+              <li key={vehiculo.id} className="p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  {esSeleccionableParaMover(vehiculo) && (
+                    <input
+                      type="checkbox"
+                      checked={seleccion.has(vehiculo.id)}
+                      onChange={() => alternarSeleccion(vehiculo.id)}
+                      aria-label={`Seleccionar ${vehiculo.chasis}`}
+                      className="mt-1 w-4 h-4 shrink-0"
+                    />
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-neutral-900 break-words">
+                      {vehiculo.marca} {vehiculo.modelo} <span className="font-normal text-neutral-500">· {vehiculo.anio}</span>
+                    </p>
+                    <p className="mt-0.5 font-mono text-xs text-neutral-600 break-all">{vehiculo.chasis}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 -mr-1">{accionesVehiculo(vehiculo)}</div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs">
+                  {estadoVehiculo(vehiculo)}
+                  {ubicacionVehiculo(vehiculo)}
+                </div>
+                <dl className="grid grid-cols-3 gap-x-3 text-xs">
+                  <div>
+                    <dt className="text-neutral-400">Patente</dt>
+                    <dd className="text-neutral-800 font-semibold">{vehiculo.patente || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-400">Precio</dt>
+                    <dd className="text-neutral-800">{vehiculo.precio != null ? `$${vehiculo.precio.toLocaleString('es-CL')}` : '—'}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-400">Color</dt>
+                    <dd className="text-neutral-800 break-words">{vehiculo.color || '—'}</dd>
+                  </div>
+                </dl>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {/* Vehiculos Table */}
-      <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="hidden lg:block bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -859,9 +1009,6 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 </tr>
               ) : (
                 pageVehiculos.map((vehiculo) => {
-                  const isReserved = vehiculo.estado_disponibilidad === 'reservado';
-                  const isSold = vehiculo.estado_disponibilidad === 'vendido';
-
                   return (
                     <tr
                       key={vehiculo.id}
@@ -921,47 +1068,12 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
 
                       {/* Ubicación */}
                       <td className="py-3.5 px-4 text-xs text-neutral-600">
-                        {isSold ? (
-                          <span className="text-neutral-400">—</span>
-                        ) : vehiculo.en_transito_hacia ? (
-                          <span
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-sky-50 text-sky-800 border border-sky-200"
-                            title={`Sale de ${vehiculo.ubicacion_nombre ?? 'sin sucursal'}`}
-                          >
-                            <Truck className="w-3 h-3" />
-                            En camino a {vehiculo.en_transito_hacia}
-                          </span>
-                        ) : vehiculo.ubicacion != null ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-neutral-100 text-neutral-900 border border-neutral-200">
-                            <Car className="w-3 h-3" />
-                            {vehiculo.ubicacion_nombre || `Sucursal #${vehiculo.ubicacion}`}
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
-                            <Truck className="w-3 h-3" />
-                            En viaje / Container
-                          </span>
-                        )}
+                        {ubicacionVehiculo(vehiculo)}
                       </td>
 
                       {/* Estado */}
                       <td className="py-3.5 px-4">
-                        {isReserved ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200">
-                            <Lock className="w-3 h-3" />
-                            Reservado
-                          </span>
-                        ) : isSold ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white border border-neutral-900">
-                            <CheckCircle2 className="w-3 h-3" />
-                            <span title={DESCRIPCION_DISPONIBILIDAD.vendido}>{ETIQUETA_DISPONIBILIDAD.vendido}</span>
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-500 border border-neutral-200">
-                            <Unlock className="w-3 h-3" />
-                            {ETIQUETA_DISPONIBILIDAD.liberado}
-                          </span>
-                        )}
+                        {estadoVehiculo(vehiculo)}
                       </td>
 
                       {/* Fecha */}
@@ -971,34 +1083,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
 
                       {/* Acciones */}
                       <td className="py-3.5 px-4 text-right space-x-2">
-                        {isReserved || isSold ? (
-                          <span
-                            title={isReserved ? 'No disponible: vehículo reservado en una solicitud' : 'No disponible: vehículo ya entregado al cliente'}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-neutral-400 bg-neutral-50 cursor-not-allowed"
-                          >
-                            <Lock className="w-3 h-3" />
-                            Bloqueado
-                          </span>
-                        ) : (
-                          <>
-                            <button
-                              onClick={() => openEditModal(vehiculo)}
-                              title="Editar vehículo"
-                              className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
-                            {userRole === 'administrador' && (
-                              <button
-                                onClick={() => openDeleteModal(vehiculo)}
-                                title="Eliminar vehículo"
-                                className="p-1.5 rounded-lg text-neutral-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </>
-                        )}
+                        {accionesVehiculo(vehiculo)}
                       </td>
                     </tr>
                   );
@@ -1042,7 +1127,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       {/* Modal: Crear Vehículo */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white">
@@ -1329,7 +1414,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       {/* Modal: Editar Vehículo */}
       {isEditModalOpen && vehiculoToEdit && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white">
@@ -1624,7 +1709,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       {/* Modal: Confirmar Eliminación */}
       {isDeleteModalOpen && vehiculoToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600">
@@ -1681,7 +1766,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       {/* Result Modal - popup encima de todo */}
       {showResultModal && resultModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in fade-in zoom-in-95">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-sm shadow-2xl max-h-[92vh] overflow-y-auto animate-in fade-in zoom-in-95">
             <div className="p-6 text-center space-y-4">
               <div className={`w-14 h-14 rounded-2xl mx-auto flex items-center justify-center ${
                 resultModal.type === 'success'
@@ -1736,7 +1821,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       {/* Modal: Importar CSV */}
       {isImportModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-2xl shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white">

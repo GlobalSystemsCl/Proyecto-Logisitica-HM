@@ -135,7 +135,7 @@ export default function PageHeader({
                 </nav>
               )}
 
-              <form action={logoutAction} className="hidden sm:block">
+              <form action={logoutAction}>
                 <button
                   type="submit"
                   className="p-2 rounded-full text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors"

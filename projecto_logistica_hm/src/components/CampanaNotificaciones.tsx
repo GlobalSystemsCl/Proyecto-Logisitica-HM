@@ -134,7 +134,7 @@ export default function CampanaNotificaciones({ usuarioId }: Props) {
         <div
           role="dialog"
           aria-label="Notificaciones"
-          className="absolute right-0 mt-2 w-[22rem] max-w-[calc(100vw-2rem)] bg-white border border-neutral-200 rounded-2xl shadow-xl z-50 overflow-hidden"
+          className="fixed inset-x-4 top-16 sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-[22rem] bg-white border border-neutral-200 rounded-2xl shadow-xl z-50 overflow-hidden"
         >
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
             <p className="text-sm font-semibold text-neutral-900">Notificaciones</p>

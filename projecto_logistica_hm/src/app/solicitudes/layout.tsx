@@ -51,7 +51,7 @@ export default async function SolicitudesLayout({ children }: { children: React.
         mostrarEnlacesCuenta={profile.rol === 'ejecutivo'}
         slots={slots}
       />
-      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8">{children}</main>
+      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 pt-8 pb-24 sm:pb-8">{children}</main>
     </div>
   );
 }

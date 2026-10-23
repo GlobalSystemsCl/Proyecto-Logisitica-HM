@@ -122,7 +122,7 @@ export default async function DashboardPage() {
         slots={slots}
       />
 
-      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8 space-y-8">
+      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 pt-8 pb-24 sm:pb-8 space-y-8">
         <div className="relative overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm min-h-[220px] sm:min-h-[240px]">
           <Image
             src="/banner3.png"
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
             priority
             sizes="100vw"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-white via-white/95 to-white/30 sm:via-white/90 sm:to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-white via-white/95 to-white/90 sm:via-white/90 sm:to-transparent" />
           <div className="relative z-10 p-6 sm:p-8 max-w-xl space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-blue-50 border border-blue-100 text-blue-700">
               <Shield className="w-3.5 h-3.5 text-blue-600" />

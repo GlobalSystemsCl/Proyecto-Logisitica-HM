@@ -470,7 +470,7 @@ export default function TrasladosClient({
                 }}
                 className="bg-white border border-neutral-200 rounded-2xl p-5 shadow-sm hover:border-neutral-400 hover:shadow cursor-pointer transition-all"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-xs text-neutral-400">#{t.id.slice(0, 8)}</span>
@@ -478,11 +478,11 @@ export default function TrasladosClient({
                         {estado.label}
                       </span>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 text-sm font-bold text-neutral-900">
+                    <div className="mt-2 flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-0.5 text-sm font-bold text-neutral-900">
                       <MapPin className="w-4 h-4 text-neutral-400 shrink-0" />
-                      <span className="truncate">{t.origen_nombre}</span>
+                      <span className="sm:truncate">{t.origen_nombre}</span>
                       <span className="text-neutral-400">→</span>
-                      <span className="truncate">{t.destino_nombre}</span>
+                      <span className="sm:truncate">{t.destino_nombre}</span>
                     </div>
                     <p className="mt-1 text-xs text-neutral-500">
                       Logística: {t.logistica_nombre ?? t.logistica_id} · Creado: {formatFecha(t.created_at)}
@@ -492,7 +492,7 @@ export default function TrasladosClient({
                       <p className="mt-1 text-xs text-neutral-500 italic">“{t.observacion}”</p>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex flex-wrap sm:flex-col gap-2 sm:shrink-0">
                     {puedeDespachar && (
                       <button
                         onClick={(e) => {
@@ -500,7 +500,7 @@ export default function TrasladosClient({
                           handleDespachar(t.id);
                         }}
                         disabled={loading === t.id}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center gap-1 px-3 py-2 sm:py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         {loading === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <PackageSearch className="w-3 h-3" />}
                         Despachar
@@ -513,7 +513,7 @@ export default function TrasladosClient({
                           setRecibirTarget(t);
                         }}
                         disabled={loading === t.id}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center gap-1 px-3 py-2 sm:py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         {loading === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <PackageCheck className="w-3 h-3" />}
                         Recepcionar
@@ -526,7 +526,7 @@ export default function TrasladosClient({
                           setCancelarTarget(t);
                         }}
                         disabled={loading === t.id}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                        className="inline-flex items-center gap-1 px-3 py-2 sm:py-1.5 text-xs font-semibold text-red-600 border border-red-200 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
                       >
                         <X className="w-3 h-3" />
                         Cancelar

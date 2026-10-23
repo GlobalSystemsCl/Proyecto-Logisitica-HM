@@ -363,6 +363,119 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     });
   };
 
+  /** Sucursales, estado y acciones de un usuario: los comparten la tabla y las tarjetas móviles. */
+  function sucursalesUsuario(user: UserProfile) {
+    const mainSuc = user.sucursal_id
+      ? sucursales.find((s) => s.id === user.sucursal_id)
+      : undefined;
+    const extras = (user.sucursales ?? []).filter((s) => s.id !== user.sucursal_id);
+    const zonaNombres = (user.zonas ?? [])
+      .map((z) => zonas.find((z2) => z2.id === z.id)?.nombre)
+      .filter(Boolean) as string[];
+    return (
+      <div className="space-y-1.5">
+        {mainSuc ? (
+          <div className="flex items-center gap-1.5">
+            <Building2 className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="text-xs font-medium text-neutral-700">{mainSuc.nombre}</span>
+            {extras.length > 0 && (
+              <span className="text-[10px] font-semibold text-neutral-400">
+                +{extras.length} más
+              </span>
+            )}
+          </div>
+        ) : (
+          <span className="text-xs text-neutral-400">Sin asignar</span>
+        )}
+        {zonaNombres.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {zonaNombres.map((name) => (
+              <span
+                key={name}
+                className="px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500 border border-neutral-200 text-[10px] font-medium"
+              >
+                {name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  function estadoUsuario(user: UserProfile) {
+    return (
+      <>
+        {user.aprobado === false ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Pendiente de autorización
+          </span>
+        ) : user.activo ? (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white border border-neutral-900">
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            Activo
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white text-neutral-500 border border-neutral-300">
+            <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
+            Inactivo
+          </span>
+        )}
+      </>
+    );
+  }
+
+  function accionesUsuario(user: UserProfile) {
+    const isMainAdmin = esAdminPrincipal(user.email);
+    return (
+      <>
+        {/* Approve pending user button */}
+        {user.aprobado === false && (
+          <button
+            onClick={() => handleAutorizar(user.id, user.email)}
+            title="Autorizar acceso"
+            className="p-1.5 rounded-lg text-amber-600 hover:text-white hover:bg-amber-500 transition-colors cursor-pointer"
+          >
+            <ShieldCheck className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Edit user button */}
+        <button
+          onClick={() => openEditModal(user)}
+          title="Editar usuario"
+          className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+        >
+          <Pencil className="w-4 h-4" />
+        </button>
+
+        {/* Reset password button */}
+        <button
+          onClick={() => handleResetPassword(user.id, user.email)}
+          title="Generar nueva contraseña provisoria"
+          className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+        >
+          <Key className="w-4 h-4" />
+        </button>
+
+        {/* Toggle active/inactive */}
+        <button
+          onClick={() => handleToggleStatus(user.id, user.activo, user.email)}
+          disabled={isMainAdmin}
+          title={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
+          className={`p-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
+            user.activo
+              ? 'text-neutral-500 hover:text-red-600 hover:bg-red-50'
+              : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
+          }`}
+        >
+          <Power className="w-4 h-4" />
+        </button>
+      </>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header & Stats */}
@@ -529,14 +642,14 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           />
         </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto">
+        <div className="grid grid-cols-[auto_1fr] items-center gap-2 w-full sm:flex sm:w-auto">
           <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
             Rol:
           </label>
           <select
             value={selectedRole}
             onChange={(e) => setSelectedRole(e.target.value)}
-            className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            className="w-full sm:w-auto bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
           >
             <option value="todos">Todos los roles</option>
             <option value="administrador">Administrador</option>
@@ -545,13 +658,13 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
             <option value="logistica">Logística</option>
             <option value="operaciones">Operaciones</option>
           </select>
-          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider ml-2">
+          <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider sm:ml-2">
             Estado:
           </label>
           <select
             value={estado}
             onChange={(e) => setEstado(e.target.value as EstadoUsuarioFiltro)}
-            className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            className="w-full sm:w-auto bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
           >
             <option value="todos">Todos</option>
             <option value="pendientes">Pendientes</option>
@@ -577,7 +690,66 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
       )}
 
       {/* Users Table */}
-      <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+      {/* Tarjetas (móvil y tablet): la tabla de 9 columnas deja las acciones fuera de la pantalla */}
+      <div className="lg:hidden bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+        {filteredUsers.length === 0 ? (
+          <p className="py-8 px-4 text-center text-sm text-neutral-400">
+            No se encontraron usuarios que coincidan con la búsqueda.
+          </p>
+        ) : (
+          <ul className="divide-y divide-neutral-200">
+            {filteredUsers.map((user) => {
+              const roleConfig = roleLabels[user.rol] || {
+                label: user.rol,
+                color: 'bg-neutral-100 text-neutral-700 border-neutral-200',
+              };
+              return (
+                <li key={user.id} className="p-4 space-y-3">
+                  <div className="flex items-start gap-3">
+                    {esPendiente(user) && (
+                      <input
+                        type="checkbox"
+                        checked={seleccion.has(user.id)}
+                        onChange={() => alternarSeleccion(user.id)}
+                        aria-label={`Seleccionar ${user.email}`}
+                        className="mt-3 w-4 h-4 shrink-0"
+                      />
+                    )}
+                    <div className="w-10 h-10 rounded-full bg-neutral-900 flex items-center justify-center font-bold text-xs text-white uppercase shrink-0">
+                      {user.nombre.charAt(0)}
+                      {user.apellido ? user.apellido.charAt(0) : ''}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-semibold text-sm text-neutral-900">
+                        <UsuarioNombreBoton usuarioId={user.id} nombre={`${user.nombre} ${user.apellido}`} muted />
+                      </p>
+                      <p className="font-mono text-xs text-neutral-600 break-all">{user.email}</p>
+                      {esAdminPrincipal(user.email) && (
+                        <span className="text-[10px] text-neutral-500 font-medium">Administrador Principal</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${roleConfig.color}`}>
+                      {roleConfig.label}
+                    </span>
+                    {estadoUsuario(user)}
+                  </div>
+                  {sucursalesUsuario(user)}
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <span className="text-[11px] text-neutral-400">
+                      Registro {new Date(user.created_at).toLocaleDateString('es-CL')}
+                    </span>
+                    <div className="flex items-center gap-1">{accionesUsuario(user)}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      <div className="hidden lg:block bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -670,64 +842,12 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
 
                       {/* Sucursal */}
                       <td className="py-3.5 px-4">
-                        {(() => {
-                          const mainSuc = user.sucursal_id
-                            ? sucursales.find((s) => s.id === user.sucursal_id)
-                            : undefined;
-                          const extras = (user.sucursales ?? []).filter((s) => s.id !== user.sucursal_id);
-                          const zonaNombres = (user.zonas ?? [])
-                            .map((z) => zonas.find((z2) => z2.id === z.id)?.nombre)
-                            .filter(Boolean) as string[];
-                          return (
-                            <div className="space-y-1.5">
-                              {mainSuc ? (
-                                <div className="flex items-center gap-1.5">
-                                  <Building2 className="w-3.5 h-3.5 text-neutral-400" />
-                                  <span className="text-xs font-medium text-neutral-700">{mainSuc.nombre}</span>
-                                  {extras.length > 0 && (
-                                    <span className="text-[10px] font-semibold text-neutral-400">
-                                      +{extras.length} más
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-xs text-neutral-400">Sin asignar</span>
-                              )}
-                              {zonaNombres.length > 0 && (
-                                <div className="flex flex-wrap gap-1">
-                                  {zonaNombres.map((name) => (
-                                    <span
-                                      key={name}
-                                      className="px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500 border border-neutral-200 text-[10px] font-medium"
-                                    >
-                                      {name}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        {sucursalesUsuario(user)}
                       </td>
 
                       {/* Status */}
                       <td className="py-3.5 px-4">
-                        {user.aprobado === false ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-300">
-                            <ShieldCheck className="w-3.5 h-3.5" />
-                            Pendiente de autorización
-                          </span>
-                        ) : user.activo ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-900 text-white border border-neutral-900">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                            Activo
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-white text-neutral-500 border border-neutral-300">
-                            <span className="w-1.5 h-1.5 rounded-full bg-neutral-400" />
-                            Inactivo
-                          </span>
-                        )}
+                        {estadoUsuario(user)}
                       </td>
 
                       {/* Password setup status */}
@@ -752,48 +872,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
 
                       {/* Action buttons */}
                       <td className="py-3.5 px-4 text-right space-x-2">
-                        {/* Approve pending user button */}
-                        {user.aprobado === false && (
-                          <button
-                            onClick={() => handleAutorizar(user.id, user.email)}
-                            title="Autorizar acceso"
-                            className="p-1.5 rounded-lg text-amber-600 hover:text-white hover:bg-amber-500 transition-colors cursor-pointer"
-                          >
-                            <ShieldCheck className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Edit user button */}
-                        <button
-                          onClick={() => openEditModal(user)}
-                          title="Editar usuario"
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-
-                        {/* Reset password button */}
-                        <button
-                          onClick={() => handleResetPassword(user.id, user.email)}
-                          title="Generar nueva contraseña provisoria"
-                          className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
-                        >
-                          <Key className="w-4 h-4" />
-                        </button>
-
-                        {/* Toggle active/inactive */}
-                        <button
-                          onClick={() => handleToggleStatus(user.id, user.activo, user.email)}
-                          disabled={isMainAdmin}
-                          title={user.activo ? 'Desactivar usuario' : 'Activar usuario'}
-                          className={`p-1.5 rounded-lg transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed ${
-                            user.activo
-                              ? 'text-neutral-500 hover:text-red-600 hover:bg-red-50'
-                              : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
-                          }`}
-                        >
-                          <Power className="w-4 h-4" />
-                        </button>
+                        {accionesUsuario(user)}
                       </td>
                     </tr>
                   );
@@ -807,7 +886,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
       {/* Modal: Crear Nuevo Usuario */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white">
@@ -869,7 +948,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                     placeholder="nombre.apellido"
                     value={emailPrefix}
                     onChange={(e) => setEmailPrefix(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-transparent text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none"
+                    className="flex-1 min-w-0 px-3 py-2 bg-transparent text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none"
                   />
                   <span className="px-2 py-2 text-neutral-400 text-sm font-semibold flex items-center">
                     @
@@ -877,7 +956,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                   <select
                     value={emailDomain}
                     onChange={(e) => setEmailDomain(e.target.value)}
-                    className="px-3 py-2 bg-neutral-50 text-sm text-neutral-900 border-l border-neutral-300 focus:outline-none"
+                    className="shrink-0 px-3 py-2 bg-neutral-50 text-sm text-neutral-900 border-l border-neutral-300 focus:outline-none"
                   >
                     {opcionesDominio.map((d) => (
                       <option key={d} value={d}>{d}</option>
@@ -972,7 +1051,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
       {/* Modal: Editar Usuario */}
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b border-neutral-200">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-neutral-900 border border-neutral-900 flex items-center justify-center text-white">

@@ -34,7 +34,7 @@ export default async function AdminHistorialPage() {
       />
 
       {/* Main Content */}
-      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 py-8">
+      <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 pt-8 pb-24 sm:pb-8">
         <HistorialClient registros={registros} metricas={metricas} />
       </main>
     </div>

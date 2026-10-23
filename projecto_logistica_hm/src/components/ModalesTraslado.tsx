@@ -5,6 +5,7 @@ import { AlertTriangle, CalendarClock, Camera, Loader2, PackageCheck, Truck, X }
 import type { DatosRecepcion } from '@/lib/recepcion';
 import { validarMotivoCancelacion, validarRecepcion } from '@/lib/recepcion';
 import { formatFechaLarga, hoyISO } from '@/lib/fechas';
+import { errorFechaProgramacion } from '@/lib/calendario';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import SelectorTransportista from '@/components/SelectorTransportista';
 import type { Transportista } from '@/types/transportista.types';
@@ -360,14 +361,19 @@ export function ReprogramarModal({
 
 interface ProgramarModalProps {
   subtitulo?: string;
-  /** Día elegido, `YYYY-MM-DD`. */
+  /** Día elegido (al soltar en el calendario) o propuesto, `YYYY-MM-DD`. */
   fecha: string;
+  /**
+   * Muestra un selector para cambiar el día: es la forma de programar sin
+   * arrastrar (pantallas táctiles, teclado).
+   */
+  elegirFecha?: boolean;
   /** Fecha límite propuesta: si el día la supera, se muestra el aviso. */
   fechaLimite: string | null;
   transportistas: Transportista[];
   onTransportistaCreado: (t: Transportista) => void;
   onCerrar: () => void;
-  onConfirmar: (transportistaId: string) => Promise<string | null>;
+  onConfirmar: (transportistaId: string, fecha: string) => Promise<string | null>;
 }
 
 /**
@@ -377,26 +383,33 @@ interface ProgramarModalProps {
 export function ProgramarModal({
   subtitulo,
   fecha,
+  elegirFecha = false,
   fechaLimite,
   transportistas,
   onTransportistaCreado,
   onCerrar,
   onConfirmar,
 }: ProgramarModalProps) {
+  const [dia, setDia] = useState(fecha);
   const [transportistaId, setTransportistaId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
-  const fueraDePlazo = !!fechaLimite && fecha > fechaLimite.slice(0, 10);
+  const fueraDePlazo = !!fechaLimite && !!dia && dia > fechaLimite.slice(0, 10);
 
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
+    const errorFecha = errorFechaProgramacion(dia, hoyISO());
+    if (errorFecha) {
+      setError(errorFecha);
+      return;
+    }
     if (!transportistaId) {
       setError('Indica el transportista del traslado.');
       return;
     }
     setEnviando(true);
     try {
-      const resultado = await onConfirmar(transportistaId);
+      const resultado = await onConfirmar(transportistaId, dia);
       if (resultado) setError(resultado);
     } finally {
       setEnviando(false);
@@ -411,11 +424,25 @@ export function ProgramarModal({
       onCerrar={onCerrar}
     >
       <form onSubmit={enviar} className="space-y-4">
-        <div className="flex gap-3">
-          <div className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-3">
-            <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Fecha programada</p>
-            <p className="font-bold text-neutral-900 mt-0.5 text-sm">{formatFechaLarga(fecha + 'T12:00:00Z')}</p>
+        {elegirFecha && (
+          <div>
+            <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">Fecha de despacho *</label>
+            <input
+              type="date"
+              min={hoyISO()}
+              value={dia}
+              onChange={(e) => setDia(e.target.value)}
+              className="w-full rounded-xl border border-neutral-300 p-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            />
           </div>
+        )}
+        <div className="flex flex-col sm:flex-row gap-3">
+          {!elegirFecha && (
+            <div className="flex-1 bg-neutral-50 border border-neutral-200 rounded-xl p-3">
+              <p className="text-[10px] font-semibold text-neutral-500 uppercase tracking-wider">Fecha programada</p>
+              <p className="font-bold text-neutral-900 mt-0.5 text-sm">{formatFechaLarga(dia + 'T12:00:00Z')}</p>
+            </div>
+          )}
           {fueraDePlazo && (
             <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-3">
               <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wider">{ETIQUETA_FECHA_LIMITE}</p>

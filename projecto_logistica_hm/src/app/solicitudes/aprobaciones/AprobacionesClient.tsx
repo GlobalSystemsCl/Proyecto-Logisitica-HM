@@ -21,6 +21,7 @@ import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import BadgeEvento from '@/components/BadgeEvento';
 import { formatFecha, hoyISO } from '@/lib/fechas';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { iniciadorNombre } from '@/lib/iniciador';
 
@@ -186,7 +187,7 @@ export default function AprobacionesClient({
               <div key={sol.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm text-neutral-500">#{sol.id.slice(0, 8)}</span>
+                    <span className="font-mono text-sm text-neutral-500">{codigoSolicitud(sol.id)}</span>
                     {sol.tipo_solicitud === 'evento' && <BadgeEvento />}
                     <span className="px-2 py-0.5 rounded-md text-xs bg-amber-50 text-amber-700 border border-amber-200">
                       Pendiente
@@ -262,7 +263,7 @@ export default function AprobacionesClient({
 
       {approveTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-neutral-900">Aprobar solicitud</h3>
               <button
@@ -274,7 +275,7 @@ export default function AprobacionesClient({
               </button>
             </div>
             <p className="text-sm text-neutral-500 mb-4">
-              Aprobando la solicitud #{approveTarget.id.slice(0, 8)}. Este es el plazo de entrega
+              Aprobando la solicitud {codigoSolicitud(approveTarget.id)}. Este es el plazo de entrega
               propuesto por el ejecutivo: puedes aceptarlo o modificarlo.
             </p>
             <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
@@ -329,7 +330,7 @@ export default function AprobacionesClient({
 
       {rejectTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-neutral-900">Rechazar solicitud</h3>
               <button
@@ -341,7 +342,7 @@ export default function AprobacionesClient({
               </button>
             </div>
             <p className="text-sm text-neutral-500 mb-4">
-              Rechazando la solicitud #{rejectTarget.id.slice(0, 8)}. Indica el motivo del rechazo
+              Rechazando la solicitud {codigoSolicitud(rejectTarget.id)}. Indica el motivo del rechazo
               (quedará registrado).
             </p>
             <textarea

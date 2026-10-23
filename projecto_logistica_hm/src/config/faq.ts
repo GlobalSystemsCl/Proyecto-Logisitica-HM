@@ -208,7 +208,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: GESTION,
     pregunta: '¿Cómo funciona la cola de prioridades?',
     respuesta:
-      'Cada sucursal de origen tiene su propia cola. Arrastra las solicitudes aprobadas desde "Por Priorizar" a la cola y ordénalas arrastrando: la posición 1 es la que Logística debe programar primero. Reordenar no envía avisos; entrar a la cola sí avisa al ejecutivo.',
+      'Cada sucursal de origen tiene su propia cola. Arrastra las solicitudes aprobadas desde "Por Priorizar" a la cola y ordénalas arrastrando: la posición 1 es la que Logística debe programar primero. Reordenar no envía avisos; entrar a la cola sí avisa al ejecutivo. En el celular, mantén presionada la tarjeta un momento antes de arrastrarla.',
   },
   {
     vista: 'prioridades',
@@ -239,7 +239,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: ['logistica'],
     pregunta: '¿Cómo programo un traslado?',
     respuesta:
-      'Arrastra la solicitud desde "Por programar" al día del despacho y elige el transportista (obligatorio). Si no está en la lista, créalo ahí mismo con su nombre y RUT. Si la fecha queda después de la fecha límite, el sistema avisa pero te deja continuar.',
+      'Arrastra la solicitud desde "Por programar" al día del despacho, o usa el botón "Programar" de la tarjeta y elige el día (la forma más cómoda en el celular). Luego indica el transportista (obligatorio). Si no está en la lista, créalo ahí mismo con su nombre y RUT. Si la fecha queda después de la fecha límite, el sistema avisa pero te deja continuar.',
   },
   {
     vista: 'calendario',

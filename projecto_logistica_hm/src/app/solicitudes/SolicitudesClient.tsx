@@ -55,6 +55,7 @@ import BadgeEvento from '@/components/BadgeEvento';
 import PanelEjecutivo from '@/components/PanelEjecutivo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 
 /**
  * Nomenclatura de negocio para los estados.
@@ -595,6 +596,94 @@ export default function SolicitudesClient({
     }
   }
 
+  /** Estado, prioridad y atraso de una solicitud: lo comparten la tabla y las tarjetas móviles. */
+  function celdaEstado(sol: SolicitudLista) {
+    const estado = estadoConfig[sol.estado];
+    const chip = CHIP_ATRASO[getEstadoAtraso(sol)];
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {sol.estado === 'rechazada' ? (
+          <button
+            type="button"
+            onClick={() => setDetailTarget(sol)}
+            title="Ver el motivo del rechazo"
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color} hover:brightness-95 transition-[filter] cursor-pointer`}
+          >
+            <XCircle className="w-3.5 h-3.5" />
+            {estado.label}
+          </button>
+        ) : (
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color}`}>
+            {estado.label}
+          </span>
+        )}
+        {puedeVerPrioridad && sol.posicion_prioridad !== null && sol.posicion_prioridad !== undefined && (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white">
+            #{sol.posicion_prioridad}
+          </span>
+        )}
+        {chip && (
+          <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${chip.clase}`}>
+            {chip.texto}
+          </span>
+        )}
+      </div>
+    );
+  }
+
+  /** Acciones de la fila (insistir, asignarse, recibir, entregar), en tabla o en tarjeta. */
+  function accionesFila(sol: SolicitudLista, clase: string) {
+    return (
+      <div className={clase}>
+        {esEjecutivo && sol.ejecutivo_id === viewer.id && ESTADOS_INSISTIBLES.includes(sol.estado) && (
+          <button
+            onClick={() => handleInsistir(sol)}
+            disabled={isSubmitting || !puedeInsistir(sol)}
+            title={
+              cooldowns[sol.id]
+                ? `Podrás insistir de nuevo en ${cooldowns[sol.id]}h`
+                : 'Pedir avanzar el estado de mi solicitud'
+            }
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <BellRing className="w-3.5 h-3.5" />
+            {cooldowns[sol.id] ? `Insistir (${cooldowns[sol.id]}h)` : 'Insistir'}
+          </button>
+        )}
+        {puedeAsignarEncargado(sol) && (
+          <button
+            onClick={() => handleAsignarEncargado(sol)}
+            disabled={isSubmitting}
+            title="Asignármela"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
+          >
+            <UserCheck className="w-3.5 h-3.5" /> Asignarme
+          </button>
+        )}
+        {puedeRecibir(sol) && (
+          <button
+            onClick={() => handleRecibir(sol)}
+            disabled={isSubmitting}
+            title="Marcar como recepcionada en destino"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
+          >
+            <PackageCheck className="w-3.5 h-3.5" /> Recibir
+          </button>
+        )}
+        {puedeFinalizar(sol) && (
+          <button
+            onClick={() => handleFinalizar(sol)}
+            disabled={isSubmitting}
+            title="Registrar entrega al cliente"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-b from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-sm ring-1 ring-black/10 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98]"
+          >
+            <Flag className="w-3.5 h-3.5" /> Entregar a cliente
+          </button>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -809,7 +898,7 @@ export default function SolicitudesClient({
             <select
               value={filtroEstado}
               onChange={(e) => setFiltroEstado(e.target.value)}
-              className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+              className="flex-1 sm:flex-none bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
             >
               <option value="todos">Todos</option>
               {(Object.keys(estadoConfig) as EstadoSolicitud[]).filter((est) => estadoEnGrupo(est, grupoActivo)).map((est) => (
@@ -822,8 +911,78 @@ export default function SolicitudesClient({
         </div>
       </div>
 
+      {/* Tarjetas (móvil y tablet): la tabla de 9 columnas deja las acciones fuera de la pantalla */}
+      <div className="lg:hidden bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+        {filtradas.length === 0 ? (
+          <p className="py-8 px-4 text-center text-sm text-neutral-400">
+            {visibles.length === 0
+              ? 'Todavía no tienes solicitudes.'
+              : `No hay solicitudes en "${grupoFiltro(grupoActivo).label}".`}
+          </p>
+        ) : (
+          <ul className="divide-y divide-neutral-200">
+            {filtradas.map((sol) => (
+              <li key={sol.id} className={`p-4 space-y-3 ${BORDE_ATRASO[getEstadoAtraso(sol)]}`}>
+                <div className="flex items-start justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTarget(sol)}
+                    className="min-w-0 text-left cursor-pointer"
+                  >
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-neutral-900">{codigoSolicitud(sol.id)}</span>
+                      {sol.tipo_solicitud === 'evento' ? (
+                        <BadgeEvento tamano="sm" />
+                      ) : (
+                        <span className="inline-flex px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-600 border border-neutral-300">
+                          {tipoLabel[sol.tipo_solicitud]}
+                        </span>
+                      )}
+                    </span>
+                    <span className="block mt-1 text-sm font-semibold text-neutral-900 break-words">
+                      {destinoDeSolicitud(sol)}
+                    </span>
+                  </button>
+                  <button
+                    onClick={() => setDetailTarget(sol)}
+                    title="Ver detalle"
+                    aria-label="Ver detalle"
+                    className="p-2.5 -m-1 shrink-0 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+                  >
+                    <Eye className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {celdaEstado(sol)}
+
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <div>
+                    <dt className="text-neutral-400">Creación</dt>
+                    <dd className="text-neutral-700">{formatFecha(sol.fecha_creacion)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-neutral-400">{ETIQUETA_FECHA_LIMITE}</dt>
+                    <dd className="text-neutral-700">{formatFecha(sol.fecha_limite)}</dd>
+                  </div>
+                  {iniciadorNombre(sol) && (
+                    <div className="col-span-2">
+                      <dt className="text-neutral-400">Iniciada por</dt>
+                      <dd className="text-neutral-700">
+                        <UsuarioNombreBoton usuarioId={iniciadorId(sol)} nombre={iniciadorNombre(sol)} muted />
+                      </dd>
+                    </div>
+                  )}
+                </dl>
+
+                {accionesFila(sol, 'flex flex-wrap gap-2 empty:hidden')}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
       {/* Table */}
-      <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="hidden lg:block bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -850,15 +1009,13 @@ export default function SolicitudesClient({
                 </tr>
               ) : (
                 filtradas.map((sol) => {
-                  const estado = estadoConfig[sol.estado];
                   const destino = destinoDeSolicitud(sol);
                   const atraso = getEstadoAtraso(sol);
-                  const chip = CHIP_ATRASO[atraso];
                   return (
                     <tr key={sol.id} className={`hover:bg-neutral-50 transition-colors ${BORDE_ATRASO[atraso]}`}>
                       <td className="py-3.5 px-4">
                         <p className="font-mono text-xs font-bold text-neutral-900 uppercase">
-                          #{sol.id.slice(0, 8)}
+                          {codigoSolicitud(sol.id)}
                         </p>
                         {sol.tipo_solicitud === 'evento' ? (
                           <span className="flex mt-1"><BadgeEvento tamano="sm" /></span>
@@ -874,33 +1031,7 @@ export default function SolicitudesClient({
                       </td>
 
                       <td className="py-3.5 px-4">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {sol.estado === 'rechazada' ? (
-                            <button
-                              type="button"
-                              onClick={() => setDetailTarget(sol)}
-                              title="Ver el motivo del rechazo"
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color} hover:brightness-95 transition-[filter] cursor-pointer`}
-                            >
-                              <XCircle className="w-3.5 h-3.5" />
-                              {estado.label}
-                            </button>
-                          ) : (
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold border ${estado.color}`}>
-                              {estado.label}
-                            </span>
-                          )}
-                          {puedeVerPrioridad && sol.posicion_prioridad !== null && sol.posicion_prioridad !== undefined && (
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold bg-neutral-900 text-white">
-                              #{sol.posicion_prioridad}
-                            </span>
-                          )}
-                          {chip && (
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${chip.clase}`}>
-                              {chip.texto}
-                            </span>
-                          )}
-                        </div>
+                        {celdaEstado(sol)}
                       </td>
 
                       <td className="py-3.5 px-4 text-xs text-neutral-600">
@@ -925,53 +1056,7 @@ export default function SolicitudesClient({
                       <td className="py-3.5 px-4 text-xs text-neutral-500">{formatFecha(sol.fecha_limite)}</td>
 
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {esEjecutivo && sol.ejecutivo_id === viewer.id && ESTADOS_INSISTIBLES.includes(sol.estado) && (
-                            <button
-                              onClick={() => handleInsistir(sol)}
-                              disabled={isSubmitting || !puedeInsistir(sol)}
-                              title={
-                                cooldowns[sol.id]
-                                  ? `Podrás insistir de nuevo en ${cooldowns[sol.id]}h`
-                                  : 'Pedir avanzar el estado de mi solicitud'
-                              }
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                            >
-                              <BellRing className="w-3.5 h-3.5" />
-                              {cooldowns[sol.id] ? `Insistir (${cooldowns[sol.id]}h)` : 'Insistir'}
-                            </button>
-                          )}
-                          {puedeAsignarEncargado(sol) && (
-                            <button
-                              onClick={() => handleAsignarEncargado(sol)}
-                              disabled={isSubmitting}
-                              title="Asignármela"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
-                            >
-                              <UserCheck className="w-3.5 h-3.5" /> Asignarme
-                            </button>
-                          )}
-                          {puedeRecibir(sol) && (
-                            <button
-                              onClick={() => handleRecibir(sol)}
-                              disabled={isSubmitting}
-                              title="Marcar como recepcionada en destino"
-                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 transition-colors cursor-pointer disabled:opacity-40"
-                            >
-                              <PackageCheck className="w-3.5 h-3.5" /> Recibir
-                            </button>
-                          )}
-                          {puedeFinalizar(sol) && (
-                            <button
-                              onClick={() => handleFinalizar(sol)}
-                              disabled={isSubmitting}
-                              title="Registrar entrega al cliente"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-white bg-gradient-to-b from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 shadow-sm ring-1 ring-black/10 transition-all cursor-pointer disabled:opacity-40 active:scale-[0.98]"
-                            >
-                              <Flag className="w-3.5 h-3.5" /> Entregar a cliente
-                            </button>
-                          )}
-                        </div>
+                        {accionesFila(sol, 'flex items-center justify-end gap-1.5')}
                       </td>
 
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
@@ -1377,7 +1462,7 @@ export default function SolicitudesClient({
       {/* Modal: Cancelar con Motivo */}
       {cancelTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden">
+          <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="p-6 space-y-4">
               <div className="flex items-start gap-3">
                 <div className="w-10 h-10 rounded-xl bg-neutral-900 flex items-center justify-center text-white shrink-0">
@@ -1386,7 +1471,7 @@ export default function SolicitudesClient({
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Cancelar Solicitud</h2>
                   <p className="text-sm text-neutral-500 font-mono uppercase">
-                    #{cancelTarget.id.slice(0, 8)} · {cancelTarget.sucursal_nombre}
+                    {codigoSolicitud(cancelTarget.id)} · {cancelTarget.sucursal_nombre}
                   </p>
                 </div>
               </div>

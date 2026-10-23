@@ -137,7 +137,7 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         <div className="lg:col-span-3 bg-white border border-neutral-200 rounded-2xl overflow-hidden">
-          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-neutral-200">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-b border-neutral-200">
             <p className="text-sm font-semibold text-neutral-900">
               {visibles.length} {visibles.length === 1 ? 'vehículo' : 'vehículos'}
               {hayFiltros && <span className="text-neutral-500 font-normal"> de {movimientos.length}</span>}
@@ -163,7 +163,35 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
               No hay movimientos con esos filtros en el período.
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Tarjetas (móvil y tablet): la tabla de 6 columnas no cabe */}
+            <ul className="lg:hidden divide-y divide-neutral-100">
+              {visibles.map((m) => (
+                <li key={m.clave} className="px-5 py-3 space-y-1 text-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-semibold text-neutral-900 break-words min-w-0">{m.origen} → {m.destino}</p>
+                    <span className="shrink-0 text-xs text-neutral-500">{formatFecha(m.fechaDespacho)}</span>
+                  </div>
+                  <p className="text-xs text-neutral-600">
+                    <span className="font-mono text-neutral-500">{m.codigo}</span> · {m.tipo === 'solicitud' ? 'Solicitud' : 'Traslado interno'} · {etiquetaEstadoMovimiento(m.estado)}
+                  </p>
+                  <p className="text-xs text-neutral-600">
+                    {m.marca} {m.modelo} · <span className="font-mono break-all">{m.chasis}</span>
+                  </p>
+                  <p className="text-xs text-neutral-500">
+                    {m.transportistaNombre ? (
+                      <>
+                        {m.transportistaNombre}
+                        {m.transportistaRut && <> · {formatearRut(m.transportistaRut)}</>}
+                      </>
+                    ) : (
+                      <span className="italic text-neutral-400">Transportista sin registrar</span>
+                    )}
+                  </p>
+                </li>
+              ))}
+            </ul>
+            <div className="hidden lg:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-neutral-50 text-[11px] uppercase tracking-wider text-neutral-500">
                   <tr>
@@ -204,6 +232,7 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
 

@@ -55,7 +55,8 @@ export default function AbrirSolicitudDetalle({ solicitudId, children, className
         onKeyDown={(e) => e.stopPropagation()}
         title="Ver detalle de la solicitud"
         aria-label="Ver detalle de la solicitud"
-        className={`inline-flex items-center gap-1 underline decoration-dotted underline-offset-2 hover:decoration-solid cursor-pointer ${className ?? ''}`}
+        // El relleno con margen negativo agranda la zona táctil sin mover el texto.
+        className={`inline-flex items-center gap-1 py-2 -my-2 underline decoration-dotted underline-offset-2 hover:decoration-solid cursor-pointer ${className ?? ''}`}
       >
         {children}
         {cargando && <Loader2 className="w-3 h-3 animate-spin" />}
