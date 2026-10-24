@@ -9,7 +9,7 @@ import {
 } from '@/lib/notificaciones';
 
 const datos: DatosCorreo = {
-  codigo: 'ABCD1234',
+  codigo: '101-15',
   origen: 'Centro',
   destino: 'Norte',
   vehiculos: ['ABCD-12 · Toyota Corolla'],
@@ -75,7 +75,7 @@ describe('plantillaCorreo', () => {
       motivo: 'Lluvia',
     });
     expect(p.urgente).toBe(true);
-    expect(p.asunto).toBe('[H.Motores] [URGENTE] Traslado de la solicitud #ABCD1234 reprogramado');
+    expect(p.asunto).toBe('[H.Motores] [URGENTE] Traslado de la solicitud 101-15 reprogramado');
     expect(p.detalles).toContainEqual(['Fecha anterior', '12/10/2026']);
     expect(p.detalles).toContainEqual(['Nueva fecha de despacho', '15/10/2026']);
     expect(p.detalles).toContainEqual(['Motivo', 'Lluvia']);
@@ -102,7 +102,7 @@ describe('plantillaCorreo', () => {
 
   it('should_label_internal_transfers', () => {
     const p = plantillaCorreo('traslado_interno_cancelado', { ...datos, motivo: 'x' });
-    expect(p.detalles[0]).toEqual(['Traslado interno', '#ABCD1234']);
+    expect(p.detalles[0]).toEqual(['Traslado interno', '101-15']);
   });
 
   it('should_build_a_template_for_every_event', () => {

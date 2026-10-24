@@ -51,7 +51,8 @@ describe('itemsRecepcion', () => {
   const sol = (id: string, fecha_limite: string | null) =>
     ({
       id,
-      sucursal: 1,
+      sucursal: 101,
+      numero: 15,
       sucursal_nombre: 'Centro',
       sucursal_destino: 2,
       sucursal_destino_nombre: 'Norte',
@@ -82,6 +83,12 @@ describe('itemsRecepcion', () => {
     const [s, t] = itemsRecepcion([sol('s1', '2026-10-01T00:00:00Z')], [tras('t1', '2026-10-02T00:00:00Z')]);
     expect(s).toMatchObject({ tipo: 'solicitud', ruta: 'Centro → Norte', vehiculos: 'ABCD-12 · Toyota Yaris' });
     expect(t).toMatchObject({ tipo: 'traslado', ruta: 'Sur → Norte', vehiculos: 'CH1 · Kia Rio' });
+  });
+
+  it('should_use_request_code_for_requests_and_short_uuid_for_transfers', () => {
+    const [s, t] = itemsRecepcion([sol('s1', '2026-10-01T00:00:00Z')], [tras('ffff0000-0000', '2026-10-02T00:00:00Z')]);
+    expect(s.codigo).toBe('101-15');
+    expect(t.codigo).toBe('#FFFF0000');
   });
 
   it('should_return_empty_list_when_nothing_is_in_transit', () => {

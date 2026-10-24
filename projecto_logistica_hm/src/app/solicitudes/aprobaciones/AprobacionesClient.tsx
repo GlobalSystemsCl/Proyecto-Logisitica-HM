@@ -187,7 +187,7 @@ export default function AprobacionesClient({
               <div key={sol.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm text-neutral-500">{codigoSolicitud(sol.id)}</span>
+                    <span className="font-mono text-sm text-neutral-500">{codigoSolicitud(sol)}</span>
                     {sol.tipo_solicitud === 'evento' && <BadgeEvento />}
                     <span className="px-2 py-0.5 rounded-md text-xs bg-amber-50 text-amber-700 border border-amber-200">
                       Pendiente
@@ -275,7 +275,7 @@ export default function AprobacionesClient({
               </button>
             </div>
             <p className="text-sm text-neutral-500 mb-4">
-              Aprobando la solicitud {codigoSolicitud(approveTarget.id)}. Este es el plazo de entrega
+              Aprobando la solicitud {codigoSolicitud(approveTarget)}. Este es el plazo de entrega
               propuesto por el ejecutivo: puedes aceptarlo o modificarlo.
             </p>
             <label className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">
@@ -342,7 +342,7 @@ export default function AprobacionesClient({
               </button>
             </div>
             <p className="text-sm text-neutral-500 mb-4">
-              Rechazando la solicitud {codigoSolicitud(rejectTarget.id)}. Indica el motivo del rechazo
+              Rechazando la solicitud {codigoSolicitud(rejectTarget)}. Indica el motivo del rechazo
               (quedará registrado).
             </p>
             <textarea

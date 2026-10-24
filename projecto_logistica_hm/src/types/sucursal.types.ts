@@ -48,6 +48,7 @@ export interface Zona {
 }
 
 export interface Sucursal {
+  /** Código de sucursal (101, 102...); arma el n° de sus solicitudes. */
   id: number;
   created_at: string;
   usuario_id: string | null;
@@ -62,6 +63,8 @@ export interface Sucursal {
 }
 
 export interface CreateSucursalInput {
+  /** Código de sucursal (101, 102...): se guarda como `sucursal.id` y no cambia. */
+  codigo: number;
   nombre: string;
   direccion?: string | null;
   slots: number;
@@ -89,6 +92,7 @@ export interface VehiculoAsociado {
 export interface SucursalSolicitudItem {
   id: string;
   sucursal: number;
+  numero: number | null;
   estado: EstadoSolicitud;
   tipo_solicitud: TipoSolicitud;
   posicion_prioridad: number | null;

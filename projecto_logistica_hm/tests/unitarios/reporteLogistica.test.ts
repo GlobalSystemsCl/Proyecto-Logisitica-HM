@@ -148,7 +148,19 @@ describe('calcularReporte', () => {
     expect(sinAsignar.pendientesFueraDeSla).toBe(0);
 
     expect(r.pendientesMasAntiguos.map((p) => p.id)).toEqual(['p1', 'p2']);
+    // Sin numero (fixture), el código cae al uuid corto.
+    expect(r.pendientesMasAntiguos.map((p) => p.codigo)).toEqual(['#P1', '#P2']);
     expect(r.totales.pendientes).toBe(2);
+  });
+
+  it('should_show_request_code_in_oldest_pending_when_request_has_number', () => {
+    const r = calcularReporte(
+      [sol({ id: 'p1', estado: 'asignada', sucursal: 101, numero: 15, logistica_id: 'beto', fecha_confirmacion: '2026-10-07T12:00:00Z' })],
+      [],
+      usuarios,
+      OPC
+    );
+    expect(r.pendientesMasAntiguos[0].codigo).toBe('101-15');
   });
 
   it('should_flag_late_solicitudes_and_on_time_receptions', () => {

@@ -85,9 +85,15 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   },
   {
     vista: 'general',
+    pregunta: '¿Cómo se numeran las solicitudes?',
+    respuesta:
+      'Con el código de la sucursal de origen y un correlativo propio de esa sucursal: 101-15 es la solicitud número 15 creada en la sucursal 101. El número se asigna al crearla y no cambia. Puedes buscar una solicitud escribiendo su número (o solo el comienzo, como 101-1) en la lista de solicitudes o en el calendario.',
+  },
+  {
+    vista: 'general',
     pregunta: '¿Cómo veo el detalle de una solicitud?',
     respuesta:
-      'Haz clic en el número de la solicitud (#XXXXXXXX, subrayado) en cualquier lista: paneles del inicio, prioridades, recepciones, reportes o sucursales. Se abre el detalle con sus vehículos, historial, observaciones y documentos. Las acciones sobre la solicitud se hacen en la pantalla que corresponde.',
+      'Haz clic en el número de la solicitud (por ejemplo 101-15, subrayado) en cualquier lista: paneles del inicio, prioridades, recepciones, reportes o sucursales. Se abre el detalle con sus vehículos, historial, observaciones y documentos. Las acciones sobre la solicitud se hacen en la pantalla que corresponde.',
   },
   {
     vista: 'general',
@@ -400,7 +406,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: SOLO_ADMIN,
     pregunta: '¿Qué puedo administrar en Sucursales?',
     respuesta:
-      'Crear y editar sucursales: nombre, dirección, espacios totales (slots) y zona. El jefe de local a cargo se asigna desde Usuarios, y cada sucursal tiene uno solo. Al abrir una sucursal ves sus vehículos y sus solicitudes; el número abre el detalle.',
+      'Crear y editar sucursales: código, nombre, dirección, espacios totales (slots) y zona. El código es el de la planilla de concesionarios (101, 102...), numera las solicitudes de la sucursal (101-1, 101-2...) y no se puede cambiar después de crearla. El jefe de local a cargo se asigna desde Usuarios, y cada sucursal tiene uno solo. Al abrir una sucursal ves sus vehículos y sus solicitudes; el número abre el detalle.',
   },
 
   // ---------- Historial ----------

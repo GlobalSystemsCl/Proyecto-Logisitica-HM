@@ -12,7 +12,6 @@ import {
   type Semaforo,
 } from '@/lib/reporteLogistica';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
-import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { formatFecha } from '@/lib/fechas';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 
@@ -222,7 +221,7 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
             {reporte.pendientesMasAntiguos.slice(0, 10).map((p) => (
               <li key={p.id} className="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
                 <AbrirSolicitudDetalle solicitudId={p.id} className="font-mono text-xs text-neutral-500">
-                  {codigoSolicitud(p.id)}
+                  {p.codigo}
                 </AbrirSolicitudDetalle>
                 <span className="font-semibold text-neutral-900">{p.ruta}</span>
                 <span className="text-xs text-neutral-500">Logística: {p.encargado} · Zona: {nombreZona(p.zonaId)}</span>

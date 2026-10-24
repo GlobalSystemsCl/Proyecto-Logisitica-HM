@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { AuditoriaFiltros, AuditoriaRegistro } from '@/types/auditoria.types';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 
 interface AuditoriaRawRow {
   id: string;
@@ -22,6 +23,8 @@ interface SolicitudVehiculoRow {
 interface SolicitudRow {
   id: string;
   fecha_creacion: string | null;
+  sucursal: number | null;
+  numero: number | null;
 }
 
 interface VehiculoRow {
@@ -147,7 +150,7 @@ export class AuditoriaService {
       if (allSolicitudIds.size > 0) {
         const { data: solData } = await admin
           .from('solicitud')
-          .select('id, fecha_creacion')
+          .select('id, fecha_creacion, sucursal, numero')
           .in('id', Array.from(allSolicitudIds));
 
         if (solData) {
@@ -166,19 +169,20 @@ export class AuditoriaService {
       // 4. Merge: enriquecer cada registro de auditoría
       return rows.map((row): AuditoriaRegistro => {
         let solicitudId: string | null = null;
+        let sol: SolicitudRow | undefined;
         let solicitudFecha: string | null = null;
         let chasis: string | null = null;
         let patente: string | null = null;
 
         if (row.entidad === 'solicitud') {
           solicitudId = row.entidad_id;
-          const sol = solicitudMap.get(row.entidad_id);
+          sol = solicitudMap.get(row.entidad_id);
           solicitudFecha = sol?.fecha_creacion || null;
         } else if (row.entidad === 'solicitud_vehiculo') {
           const sv = svMap.get(row.entidad_id);
           if (sv) {
             solicitudId = sv.solicitud_id;
-            const sol = solicitudMap.get(sv.solicitud_id);
+            sol = solicitudMap.get(sv.solicitud_id);
             solicitudFecha = sol?.fecha_creacion || null;
             const veh = vehiculoMap.get(sv.vehiculo_id);
             if (veh) {
@@ -200,6 +204,9 @@ export class AuditoriaService {
           usuario_nombre: row.usuario?.nombre || null,
           usuario_apellido: row.usuario?.apellido || null,
           solicitud_id: solicitudId,
+          solicitud_codigo: solicitudId
+            ? codigoSolicitud({ id: solicitudId, sucursal: sol?.sucursal ?? null, numero: sol?.numero ?? null })
+            : null,
           solicitud_fecha_creacion: solicitudFecha,
           chasis,
           patente,

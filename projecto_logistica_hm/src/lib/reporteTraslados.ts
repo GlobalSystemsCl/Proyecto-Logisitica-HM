@@ -3,6 +3,7 @@ import type { TrasladoInterno } from '@/types/traslado.types';
 import { formatFecha, partesFecha } from '@/lib/fechas';
 import { esFechaValida, sumarDias } from '@/lib/calendario';
 import { formatearRut } from '@/lib/rut';
+import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
 
 /**
  * Exportes de Logística (pedido del cliente, 2026-10-19). Funciones puras:
@@ -30,11 +31,6 @@ const ETIQUETA_ESTADO: Record<string, string> = {
 
 export function etiquetaEstadoMovimiento(estado: string): string {
   return ETIQUETA_ESTADO[estado] ?? estado;
-}
-
-/** N° visible de una solicitud o traslado (el mismo de su detalle). */
-function codigo(id: string): string {
-  return `#${id.slice(0, 8).toUpperCase()}`;
 }
 
 /** Día (`YYYY-MM-DD`) de una fecha, en la hora de Chile si trae hora. */
@@ -74,7 +70,7 @@ export function filasExcelCalendarizacion(solicitudes: SolicitudLista[]): Array<
   return ordenadas.flatMap((s) => {
     const vehiculos = s.vehiculos.length > 0 ? s.vehiculos : [null];
     return vehiculos.map((v) => ({
-      Solicitud: codigo(s.id),
+      Solicitud: codigoSolicitud(s),
       'Fecha programada': formatFecha(s.fecha_tentativa_despacho),
       Origen: s.sucursal_nombre ?? '',
       Destino: s.sucursal_destino_nombre ?? s.titulo_evento ?? '',
@@ -127,7 +123,7 @@ export function movimientosDesdeSolicitudes(solicitudes: SolicitudLista[]): Movi
     return s.vehiculos.map((v) => ({
       clave: `${s.id}:${v.solicitud_vehiculo_id}`,
       tipo: 'solicitud' as const,
-      codigo: codigo(s.id),
+      codigo: codigoSolicitud(s),
       fechaDespacho,
       fechaRecepcion: diaChile(s.fecha_recepcion),
       origen: s.sucursal_nombre ?? '',
@@ -153,7 +149,7 @@ export function movimientosDesdeTraslados(traslados: TrasladoInterno[]): Movimie
     return t.vehiculos.map((v) => ({
       clave: `${t.id}:${v.traslado_vehiculo_id}`,
       tipo: 'interno' as const,
-      codigo: codigo(t.id),
+      codigo: codigoTraslado(t.id),
       fechaDespacho,
       fechaRecepcion: diaChile(t.fecha_recepcion),
       origen: t.origen_nombre ?? '',

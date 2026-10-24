@@ -76,6 +76,7 @@ const MAX_TAMANO_DOCUMENTO = 10 * 1024 * 1024;
 interface SolicitudRawRow {
   id: string;
   sucursal: number;
+  numero: number | null;
   sucursal_destino: number | null;
   estado: SolicitudLista['estado'];
   tipo_solicitud: SolicitudLista['tipo_solicitud'];
@@ -121,7 +122,7 @@ function persona(p: { nombre: string; apellido: string } | null): string | null 
   return p ? `${p.nombre} ${p.apellido}`.trim() : null;
 }
 
-const SOLICITUD_SELECT = `id, sucursal, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
+const SOLICITUD_SELECT = `id, sucursal, numero, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
   ejecutivo_id, jefe_local_id, logistica_id, creado_por, transportista_id,
   fecha_creacion, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_limite, motivo_cancelacion,
   fecha_confirmacion, fecha_inicio_transito, fecha_recepcion, fecha_entrega_cliente,
@@ -139,6 +140,7 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
   return {
     id: row.id,
     sucursal: row.sucursal,
+    numero: row.numero ?? null,
     sucursal_nombre: row.suc?.nombre ?? null,
     sucursal_destino: row.sucursal_destino,
     sucursal_destino_nombre: row.destino?.nombre ?? null,

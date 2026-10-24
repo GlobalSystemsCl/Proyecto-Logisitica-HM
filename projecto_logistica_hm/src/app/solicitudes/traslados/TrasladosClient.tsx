@@ -33,6 +33,7 @@ import { CancelarTransitoModal, RecepcionModal } from '@/components/ModalesTrasl
 import type { DatosRecepcion } from '@/lib/recepcion';
 import SelectorTransportista from '@/components/SelectorTransportista';
 import { formatearRut } from '@/lib/rut';
+import { codigoTraslado } from '@/lib/codigoSolicitud';
 import type { Transportista } from '@/types/transportista.types';
 
 const PAGE_SIZE = 12;
@@ -473,7 +474,7 @@ export default function TrasladosClient({
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs text-neutral-400">#{t.id.slice(0, 8)}</span>
+                      <span className="font-mono text-xs text-neutral-400">{codigoTraslado(t.id)}</span>
                       <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${estado.color}`}>
                         {estado.label}
                       </span>
@@ -581,7 +582,7 @@ export default function TrasladosClient({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs text-neutral-400">#{detalle.id.slice(0, 8)}</span>
+                  <span className="font-mono text-xs text-neutral-400">{codigoTraslado(detalle.id)}</span>
                   <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${estadoConfig[detalle.estado].color}`}>
                     {estadoConfig[detalle.estado].label}
                   </span>

@@ -5,7 +5,7 @@ import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import BadgeEvento from '@/components/BadgeEvento';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
-import { codigoSolicitud } from '@/lib/codigoSolicitud';
+import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
 import { recortar, LIMITE_PANEL_LOGISTICA } from '@/lib/panel';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
@@ -32,7 +32,7 @@ function vehiculos(s: SolicitudLista): string {
 
 /** Abre el calendario con la solicitud ya buscada (y en su día, si tiene fecha). */
 function hrefCalendario(s: SolicitudLista): string {
-  const p = new URLSearchParams({ q: s.id.slice(0, 8) });
+  const p = new URLSearchParams({ q: codigoSolicitud(s) });
   const dia = s.fecha_tentativa_despacho?.slice(0, 10);
   if (dia) {
     p.set('vista', 'dia');
@@ -51,7 +51,7 @@ function FilaSolicitud({ s, detalle }: { s: SolicitudLista; detalle: string }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
-            {codigoSolicitud(s.id)}
+            {codigoSolicitud(s)}
           </AbrirSolicitudDetalle>
           {s.tipo_solicitud === 'evento' && <BadgeEvento tamano="sm" />}
         </div>
@@ -149,7 +149,7 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
           {trasladosPendientes.items.map((t) => (
             <li key={t.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <span className="font-mono text-[11px] font-bold text-neutral-900">{codigoSolicitud(t.id)}</span>
+                <span className="font-mono text-[11px] font-bold text-neutral-900">{codigoTraslado(t.id)}</span>
                 <p className="text-sm font-semibold text-neutral-900 truncate">
                   {t.origen_nombre ?? `Sucursal ${t.origen_id}`} → {t.destino_nombre ?? `Sucursal ${t.destino_id}`}
                 </p>

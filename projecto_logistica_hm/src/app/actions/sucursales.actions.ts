@@ -2,6 +2,7 @@
 
 import { requireProfile, requireRole } from '@/lib/auth/guards';
 import { mensajeErrorUsuario } from '@/lib/errores';
+import { CODIGO_SUCURSAL_MAX, parsearCodigoSucursal } from '@/lib/validaciones';
 import { SucursalesService } from '@/services/sucursales.service';
 import { revalidatePath } from 'next/cache';
 
@@ -18,6 +19,8 @@ function parseSlots(value: string): number | null {
 }
 
 export interface SucursalFormData {
+  /** Solo al crear: el código no se puede cambiar. */
+  codigo?: string;
   nombre: string;
   direccion?: string;
   slots: string;
@@ -33,6 +36,14 @@ export async function createSucursalAction(data: SucursalFormData) {
       return { success: false, error: 'El nombre de la sucursal es obligatorio.' };
     }
 
+    const codigo = parsearCodigoSucursal(data.codigo ?? '');
+    if (codigo === null) {
+      return {
+        success: false,
+        error: `El código de sucursal debe ser un número entero entre 1 y ${CODIGO_SUCURSAL_MAX}.`,
+      };
+    }
+
     const slots = parseSlots(data.slots);
 
     if (slots === null) {
@@ -40,6 +51,7 @@ export async function createSucursalAction(data: SucursalFormData) {
     }
 
     const result = await SucursalesService.createSucursal({
+      codigo,
       nombre,
       direccion: data.direccion?.trim() || null,
       slots,

@@ -170,6 +170,11 @@ describe('filasExcelCalendarizacion', () => {
     expect(filas).toHaveLength(1);
     expect(filas[0]).toMatchObject({ Chasis: '', Transportista: '', 'RUT transportista': '', Tipo: 'Evento' });
   });
+
+  it('should_show_request_code_when_request_has_number', () => {
+    const [fila] = filasExcelCalendarizacion([solicitud({ sucursal: 101, numero: 15, vehiculos: [] })]);
+    expect(fila.Solicitud).toBe('101-15');
+  });
 });
 
 describe('movimientosDesdeSolicitudes', () => {
@@ -180,6 +185,13 @@ describe('movimientosDesdeSolicitudes', () => {
     ]);
     expect(movs).toHaveLength(2);
     expect(movs[0]).toMatchObject({ tipo: 'solicitud', codigo: '#DDDDDDDD', fechaDespacho: '2026-10-03', transportistaId: 'tr-1' });
+  });
+
+  it('should_use_branch_code_and_number_when_request_has_number', () => {
+    const [mov] = movimientosDesdeSolicitudes([
+      solicitud({ sucursal: 101, numero: 15, fecha_despacho: '2026-10-03T14:00:00Z', vehiculos: [vehiculo('A')] }),
+    ]);
+    expect(mov.codigo).toBe('101-15');
   });
 });
 

@@ -33,7 +33,8 @@ Convenciones de test (ver `tests/plan_maestro_testing.md`):
 
 ## Solicitudes en la UI
 
-- El número visible de una solicitud se arma solo con `codigoSolicitud` (`src/lib/codigoSolicitud.ts`); no usar `id.slice(0, 8)` en código nuevo.
+- El número visible de una solicitud es `<código de sucursal de origen>-<correlativo>` (101-15) y se arma solo con `codigoSolicitud` (`src/lib/codigoSolicitud.ts`), que necesita `sucursal` y `numero`; los traslados internos usan `codigoTraslado`. No usar `id.slice(0, 8)` en código nuevo.
+- El código de sucursal ES `sucursal.id` (los del Excel de concesionarios). Para filtrar solicitudes por sucursal se usa `solicitud.sucursal`; no crear otra relación ni columna de código. La BD asigna `solicitud.numero` (trigger `tr_asignar_numero_solicitud`): la app nunca lo escribe.
 - Para que una solicitud se pueda abrir desde cualquier lista, envolver su número en `AbrirSolicitudDetalle` (`src/components/`).
 
 ## Cuentas

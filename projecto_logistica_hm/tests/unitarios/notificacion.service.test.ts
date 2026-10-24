@@ -150,6 +150,18 @@ describe('NotificacionService.notificarSolicitud', () => {
     expect(correo.html).toContain('http://localhost:3000/solicitudes');
   });
 
+  it('should_use_branch_code_and_number_in_subject_when_request_has_number', async () => {
+    getSolicitudCompleta.mockResolvedValue(solicitud({ estado: 'calendarizada', sucursal: 101, numero: 15 }));
+    participantes();
+
+    await NotificacionService.notificarSolicitud('solicitud_recalendarizada', 's-1', 'log', {
+      fechaAnterior: '12/10/2026',
+    });
+
+    const correo = enviarCorreo.mock.calls[0][0] as { asunto: string };
+    expect(correo.asunto).toContain('Traslado de la solicitud 101-15 reprogramado');
+  });
+
   it('should_notify_zone_logistics_only_on_approval', async () => {
     getSolicitudCompleta.mockResolvedValue(solicitud());
     participantes();

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CODIGO_SUCURSAL_MAX,
+  parsearCodigoSucursal,
   requisitosPassword,
   validarCampoTexto,
   validarEmailFormato,
@@ -104,5 +106,28 @@ describe('validarCampoTexto', () => {
 
   it('should_accept_a_field_within_limits', () => {
     expect(validarCampoTexto('Juan', 'nombre', 100)).toBeNull();
+  });
+});
+describe('parsearCodigoSucursal', () => {
+  it('should_return_number_when_code_is_a_positive_integer', () => {
+    expect(parsearCodigoSucursal('101')).toBe(101);
+    expect(parsearCodigoSucursal(' 145 ')).toBe(145);
+  });
+
+  it('should_accept_limits_when_code_is_1_or_max', () => {
+    expect(parsearCodigoSucursal('1')).toBe(1);
+    expect(parsearCodigoSucursal(String(CODIGO_SUCURSAL_MAX))).toBe(CODIGO_SUCURSAL_MAX);
+  });
+
+  it('should_return_null_when_code_is_zero_or_above_max', () => {
+    expect(parsearCodigoSucursal('0')).toBeNull();
+    expect(parsearCodigoSucursal(String(CODIGO_SUCURSAL_MAX + 1))).toBeNull();
+  });
+
+  it('should_return_null_when_code_is_not_an_integer', () => {
+    expect(parsearCodigoSucursal('')).toBeNull();
+    expect(parsearCodigoSucursal('10.5')).toBeNull();
+    expect(parsearCodigoSucursal('-3')).toBeNull();
+    expect(parsearCodigoSucursal('A101')).toBeNull();
   });
 });

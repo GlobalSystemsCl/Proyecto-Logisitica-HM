@@ -276,4 +276,11 @@ describe('coincideBusqueda', () => {
   it('should_devolver_false_when_nada_coincide', () => {
     expect(coincideBusqueda(sol, 'zzzz')).toBe(false);
   });
+
+  it('should_coincidir_when_termino_es_el_numero_de_solicitud', () => {
+    const conNumero = solicitud('aprobada', { sucursal: 101, numero: 15, vehiculos: [] });
+    expect(coincideBusqueda(conNumero, '101-15')).toBe(true);
+    expect(coincideBusqueda(conNumero, '#101-15')).toBe(true);
+    expect(coincideBusqueda(conNumero, '102-15')).toBe(false);
+  });
 });

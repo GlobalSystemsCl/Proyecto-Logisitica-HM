@@ -10,6 +10,8 @@ export interface AuditoriaRegistro {
   usuario_nombre: string | null;
   usuario_apellido: string | null;
   solicitud_id: string | null;
+  /** N° visible de la solicitud (`codigoSolicitud`). */
+  solicitud_codigo: string | null;
   solicitud_fecha_creacion: string | null;
   chasis: string | null;
   patente: string | null;

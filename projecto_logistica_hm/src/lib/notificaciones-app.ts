@@ -107,7 +107,7 @@ export function resolverDestinatariosApp(
 }
 
 export interface DatosNotificacionApp {
-  /** Identificador corto visible (8 primeros caracteres del UUID). */
+  /** N° visible tal cual: `codigoSolicitud` (101-15) o `codigoTraslado` (#ABCD1234). */
   codigo: string;
   origen: string;
   destino: string;
@@ -130,7 +130,7 @@ function recortar(texto: string, max: number): string {
 }
 
 export function textoNotificacion(evento: EventoApp, d: DatosNotificacionApp): TextoNotificacion {
-  const ref = `#${d.codigo} (${d.origen} → ${d.destino})`;
+  const ref = `${d.codigo} (${d.origen} → ${d.destino})`;
   const motivo = d.motivo?.trim() ? ` Motivo: ${d.motivo.trim()}` : '';
   const fecha = d.fechaProgramada ? ` para el ${d.fechaProgramada}` : '';
 
@@ -157,7 +157,7 @@ export function textoNotificacion(evento: EventoApp, d: DatosNotificacionApp): T
     solicitud_cancelada_transito: { titulo: 'Traslado cancelado en tránsito', mensaje: `El traslado de la solicitud ${ref} se canceló en tránsito.${motivo}` },
     traslado_interno_cancelado: {
       titulo: 'Traslado interno cancelado',
-      mensaje: `El traslado interno #${d.codigo} (${d.origen} → ${d.destino}) se canceló en tránsito.${motivo}`,
+      mensaje: `El traslado interno ${d.codigo} (${d.origen} → ${d.destino}) se canceló en tránsito.${motivo}`,
     },
   };
 

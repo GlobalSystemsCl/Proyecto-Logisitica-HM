@@ -535,7 +535,7 @@ export default function SolicitudDetalleModal({
           {/* Title + badge */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-1">
             <h1 className="text-2xl sm:text-3xl font-bold text-neutral-900">
-              Solicitud {codigoSolicitud(solicitud.id)}
+              Solicitud {codigoSolicitud(solicitud)}
             </h1>
             <span className={`inline-flex items-center px-3.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${estadoConfig[solicitud.estado].color}`}>
               {estadoConfig[solicitud.estado].label}

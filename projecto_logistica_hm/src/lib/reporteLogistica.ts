@@ -1,5 +1,6 @@
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { estadoPlazo } from '@/lib/calendario';
+import { codigoSolicitud } from '@/lib/codigoSolicitud';
 
 /**
  * Reportería de Logística (R17): mide a cada encargado por su tiempo de
@@ -73,6 +74,8 @@ export interface FilaEncargado {
 
 export interface PendienteDetalle {
   id: string;
+  /** N° visible (`codigoSolicitud`). */
+  codigo: string;
   ruta: string;
   encargado: string;
   zonaId: number | null;
@@ -195,6 +198,7 @@ export function calcularReporte(
       }
       pendientesMasAntiguos.push({
         id: s.id,
+        codigo: codigoSolicitud(s),
         ruta: `${s.sucursal_nombre ?? s.sucursal} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento'}`,
         encargado: f.nombre,
         zonaId: s.sucursal_zona_id,

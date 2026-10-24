@@ -887,7 +887,7 @@ export default function SolicitudesClient({
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input
               type="text"
-              placeholder="Buscar por sucursal, ID, ejecutivo, patente..."
+              placeholder="Buscar por sucursal, N° (101-15), ejecutivo, patente..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
@@ -930,7 +930,7 @@ export default function SolicitudesClient({
                     className="min-w-0 text-left cursor-pointer"
                   >
                     <span className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-neutral-900">{codigoSolicitud(sol.id)}</span>
+                      <span className="font-mono text-xs font-bold text-neutral-900">{codigoSolicitud(sol)}</span>
                       {sol.tipo_solicitud === 'evento' ? (
                         <BadgeEvento tamano="sm" />
                       ) : (
@@ -1015,7 +1015,7 @@ export default function SolicitudesClient({
                     <tr key={sol.id} className={`hover:bg-neutral-50 transition-colors ${BORDE_ATRASO[atraso]}`}>
                       <td className="py-3.5 px-4">
                         <p className="font-mono text-xs font-bold text-neutral-900 uppercase">
-                          {codigoSolicitud(sol.id)}
+                          {codigoSolicitud(sol)}
                         </p>
                         {sol.tipo_solicitud === 'evento' ? (
                           <span className="flex mt-1"><BadgeEvento tamano="sm" /></span>
@@ -1471,7 +1471,7 @@ export default function SolicitudesClient({
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Cancelar Solicitud</h2>
                   <p className="text-sm text-neutral-500 font-mono uppercase">
-                    {codigoSolicitud(cancelTarget.id)} · {cancelTarget.sucursal_nombre}
+                    {codigoSolicitud(cancelTarget)} · {cancelTarget.sucursal_nombre}
                   </p>
                 </div>
               </div>

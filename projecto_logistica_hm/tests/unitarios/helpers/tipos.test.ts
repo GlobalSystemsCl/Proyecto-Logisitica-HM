@@ -7,6 +7,7 @@ function solicitud(overrides: Partial<SolicitudLista> = {}): SolicitudLista {
   return {
     id: 'sol-1',
     sucursal: 1,
+    numero: 1,
     sucursal_nombre: 'Sucursal Centro',
     sucursal_destino: null,
     sucursal_destino_nombre: null,

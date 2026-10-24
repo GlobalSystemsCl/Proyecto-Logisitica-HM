@@ -80,6 +80,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [codigo, setCodigo] = useState('');
   const [nombre, setNombre] = useState('');
   const [direccion, setDireccion] = useState('');
   const [slots, setSlots] = useState('');
@@ -134,6 +135,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
     return sucursales.filter((s) => {
       const matchesTerm =
         !term ||
+        String(s.id).startsWith(term) ||
         (s.nombre || '').toLowerCase().includes(term) ||
         (s.direccion || '').toLowerCase().includes(term);
       const matchesZona = zonaFiltro === 'todas' || s.zona_id === zonaFiltro;
@@ -143,6 +145,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
 
   function openCreateModal() {
     setEditingSucursal(null);
+    setCodigo('');
     setNombre('');
     setDireccion('');
     setSlots('');
@@ -152,6 +155,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
 
   function openEditModal(sucursal: Sucursal) {
     setEditingSucursal(sucursal);
+    setCodigo(String(sucursal.id));
     setNombre(sucursal.nombre || '');
     setDireccion(sucursal.direccion || '');
     setSlots(sucursal.slots !== null && sucursal.slots !== undefined ? String(sucursal.slots) : '');
@@ -163,7 +167,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      const data = { nombre, direccion, slots, zona_id: zonaId };
+      const data = { codigo, nombre, direccion, slots, zona_id: zonaId };
       const result = editingSucursal
         ? await updateSucursalAction(editingSucursal.id, data)
         : await createSucursalAction(data);
@@ -551,7 +555,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
           <input
             type="text"
-            placeholder="Buscar por nombre o dirección..."
+            placeholder="Buscar por código, nombre o dirección..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
@@ -596,7 +600,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
               <li key={sucursal.id} className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-semibold text-neutral-900 break-words">{sucursal.nombre}</p>
+                    <p className="font-semibold text-neutral-900 break-words">
+                      <span className="font-mono text-neutral-500 mr-1.5">{sucursal.id}</span>
+                      {sucursal.nombre}
+                    </p>
                     {sucursal.direccion && (
                       <p className="text-xs text-neutral-500 mt-0.5 flex items-center gap-1">
                         <MapPin className="w-3 h-3 shrink-0" />
@@ -650,7 +657,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                     <tr key={sucursal.id} className="hover:bg-neutral-50 transition-colors">
                       {/* Nombre & Dirección */}
                       <td className="py-3.5 px-4">
-                        <p className="font-semibold text-neutral-900">{sucursal.nombre}</p>
+                        <p className="font-semibold text-neutral-900">
+                          <span className="font-mono text-neutral-500 mr-1.5">{sucursal.id}</span>
+                          {sucursal.nombre}
+                        </p>
                         {sucursal.direccion && (
                           <p className="text-xs text-neutral-500 mt-0.5 flex items-center gap-1">
                             <MapPin className="w-3 h-3 shrink-0" />
@@ -733,6 +743,27 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                  Código *
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  required
+                  disabled={!!editingSucursal}
+                  placeholder="Ej. 101"
+                  value={codigo}
+                  onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
+                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm font-mono text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 disabled:bg-neutral-100 disabled:text-neutral-500"
+                />
+                <p className="text-[11px] text-neutral-500">
+                  {editingSucursal
+                    ? 'El código no se puede cambiar: es el inicio del número de las solicitudes de esta sucursal.'
+                    : 'El de la planilla de concesionarios. Las solicitudes de esta sucursal se numeran con él (101-1, 101-2...) y después no se puede cambiar.'}
+                </p>
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                   Nombre *
@@ -1019,7 +1050,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                   <Building2 className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-neutral-900">{detailSucursal.nombre}</h2>
+                  <h2 className="text-lg font-bold text-neutral-900">
+                    <span className="font-mono text-neutral-500 mr-1.5">{detailSucursal.id}</span>
+                    {detailSucursal.nombre}
+                  </h2>
                   <p className="text-xs text-neutral-500">
                     {detailSucursal.direccion || 'Sin dirección registrada'} ·{' '}
                     {detailSucursal.encargado ? (
@@ -1068,7 +1102,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <AbrirSolicitudDetalle solicitudId={sol.id} className="text-[10px] font-mono font-bold text-neutral-500">
-                          {codigoSolicitud(sol.id)}
+                          {codigoSolicitud(sol)}
                         </AbrirSolicitudDetalle>
                         <span className="inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-white text-neutral-600 border border-neutral-300">
                           {tipoLabel[sol.tipo_solicitud] || sol.tipo_solicitud}

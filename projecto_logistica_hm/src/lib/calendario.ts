@@ -1,4 +1,5 @@
 import type { SolicitudLista } from '@/types/solicitud.types';
+import { coincideCodigoSolicitud } from '@/lib/codigoSolicitud';
 
 /**
  * Calendario de logística (R16): vistas mensual, semanal y diaria, filtros
@@ -252,7 +253,7 @@ export function cumpleFiltros(s: SolicitudLista, f: FiltrosCalendario, ctx: Cont
     const enVehiculos = s.vehiculos.some(
       (v) => (v.patente ?? '').toLowerCase().includes(q) || v.chasis.toLowerCase().includes(q)
     );
-    if (!enVehiculos && !s.id.toLowerCase().startsWith(q)) return false;
+    if (!enVehiculos && !coincideCodigoSolicitud(s, q)) return false;
   }
   return true;
 }

@@ -109,7 +109,7 @@ function ruta(s: SolicitudLista): string {
 
 /** N° visible de la solicitud: el mismo que muestra su detalle. */
 function numero(s: SolicitudLista): string {
-  return codigoSolicitud(s.id);
+  return codigoSolicitud(s);
 }
 
 function TipoChip({ s, tamano = 'sm' }: { s: SolicitudLista; tamano?: 'sm' | 'md' }) {

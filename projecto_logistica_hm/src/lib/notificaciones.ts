@@ -78,7 +78,7 @@ export function resolverDestinatarios(
 }
 
 export interface DatosCorreo {
-  /** Identificador corto visible (por ejemplo, los 8 primeros caracteres del UUID). */
+  /** N° visible tal cual: `codigoSolicitud` (101-15) o `codigoTraslado` (#ABCD1234). */
   codigo: string;
   origen: string;
   destino: string;
@@ -109,7 +109,7 @@ export function plantillaCorreo(evento: EventoNotificacion, d: DatosCorreo): Pla
   const prefijo = urgente ? '[URGENTE] ' : '';
   const ruta = `${d.origen} → ${d.destino}`;
   const base: Array<[string, string] | null> = [
-    ['Solicitud', `#${d.codigo}`],
+    ['Solicitud', `${d.codigo}`],
     ['Traslado', ruta],
     d.vehiculos.length > 0 ? ['Vehículo(s)', d.vehiculos.join(', ')] : null,
     lineaFecha(ETIQUETA_FECHA_LIMITE, d.fechaLimite),
@@ -117,31 +117,31 @@ export function plantillaCorreo(evento: EventoNotificacion, d: DatosCorreo): Pla
 
   const textos: Record<EventoNotificacion, { asunto: string; titulo: string; intro: string; extra: Array<[string, string] | null> }> = {
     solicitud_creada: {
-      asunto: `Nueva solicitud #${d.codigo} pendiente de aprobación`,
+      asunto: `Nueva solicitud ${d.codigo} pendiente de aprobación`,
       titulo: 'Nueva solicitud por aprobar',
       intro: 'Se creó una solicitud en tu sucursal que espera tu aprobación.',
       extra: [],
     },
     solicitud_aprobada: {
-      asunto: `Solicitud #${d.codigo} aprobada`,
+      asunto: `Solicitud ${d.codigo} aprobada`,
       titulo: 'Solicitud aprobada',
       intro: 'El Jefe de Local aprobó la solicitud. Logística ya puede programar el traslado.',
       extra: [],
     },
     solicitud_rechazada: {
-      asunto: `Solicitud #${d.codigo} rechazada`,
+      asunto: `Solicitud ${d.codigo} rechazada`,
       titulo: 'Solicitud rechazada',
       intro: 'La solicitud fue rechazada. El rechazo es definitivo: si aún necesitas el vehículo, crea una nueva solicitud.',
       extra: [d.motivo ? ['Motivo', d.motivo] : null],
     },
     solicitud_calendarizada: {
-      asunto: `Traslado de la solicitud #${d.codigo} programado`,
+      asunto: `Traslado de la solicitud ${d.codigo} programado`,
       titulo: 'Traslado programado',
       intro: 'Logística programó la fecha de despacho del traslado.',
       extra: [lineaFecha('Fecha de despacho', d.fechaProgramada)],
     },
     solicitud_recalendarizada: {
-      asunto: `${prefijo}Traslado de la solicitud #${d.codigo} reprogramado`,
+      asunto: `${prefijo}Traslado de la solicitud ${d.codigo} reprogramado`,
       titulo: 'Traslado reprogramado',
       intro: 'Logística cambió la fecha de despacho del traslado. Revisa la nueva fecha.',
       extra: [
@@ -151,13 +151,13 @@ export function plantillaCorreo(evento: EventoNotificacion, d: DatosCorreo): Pla
       ],
     },
     solicitud_despachada: {
-      asunto: `Solicitud #${d.codigo} en camino a tu sucursal`,
+      asunto: `Solicitud ${d.codigo} en camino a tu sucursal`,
       titulo: 'Vehículo en camino',
       intro: 'El traslado fue despachado y va en camino. Prepara la recepción.',
       extra: [],
     },
     solicitud_recepcionada: {
-      asunto: `Solicitud #${d.codigo} recibida en destino${d.conNovedades ? ' con novedades' : ''}`,
+      asunto: `Solicitud ${d.codigo} recibida en destino${d.conNovedades ? ' con novedades' : ''}`,
       titulo: d.conNovedades ? 'Vehículo recibido con novedades' : 'Vehículo recibido',
       intro: d.conNovedades
         ? 'El vehículo llegó a destino, pero se registraron novedades en la recepción.'
@@ -165,7 +165,7 @@ export function plantillaCorreo(evento: EventoNotificacion, d: DatosCorreo): Pla
       extra: [d.observacion ? ['Observación de la recepción', d.observacion] : null],
     },
     solicitud_cancelada_transito: {
-      asunto: `${prefijo}Traslado de la solicitud #${d.codigo} cancelado en tránsito`,
+      asunto: `${prefijo}Traslado de la solicitud ${d.codigo} cancelado en tránsito`,
       titulo: 'Traslado cancelado',
       intro: 'Logística canceló el traslado mientras estaba en tránsito.',
       extra: [
@@ -174,7 +174,7 @@ export function plantillaCorreo(evento: EventoNotificacion, d: DatosCorreo): Pla
       ],
     },
     traslado_interno_cancelado: {
-      asunto: `${prefijo}Traslado interno #${d.codigo} cancelado en tránsito`,
+      asunto: `${prefijo}Traslado interno ${d.codigo} cancelado en tránsito`,
       titulo: 'Traslado interno cancelado',
       intro: 'Logística canceló el traslado interno mientras estaba en tránsito.',
       extra: [
@@ -186,7 +186,7 @@ export function plantillaCorreo(evento: EventoNotificacion, d: DatosCorreo): Pla
 
   const t = textos[evento];
   const detalles = [...base, ...t.extra].filter((x): x is [string, string] => x !== null);
-  if (evento === 'traslado_interno_cancelado') detalles[0] = ['Traslado interno', `#${d.codigo}`];
+  if (evento === 'traslado_interno_cancelado') detalles[0] = ['Traslado interno', `${d.codigo}`];
   return { asunto: `[H.Motores] ${t.asunto}`, titulo: t.titulo, intro: t.intro, detalles, urgente };
 }
 

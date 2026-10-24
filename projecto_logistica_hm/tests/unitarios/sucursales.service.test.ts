@@ -89,3 +89,65 @@ describe('SucursalesService.deleteSucursal (brecha 016)', () => {
     });
   });
 });
+
+describe('SucursalesService.createSucursal', () => {
+  const INPUT = { codigo: 101, nombre: '15 NORTE-VIÑA DEL MAR', direccion: null, slots: 20, zona_id: 1 };
+
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('should_insert_branch_with_code_as_id_when_code_and_name_are_free', async () => {
+    admin.results.sucursal = [
+      { data: null, error: null },
+      { data: [], error: null },
+      { data: { id: 101, nombre: INPUT.nombre }, error: null },
+    ];
+
+    const res = await SucursalesService.createSucursal(INPUT);
+
+    expect(res.success).toBe(true);
+    expect(res.sucursal?.id).toBe(101);
+    expect(admin.callsTo('sucursal')).toContainEqual(['eq', 'id', 101]);
+    expect(admin.callsTo('sucursal')).toContainEqual([
+      'insert',
+      { id: 101, nombre: INPUT.nombre, direccion: null, slots: 20, zona_id: 1 },
+    ]);
+  });
+
+  it('should_reject_and_not_insert_when_code_already_belongs_to_another_branch', async () => {
+    admin.results.sucursal = [{ data: { id: 101, nombre: 'CONCON' }, error: null }];
+
+    const res = await SucursalesService.createSucursal(INPUT);
+
+    expect(res).toEqual({ success: false, error: 'El código 101 ya pertenece a la sucursal "CONCON".' });
+    expect(admin.callsTo('sucursal').some(([m]) => m === 'insert')).toBe(false);
+  });
+
+  it('should_reject_and_not_insert_when_name_already_exists', async () => {
+    admin.results.sucursal = [
+      { data: null, error: null },
+      { data: [{ id: 6, nombre: INPUT.nombre }], error: null },
+    ];
+
+    const res = await SucursalesService.createSucursal(INPUT);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe(`Ya existe una sucursal registrada con el nombre "${INPUT.nombre}".`);
+    expect(admin.callsTo('sucursal').some(([m]) => m === 'insert')).toBe(false);
+  });
+
+  it('should_translate_unique_violation_when_code_is_taken_concurrently', async () => {
+    admin.results.sucursal = [
+      { data: null, error: null },
+      { data: [], error: null },
+      { data: null, error: { message: 'duplicate key value violates unique constraint "sucursal_pkey"', code: '23505' } },
+    ];
+
+    const res = await SucursalesService.createSucursal(INPUT);
+
+    expect(res).toEqual({ success: false, error: 'Ya existe un registro con esos datos.' });
+  });
+});

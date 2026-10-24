@@ -28,6 +28,7 @@ import {
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { formatFecha } from '@/lib/fechas';
 import { getAppUrl } from '@/lib/env';
+import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
 
 export interface ResultadoNotificacion {
   /** Correos enviados y fallidos (R7). */
@@ -249,7 +250,7 @@ export class NotificacionService {
       };
 
       const datos: DatosCorreo = {
-        codigo: sol.id.slice(0, 8).toUpperCase(),
+        codigo: codigoSolicitud(sol),
         origen: sol.sucursal_nombre ?? `Sucursal ${sol.sucursal}`,
         destino: sol.sucursal_destino_nombre ?? sol.titulo_evento ?? 'Evento',
         vehiculos: sol.vehiculos.map((v) => etiquetaVehiculo(v)).filter((v): v is string => Boolean(v)),
@@ -297,7 +298,7 @@ export class NotificacionService {
       ]);
 
       const datos: DatosCorreo = {
-        codigo: t.id.slice(0, 8).toUpperCase(),
+        codigo: codigoTraslado(t.id),
         origen: t.origen_nombre ?? `Sucursal ${t.origen_id}`,
         destino: t.destino_nombre ?? `Sucursal ${t.destino_id}`,
         vehiculos: t.vehiculos.map((v) => `${v.patente ?? v.chasis} · ${v.marca} ${v.modelo}`),

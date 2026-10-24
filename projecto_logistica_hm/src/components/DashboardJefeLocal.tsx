@@ -101,7 +101,7 @@ export default function DashboardJefeLocal({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                   <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
-                    {codigoSolicitud(s.id)}
+                    {codigoSolicitud(s)}
                   </AbrirSolicitudDetalle>
                   {s.tipo_solicitud === 'evento' && <BadgeEvento tamano="sm" />}
                 </div>
@@ -137,7 +137,7 @@ export default function DashboardJefeLocal({
               <div className="flex-1 min-w-0">
                 {r.tipo === 'solicitud' && (
                   <AbrirSolicitudDetalle solicitudId={r.id} className="font-mono text-[11px] font-bold text-neutral-900">
-                    {codigoSolicitud(r.id)}
+                    {r.codigo}
                   </AbrirSolicitudDetalle>
                 )}
                 <p className="text-sm font-semibold text-neutral-900 truncate">
@@ -178,7 +178,7 @@ export default function DashboardJefeLocal({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                   <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
-                    {codigoSolicitud(s.id)}
+                    {codigoSolicitud(s)}
                   </AbrirSolicitudDetalle>
                   {s.tipo_solicitud === 'evento' && <BadgeEvento tamano="sm" />}
                 </div>

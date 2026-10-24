@@ -1,5 +1,6 @@
 import type { EstadoSolicitud, SolicitudLista } from '@/types/solicitud.types';
 import type { UserRole } from '@/types/auth.types';
+import { coincideCodigoSolicitud } from '@/lib/codigoSolicitud';
 
 /**
  * Filtro por **grupos de estado** de la lista de solicitudes.
@@ -131,14 +132,14 @@ export function destinoDeSolicitud(sol: SolicitudLista): string {
 
 /**
  * Búsqueda de texto sobre los campos que el usuario recuerda de una
- * solicitud: sucursal, ID, personas, destino y patente.
+ * solicitud: sucursal, N° de solicitud (o su uuid), personas, destino y patente.
  */
 export function coincideBusqueda(sol: SolicitudLista, term: string): boolean {
   const t = term.trim().toLowerCase();
   if (!t) return true;
   return (
     (sol.sucursal_nombre || '').toLowerCase().includes(t) ||
-    sol.id.toLowerCase().includes(t) ||
+    coincideCodigoSolicitud(sol, t) ||
     (sol.ejecutivo_nombre || '').toLowerCase().includes(t) ||
     (sol.jefe_local_nombre || '').toLowerCase().includes(t) ||
     (sol.logistica_nombre || '').toLowerCase().includes(t) ||

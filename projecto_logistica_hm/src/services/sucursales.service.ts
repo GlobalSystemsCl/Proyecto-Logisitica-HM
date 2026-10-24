@@ -12,6 +12,7 @@ import { escaparPatronLike } from '@/lib/busqueda';
 interface SolicitudRawRow {
   id: string;
   sucursal: number;
+  numero: number | null;
   estado: SucursalSolicitudItem['estado'];
   tipo_solicitud: SucursalSolicitudItem['tipo_solicitud'];
   posicion_prioridad: number | null;
@@ -98,7 +99,7 @@ export class SucursalesService {
       const { data, error } = await admin
         .from('solicitud')
         .select(
-          `id, sucursal, estado, tipo_solicitud, posicion_prioridad,
+          `id, sucursal, numero, estado, tipo_solicitud, posicion_prioridad,
            fecha_creacion, fecha_tentativa_despacho, fecha_limite, motivo_cancelacion,
            ejecutivo:ejecutivo_id(id, nombre, apellido),
            jefe:jefe_local_id(id, nombre, apellido),
@@ -117,6 +118,7 @@ export class SucursalesService {
       return rows.map((row) => ({
         id: row.id,
         sucursal: row.sucursal,
+        numero: row.numero ?? null,
         estado: row.estado,
         tipo_solicitud: row.tipo_solicitud,
         posicion_prioridad: row.posicion_prioridad,
@@ -157,6 +159,19 @@ export class SucursalesService {
     try {
       const admin = createAdminClient();
 
+      const { data: mismoCodigo } = await admin
+        .from('sucursal')
+        .select('id, nombre')
+        .eq('id', input.codigo)
+        .maybeSingle();
+
+      if (mismoCodigo) {
+        return {
+          success: false,
+          error: `El código ${input.codigo} ya pertenece a la sucursal "${mismoCodigo.nombre ?? ''}".`,
+        };
+      }
+
       const { data: existing } = await admin
         .from('sucursal')
         .select('id, nombre')
@@ -172,6 +187,7 @@ export class SucursalesService {
       const { data, error } = await admin
         .from('sucursal')
         .insert({
+          id: input.codigo,
           nombre: input.nombre.trim(),
           direccion: input.direccion?.trim() || null,
           slots: input.slots,

@@ -19,7 +19,6 @@ import { AuditoriaRegistro } from '@/types/auditoria.types';
 import { AuditoriaMetricas } from '@/services/auditoria.service';
 import { getAuditoriaAction } from '@/app/actions/auditoria.actions';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
-import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { utils, writeFile } from 'xlsx';
 
 const accionConfig: Record<string, { label: string; color: string }> = {
@@ -144,7 +143,7 @@ function DetalleRegistro({ reg }: { reg: AuditoriaRegistro }) {
       </p>
       {reg.solicitud_id && (
         <p className="text-[10px] text-neutral-400 font-mono mt-0.5">
-          Solicitud {codigoSolicitud(reg.solicitud_id)}
+          Solicitud {reg.solicitud_codigo}
         </p>
       )}
     </>
@@ -553,7 +552,7 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
                   <p className="text-xs text-neutral-500">
                     {accionConfig[detailRegistro.accion]?.label || detailRegistro.accion}
                     {detailRegistro.solicitud_id && (
-                      <> · Solicitud {codigoSolicitud(detailRegistro.solicitud_id)}</>
+                      <> · Solicitud {detailRegistro.solicitud_codigo}</>
                     )}
                   </p>
                 </div>

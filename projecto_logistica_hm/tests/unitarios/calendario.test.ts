@@ -199,6 +199,13 @@ describe('cumpleFiltros', () => {
     expect(cumpleFiltros(sol(), { ...f, busqueda: 'zzz' }, ctx)).toBe(false);
   });
 
+  it('should_search_by_request_code_when_request_has_number', () => {
+    const conNumero = sol({ sucursal: 101, numero: 15 });
+    expect(cumpleFiltros(conNumero, { ...f, busqueda: '101-15' }, ctx)).toBe(true);
+    expect(cumpleFiltros(conNumero, { ...f, busqueda: '101-1' }, ctx)).toBe(true);
+    expect(cumpleFiltros(conNumero, { ...f, busqueda: '101-2' }, ctx)).toBe(false);
+  });
+
   it('should_filter_by_deadline_status_and_rescheduled', () => {
     expect(cumpleFiltros(sol({ fecha_limite: '2026-10-01' }), { ...f, plazo: 'atrasada' }, ctx)).toBe(true);
     expect(cumpleFiltros(sol(), { ...f, plazo: 'atrasada' }, ctx)).toBe(false);

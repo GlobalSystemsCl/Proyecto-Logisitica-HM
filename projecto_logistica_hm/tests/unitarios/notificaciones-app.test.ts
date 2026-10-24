@@ -15,7 +15,7 @@ import { DESTINATARIOS_POR_EVENTO } from '@/lib/notificaciones';
 
 const persona = (id: string) => ({ id, email: `${id}@test.cl`, nombre: id.toUpperCase() });
 const EVENTOS = Object.keys(DESTINATARIOS_APP) as EventoApp[];
-const DATOS = { codigo: 'ABCD1234', origen: 'Centro', destino: 'Norte' };
+const DATOS = { codigo: '101-15', origen: 'Centro', destino: 'Norte' };
 
 describe('DESTINATARIOS_APP', () => {
   it('should_include_every_email_recipient_in_app_notifications', () => {
@@ -77,7 +77,7 @@ describe('textoNotificacion', () => {
       const t = textoNotificacion(evento, DATOS);
       expect(t.titulo.length, evento).toBeGreaterThan(0);
       expect(t.titulo.length, evento).toBeLessThanOrEqual(100);
-      expect(t.mensaje, evento).toContain('#ABCD1234');
+      expect(t.mensaje, evento).toContain('101-15');
       expect(t.mensaje, evento).toContain('Centro → Norte');
     }
   });
@@ -90,7 +90,7 @@ describe('textoNotificacion', () => {
       motivo: ' Lluvia ',
     });
     expect(t.mensaje).toBe(
-      'El traslado de la solicitud #ABCD1234 (Centro → Norte) se reprogramó para el 20/10/2026 (antes: 15/10/2026). Motivo: Lluvia'
+      'El traslado de la solicitud 101-15 (Centro → Norte) se reprogramó para el 20/10/2026 (antes: 15/10/2026). Motivo: Lluvia'
     );
   });
 

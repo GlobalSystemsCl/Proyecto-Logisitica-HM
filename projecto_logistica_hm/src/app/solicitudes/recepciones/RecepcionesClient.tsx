@@ -9,7 +9,7 @@ import { RecepcionModal } from '@/components/ModalesTraslado';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import type { DatosRecepcion } from '@/lib/recepcion';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
-import { codigoSolicitud } from '@/lib/codigoSolicitud';
+import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
@@ -90,7 +90,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-xs text-neutral-500">
-                            {codigoSolicitud(s.id)}
+                            {codigoSolicitud(s)}
                           </AbrirSolicitudDetalle>
                           {chip && (
                             <span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold border ${chip.clase}`}>{chip.texto}</span>
@@ -131,7 +131,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                 {traslados.map((t) => (
                   <li key={t.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1 min-w-0 space-y-1">
-                      <span className="font-mono text-xs text-neutral-500">#{t.id.slice(0, 8)}</span>
+                      <span className="font-mono text-xs text-neutral-500">{codigoTraslado(t.id)}</span>
                       <p className="text-sm font-semibold text-neutral-900 flex items-center gap-1.5">
                         <Truck className="w-4 h-4 text-neutral-400" />
                         {t.origen_nombre} → {t.destino_nombre}

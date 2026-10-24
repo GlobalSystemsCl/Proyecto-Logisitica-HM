@@ -550,7 +550,7 @@ function SolicitudCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <AbrirSolicitudDetalle solicitudId={sol.id} className="font-mono text-xs text-neutral-500">
-              {codigoSolicitud(sol.id)}
+              {codigoSolicitud(sol)}
             </AbrirSolicitudDetalle>
             {sol.tipo_solicitud === 'evento' ? (
               <BadgeEvento tamano="sm" />
@@ -653,7 +653,7 @@ function TarjetaArrastre({ sol, enCola }: { sol: SolicitudLista; enCola: boolean
         )}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-mono text-xs text-neutral-500">{codigoSolicitud(sol.id)}</span>
+            <span className="font-mono text-xs text-neutral-500">{codigoSolicitud(sol)}</span>
             {sol.tipo_solicitud === 'evento' ? (
               <BadgeEvento tamano="sm" />
             ) : (

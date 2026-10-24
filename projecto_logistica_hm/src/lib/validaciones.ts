@@ -76,3 +76,18 @@ export function validarCampoTexto(
   }
   return null;
 }
+
+/** Mayor código de sucursal aceptado (los del Excel de concesionarios son de 3 dígitos). */
+export const CODIGO_SUCURSAL_MAX = 99999;
+
+/**
+ * Código de sucursal escrito por el administrador: entero entre 1 y
+ * `CODIGO_SUCURSAL_MAX`. `null` si no es válido. Es el id de la sucursal y el
+ * prefijo del n° de sus solicitudes (`lib/codigoSolicitud`).
+ */
+export function parsearCodigoSucursal(valor: string): number | null {
+  const limpio = (valor || '').trim();
+  if (!/^\d+$/.test(limpio)) return null;
+  const n = Number(limpio);
+  return n >= 1 && n <= CODIGO_SUCURSAL_MAX ? n : null;
+}
