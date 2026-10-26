@@ -20,6 +20,7 @@ import type { TrasladoInterno } from '@/types/traslado.types';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { calcularReporte, indicadoresDeEncargado } from '@/lib/reporteLogistica';
 import { slotsConZona } from '@/lib/slots';
+import { LIMITE_PANEL_LOGISTICA } from '@/lib/panel';
 import { hoyISO, ZONA_HORARIA } from '@/lib/fechas';
 import { sumarDias } from '@/lib/calendario';
 
@@ -142,7 +143,7 @@ export default async function DashboardPage() {
               Bienvenido, {profile.nombre} {profile.apellido}
             </h1>
             <p className="text-sm text-neutral-500 max-w-lg leading-relaxed">
-              Desde acá entrás a todo lo que tenés disponible: {ROL_LABEL[rol]}.
+              Desde aquí accedes a todo lo que tienes disponible: {ROL_LABEL[rol]}.
             </p>
           </div>
         </div>
@@ -178,6 +179,7 @@ export default async function DashboardPage() {
             titulo="Espacios disponibles en todas las sucursales"
             sucursales={slotsTodas}
             conZona
+            limite={LIMITE_PANEL_LOGISTICA}
             textoVacio="No hay sucursales registradas."
             actualizado={timestamp}
           />

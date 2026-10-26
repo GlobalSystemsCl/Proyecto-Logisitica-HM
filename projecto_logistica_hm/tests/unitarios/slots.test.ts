@@ -3,6 +3,7 @@ import {
   UMBRAL_ATENCION,
   nombreSucursal,
   ordenarPorDisponibilidad,
+  ordenarPorOcupacion,
   resumenSlots,
   slotsLibres,
   textoSlots,
@@ -145,6 +146,48 @@ describe('ordenarPorDisponibilidad', () => {
     ];
     ordenarPorDisponibilidad(input);
     expect(input.map((s) => s.nombre)).toEqual(['A', 'B']);
+  });
+});
+
+describe('ordenarPorOcupacion', () => {
+  it('should_sort_descending_by_occupied_slots', () => {
+    const res = ordenarPorOcupacion([
+      sucursal({ nombre: 'A', slots_ocupados: 3 }),
+      sucursal({ nombre: 'B', slots_ocupados: 12 }),
+      sucursal({ nombre: 'C', slots_ocupados: 7 }),
+    ]);
+    expect(res.map((s) => s.nombre)).toEqual(['B', 'C', 'A']);
+  });
+
+  it('should_break_ties_by_total_use_and_then_by_name_when_occupied_is_equal', () => {
+    const res = ordenarPorOcupacion([
+      sucursal({ nombre: 'Talca', slots_ocupados: 5, slots_reservados: 0 }),
+      sucursal({ nombre: 'Linares', slots_ocupados: 5, slots_reservados: 2 }),
+      sucursal({ nombre: 'Calama', slots_ocupados: 5, slots_reservados: 0 }),
+    ]);
+    expect(res.map((s) => s.nombre)).toEqual(['Linares', 'Calama', 'Talca']);
+  });
+
+  it('should_treat_null_occupied_as_zero_when_branch_has_no_data', () => {
+    const res = ordenarPorOcupacion([
+      sucursal({ nombre: 'Sin datos', slots: null, slots_ocupados: null, slots_reservados: null }),
+      sucursal({ nombre: 'Con uno', slots_ocupados: 1 }),
+    ]);
+    expect(res.map((s) => s.nombre)).toEqual(['Con uno', 'Sin datos']);
+  });
+
+  it('should_keep_extra_fields_and_not_mutate_the_input', () => {
+    const input = [
+      { ...sucursal({ nombre: 'A', slots_ocupados: 1 }), id: 101 },
+      { ...sucursal({ nombre: 'B', slots_ocupados: 9 }), id: 102 },
+    ];
+    const res = ordenarPorOcupacion(input);
+    expect(res.map((s) => s.id)).toEqual([102, 101]);
+    expect(input.map((s) => s.nombre)).toEqual(['A', 'B']);
+  });
+
+  it('should_return_empty_list_when_there_are_no_branches', () => {
+    expect(ordenarPorOcupacion([])).toEqual([]);
   });
 });
 
