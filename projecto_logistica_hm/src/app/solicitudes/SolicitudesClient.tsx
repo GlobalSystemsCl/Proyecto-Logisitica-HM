@@ -1321,7 +1321,7 @@ export default function SolicitudesClient({
                           className="accent-neutral-900"
                         />
                         <span className="font-mono font-bold text-neutral-900 text-xs">{v.patente}</span>
-                        <span className="text-xs text-neutral-500 truncate">{v.chasis} · {v.marca} {v.modelo} · {v.anio}</span>
+                        <span className="text-xs text-neutral-500 truncate">{v.chasis} · {v.marca} {v.modelo}{v.anio ? ` · ${v.anio}` : ''}</span>
                         <span className="ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-neutral-50 border border-neutral-200 text-[10px] font-semibold text-neutral-600 shrink-0">
                           {sucursalesPorId.get(v.ubicacion ?? -1) || 'Sin sucursal'}
                         </span>

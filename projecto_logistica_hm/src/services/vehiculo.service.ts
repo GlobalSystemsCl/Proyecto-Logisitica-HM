@@ -4,6 +4,7 @@ import { OrganizacionService } from '@/services/organizacion.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { enLotes, obtenerTodasLasFilas } from '@/lib/paginacion';
+import { celda, columnasStock, esChasisValido, separarMarca, tieneColumnasMinimas } from '@/lib/importStock';
 import {
   TAMANO_GRUPO_IDS,
   bloqueosDesdeVinculos,
@@ -56,9 +57,12 @@ export class VehiculoService {
           id: v.id as string,
           chasis: v.chasis as string,
           patente: (v.patente as string | null) ?? null,
+          tipo_vehiculo: (v.tipo_vehiculo as string | null) ?? null,
+          marca_codigo: (v.marca_codigo as string | null) ?? null,
           marca: v.marca as string,
           modelo: v.modelo as string,
-          anio: v.anio as number,
+          idv: (v.idv as string | null) ?? null,
+          anio: (v.anio as number | null) ?? null,
           color: v.color as string | null,
           precio: v.precio as number | null,
           ubicacion: v.ubicacion as number | null,
@@ -369,9 +373,9 @@ export class VehiculoService {
         }
       }
 
-      // Validar año
+      // Validar año (opcional: el Excel de stock no lo trae)
       const currentYear = new Date().getFullYear();
-      if (input.anio < 1900 || input.anio > currentYear + 1) {
+      if (input.anio != null && (input.anio < 1900 || input.anio > currentYear + 1)) {
         return {
           success: false,
           error: `El año debe estar entre 1900 y ${currentYear + 1}.`,
@@ -390,9 +394,12 @@ export class VehiculoService {
       const newVehiculo = {
         chasis: cleanChasis,
         patente: cleanPatente,
+        tipo_vehiculo: input.tipo_vehiculo?.trim() || null,
+        marca_codigo: input.marca_codigo?.trim().toUpperCase() || null,
         marca: cleanMarca,
         modelo: cleanModelo,
-        anio: input.anio,
+        idv: input.idv?.trim() || null,
+        anio: input.anio ?? null,
         color: input.color?.trim() || null,
         precio: input.precio ?? null,
         ubicacion: input.ubicacion ?? null,
@@ -496,6 +503,9 @@ export class VehiculoService {
 
       if (input.marca !== undefined) updateData.marca = input.marca.trim();
       if (input.modelo !== undefined) updateData.modelo = input.modelo.trim();
+      if (input.tipo_vehiculo !== undefined) updateData.tipo_vehiculo = input.tipo_vehiculo?.trim() || null;
+      if (input.marca_codigo !== undefined) updateData.marca_codigo = input.marca_codigo?.trim().toUpperCase() || null;
+      if (input.idv !== undefined) updateData.idv = input.idv?.trim() || null;
       if (input.color !== undefined) updateData.color = input.color?.trim() || null;
 
       if (input.precio !== undefined) {
@@ -510,7 +520,7 @@ export class VehiculoService {
 
       if (input.anio !== undefined) {
         const currentYear = new Date().getFullYear();
-        if (input.anio < 1900 || input.anio > currentYear + 1) {
+        if (input.anio !== null && (input.anio < 1900 || input.anio > currentYear + 1)) {
           return { success: false, error: `El año debe estar entre 1900 y ${currentYear + 1}.` };
         }
         updateData.anio = input.anio;
@@ -585,18 +595,16 @@ export class VehiculoService {
   // IMPORTACION MASIVA DE STOCK (CSV)
   // ==========================================================================
   //
-  // Formato esperado: exportacion del stock (modelo_excel/STOCK VN .xls / CSV).
-  // Columnas (por nombre de encabezado, insensible a mayusculas):
-  //   C.comp   -> codigo de sucursal (se mapea a sucursal.id; fallback por nombre)
-  //   Marca    -> codigo de marca (resuelto contra el catalogo; autocrea si falta)
-  //   Modelo   -> modelo del vehiculo
-  //   Chasis   -> chasis (17 caracteres; es la clave de duplicado)
-  //   Color    -> color
-  //   Fec.adj. -> fecha de adjudicacion (de aqui se deriva el anio)
-  //   P.V.D.   -> precio de venta directa (formato "13,859,244.00")
-  //   (resto de columnas: Estad, IDV, Dias, F.limite, I.V.A., Rectifi, Imp.taller,
-  //    T.Costo -> NO se persisten)
-  // Patente NO viene en el stock -> se inserta NULL (patente opcional).
+  // Formato esperado: Excel de stock o de compras (modelo_excel/*.xls), leido
+  // por encabezado con src/lib/importStock.ts:
+  //   Tipo de vehículo -> tipo_vehiculo (VN)
+  //   Marca            -> marca_codigo (HY, TO...; se asegura en el catalogo)
+  //   Marca completa   -> marca (HYUNDAI); si falta, el nombre del catalogo
+  //   Modelo, IDV, Color, Patente -> columnas del mismo nombre
+  //   Chasis           -> chasis (17 caracteres; es la clave de duplicado)
+  //   Ubicación        -> sucursal (codigo = sucursal.id o nombre); vacia = en viaje
+  // Del formato anterior se aceptan C.comp (ubicacion), Fec.adj. (anio) y
+  // P.V.D. (precio). Sin Fec.adj., anio queda NULL.
 
   static async importVehiculosCSV(
     textoCSV: string,
@@ -620,18 +628,8 @@ export class VehiculoService {
         return { success: false, error: 'El archivo no contiene filas válidas.' };
       }
 
-      const encabezados = (filas[0] || []).map((h) => h.trim().replace(/"/g, '').toLowerCase());
-      const col = (nombres: string[]): number => encabezados.findIndex((h) => nombres.includes(h));
-
-      const idxCcomp = col(['c.comp', 'ccomp', 'conces', 'sucursal', 'codigo']);
-      const idxMarca = col(['marca']);
-      const idxModelo = col(['modelo']);
-      const idxChasis = col(['chasis', 'n° chasis', 'nro chasis', 'vin']);
-      const idxColor = col(['color']);
-      const idxFecAdj = col(['fec.adj.', 'fec adj', 'f.adj.', 'fec.adj', 'fecha adj']);
-      const idxPvd = col(['p.v.d.', 'pvd', 'precio']);
-
-      if (idxMarca < 0 || idxModelo < 0 || idxChasis < 0) {
+      const c = columnasStock(filas[0] || []);
+      if (!tieneColumnasMinimas(c)) {
         return {
           success: false,
           error: 'El archivo debe contener al menos las columnas Marca, Modelo y Chasis.',
@@ -640,16 +638,18 @@ export class VehiculoService {
 
       const sucursales = await VehiculoService.resolverSucursales(admin);
 
-      // Resolver marcas una sola vez (autocreando lo que falte)
-      const codigosMarca = new Set<string>();
+      // Resolver marcas una sola vez (autocreando lo que falte con el nombre
+      // de la columna "Marca completa")
+      const nombresMarca = new Map<string, string>();
       filas.slice(1).forEach((r) => {
-        const raw = (r[idxMarca] || '').trim();
-        if (raw) codigosMarca.add(raw.toUpperCase());
+        const { codigo, nombre } = separarMarca(celda(r, c.marca), celda(r, c.marcaCompleta));
+        if (codigo && (!nombresMarca.has(codigo) || (!nombresMarca.get(codigo) && nombre))) {
+          nombresMarca.set(codigo, nombre);
+        }
       });
       const marcasResueltas = new Map<string, string>();
-      for (const codigoRaw of codigosMarca) {
-        const nombre = await OrganizacionService.asegurarMarcaCodigo(codigoRaw);
-        marcasResueltas.set(codigoRaw, nombre);
+      for (const [codigo, nombre] of nombresMarca) {
+        marcasResueltas.set(codigo, await OrganizacionService.asegurarMarcaCodigo(codigo, nombre || undefined));
       }
 
       // Chasis ya existentes (paginado: evita el tope de 1000 filas por petición)
@@ -666,13 +666,13 @@ export class VehiculoService {
       const erroresDetalle: string[] = [];
 
       for (const fila of filas.slice(1)) {
-        const chasis = (fila[idxChasis] || '').trim().toUpperCase();
+        const chasis = celda(fila, c.chasis).toUpperCase();
         if (!chasis) {
           errores++;
           erroresDetalle.push('Fila sin chasis');
           continue;
         }
-        if (!/^[A-Z0-9]{17}$/.test(chasis)) {
+        if (!esChasisValido(chasis)) {
           errores++;
           erroresDetalle.push(`Chasis no válido: ${chasis}`);
           continue;
@@ -683,7 +683,7 @@ export class VehiculoService {
         }
 
         // Sucursal origen (ubicacion)
-        const codigoSucursal = (fila[idxCcomp] || '').trim();
+        const codigoSucursal = celda(fila, c.ubicacion);
         let sucursalId: number | null = null;
         if (codigoSucursal) {
           const num = Number(codigoSucursal.replace(/\D/g, ''));
@@ -698,22 +698,23 @@ export class VehiculoService {
           }
         }
 
-        const marcaCodigoRaw = (fila[idxMarca] || '').trim();
-        const marcaNombre = marcasResueltas.get(marcaCodigoRaw.toUpperCase()) || marcaCodigoRaw;
-        const modelo = (fila[idxModelo] || '').trim();
-        const color = (fila[idxColor] || '').trim() || null;
-        const anio = idxFecAdj >= 0
-          ? VehiculoService.extraerAnio(fila[idxFecAdj], anioPorDefecto)
-          : anioPorDefecto;
-        const precio = idxPvd >= 0 ? VehiculoService.parsePrecio(fila[idxPvd]) : null;
+        const marca = separarMarca(celda(fila, c.marca), celda(fila, c.marcaCompleta));
+        const marcaNombre = marca.nombre || marcasResueltas.get(marca.codigo) || marca.codigo;
+        const anio = c.fechaAdjudicacion >= 0
+          ? VehiculoService.extraerAnio(celda(fila, c.fechaAdjudicacion), anioPorDefecto)
+          : null;
+        const precio = c.precio >= 0 ? VehiculoService.parsePrecio(celda(fila, c.precio)) : null;
 
         pendientes.push({
           chasis,
-          patente: null,
+          patente: celda(fila, c.patente).toUpperCase() || null,
+          tipo_vehiculo: celda(fila, c.tipo) || null,
+          marca_codigo: marca.codigo || null,
           marca: marcaNombre,
-          modelo,
+          modelo: celda(fila, c.modelo),
+          idv: celda(fila, c.idv) || null,
           anio,
-          color,
+          color: celda(fila, c.color) || null,
           precio,
           ubicacion: sucursalId,
         });
@@ -737,7 +738,7 @@ export class VehiculoService {
         importados,
         duplicados,
         errores,
-        marcasProcesadas: codigosMarca.size,
+        marcasProcesadas: nombresMarca.size,
         mensaje:
           `Importación completada: ${importados} vehículos importados, ${duplicados} duplicados omitidos, ` +
           `${errores} errores${erroresDetalle.length > 0 ? ` (${erroresDetalle.slice(0, 5).join('; ')})` : ''}.`,

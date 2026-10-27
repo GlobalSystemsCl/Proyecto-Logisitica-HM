@@ -21,8 +21,11 @@ function vehiculo(overrides: Partial<VehiculoConDisponibilidad> = {}): VehiculoC
     id: 'veh-1',
     chasis: '1HGCM82633A004352',
     patente: 'ABCD-12',
+    tipo_vehiculo: 'VN',
+    marca_codigo: 'TO',
     marca: 'Toyota',
     modelo: 'Corolla',
+    idv: '157651',
     anio: 2020,
     color: null,
     precio: 100,
@@ -135,6 +138,12 @@ describe('coincideBusqueda', () => {
 
   it('should_match_by_patente', () => {
     expect(coincideBusqueda(vehiculo(), 'abcd-12')).toBe(true);
+  });
+
+  it('should_match_by_idv_and_exact_brand_code', () => {
+    expect(coincideBusqueda(vehiculo(), '1576')).toBe(true);
+    expect(coincideBusqueda(vehiculo({ marca_codigo: 'MH', marca: 'MAHINDRA', modelo: 'XUV' }), 'mh')).toBe(true);
+    expect(coincideBusqueda(vehiculo({ idv: null, marca_codigo: null }), '999')).toBe(false);
   });
 
   it('should_match_by_marca', () => {

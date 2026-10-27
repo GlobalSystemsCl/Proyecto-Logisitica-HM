@@ -655,6 +655,51 @@ describe('VehiculoService', () => {
       expect(res.importados).toBe(0);
     });
 
+    it('should_import_stock_excel_columns_when_file_uses_current_format', async () => {
+      admin.results.sucursal = [{ data: [{ id: 101, nombre: '15 NORTE' }], error: null }];
+      admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: null }];
+      const csv = [
+        'Tipo de vehículo ,Marca,Marca completa,Modelo,IDV,Chasis,Color,Ubicación,Patente ',
+        `VN,HY,HYUNDAI,GRAND I-10 A,157686,${CHASIS_VALIDO},PLATA,101,`,
+        'VN,TO,TOYOTA,YARIS CROSS,157700,JTMW1RF79KD123456,,,abcd-12',
+        'VN,VW,VOLKSWAGEN,Tera 1.0 TSI,162822,9BWBL6DF9TT42113,,,',
+      ].join('\n');
+
+      const res = await VehiculoService.importVehiculosCSV(csv);
+
+      expect(res.importados).toBe(2);
+      expect(res.errores).toBe(1);
+      const insert = admin.callsTo('vehiculo').find((c) => c[0] === 'insert');
+      expect(insert?.[1]).toEqual([
+        {
+          chasis: CHASIS_VALIDO,
+          patente: null,
+          tipo_vehiculo: 'VN',
+          marca_codigo: 'HY',
+          marca: 'HYUNDAI',
+          modelo: 'GRAND I-10 A',
+          idv: '157686',
+          anio: null,
+          color: 'PLATA',
+          precio: null,
+          ubicacion: 101,
+        },
+        {
+          chasis: 'JTMW1RF79KD123456',
+          patente: 'ABCD-12',
+          tipo_vehiculo: 'VN',
+          marca_codigo: 'TO',
+          marca: 'TOYOTA',
+          modelo: 'YARIS CROSS',
+          idv: '157700',
+          anio: null,
+          color: null,
+          precio: null,
+          ubicacion: null,
+        },
+      ]);
+    });
+
     it('should_read_existing_chassis_ordered_by_id', async () => {
       admin.results.sucursal = [{ data: [], error: null }];
       admin.results.vehiculo = [{ data: [], error: null }];

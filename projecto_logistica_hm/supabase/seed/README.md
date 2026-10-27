@@ -81,6 +81,8 @@ El id de cada fila creada empieza con `5eed`:
 ## Escenarios
 
 Sucursales: 6 = 15 NORTE, 7 = CONCON, 8 = SANTIAGO CENTRO, 9 = VALPARAISO.
+
+> **Producción (2026-10-26):** `scripts/04_limpiar_datos_prueba.sql` borra estas 4 sucursales y todos los datos de prueba. Desde ahí, estos seeds solo sirven en un branch o proyecto de prueba que tenga las sucursales 6–9; no ejecutarlos en producción.
 "D-n" = hace n días.
 
 | # | Estado final | Historia |

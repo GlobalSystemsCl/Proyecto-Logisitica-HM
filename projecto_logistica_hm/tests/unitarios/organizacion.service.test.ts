@@ -168,3 +168,35 @@ describe('OrganizacionService.getSucursalIdsDeZonasUsuario', () => {
     expect(await OrganizacionService.getSucursalIdsDeZonasUsuario('lg-1')).toEqual([]);
   });
 });
+
+describe('OrganizacionService.asegurarMarcaCodigo', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_return_catalog_name_when_brand_already_has_a_real_name', async () => {
+    admin.results.marca = [fila({ codigo: 'HY', nombre: 'Hyundai Motors' })];
+    expect(await OrganizacionService.asegurarMarcaCodigo('hy', 'HYUNDAI')).toBe('Hyundai Motors');
+    expect(admin.callsTo('marca').some((c) => c[0] === 'update')).toBe(false);
+  });
+
+  it('should_fill_name_from_excel_when_catalog_only_has_the_code', async () => {
+    admin.results.marca = [fila({ codigo: 'HY', nombre: 'HY' }), fila(null)];
+    expect(await OrganizacionService.asegurarMarcaCodigo('HY', 'HYUNDAI')).toBe('HYUNDAI');
+    expect(admin.callsTo('marca')).toContainEqual(['update', { nombre: 'HYUNDAI' }]);
+  });
+
+  it('should_create_brand_with_suggested_name_or_code_when_missing', async () => {
+    admin.results.marca = [fila(null), fila(null), fila(null), fila(null)];
+    expect(await OrganizacionService.asegurarMarcaCodigo('TO', 'TOYOTA')).toBe('TOYOTA');
+    expect(admin.callsTo('marca')).toContainEqual(['insert', { codigo: 'TO', nombre: 'TOYOTA' }]);
+    expect(await OrganizacionService.asegurarMarcaCodigo('OP')).toBe('OP');
+    expect(admin.callsTo('marca')).toContainEqual(['insert', { codigo: 'OP', nombre: 'OP' }]);
+  });
+
+  it('should_return_empty_when_code_is_blank', async () => {
+    expect(await OrganizacionService.asegurarMarcaCodigo('  ')).toBe('');
+    expect(admin.from).not.toHaveBeenCalled();
+  });
+});

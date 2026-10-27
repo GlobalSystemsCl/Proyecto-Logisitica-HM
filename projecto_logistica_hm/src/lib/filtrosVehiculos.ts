@@ -89,13 +89,15 @@ export function coincideDisponibilidad(
   return estado === filtro;
 }
 
-/** Indica si el vehículo coincide con la búsqueda libre por chasis, patente, marca o modelo. */
+/** Indica si el vehículo coincide con la búsqueda libre por chasis, patente, IDV, marca (código o nombre) o modelo. */
 export function coincideBusqueda(vehiculo: VehiculoConDisponibilidad, busqueda: string): boolean {
   const termino = busqueda.trim().toLowerCase();
   if (!termino) return true;
   return (
     vehiculo.chasis.toLowerCase().includes(termino) ||
     (vehiculo.patente ?? '').toLowerCase().includes(termino) ||
+    (vehiculo.idv ?? '').toLowerCase().includes(termino) ||
+    (vehiculo.marca_codigo ?? '').toLowerCase() === termino ||
     vehiculo.marca.toLowerCase().includes(termino) ||
     vehiculo.modelo.toLowerCase().includes(termino)
   );
