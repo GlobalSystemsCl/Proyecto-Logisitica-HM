@@ -7,6 +7,7 @@ fecha, cada una con su script de reversión.
 ```
 supabase/
 ├── scripts/00_respaldo_antes_de_migrar.sql   consultas de solo lectura para respaldar
+├── scripts/04_limpiar_datos_prueba.sql       vacía los datos de prueba (una vez, no es migración)
 ├── migrations/                               cambios, en orden de aplicación
 ├── rollback/                                 reversión de cada migración (mismo nombre)
 └── seed/                                     datos de prueba del ciclo de vida (ver seed/README.md)
