@@ -628,7 +628,7 @@ export default function SolicitudDetalleModal({
                 </p>
                 <p className="text-[11px] text-neutral-500">
                   {vehiculosLocal.length > 0
-                    ? `${vehiculosLocal[0].marca} ${vehiculosLocal[0].modelo} ${vehiculosLocal[0].anio}`
+                    ? [vehiculosLocal[0].marca, vehiculosLocal[0].modelo, vehiculosLocal[0].anio].filter(Boolean).join(' ')
                     : 'Sin vehículo'}
                 </p>
               </div>
@@ -865,7 +865,7 @@ export default function SolicitudDetalleModal({
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-neutral-900 font-mono">{v.patente}</p>
                             <p className="text-[11px] text-neutral-500 truncate">
-                              {v.chasis} · {v.marca} {v.modelo} · {v.anio}{v.color ? ` · ${v.color}` : ''}
+                              {v.chasis} · {v.marca} {v.modelo}{v.anio ? ` · ${v.anio}` : ''}{v.color ? ` · ${v.color}` : ''}
                             </p>
                           </div>
                         </div>
@@ -901,7 +901,7 @@ export default function SolicitudDetalleModal({
                     >
                       <option value="">Agregar vehículo...</option>
                       {vehiculosDisponiblesParaAgregar.map((v) => (
-                        <option key={v.id} value={v.id}>{v.patente} — {v.marca} {v.modelo} ({v.anio})</option>
+                        <option key={v.id} value={v.id}>{v.patente || v.chasis} — {v.marca} {v.modelo}{v.anio ? ` (${v.anio})` : ''}</option>
                       ))}
                     </select>
                     <button

@@ -37,15 +37,10 @@ export async function createVehiculoAction(data: CreateVehiculoInput) {
   try {
     const profile = await verifyVehiculoPermission();
 
-    if (
-      !data.chasis?.trim() ||
-      !data.marca?.trim() ||
-      !data.modelo?.trim() ||
-      !data.anio
-    ) {
+    if (!data.chasis?.trim() || !data.marca?.trim() || !data.modelo?.trim()) {
       return {
         success: false,
-        error: 'Todos los campos marcados son obligatorios (la patente es opcional).',
+        error: 'El chasis, la marca y el modelo son obligatorios.',
       };
     }
 

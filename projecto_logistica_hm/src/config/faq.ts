@@ -367,7 +367,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: INVENTARIO,
     pregunta: '¿Cómo cargo el stock desde Excel?',
     respuesta:
-      'Usa "Importar Stock" y elige el archivo Excel o CSV. Los chasis repetidos se informan y no se duplican. Los vehículos sin sucursal quedan "En viaje / Container" hasta que les asignes ubicación.',
+      'Usa "Importar Stock" y elige el Excel de stock o de compras tal como viene, con las columnas Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación y Patente. Los chasis repetidos se informan y no se duplican, y los que no tienen 17 caracteres se informan como error. Los vehículos sin ubicación quedan "En viaje / Container" hasta que les asignes una sucursal.',
   },
 
   // ---------- Usuarios ----------

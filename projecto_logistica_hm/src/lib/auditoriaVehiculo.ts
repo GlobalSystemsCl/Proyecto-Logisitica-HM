@@ -12,8 +12,11 @@
 export const CAMPOS_AUDITADOS_VEHICULO = [
   'chasis',
   'patente',
+  'tipo_vehiculo',
+  'marca_codigo',
   'marca',
   'modelo',
+  'idv',
   'anio',
   'color',
   'precio',

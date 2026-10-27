@@ -2,9 +2,17 @@ export interface Vehiculo {
   id: string;
   chasis: string;
   patente: string | null;
+  /** "Tipo de vehículo" del Excel de stock (VN). */
+  tipo_vehiculo: string | null;
+  /** "Marca" del Excel: código del catálogo (HY, TO...). */
+  marca_codigo: string | null;
+  /** "Marca completa" del Excel (HYUNDAI). */
   marca: string;
   modelo: string;
-  anio: number;
+  /** "IDV" del Excel: identificador del vehículo en el sistema de la empresa. */
+  idv: string | null;
+  /** El Excel de stock no lo trae: queda null en los vehículos importados. */
+  anio: number | null;
   color: string | null;
   precio: number | null;
   ubicacion: number | null;
@@ -23,9 +31,12 @@ export interface VehiculoConDisponibilidad extends Vehiculo {
 export interface CreateVehiculoInput {
   chasis: string;
   patente?: string | null;
+  tipo_vehiculo?: string | null;
+  marca_codigo?: string | null;
   marca: string;
   modelo: string;
-  anio: number;
+  idv?: string | null;
+  anio?: number | null;
   color?: string;
   precio?: number | null;
   ubicacion?: number | null;
@@ -34,9 +45,12 @@ export interface CreateVehiculoInput {
 export interface UpdateVehiculoInput {
   chasis?: string;
   patente?: string | null;
+  tipo_vehiculo?: string | null;
+  marca_codigo?: string | null;
   marca?: string;
   modelo?: string;
-  anio?: number;
+  idv?: string | null;
+  anio?: number | null;
   color?: string | null;
   precio?: number | null;
   ubicacion?: number | null;

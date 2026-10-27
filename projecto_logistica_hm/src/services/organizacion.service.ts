@@ -240,9 +240,10 @@ export class OrganizacionService {
    * importacion CSV y por el alta de vehiculos. Devuelve el nombre comercial a
    * guardar en vehiculo.marca (si no hay catalogo, se usa el codigo, normalizado).
    */
-  static async asegurarMarcaCodigo(codigoRaw: string): Promise<string> {
+  static async asegurarMarcaCodigo(codigoRaw: string, nombreSugerido?: string): Promise<string> {
     const codigo = (codigoRaw || '').trim().toUpperCase();
     if (!codigo) return codigoRaw?.trim() || '';
+    const sugerido = nombreSugerido?.trim() || '';
 
     try {
       const admin = createAdminClient();
@@ -252,10 +253,19 @@ export class OrganizacionService {
         .eq('codigo', codigo)
         .maybeSingle();
 
-      if (data) return data.nombre;
+      if (data) {
+        // Marca autocreada solo con el código ("HY"): se completa con el
+        // nombre que trae el Excel ("HYUNDAI"). Un nombre ya editado no se pisa.
+        if (sugerido && data.nombre === codigo && sugerido !== codigo) {
+          await admin.from('marca').update({ nombre: sugerido }).eq('codigo', codigo);
+          return sugerido;
+        }
+        return data.nombre;
+      }
 
-      await admin.from('marca').insert({ codigo, nombre: codigo });
-      return codigo;
+      const nombre = sugerido || codigo;
+      await admin.from('marca').insert({ codigo, nombre });
+      return nombre;
     } catch (err) {
       console.error('Error en asegurarMarcaCodigo:', err);
       return codigo;

@@ -45,12 +45,13 @@ values
   ('20261020120000', 'fn_vehiculos_disponibles_traslado'),
   ('20261020130000', 'transportista'),
   ('20261020140000', 'notificacion_nuevo_usuario'),
-  ('20261024120000', 'codigo_solicitud_por_sucursal')
+  ('20261024120000', 'codigo_solicitud_por_sucursal'),
+  ('20261027120000', 'recrear_vehiculo_formato_stock')
 on conflict (version) do nothing;
 
 commit;
 
 -- -----------------------------------------------------------------------------
--- Verificación (ejecutar por separado): una fila por archivo de migrations/ (23 al 2026-10-24)
+-- Verificación (ejecutar por separado): una fila por archivo de migrations/ (24 al 2026-10-27)
 -- -----------------------------------------------------------------------------
 -- select version, name from supabase_migrations.schema_migrations order by version;

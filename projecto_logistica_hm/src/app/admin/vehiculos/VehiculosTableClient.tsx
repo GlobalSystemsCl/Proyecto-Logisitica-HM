@@ -120,6 +120,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   const [color, setColor] = useState('');
   const [precio, setPrecio] = useState('');
   const [ubicacion, setUbicacion] = useState('');
+  const [tipoVehiculo, setTipoVehiculo] = useState('');
+  const [marcaCodigo, setMarcaCodigo] = useState('');
+  const [idv, setIdv] = useState('');
 
   // Field-level validation errors
   const [errors, setErrors] = useState<{
@@ -162,7 +165,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   };
 
   const validateAnio = (value: number): string => {
-    if (!value) return 'El año es obligatorio.';
+    if (!value) return '';
     if (value < 1900) return 'Mínimo 1900.';
     if (value > currentYear + 1) return `Máximo ${currentYear + 1}.`;
     return '';
@@ -210,7 +213,6 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
 
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importCsv, setImportCsv] = useState('');
-  const [importAnioDefecto, setImportAnioDefecto] = useState<number>(new Date().getFullYear());
   const [archivoImport, setArchivoImport] = useState('');
   const [isReadingFile, setIsReadingFile] = useState(false);
   const [isImporting, startImportTransition] = useTransition();
@@ -322,6 +324,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     setColor('');
     setPrecio('');
     setUbicacion('');
+    setTipoVehiculo('');
+    setMarcaCodigo('');
+    setIdv('');
     setErrors({ chasis: '', patente: '', marca: '', modelo: '', anio: '', precio: '', ubicacion: '' });
     setAttemptedSubmit(false);
   };
@@ -347,9 +352,12 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       const res = await createVehiculoAction({
         chasis,
         patente,
+        tipo_vehiculo: tipoVehiculo || null,
+        marca_codigo: marcaCodigo || null,
         marca,
         modelo,
-        anio,
+        idv: idv || null,
+        anio: anio || null,
         color: color || undefined,
         precio: precio ? Number(precio) : null,
         ubicacion: ubicacion === 'en_viaje' ? null : Number(ubicacion),
@@ -390,9 +398,12 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       const res = await updateVehiculoAction(vehiculoToEdit.id, {
         chasis,
         patente,
+        tipo_vehiculo: tipoVehiculo || null,
+        marca_codigo: marcaCodigo || null,
         marca,
         modelo,
-        anio,
+        idv: idv || null,
+        anio: anio || null,
         color: color || undefined,
         precio: precio ? Number(precio) : null,
         ubicacion: ubicacion === 'en_viaje' ? null : Number(ubicacion),
@@ -438,7 +449,10 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     setPatente(vehiculo.patente ?? '');
     setMarca(vehiculo.marca);
     setModelo(vehiculo.modelo);
-    setAnio(vehiculo.anio);
+    setAnio(vehiculo.anio ?? 0);
+    setTipoVehiculo(vehiculo.tipo_vehiculo ?? '');
+    setMarcaCodigo(vehiculo.marca_codigo ?? '');
+    setIdv(vehiculo.idv ?? '');
     setColor(vehiculo.color || '');
     setPrecio(vehiculo.precio != null ? String(vehiculo.precio) : '');
     setUbicacion(vehiculo.ubicacion != null ? String(vehiculo.ubicacion) : 'en_viaje');
@@ -452,7 +466,6 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
 
   const resetImportModal = () => {
     setImportCsv('');
-    setImportAnioDefecto(new Date().getFullYear());
     setArchivoImport('');
     setIsReadingFile(false);
   };
@@ -461,10 +474,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     const trimmed = importCsv.trim();
     if (!trimmed) return;
     startImportTransition(async () => {
-      const res = await importVehiculosAction({
-        csv: trimmed,
-        anioPorDefecto: importAnioDefecto || undefined,
-      });
+      const res = await importVehiculosAction({ csv: trimmed });
       if (res.success) {
         setResultModal({
           type: 'success',
@@ -942,7 +952,13 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                   )}
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-neutral-900 break-words">
-                      {vehiculo.marca} {vehiculo.modelo} <span className="font-normal text-neutral-500">· {vehiculo.anio}</span>
+                      {vehiculo.marca} {vehiculo.modelo}
+                      {(vehiculo.tipo_vehiculo || vehiculo.marca_codigo) && (
+                        <span className="font-normal text-neutral-500">
+                          {' · '}
+                          {[vehiculo.tipo_vehiculo, vehiculo.marca_codigo].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
                     </p>
                     <p className="mt-0.5 font-mono text-xs text-neutral-600 break-all">{vehiculo.chasis}</p>
                   </div>
@@ -958,8 +974,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                     <dd className="text-neutral-800 font-semibold">{vehiculo.patente || '—'}</dd>
                   </div>
                   <div>
-                    <dt className="text-neutral-400">Precio</dt>
-                    <dd className="text-neutral-800">{vehiculo.precio != null ? `$${vehiculo.precio.toLocaleString('es-CL')}` : '—'}</dd>
+                    <dt className="text-neutral-400">IDV</dt>
+                    <dd className="text-neutral-800 font-mono">{vehiculo.idv || '—'}</dd>
                   </div>
                   <div>
                     <dt className="text-neutral-400">Color</dt>
@@ -989,21 +1005,23 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                     />
                   )}
                 </th>
-                <th className="py-3.5 px-4">Vehículo</th>
+                <th className="py-3.5 px-4">Tipo de vehículo</th>
+                <th className="py-3.5 px-4">Marca</th>
+                <th className="py-3.5 px-4">Marca completa</th>
+                <th className="py-3.5 px-4">Modelo</th>
+                <th className="py-3.5 px-4">IDV</th>
                 <th className="py-3.5 px-4">Chasis</th>
-                <th className="py-3.5 px-4">Patente</th>
-                <th className="py-3.5 px-4">Precio</th>
                 <th className="py-3.5 px-4">Color</th>
                 <th className="py-3.5 px-4">Ubicación</th>
+                <th className="py-3.5 px-4">Patente</th>
                 <th className="py-3.5 px-4">Estado</th>
-                <th className="py-3.5 px-4">Registro</th>
                 <th className="py-3.5 px-4 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filteredVehiculos.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-8 text-center text-neutral-400">
+                  <td colSpan={12} className="py-8 text-center text-neutral-400">
                     No se encontraron vehículos que coincidan con la búsqueda.
                   </td>
                 </tr>
@@ -1025,27 +1043,30 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                         )}
                       </td>
 
-                      {/* Vehículo */}
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-full bg-neutral-900 flex items-center justify-center text-white">
-                            <Car className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-neutral-900">
-                              {vehiculo.marca} {vehiculo.modelo}
-                            </p>
-                            <p className="text-xs text-neutral-500">{vehiculo.anio}</p>
-                          </div>
-                        </div>
+                      <td className="py-3.5 px-4 text-xs text-neutral-600">
+                        {vehiculo.tipo_vehiculo || '—'}
                       </td>
-
-                      {/* Chasis */}
+                      <td className="py-3.5 px-4 text-xs font-semibold text-neutral-700">
+                        {vehiculo.marca_codigo || '—'}
+                      </td>
+                      <td className="py-3.5 px-4 font-semibold text-neutral-900">
+                        {vehiculo.marca}
+                      </td>
+                      <td className="py-3.5 px-4 text-neutral-700">
+                        {vehiculo.modelo}
+                      </td>
+                      <td className="py-3.5 px-4 text-neutral-600 font-mono text-xs">
+                        {vehiculo.idv || '—'}
+                      </td>
                       <td className="py-3.5 px-4 text-neutral-600 font-mono text-xs">
                         {vehiculo.chasis}
                       </td>
-
-                      {/* Patente */}
+                      <td className="py-3.5 px-4 text-xs text-neutral-500">
+                        {vehiculo.color || '—'}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs text-neutral-600">
+                        {ubicacionVehiculo(vehiculo)}
+                      </td>
                       <td className="py-3.5 px-4">
                         {vehiculo.patente ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-semibold bg-neutral-100 text-neutral-900 border border-neutral-200">
@@ -1055,30 +1076,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                           <span className="text-xs text-neutral-400 italic">Sin patente</span>
                         )}
                       </td>
-
-                      {/* Precio */}
-                      <td className="py-3.5 px-4 text-xs text-neutral-700 font-medium">
-                        {vehiculo.precio != null ? `$${vehiculo.precio.toLocaleString('es-CL')}` : '—'}
-                      </td>
-
-                      {/* Color */}
-                      <td className="py-3.5 px-4 text-xs text-neutral-500">
-                        {vehiculo.color || '—'}
-                      </td>
-
-                      {/* Ubicación */}
-                      <td className="py-3.5 px-4 text-xs text-neutral-600">
-                        {ubicacionVehiculo(vehiculo)}
-                      </td>
-
-                      {/* Estado */}
                       <td className="py-3.5 px-4">
                         {estadoVehiculo(vehiculo)}
-                      </td>
-
-                      {/* Fecha */}
-                      <td className="py-3.5 px-4 text-xs text-neutral-500">
-                        {new Date(vehiculo.created_at).toLocaleDateString('es-CL')}
                       </td>
 
                       {/* Acciones */}
@@ -1226,11 +1225,11 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Marca *
+                    Marca completa *
                   </label>
                   <input
                     type="text"
-                    placeholder="Toyota, Chevrolet..."
+                    placeholder="HYUNDAI, TOYOTA..."
                     value={marca}
                     onChange={(e) => {
                       setMarca(e.target.value);
@@ -1277,11 +1276,53 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 </div>
               </div>
 
+              {/* Tipo, código de marca e IDV (columnas del Excel de stock) */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Tipo
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="VN"
+                    value={tipoVehiculo}
+                    onChange={(e) => setTipoVehiculo(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Marca
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="HY, TO..."
+                    value={marcaCodigo}
+                    onChange={(e) => setMarcaCodigo(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    IDV
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="157651"
+                    value={idv}
+                    onChange={(e) => setIdv(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+              </div>
+
               {/* Año & Color */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Año *
+                    Año <span className="text-neutral-400 font-medium normal-case">— opcional</span>
                   </label>
                   <input
                     type="number"
@@ -1517,11 +1558,11 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Marca *
+                    Marca completa *
                   </label>
                   <input
                     type="text"
-                    placeholder="Toyota, Chevrolet..."
+                    placeholder="HYUNDAI, TOYOTA..."
                     value={marca}
                     onChange={(e) => {
                       setMarca(e.target.value);
@@ -1568,11 +1609,53 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 </div>
               </div>
 
+              {/* Tipo, código de marca e IDV (columnas del Excel de stock) */}
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Tipo
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="VN"
+                    value={tipoVehiculo}
+                    onChange={(e) => setTipoVehiculo(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    Marca
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="HY, TO..."
+                    value={marcaCodigo}
+                    onChange={(e) => setMarcaCodigo(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
+                    IDV
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="157651"
+                    value={idv}
+                    onChange={(e) => setIdv(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  />
+                </div>
+              </div>
+
               {/* Año & Color */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Año *
+                    Año <span className="text-neutral-400 font-medium normal-case">— opcional</span>
                   </label>
                   <input
                     type="number"
@@ -1830,7 +1913,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Importar Stock CSV o Excel</h2>
                   <p className="text-xs text-neutral-500">
-                    Formato del Excel modelo: Columna C.comp = sucursal, Marca, Modelo, Estad, IDV, Chasis, Color, Fec.adj., P.V.D.
+                    Columnas del Excel de stock o compras: Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación, Patente.
                   </p>
                 </div>
               </div>
@@ -1843,20 +1926,6 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             </div>
 
             <div className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                  Año por defecto (cuando F.adj. está vacío)
-                </label>
-                <input
-                  type="number"
-                  min={2000}
-                  max={new Date().getFullYear() + 2}
-                  value={importAnioDefecto}
-                  onChange={(e) => setImportAnioDefecto(parseInt(e.target.value) || new Date().getFullYear())}
-                  className="w-40 px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                />
-              </div>
-
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
                   Seleccionar archivo CSV / Excel
@@ -1885,7 +1954,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 </label>
                 <textarea
                   rows={6}
-                  placeholder={"C.comp\tMarca\tModelo\tEstad\tIDV\tChasis\tColor\tFec.adj.\tP.V.D.\n101,15 NORTE-VIÑA DEL MAR\tBAI,BAIC\tBAI,BAIC AX7\t...\t...\tLSVA241Z3...\tBLANCO\t15/01/2026\t13,859,244.00"}
+                  placeholder={"Tipo de vehículo\tMarca\tMarca completa\tModelo\tIDV\tChasis\tColor\tUbicación\tPatente\nVN\tHY\tHYUNDAI\tGRAND I-10 A\t157686\tMALB251CAVM746960\tPLATA\t\t"}
                   value={importCsv}
                   onChange={(e) => setImportCsv(e.target.value)}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono whitespace-pre resize-y"
@@ -1895,8 +1964,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
               <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl flex items-start gap-2.5 text-xs text-neutral-600">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-neutral-900" />
                 <span>
-                  Se procesan <strong>todas las filas</strong> del STOCK (incluye IVN, DEM, AVN).
-                  Las columnas Estad e IDV <strong>no se persisten</strong>. Patente y año se completan si están vacíos.
+                  Se procesan <strong>todas las filas</strong> con chasis de 17 caracteres. Los chasis que ya están en el
+                  inventario se omiten (duplicados). Con la Ubicación vacía, el vehículo queda <strong>en viaje</strong>; se
+                  acepta el código de sucursal (101) o su nombre.
                 </span>
               </div>
 
