@@ -5,6 +5,7 @@ import { VehiculoConDisponibilidad } from '@/types/vehiculo.types';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
 import {
   FILTRO_EN_VIAJE,
+  contarSinUbicacion,
   FILTRO_TODAS,
   FILTROS_INICIALES,
   contarPorDisponibilidad,
@@ -264,6 +265,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   const pageVehiculos = filteredVehiculos.slice(pageStart, pageStart + PAGE_SIZE);
 
   const seleccionablesFiltrados = filteredVehiculos.filter(esSeleccionableParaMover);
+  const totalSinUbicacion = useMemo(() => contarSinUbicacion(vehiculos), [vehiculos]);
   const seleccionablesPagina = pageVehiculos.filter(esSeleccionableParaMover);
   const paginaSeleccionada =
     seleccionablesPagina.length > 0 && seleccionablesPagina.every((v) => seleccion.has(v.id));
@@ -572,7 +574,10 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             {vehiculo.ubicacion_nombre || `Sucursal #${vehiculo.ubicacion}`}
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+          <span
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200"
+            title="No se puede pedir: sin sucursal de origen. Asígnale una con el cambio de ubicación."
+          >
             <Truck className="w-3 h-3" />
             En viaje / Container
           </span>
@@ -762,7 +767,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input
               type="text"
-              placeholder="Buscar por chasis, patente, marca..."
+              placeholder="Buscar por chasis, patente, IDV, marca… o pegar varios chasis"
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-10 pr-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
@@ -825,7 +830,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
               >
                 <option value={FILTRO_TODAS}>Todas</option>
-                <option value={FILTRO_EN_VIAJE}>En viaje / Container</option>
+                <option value={FILTRO_EN_VIAJE}>Sin ubicación (en viaje / container)</option>
                 {sucursales.map((s) => (
                   <option key={s.id} value={String(s.id)}>
                     {s.nombre || `Sucursal #${s.id}`}
@@ -882,6 +887,23 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       </div>
 
       {/* Fase G: cambio de ubicación masivo */}
+      {/* R6/R18: los vehículos sin sucursal no se pueden pedir; atajo para asignarles una. */}
+      {totalSinUbicacion > 0 && selectedUbicacion !== FILTRO_EN_VIAJE && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+          <span>
+            <strong>{totalSinUbicacion}</strong> vehículo(s) sin sucursal de origen (en viaje / container): no se pueden pedir en
+            una solicitud hasta que les asignes una sucursal.
+          </span>
+          <button
+            type="button"
+            onClick={() => handleUbicacionChange(FILTRO_EN_VIAJE)}
+            className="px-3 py-1.5 rounded-lg bg-white border border-amber-300 font-semibold hover:bg-amber-100 cursor-pointer"
+          >
+            Ver y asignar ubicación
+          </button>
+        </div>
+      )}
+
       {seleccionablesFiltrados.length > 0 && (
         <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center gap-3 text-sm">
           <div className="flex flex-wrap items-center gap-3 flex-1">

@@ -18,32 +18,36 @@ const esWebp: Firma = (bytes) =>
   bytes.length >= 12 &&
   bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50; // "WEBP"
 
-/** Texto plano: sin bytes NUL y sin firmas de ejecutables en el inicio. */
-const esTexto: Firma = (bytes) => {
-  const muestra = bytes.subarray(0, 8192);
-  if (muestra.includes(0x00)) return false;
-  if (empiezaCon([0x4d, 0x5a])(muestra)) return false; // "MZ" ejecutable Windows
-  if (empiezaCon([0x7f, 0x45, 0x4c, 0x46])(muestra)) return false; // ELF
-  return true;
-};
+/** Office 97-2003 (.xls): contenedor OLE "D0 CF 11 E0 A1 B1 1A E1". */
+const esOle = empiezaCon([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]);
 
 interface TipoPermitido {
   extensiones: string[];
   firma: Firma;
 }
 
+/**
+ * R11 (decisión del 2026-11-03): solo PDF, Excel e imágenes. Se quitaron Word,
+ * PowerPoint, texto, CSV y ZIP; HEIC no se acepta. Debe coincidir con
+ * `allowed_mime_types` del bucket `solicitud-documentos` (migración 20261103120000).
+ */
 export const TIPOS_DOCUMENTO: Record<string, TipoPermitido> = {
   'application/pdf': { extensiones: ['pdf'], firma: empiezaCon([0x25, 0x50, 0x44, 0x46, 0x2d]) }, // %PDF-
   'image/png': { extensiones: ['png'], firma: empiezaCon([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]) },
   'image/jpeg': { extensiones: ['jpg', 'jpeg'], firma: empiezaCon([0xff, 0xd8, 0xff]) },
   'image/webp': { extensiones: ['webp'], firma: esWebp },
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': { extensiones: ['docx'], firma: esZip },
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': { extensiones: ['xlsx'], firma: esZip },
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': { extensiones: ['pptx'], firma: esZip },
-  'text/plain': { extensiones: ['txt'], firma: esTexto },
-  'text/csv': { extensiones: ['csv'], firma: esTexto },
-  'application/zip': { extensiones: ['zip'], firma: esZip },
+  'application/vnd.ms-excel': { extensiones: ['xls'], firma: esOle },
 };
+
+/** Valor del `accept` del selector de archivos: tipos MIME y extensiones. */
+export const ACEPTA_DOCUMENTOS = [
+  ...Object.keys(TIPOS_DOCUMENTO),
+  ...Object.values(TIPOS_DOCUMENTO).flatMap((t) => t.extensiones.map((e) => `.${e}`)),
+].join(',');
+
+/** Texto para el usuario junto al botón de subir. */
+export const TEXTO_FORMATOS_DOCUMENTO = 'PDF, Excel (.xlsx o .xls) o imagen (PNG, JPG o WEBP), hasta 10 MB cada uno.';
 
 export function extensionDe(nombre: string): string {
   const punto = nombre.lastIndexOf('.');

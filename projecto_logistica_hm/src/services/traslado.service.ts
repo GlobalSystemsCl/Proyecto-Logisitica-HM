@@ -9,6 +9,7 @@ import type {
 } from '@/types/traslado.types';
 import { esFuncionInexistente, mensajeErrorUsuario } from '@/lib/errores';
 import { obtenerTodasLasFilas } from '@/lib/paginacion';
+import { mensajeVehiculosSinUbicacion } from '@/lib/vehiculo';
 import { sumarDias } from '@/lib/calendario';
 import { TransportistaService } from '@/services/transportista.service';
 import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
@@ -235,6 +236,27 @@ export class TrasladoService {
         return {
           success: false,
           error: 'Solo los vehículos disponibles pueden trasladarse.',
+        };
+      }
+
+      // R6: el vehículo debe estar en la sucursal de origen (uno sin ubicación,
+      // en tránsito o container, nunca se traslada).
+      const { data: ubicaciones, error: ubicError } = await admin
+        .from('vehiculo')
+        .select('id, chasis, ubicacion')
+        .in('id', vehiculosIds);
+      if (ubicError) return { success: false, error: mensajeErrorUsuario(ubicError, 'No se pudo verificar la ubicación de los vehículos.') };
+      const filasUbic = (ubicaciones ?? []) as Array<{ id: string; chasis: string; ubicacion: number | null }>;
+      if (filasUbic.length < vehiculosIds.length) {
+        return { success: false, error: 'Uno o más vehículos seleccionados ya no existen en el inventario.' };
+      }
+      const sinUbicacion = filasUbic.filter((v) => v.ubicacion === null).map((v) => v.chasis);
+      if (sinUbicacion.length > 0) return { success: false, error: mensajeVehiculosSinUbicacion(sinUbicacion) };
+      const enOtraSucursal = filasUbic.filter((v) => v.ubicacion !== input.origen_id).map((v) => v.chasis);
+      if (enOtraSucursal.length > 0) {
+        return {
+          success: false,
+          error: `El vehículo ${enOtraSucursal.join(', ')} no está en la sucursal de origen del traslado.`,
         };
       }
 

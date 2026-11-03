@@ -56,6 +56,7 @@ import PanelEjecutivo from '@/components/PanelEjecutivo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
+import { tieneUbicacion } from '@/lib/vehiculo';
 
 /**
  * Nomenclatura de negocio para los estados.
@@ -261,9 +262,13 @@ export default function SolicitudesClient({
       .sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [vehiculos, sucursalesPorId]);
 
+  const sinUbicacion = useMemo(() => vehiculos.filter((v) => !tieneUbicacion(v)).length, [vehiculos]);
+
   const vehiculosFiltrados = useMemo(() => {
     const term = vehiculoSearch.trim().toLowerCase();
     return vehiculos.filter((v) => {
+      // R6: sin sucursal de origen (en tránsito o container) no se puede pedir.
+      if (!tieneUbicacion(v)) return false;
       if (vehiculoMarca && v.marca !== vehiculoMarca) return false;
       if (vehiculoSucursal !== '' && v.ubicacion !== vehiculoSucursal) return false;
       if (term) {
@@ -1289,6 +1294,12 @@ export default function SolicitudesClient({
                     ))}
                   </select>
                 </div>
+
+                {sinUbicacion > 0 && (
+                  <p className="text-[11px] text-neutral-500">
+                    {sinUbicacion} vehículo(s) sin sucursal de origen (en tránsito o container) no aparecen: no se pueden pedir hasta que Logística les asigne una sucursal.
+                  </p>
+                )}
 
                 <div className={`max-h-44 overflow-y-auto border rounded-xl divide-y divide-neutral-200 ${vehiculoError && selectedVehiculos.size === 0 ? 'border-red-300 bg-red-50/30' : 'border-neutral-300'}`}>
                   {vehiculos.length === 0 ? (

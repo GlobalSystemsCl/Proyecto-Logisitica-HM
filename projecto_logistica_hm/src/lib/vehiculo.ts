@@ -58,3 +58,19 @@ export function etiquetaDisponibilidad(estado: DisponibilidadVehiculo | string |
   if (!estado) return '—';
   return ETIQUETA_DISPONIBILIDAD[estado as DisponibilidadVehiculo] ?? estado;
 }
+
+/**
+ * R6 (decisión del 2026-11-03): solo se pueden pedir vehículos con sucursal de
+ * origen. Los que no tienen `ubicacion` están en tránsito o en container y
+ * nunca se piden en una solicitud; Logística primero les asigna una sucursal.
+ */
+export function tieneUbicacion(v: { ubicacion: number | null | undefined }): boolean {
+  return v.ubicacion !== null && v.ubicacion !== undefined;
+}
+
+/** Error al pedir vehículos sin sucursal de origen (lista los chasis, hasta 5). */
+export function mensajeVehiculosSinUbicacion(chasis: string[]): string {
+  const lista = chasis.slice(0, 5).join(', ') + (chasis.length > 5 ? ` y ${chasis.length - 5} más` : '');
+  const sujeto = chasis.length === 1 ? `El vehículo ${lista} no tiene` : `Los vehículos ${lista} no tienen`;
+  return `${sujeto} sucursal de origen (en tránsito o en container). Asígnale una sucursal en el inventario antes de pedirlo.`;
+}

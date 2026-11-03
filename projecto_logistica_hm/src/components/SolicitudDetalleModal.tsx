@@ -48,7 +48,8 @@ import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { extraerMotivoRechazo } from '@/lib/motivoRechazo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
-import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
+import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD, tieneUbicacion } from '@/lib/vehiculo';
+import { ACEPTA_DOCUMENTOS, TEXTO_FORMATOS_DOCUMENTO } from '@/lib/archivos';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 import { formatearRut } from '@/lib/rut';
@@ -76,18 +77,6 @@ const PRE_DESPACHO: EstadoSolicitud[] = [
   'priorizada',
 ];
 
-const ACEPTA_DOCUMENTOS = [
-  'application/pdf',
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain',
-  'text/csv',
-  'application/zip',
-].join(',');
 
 function formatTamano(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -368,9 +357,12 @@ export default function SolicitudDetalleModal({
     ...(creacion ? [creacion] : []),
   ];
 
+  // Se compara por chasis: muchos vehículos no tienen patente y comparar por
+  // patente (null === null) ocultaba todos los demás sin patente. R6: solo los
+  // que tienen sucursal de origen.
   const vehiculosDisponiblesParaAgregar = vehiculosInventario
-    .filter((v) => !v.reservado_en_activa)
-    .filter((v) => !vehiculosLocal.some((adj) => adj.patente === v.patente));
+    .filter((v) => !v.reservado_en_activa && tieneUbicacion(v))
+    .filter((v) => !vehiculosLocal.some((adj) => adj.chasis === v.chasis));
 
   async function handleAgregarVehiculo() {
     if (!nuevoVehiculoId || isSubmitting) return;
@@ -1140,6 +1132,7 @@ export default function SolicitudDetalleModal({
                 </button>
                 )}
               </div>
+              {abierta && <p className="text-[11px] text-neutral-500">{TEXTO_FORMATOS_DOCUMENTO}</p>}
 
               {documentos.length === 0 ? (
                 <div className="py-12 text-center">

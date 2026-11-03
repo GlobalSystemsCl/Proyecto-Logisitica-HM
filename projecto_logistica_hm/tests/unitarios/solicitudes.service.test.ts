@@ -423,6 +423,15 @@ describe('SolicitudesService.createSolicitud', () => {
   beforeEach(() => {
     admin.reset();
     vi.clearAllMocks();
+    vi.spyOn(SolicitudesService, 'validarVehiculosConUbicacion').mockResolvedValue(null);
+  });
+
+  it('should_reject_when_a_vehicle_has_no_origin_branch', async () => {
+    vi.mocked(SolicitudesService.validarVehiculosConUbicacion).mockResolvedValue('sin ubicación');
+    admin.results.solicitud_vehiculo = [fila([])];
+    const res = await SolicitudesService.createSolicitud({ sucursal: 1, tipo_solicitud: 'venta' }, ['v-1'], USUARIO_ID);
+    expect(res).toEqual({ success: false, error: 'sin ubicación' });
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'insert')).toBe(false);
   });
 
   afterEach(() => {
@@ -1674,6 +1683,7 @@ describe('SolicitudesService.agregarVehiculo', () => {
   beforeEach(() => {
     admin.reset();
     vi.clearAllMocks();
+    vi.spyOn(SolicitudesService, 'validarVehiculosConUbicacion').mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -2243,5 +2253,37 @@ describe('SolicitudesService.finalizarSolicitud', () => {
     spyRegistrarAuditoria();
     const res = await SolicitudesService.finalizarSolicitud('s-1', USUARIO_ID);
     expect(res).toEqual({ success: true });
+  });
+});
+
+describe('SolicitudesService.validarVehiculosConUbicacion', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_return_null_when_every_vehicle_has_a_branch', async () => {
+    admin.results.vehiculo = [fila([{ id: 'v-1', chasis: 'AAA', ubicacion: 101 }, { id: 'v-2', chasis: 'BBB', ubicacion: 102 }])];
+    expect(await SolicitudesService.validarVehiculosConUbicacion(admin as never, ['v-1', 'v-2'])).toBeNull();
+    expect(admin.callsTo('vehiculo')).toContainEqual(['in', 'id', ['v-1', 'v-2']]);
+  });
+
+  it('should_list_chassis_of_vehicles_without_branch', async () => {
+    admin.results.vehiculo = [fila([{ id: 'v-1', chasis: 'AAA', ubicacion: null }, { id: 'v-2', chasis: 'BBB', ubicacion: 102 }])];
+    expect(await SolicitudesService.validarVehiculosConUbicacion(admin as never, ['v-1', 'v-2'])).toBe(
+      'El vehículo AAA no tiene sucursal de origen (en tránsito o en container). Asígnale una sucursal en el inventario antes de pedirlo.'
+    );
+  });
+
+  it('should_reject_when_a_vehicle_no_longer_exists', async () => {
+    admin.results.vehiculo = [fila([{ id: 'v-1', chasis: 'AAA', ubicacion: 101 }])];
+    expect(await SolicitudesService.validarVehiculosConUbicacion(admin as never, ['v-1', 'v-9'])).toBe(
+      'Uno o más vehículos seleccionados ya no existen en el inventario.'
+    );
+  });
+
+  it('should_skip_query_when_there_are_no_vehicles', async () => {
+    expect(await SolicitudesService.validarVehiculosConUbicacion(admin as never, [])).toBeNull();
+    expect(admin.callsTo('vehiculo')).toHaveLength(0);
   });
 });

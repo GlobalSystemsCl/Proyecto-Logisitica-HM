@@ -9,6 +9,8 @@ import {
   coincideRangoFecha,
   coincideUbicacion,
   contarPorDisponibilidad,
+  contarSinUbicacion,
+  terminosListaBusqueda,
   filtrarVehiculos,
   hayFiltrosActivos,
   type FiltrosVehiculos,
@@ -265,5 +267,43 @@ describe('filtro en tránsito (R2)', () => {
   it('should_keep_previous_behaviour_for_other_filters', () => {
     expect(coincideDisponibilidad('reservado', 'reservado', 'Norte')).toBe(true);
     expect(coincideDisponibilidad('liberado', 'todas')).toBe(true);
+  });
+});
+
+describe('terminosListaBusqueda', () => {
+  it('should_detect_pasted_list_of_chassis_or_idv', () => {
+    expect(terminosListaBusqueda('1HGCM82633A004352, 157651\nJTMW1RF79KD123456')).toEqual([
+      '1hgcm82633a004352',
+      '157651',
+      'jtmw1rf79kd123456',
+    ]);
+  });
+
+  it('should_return_null_for_free_text_or_single_term', () => {
+    expect(terminosListaBusqueda('toyota yaris')).toBeNull();
+    expect(terminosListaBusqueda('1HGCM82633A004352')).toBeNull();
+    expect(terminosListaBusqueda('157651 toyota')).toBeNull();
+  });
+});
+
+describe('coincideBusqueda con lista pegada', () => {
+  it('should_match_exact_chassis_or_idv_of_the_list', () => {
+    const lista = 'JTMW1RF79KD123456 157651';
+    expect(coincideBusqueda(vehiculo({ chasis: 'JTMW1RF79KD123456', idv: null }), lista)).toBe(true);
+    expect(coincideBusqueda(vehiculo({ chasis: 'OTRO0000000000000', idv: '157651' }), lista)).toBe(true);
+    expect(coincideBusqueda(vehiculo({ chasis: 'OTRO0000000000000', idv: '1576519' }), lista)).toBe(false);
+  });
+});
+
+describe('contarSinUbicacion', () => {
+  it('should_count_vehicles_without_branch_that_are_not_delivered', () => {
+    expect(
+      contarSinUbicacion([
+        vehiculo({ ubicacion: null }),
+        vehiculo({ ubicacion: null, estado_disponibilidad: 'reservado' }),
+        vehiculo({ ubicacion: null, estado_disponibilidad: 'vendido' }),
+        vehiculo({ ubicacion: 3 }),
+      ])
+    ).toBe(2);
   });
 });

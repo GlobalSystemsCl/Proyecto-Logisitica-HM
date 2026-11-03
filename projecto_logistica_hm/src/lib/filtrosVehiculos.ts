@@ -89,8 +89,29 @@ export function coincideDisponibilidad(
   return estado === filtro;
 }
 
-/** Indica si el vehículo coincide con la búsqueda libre por chasis, patente, IDV, marca (código o nombre) o modelo. */
+/**
+ * R18: una búsqueda con dos o más chasis (17 caracteres) o IDV (5 o más
+ * dígitos), separados por espacios, comas o saltos de línea, es una lista
+ * pegada (de un correo o una guía): devuelve los términos en minúscula.
+ * Cualquier otra búsqueda devuelve null y se busca como texto libre.
+ */
+export function terminosListaBusqueda(busqueda: string): string[] | null {
+  const terminos = busqueda.split(/[\s,;]+/).filter(Boolean);
+  if (terminos.length < 2) return null;
+  const esIdentificador = (t: string) => /^[a-z0-9]{17}$/i.test(t) || /^\d{5,}$/.test(t);
+  return terminos.every(esIdentificador) ? terminos.map((t) => t.toLowerCase()) : null;
+}
+
+/**
+ * Indica si el vehículo coincide con la búsqueda libre por chasis, patente, IDV,
+ * marca (código o nombre) o modelo. Con una lista pegada de chasis o IDV,
+ * coincide si su chasis o su IDV es exactamente uno de la lista.
+ */
 export function coincideBusqueda(vehiculo: VehiculoConDisponibilidad, busqueda: string): boolean {
+  const lista = terminosListaBusqueda(busqueda);
+  if (lista) {
+    return lista.includes(vehiculo.chasis.toLowerCase()) || lista.includes((vehiculo.idv ?? '').toLowerCase());
+  }
   const termino = busqueda.trim().toLowerCase();
   if (!termino) return true;
   return (
@@ -115,6 +136,14 @@ export function filtrarVehiculos(
     if (!coincideUbicacion(v.ubicacion, filtros.ubicacion)) return false;
     return coincideRangoFecha(aFechaLocal(v.created_at), filtros.fechaDesde, filtros.fechaHasta);
   });
+}
+
+/**
+ * R6/R18: vehículos sin sucursal de origen que siguen en el inventario (no
+ * entregados). No se pueden pedir hasta que Logística les asigne una.
+ */
+export function contarSinUbicacion(vehiculos: VehiculoConDisponibilidad[]): number {
+  return vehiculos.filter((v) => v.ubicacion === null && v.estado_disponibilidad !== 'vendido').length;
 }
 
 /** Cuenta el total y el desglose por estado de disponibilidad del conjunto recibido. */

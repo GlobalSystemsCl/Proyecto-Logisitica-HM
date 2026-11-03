@@ -669,6 +669,7 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-11-03 | Paso 1 del plan de requisitos: la sesión ya no se cierra cuando falla la lectura del estado de la cuenta (y se cierra solo en el dispositivo actual); la recuperación de clave se envía con Brevo y un enlace `token_hash`. Sin migración. Nueva sección 40 | Claude (asistido) |
 | 2026-11-03 | Paso 2 del plan de requisitos (R17): el registro crea la cuenta activa como ejecutivo; el administrador ya no aprueba, solo corrige rol o sucursal. Reemplaza la decisión del 2026-10-20 (sección 36). Sin migración. Nueva sección 41 | Claude (asistido) |
 | 2026-11-03 | Paso 3 del plan de requisitos (R2): cada notificación (campana y correo) lleva a la pantalla donde el destinatario hace su acción y abre el detalle. Sin migración. Nueva sección 42 | Claude (asistido) |
+| 2026-11-03 | Paso 4 del plan de requisitos (R6, R18, R11): los vehículos sin sucursal de origen no se pueden pedir ni trasladar; aviso y atajo en el inventario, búsqueda por lista de chasis o IDV; documentos solo PDF, Excel e imágenes. Migración `20261103120000`. Nueva sección 43 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -1024,3 +1025,14 @@ Plan: `auditoria/plan-requisitos-2026-11-03.md` (R2).
 - `ModalConsultaSolicitud` concentra el modal de consulta que usan `AbrirSolicitudDetalle` y `AbrirSolicitudDesdeUrl`. `lib/enlaceNotificacion.ts`: `idDesdeParam` y `urlSinParametro`.
 - Las notificaciones ya guardadas conservan su enlace anterior.
 - **Tests:** `notificaciones.test.ts`, `notificaciones-app.test.ts` (`rutaAccion`, papel de cada destinatario), `notificacion.service.test.ts` (enlaces por papel en campana y correo) y `enlaceNotificacion.test.ts`.
+
+## 43. Vehículos sin ubicación, asignación en bloque y documentos (2026-11-03, paso 4 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R6, R18 y R11).
+
+- **R6, solo se piden vehículos con sucursal de origen** (decisión del cliente). Los que no tienen `ubicacion` (en tránsito o en container) no aparecen en el selector de "Nueva Solicitud" ni al agregar vehículos desde el detalle; el selector avisa cuántos quedan fuera. En el servidor, `SolicitudesService.validarVehiculosConUbicacion` rechaza `createSolicitud` y `agregarVehiculo` (mensaje con los chasis, `mensajeVehiculosSinUbicacion` en `lib/vehiculo.ts`). `TrasladoService.crearTraslado` exige que el vehículo esté en la sucursal de origen del traslado (rechaza los sin ubicación y los de otra sucursal).
+- De paso: al agregar un vehículo desde el detalle se descartaban los que tenían la misma patente que uno ya agregado; como los importados no tienen patente, uno sin patente ocultaba a todos los demás. Ahora se compara por chasis.
+- **R18, asignar ubicación en bloque.** Ya existía el cambio de ubicación masivo (sección 37). Se agregan: aviso "N vehículos sin sucursal de origen" con el botón "Ver y asignar ubicación" (filtra "Sin ubicación"), el texto del badge "En viaje / Container" explica que no se puede pedir, y la búsqueda acepta una lista pegada de chasis (17 caracteres) o IDV (5 o más dígitos) separados por espacios, comas o saltos de línea (`terminosListaBusqueda`, coincidencia exacta). `contarSinUbicacion` no cuenta los entregados al cliente.
+- **R11, documentos: solo PDF, Excel e imágenes** (decisión del cliente; HEIC no). `TIPOS_DOCUMENTO` (`lib/archivos.ts`) queda con PDF, PNG, JPEG, WEBP, `.xlsx` y `.xls` (nuevo, firma OLE `D0 CF 11 E0 A1 B1 1A E1`); se quitan Word, PowerPoint, texto, CSV y ZIP. `ACEPTA_DOCUMENTOS` y `TEXTO_FORMATOS_DOCUMENTO` salen de ahí y el detalle muestra los formatos junto al botón. Los documentos ya subidos no se tocan.
+- **Migración `20261103120000_documentos_excel_pdf_imagenes.sql`:** deja la misma lista en `allowed_mime_types` del bucket `solicitud-documentos` (antes no incluía `.xls`). Un test compara la lista del bucket con `TIPOS_DOCUMENTO`.
+- **Tests:** `vehiculo.test.ts`, `filtrosVehiculos.test.ts`, `solicitudes.service.test.ts` (`validarVehiculosConUbicacion`), `traslado.service.test.ts`, `archivos.test.ts` y `migracion-documentos.test.ts`.

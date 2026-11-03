@@ -17,15 +17,15 @@ Análisis de los pedidos de la reunión, contrastados con el código de la rama 
 | R3 | Logística con varias zonas | M | Sí | Listo para implementar |
 | R4 | Ver los vehículos de cada sucursal desde Slots | S | No | Listo para implementar |
 | R5 | Ver los vehículos en tránsito | S | No | Decidido: sin estados intermedios |
-| R6 | Vehículo sin ubicación no se puede pedir | S | No | Decidido; Logística asigna la ubicación a mano |
+| R6 | Vehículo sin ubicación no se puede pedir | S | No | **Hecho (paso 4)** |
 | R7 | Torquemada Acopio / Torquemada Vitrina | S | Datos | Bloqueado: falta el Excel |
 | R8 | Nuevas sucursales y sus códigos | S | Datos | Bloqueado: falta el Excel |
 | R9 | Congelar cuenta de Logística y traspasar a un sustituto | L | Sí | Decidido (vuelven solas al titular); depende de R3 |
 | R10 | Empresas de transporte (RUT, transportista, patente) | M | Sí | Decidido |
-| R11 | Documentos permitidos: Excel, PDF e imágenes | S | No | Decidido |
+| R11 | Documentos permitidos: Excel, PDF e imágenes | S | Sí | **Hecho (paso 4)**; migración del bucket |
 | R12 | Traslados internos con selección múltiple | M | No | Listo para implementar |
 | R14 | Logística corrige el chasis de un vehículo reservado | S | No | Decidido: caso eventual, prioridad baja |
-| R18 | Asignar ubicación en bloque con casillas | S | No | Ya existe (fase G); ajustar al flujo de R6 |
+| R18 | Asignar ubicación en bloque con casillas | S | No | **Hecho (paso 4)** |
 | R15 | Número de guía obligatorio al despachar | M | Sí | Listo para implementar |
 | R16 | Reportería y trackeo de empresas de transporte | L | No | Depende de R10 y R15 |
 | R17 | Todos entran como ejecutivo activo | S | No | **Hecho (paso 2)** |

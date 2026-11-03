@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { etiquetaVehiculo, nombreVehiculo, nombreVehiculoConAnio, DESCRIPCION_DISPONIBILIDAD, etiquetaDisponibilidad } from '@/lib/vehiculo';
+import {
+  etiquetaVehiculo,
+  nombreVehiculo,
+  nombreVehiculoConAnio,
+  DESCRIPCION_DISPONIBILIDAD,
+  etiquetaDisponibilidad,
+  mensajeVehiculosSinUbicacion,
+  tieneUbicacion,
+} from '@/lib/vehiculo';
 import type { VehiculoAsociado } from '@/types/solicitud.types';
 
 function vehiculo(overrides: Partial<VehiculoAsociado> = {}): VehiculoAsociado {
@@ -85,5 +93,26 @@ describe('etiquetaDisponibilidad', () => {
 
   it('should_return_raw_value_when_state_is_unknown', () => {
     expect(etiquetaDisponibilidad('en_revision')).toBe('en_revision');
+  });
+});
+
+describe('tieneUbicacion', () => {
+  it('should_be_true_only_when_vehicle_has_a_branch', () => {
+    expect(tieneUbicacion({ ubicacion: 101 })).toBe(true);
+    expect(tieneUbicacion({ ubicacion: null })).toBe(false);
+    expect(tieneUbicacion({ ubicacion: undefined })).toBe(false);
+  });
+});
+
+describe('mensajeVehiculosSinUbicacion', () => {
+  it('should_use_singular_for_one_vehicle', () => {
+    expect(mensajeVehiculosSinUbicacion(['AAA'])).toBe(
+      'El vehículo AAA no tiene sucursal de origen (en tránsito o en container). Asígnale una sucursal en el inventario antes de pedirlo.'
+    );
+  });
+
+  it('should_list_up_to_five_chassis_and_count_the_rest', () => {
+    const msg = mensajeVehiculosSinUbicacion(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
+    expect(msg.startsWith('Los vehículos A, B, C, D, E y 2 más no tienen sucursal de origen')).toBe(true);
   });
 });

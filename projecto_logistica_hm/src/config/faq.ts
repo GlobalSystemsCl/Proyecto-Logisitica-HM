@@ -143,7 +143,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: CREAN,
     pregunta: '¿Cómo creo una solicitud?',
     respuesta:
-      'Usa "Nueva Solicitud", elige el tipo (venta o evento), los vehículos (al menos uno; puedes buscarlos por chasis o patente) y la fecha límite de entrega propuesta, que no puede ser anterior a hoy. Si la crea un ejecutivo, en una venta el destino es su sucursal y queda pendiente de aprobación. Si la crea un jefe de local, queda aprobada.',
+      'Usa "Nueva Solicitud", elige el tipo (venta o evento), los vehículos (al menos uno; puedes buscarlos por chasis o patente; solo aparecen los que tienen sucursal de origen, los que están en tránsito o en container no se pueden pedir) y la fecha límite de entrega propuesta, que no puede ser anterior a hoy. Si la crea un ejecutivo, en una venta el destino es su sucursal y queda pendiente de aprobación. Si la crea un jefe de local, queda aprobada.',
   },
   {
     vista: 'solicitudes',
@@ -189,7 +189,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'solicitudes',
     pregunta: '¿Puedo adjuntar documentos u observaciones?',
     respuesta:
-      'Sí, en las pestañas Observaciones y Documentos del detalle. Los documentos tienen un máximo de 10 MB. Las solicitudes rechazadas o canceladas ya no aceptan observaciones ni documentos.',
+      'Sí, en las pestañas Observaciones y Documentos del detalle. Se aceptan PDF, Excel (.xlsx o .xls) e imágenes (PNG, JPG o WEBP), de hasta 10 MB cada uno. Las solicitudes rechazadas o canceladas ya no aceptan observaciones ni documentos.',
   },
 
   // ---------- Aprobaciones ----------
@@ -353,7 +353,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: INVENTARIO,
     pregunta: '¿Cómo cambio la ubicación de varios vehículos a la vez?',
     respuesta:
-      'Marca las casillas de los vehículos (o usa "Seleccionar los N disponibles del filtro"), elige la sucursal de destino y usa "Mover". Se omiten, con el motivo, los reservados, los entregados al cliente, los que están en un traslado interno y los que ya están en esa sucursal. Cada cambio queda en el historial.',
+      'Marca las casillas de los vehículos (o usa "Seleccionar los N disponibles del filtro"), elige la sucursal de destino y usa "Mover". Se omiten, con el motivo, los reservados, los entregados al cliente, los que están en un traslado interno y los que ya están en esa sucursal. Cada cambio queda en el historial. Para asignar sucursal a los importados sin ubicación, usa "Ver y asignar ubicación" (o el filtro "Sin ubicación"). Para mover una lista de autos puntual, pega sus chasis o IDV en el buscador, separados por espacios o comas.',
   },
   {
     vista: 'inventario',
@@ -367,7 +367,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: INVENTARIO,
     pregunta: '¿Cómo cargo el stock desde Excel?',
     respuesta:
-      'Usa "Importar Stock" y elige el Excel de stock o de compras tal como viene, con las columnas Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación y Patente. Los chasis repetidos se informan y no se duplican, y los que no tienen 17 caracteres se informan como error. Los vehículos sin ubicación quedan "En viaje / Container" hasta que les asignes una sucursal.',
+      'Usa "Importar Stock" y elige el Excel de stock o de compras tal como viene, con las columnas Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación y Patente. Los chasis repetidos se informan y no se duplican, y los que no tienen 17 caracteres se informan como error. Los vehículos sin ubicación quedan "En viaje / Container" y no se pueden pedir en una solicitud hasta que les asignes una sucursal.',
   },
 
   // ---------- Usuarios ----------

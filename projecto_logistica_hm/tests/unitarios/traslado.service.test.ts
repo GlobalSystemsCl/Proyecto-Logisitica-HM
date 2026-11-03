@@ -255,6 +255,7 @@ describe('TrasladoService', () => {
       admin.results.traslado_interno_vehiculo = [fila([]), fila(null)];
       admin.results.solicitud_vehiculo = [fila([]), fila([])];
       admin.results.traslado_interno = [fila({ id: 't-1' }), fila(filaTraslado())];
+      admin.results.vehiculo = [fila([{ id: 'veh-1', chasis: 'CH1', ubicacion: 1 }])];
       const auditoria = vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
 
       const res = await TrasladoService.crearTraslado(
@@ -274,6 +275,28 @@ describe('TrasladoService', () => {
       expect(JSON.stringify(admin.callsTo('sucursal'))).not.toContain('slots');
       expect(admin.callsTo('solicitud_vehiculo').length).toBeGreaterThan(0);
       expect(auditoria).toHaveBeenCalled();
+    });
+
+    it('should_reject_when_vehicle_has_no_branch_or_is_in_another_branch', async () => {
+      const preparar = (ubicacion: number | null) => {
+        admin.reset();
+        admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
+        admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
+        admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
+        admin.results.traslado_interno_vehiculo = [fila([])];
+        admin.results.solicitud_vehiculo = [fila([]), fila([])];
+        admin.results.vehiculo = [fila([{ id: 'veh-1', chasis: 'CH1', ubicacion }])];
+      };
+      const entrada = { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' };
+
+      preparar(null);
+      const sinUbicacion = await TrasladoService.crearTraslado(entrada, ['veh-1'], 'log-1');
+      expect(sinUbicacion.error).toContain('El vehículo CH1 no tiene sucursal de origen');
+
+      preparar(5);
+      const otraSucursal = await TrasladoService.crearTraslado(entrada, ['veh-1'], 'log-1');
+      expect(otraSucursal.error).toBe('El vehículo CH1 no está en la sucursal de origen del traslado.');
+      expect(admin.callsTo('traslado_interno').filter((c) => c[0] === 'insert')).toHaveLength(0);
     });
 
     it('should_rechazar_traslado_cuando_un_vehiculo_esta_vendido', async () => {

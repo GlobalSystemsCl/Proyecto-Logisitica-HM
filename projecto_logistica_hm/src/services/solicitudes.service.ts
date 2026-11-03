@@ -18,6 +18,7 @@ import { obtenerTodasLasFilas, type ConsultaPaginable } from '@/lib/paginacion';
 import { sumarDias } from '@/lib/calendario';
 import { TransportistaService } from '@/services/transportista.service';
 import { validarContenidoArchivo } from '@/lib/archivos';
+import { mensajeVehiculosSinUbicacion } from '@/lib/vehiculo';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import {
   textoObservacionRecepcion,
@@ -732,6 +733,9 @@ export class SolicitudesService {
           error: 'Uno o más vehículos seleccionados ya están reservados en otra solicitud activa.',
         };
       }
+
+      const errorUbicacion = await SolicitudesService.validarVehiculosConUbicacion(admin, vehiculoIds);
+      if (errorUbicacion) return { success: false, error: errorUbicacion };
 
       const { data, error } = await admin
         .from('solicitud')
@@ -1727,6 +1731,21 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * R6 (2026-11-03): solo se piden vehículos con sucursal de origen. Devuelve
+   * el error para el usuario, o null si todos tienen `ubicacion`. Se valida en
+   * el servidor aunque los selectores ya oculten los que no tienen.
+   */
+  static async validarVehiculosConUbicacion(admin: SupabaseClient, vehiculoIds: string[]): Promise<string | null> {
+    if (vehiculoIds.length === 0) return null;
+    const { data, error } = await admin.from('vehiculo').select('id, chasis, ubicacion').in('id', vehiculoIds);
+    if (error) return mensajeErrorUsuario(error, 'No se pudo verificar la ubicación de los vehículos.');
+    const filas = (data ?? []) as Array<{ id: string; chasis: string; ubicacion: number | null }>;
+    if (filas.length < new Set(vehiculoIds).size) return 'Uno o más vehículos seleccionados ya no existen en el inventario.';
+    const sinUbicacion = filas.filter((v) => v.ubicacion === null).map((v) => v.chasis);
+    return sinUbicacion.length > 0 ? mensajeVehiculosSinUbicacion(sinUbicacion) : null;
+  }
+
   static async agregarVehiculo(
     solicitudId: string,
     vehiculoId: string,
@@ -1752,6 +1771,9 @@ export class SolicitudesService {
       if (reservaActiva && reservaActiva.length > 0) {
         return { success: false, error: 'Ese vehículo ya está reservado en otra solicitud activa.' };
       }
+
+      const errorUbicacion = await SolicitudesService.validarVehiculosConUbicacion(admin, [vehiculoId]);
+      if (errorUbicacion) return { success: false, error: errorUbicacion };
 
       const { data, error } = await admin
         .from('solicitud_vehiculo')

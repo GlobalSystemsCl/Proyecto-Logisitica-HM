@@ -36,6 +36,7 @@ Convenciones de test (ver `tests/plan_maestro_testing.md`):
 - El número visible de una solicitud es `<código de sucursal de origen>-<correlativo>` (101-15) y se arma solo con `codigoSolicitud` (`src/lib/codigoSolicitud.ts`), que necesita `sucursal` y `numero`; los traslados internos usan `codigoTraslado`. No usar `id.slice(0, 8)` en código nuevo.
 - El código de sucursal ES `sucursal.id` (los del Excel de concesionarios). Para filtrar solicitudes por sucursal se usa `solicitud.sucursal`; no crear otra relación ni columna de código. La BD asigna `solicitud.numero` (trigger `tr_asignar_numero_solicitud`): la app nunca lo escribe.
 - Para que una solicitud se pueda abrir desde cualquier lista, envolver su número en `AbrirSolicitudDetalle` (`src/components/`).
+- Solo se piden vehículos con sucursal de origen (`tieneUbicacion`, `lib/vehiculo.ts`): todo camino que reserve vehículos valida en el servidor con `SolicitudesService.validarVehiculosConUbicacion`. Los tipos de documento permitidos viven en `TIPOS_DOCUMENTO` (`lib/archivos.ts`) y deben coincidir con el bucket `solicitud-documentos`.
 - El enlace de cada notificación sale de `rutaAccion` (`lib/notificaciones-app.ts`, tabla `RUTA_ACCION`) según el evento y el papel del destinatario. Una pantalla que sea destino de un aviso debe abrir el detalle con `?solicitud=` (o `?traslado=`): su propio modal si la solicitud está en la lista, o `AbrirSolicitudDesdeUrl` si no.
 
 ## Cuentas
