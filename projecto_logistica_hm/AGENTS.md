@@ -36,11 +36,15 @@ Convenciones de test (ver `tests/plan_maestro_testing.md`):
 - El número visible de una solicitud es `<código de sucursal de origen>-<correlativo>` (101-15) y se arma solo con `codigoSolicitud` (`src/lib/codigoSolicitud.ts`), que necesita `sucursal` y `numero`; los traslados internos usan `codigoTraslado`. No usar `id.slice(0, 8)` en código nuevo.
 - El código de sucursal ES `sucursal.id` (los del Excel de concesionarios). Para filtrar solicitudes por sucursal se usa `solicitud.sucursal`; no crear otra relación ni columna de código. La BD asigna `solicitud.numero` (trigger `tr_asignar_numero_solicitud`): la app nunca lo escribe.
 - Para que una solicitud se pueda abrir desde cualquier lista, envolver su número en `AbrirSolicitudDetalle` (`src/components/`).
+- El enlace de cada notificación sale de `rutaAccion` (`lib/notificaciones-app.ts`, tabla `RUTA_ACCION`) según el evento y el papel del destinatario. Una pantalla que sea destino de un aviso debe abrir el detalle con `?solicitud=` (o `?traslado=`): su propio modal si la solicitud está en la lista, o `AbrirSolicitudDesdeUrl` si no.
 
 ## Cuentas
 
 - Toda creación de cuentas valida el dominio con `validarDominioCorreo` (`src/lib/dominios.ts`, variable `DOMINIOS_CORREO_PERMITIDOS`). El login nunca se restringe por dominio.
+- El registro crea la cuenta **activa** como ejecutivo (decisión del 2026-11-03): no volver a dejarla pendiente de aprobación. El administrador solo corrige rol o sucursal.
 - El administrador solo recibe la notificación `NUEVO_USUARIO` (campana, sin correo); no agregarlo a los destinatarios del flujo de solicitudes.
+- Los correos de Auth (recuperación de clave) se envían con Brevo usando `auth.admin.generateLink` y un enlace `token_hash` al callback. No usar `resetPasswordForEmail`: el SMTP por defecto de Supabase no entrega a los usuarios.
+- El middleware nunca cierra la sesión por un error al leer la cuenta, y cuando la cierra usa `signOut({ scope: 'local' })`.
 
 ## Ayuda
 

@@ -1,6 +1,7 @@
 import {
   DESTINATARIOS_POR_EVENTO,
   type Destinatario,
+  type DestinatarioConRol,
   type EventoNotificacion,
   type RolDestinatario,
 } from '@/lib/notificaciones';
@@ -93,14 +94,14 @@ export function resolverDestinatariosApp(
   evento: EventoApp,
   porRol: Partial<Record<RolDestinatario, Destinatario[]>>,
   actorId: string | null
-): Destinatario[] {
+): DestinatarioConRol[] {
   const vistos = new Set<string>();
-  const resultado: Destinatario[] = [];
+  const resultado: DestinatarioConRol[] = [];
   for (const rol of DESTINATARIOS_APP[evento]) {
     for (const d of porRol[rol] ?? []) {
       if (!d.id || d.id === actorId || vistos.has(d.id)) continue;
       vistos.add(d.id);
-      resultado.push(d);
+      resultado.push({ ...d, rol });
     }
   }
   return resultado;
@@ -189,7 +190,10 @@ export function tiempoRelativo(fechaIso: string, ahora: Date = new Date()): stri
  * evento de solicitud.
  */
 export const TIPO_NUEVO_USUARIO: TipoNotificacion = 'NUEVO_USUARIO';
-export const RUTA_CUENTAS_PENDIENTES = '/admin/usuarios?estado=pendientes';
+/** Abre Usuarios filtrado por el correo de la cuenta nueva, para revisar su rol. */
+export function rutaNuevoUsuario(email: string): string {
+  return `/admin/usuarios?q=${encodeURIComponent(email)}`;
+}
 
 export interface DatosNuevoUsuario {
   nombre: string;
@@ -200,13 +204,40 @@ export interface DatosNuevoUsuario {
 export function textoNotificacionNuevoUsuario(d: DatosNuevoUsuario): TextoNotificacion {
   const sucursal = d.sucursal ? ` en ${d.sucursal}` : '';
   return {
-    titulo: 'Nueva cuenta por activar',
-    mensaje: `${d.nombre} (${d.email}) se registró${sucursal} y espera que le asignes rol y sucursal.`,
+    titulo: 'Nuevo usuario registrado',
+    mensaje: `${d.nombre} (${d.email}) se registró como Ejecutivo${sucursal}. Revisa si el rol y la sucursal corresponden.`,
   };
 }
 
+/**
+ * R2 (2026-11-03): pantalla donde el destinatario hace la acción que le toca
+ * después de cada evento. Quien solo se entera (sin acción) va al detalle en
+ * Solicitudes. Cada pantalla abre el detalle con `?solicitud=`.
+ *
+ * Flujo: el jefe de local aprueba y prioriza (no se le avisa de lo que hace él
+ * mismo); la solicitud priorizada aparece en el calendario de Logística, que la
+ * programa. Por eso Logística va al calendario desde la aprobación.
+ */
+export const RUTA_ACCION: Partial<Record<EventoApp, Partial<Record<RolDestinatario, string>>>> = {
+  solicitud_creada: { jefe_origen: '/solicitudes/aprobaciones' },
+  solicitud_aprobada: { logistica_zona: '/logistica/calendarizaciones' },
+  solicitud_asignada: { logistica_encargado: '/logistica/calendarizaciones' },
+  solicitud_despachada: { jefe_recepcion: '/solicitudes/recepciones' },
+};
+
+/** Enlace de la notificación para un destinatario según su papel en el evento. */
+export function rutaAccion(
+  evento: EventoApp,
+  rol: RolDestinatario | null,
+  entidad: 'solicitud' | 'traslado_interno',
+  entidadId: string
+): string {
+  if (entidad === 'traslado_interno') return `/solicitudes/traslados?traslado=${encodeURIComponent(entidadId)}`;
+  const base = (rol && RUTA_ACCION[evento]?.[rol]) || '/solicitudes';
+  return `${base}?solicitud=${encodeURIComponent(entidadId)}`;
+}
+
+/** Enlace genérico (sin papel): detalle en Solicitudes o bandeja de traslados. */
 export function rutaNotificacion(entidad: 'solicitud' | 'traslado_interno', entidadId: string): string {
-  return entidad === 'solicitud'
-    ? `/solicitudes?solicitud=${encodeURIComponent(entidadId)}`
-    : '/solicitudes/traslados';
+  return rutaAccion('solicitud_creada', null, entidad, entidadId);
 }

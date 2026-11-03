@@ -8,6 +8,9 @@ const server = createServerClientMock();
 vi.mock('@/lib/supabase/admin', () => ({ createAdminClient: () => admin }));
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => server }));
 
+const enviarCorreo = vi.fn(async () => ({ success: true }));
+vi.mock('@/services/email.service', () => ({ EmailService: { enviarCorreo } }));
+
 const {
   AuthService,
   MENSAJE_LOGIN_FALLIDO,
@@ -274,7 +277,7 @@ describe('AuthService', () => {
       expect(metadata).toEqual({ nombre: 'Juan', apellido: 'Pérez', sucursal_id: null });
     });
 
-    it('should_create_profile_as_inactive_pending_ejecutivo', async () => {
+    it('should_create_profile_as_active_ejecutivo_without_admin_approval', async () => {
       admin.results.usuario = [{ data: null, error: null }];
       admin.auth.admin.createUser.mockResolvedValue({ data: { user: authUser() }, error: null });
       const res = await AuthService.register(datos());
@@ -283,8 +286,8 @@ describe('AuthService', () => {
       expect(upsert?.[1]).toMatchObject({
         email: 'user@test.com',
         rol: 'ejecutivo',
-        activo: false,
-        aprobado: false,
+        activo: true,
+        aprobado: true,
       });
     });
 
@@ -585,47 +588,51 @@ describe('AuthService', () => {
       admin.results.usuario = [fila({ activo: false, aprobado: true })];
       const res = await AuthService.sendPasswordResetEmail('user@test.com');
       expect(res).toEqual({ success: true });
-      expect(server.auth.resetPasswordForEmail).not.toHaveBeenCalled();
+      expect(admin.auth.admin.generateLink).not.toHaveBeenCalled();
+      expect(enviarCorreo).not.toHaveBeenCalled();
     });
 
     it('should_report_success_without_sending_when_account_does_not_exist', async () => {
       admin.results.usuario = [{ data: null, error: { message: 'PGRST116' } }];
       const res = await AuthService.sendPasswordResetEmail('nadie@test.com');
       expect(res).toEqual({ success: true });
-      expect(server.auth.resetPasswordForEmail).not.toHaveBeenCalled();
+      expect(enviarCorreo).not.toHaveBeenCalled();
     });
 
     it('should_report_success_without_sending_when_account_is_pending', async () => {
       admin.results.usuario = [fila({ activo: false, aprobado: false })];
       expect(await AuthService.sendPasswordResetEmail('user@test.com')).toEqual({ success: true });
+      expect(enviarCorreo).not.toHaveBeenCalled();
+    });
+
+    it('should_generate_link_and_send_it_with_brevo_for_active_account', async () => {
+      admin.results.usuario = [fila({ nombre: 'Ana', activo: true, aprobado: true })];
+      const res = await AuthService.sendPasswordResetEmail('  USER@Test.COM ');
+      expect(res).toEqual({ success: true });
+      expect(admin.auth.admin.generateLink).toHaveBeenCalledWith({ type: 'recovery', email: 'user@test.com' });
+      expect(enviarCorreo).toHaveBeenCalledTimes(1);
+      const correo = (enviarCorreo.mock.calls[0] as unknown as [{ toEmail: string; toName: string; asunto: string; html: string }])[0];
+      expect(correo.toEmail).toBe('user@test.com');
+      expect(correo.toName).toBe('Ana');
+      expect(correo.html).toContain(
+        'http://localhost:3000/auth/callback?token_hash=hash-123&amp;type=recovery&amp;next=%2Festablecer-clave'
+      );
       expect(server.auth.resetPasswordForEmail).not.toHaveBeenCalled();
     });
 
-    it('should_send_reset_email_for_active_account', async () => {
-      admin.results.usuario = [fila({ activo: true, aprobado: true })];
-      const res = await AuthService.sendPasswordResetEmail('  USER@Test.COM ');
-      expect(res).toEqual({ success: true });
-      expect(server.auth.resetPasswordForEmail).toHaveBeenCalledWith('user@test.com', {
-        redirectTo: 'http://localhost:3000/auth/callback?next=/establecer-clave',
-      });
-    });
-
-    it('should_use_provided_redirect_url', async () => {
+    it('should_return_generic_error_when_link_generation_fails', async () => {
       admin.results.usuario = [fila({ activo: true })];
-      await AuthService.sendPasswordResetEmail('user@test.com', 'https://app.test/reset');
-      expect(server.auth.resetPasswordForEmail).toHaveBeenCalledWith('user@test.com', {
-        redirectTo: 'https://app.test/reset',
-      });
-    });
-
-    it('should_return_generic_error_when_supabase_fails', async () => {
-      admin.results.usuario = [fila({ activo: true })];
-      server.auth.resetPasswordForEmail.mockResolvedValue({ data: {}, error: { message: 'rate limited' } });
+      admin.auth.admin.generateLink.mockResolvedValueOnce({ data: null, error: { message: 'User not found' } } as never);
       const res = await AuthService.sendPasswordResetEmail('user@test.com');
-      expect(res).toEqual({
-        success: false,
-        error: 'No se pudo enviar el correo en este momento. Intenta más tarde.',
-      });
+      expect(res).toEqual({ success: false, error: 'No se pudo enviar el correo en este momento. Intenta más tarde.' });
+      expect(enviarCorreo).not.toHaveBeenCalled();
+    });
+
+    it('should_return_generic_error_when_brevo_fails', async () => {
+      admin.results.usuario = [fila({ activo: true })];
+      enviarCorreo.mockResolvedValueOnce({ success: false, error: 'HTTP 401' } as never);
+      const res = await AuthService.sendPasswordResetEmail('user@test.com');
+      expect(res).toEqual({ success: false, error: 'No se pudo enviar el correo en este momento. Intenta más tarde.' });
     });
   });
 

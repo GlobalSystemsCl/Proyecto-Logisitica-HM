@@ -4,10 +4,15 @@ import { redirect } from 'next/navigation';
 import { getTrasladosAction, getVehiculosParaTrasladoAction, getSucursalesTrasladoAction } from '@/app/actions/traslados.actions';
 import TrasladosClient from './TrasladosClient';
 import { TransportistaService } from '@/services/transportista.service';
+import { idDesdeParam } from '@/lib/enlaceNotificacion';
 
 export const dynamic = 'force-dynamic';
 
-export default async function TrasladosPage() {
+export default async function TrasladosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const profile = await AuthService.getCurrentUserProfile();
 
   if (!profile) {
@@ -46,6 +51,7 @@ export default async function TrasladosPage() {
       viewerRol={profile.rol}
       viewerSucursales={viewerSucursales}
       transportistas={transportistas}
+      trasladoInicialId={idDesdeParam((await searchParams).traslado)}
     />
   );
 }

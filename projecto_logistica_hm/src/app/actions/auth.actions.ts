@@ -4,7 +4,7 @@ import { AuthService } from '@/services/auth.service';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { validarCampoTexto, validarEmailFormato, validarPassword } from '@/lib/validaciones';
-import { mensajeRegistroPendiente } from '@/lib/soporte';
+import { mensajeRegistroActivo } from '@/lib/soporte';
 import { enSegundoPlano } from '@/lib/segundoPlano';
 import { NotificacionService } from '@/services/notificacion.service';
 
@@ -109,7 +109,7 @@ export async function registerAction(
     );
   }
 
-  return { success: true, message: mensajeRegistroPendiente(result.sucursalNombre ?? null) };
+  return { success: true, message: mensajeRegistroActivo(result.sucursalNombre ?? null) };
 }
 
 export async function loginAction(prevState: unknown, formData: FormData) {

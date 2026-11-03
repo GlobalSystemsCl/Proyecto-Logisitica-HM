@@ -126,8 +126,10 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsHydrated(true);
-    // La notificación de usuario nuevo abre `?estado=pendientes`.
-    setEstado(estadoDesdeParam(new URLSearchParams(window.location.search).get('estado')));
+    // La notificación de usuario nuevo abre `?q=<correo>` (antes `?estado=pendientes`).
+    const params = new URLSearchParams(window.location.search);
+    setEstado(estadoDesdeParam(params.get('estado')));
+    setSearchTerm(params.get('q') ?? '');
   }, []);
 
   // Filter users - only apply filters after hydration to avoid SSR mismatch

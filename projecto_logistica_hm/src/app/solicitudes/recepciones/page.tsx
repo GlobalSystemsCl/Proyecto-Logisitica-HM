@@ -4,6 +4,8 @@ import { SolicitudesService } from '@/services/solicitudes.service';
 import { TrasladoService } from '@/services/traslado.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import RecepcionesClient from './RecepcionesClient';
+import AbrirSolicitudDesdeUrl from '@/components/AbrirSolicitudDesdeUrl';
+import { idDesdeParam } from '@/lib/enlaceNotificacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +14,11 @@ export const dynamic = 'force-dynamic';
  * del Jefe de Local (solicitudes y traslados internos) para marcarlo como
  * recibido y registrar las novedades.
  */
-export default async function RecepcionesPage() {
+export default async function RecepcionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const profile = await AuthService.getCurrentUserProfile();
 
   if (!profile) {
@@ -33,5 +39,11 @@ export default async function RecepcionesPage() {
     TrasladoService.getTrasladosEnTransitoHacia(sucursalIds),
   ]);
 
-  return <RecepcionesClient solicitudes={solicitudes} traslados={traslados} />;
+  // R2: el aviso de despacho abre el detalle; "Recepcionar" sigue en la tarjeta.
+  return (
+    <>
+      <RecepcionesClient solicitudes={solicitudes} traslados={traslados} />
+      <AbrirSolicitudDesdeUrl solicitudId={idDesdeParam((await searchParams).solicitud)} />
+    </>
+  );
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getSoporteEmail, mensajeCuentaDesactivada, mensajeRegistroPendiente } from '@/lib/soporte';
+import { getSoporteEmail, mensajeCuentaDesactivada, mensajeRegistroActivo } from '@/lib/soporte';
 
 describe('getSoporteEmail', () => {
   beforeEach(() => {
@@ -41,7 +41,7 @@ describe('mensajeCuentaDesactivada', () => {
   });
 });
 
-describe('mensajeRegistroPendiente', () => {
+describe('mensajeRegistroActivo', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -50,19 +50,18 @@ describe('mensajeRegistroPendiente', () => {
     vi.unstubAllEnvs();
   });
 
-  it('should_mention_role_branch_pending_approval_and_support_email', () => {
+  it('should_say_account_is_active_with_role_branch_and_support_email', () => {
     vi.stubEnv('NEXT_PUBLIC_SOPORTE_EMAIL', 'soporte@hmotores.cl');
-    expect(mensajeRegistroPendiente('Centro')).toBe(
-      'Tu solicitud de acceso quedó registrada con el perfil Ejecutivo (vendedor) en la sucursal Centro. ' +
-        'El administrador debe activarla antes de que puedas ingresar. ' +
-        'Si el rol o la sucursal no corresponden, escribe al administrador a soporte@hmotores.cl.'
+    expect(mensajeRegistroActivo('Centro')).toBe(
+      'Tu cuenta está activa con el perfil Ejecutivo (vendedor) en la sucursal Centro y ya puedes ingresar. ' +
+        'Si este no es tu rol o tu sucursal, escribe al administrador a soporte@hmotores.cl.'
     );
   });
 
   it('should_omit_branch_and_email_when_they_are_unknown', () => {
     vi.stubEnv('NEXT_PUBLIC_SOPORTE_EMAIL', '');
-    const msg = mensajeRegistroPendiente(null);
-    expect(msg).toContain('perfil Ejecutivo (vendedor). El administrador');
+    const msg = mensajeRegistroActivo(null);
+    expect(msg).toContain('perfil Ejecutivo (vendedor) y ya puedes ingresar.');
     expect(msg.endsWith('contacta al administrador.')).toBe(true);
   });
 });

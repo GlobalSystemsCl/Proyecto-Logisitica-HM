@@ -18,7 +18,7 @@ function LoginForm() {
   let paramError: string | null = null;
   const err = searchParams.get('error');
   if (err === 'enlace_expirado' || err === 'auth_callback_failed') {
-    paramError = 'El enlace de acceso ha expirado o ya fue utilizado. Por favor solicita uno nuevo al administrador.';
+    paramError = 'El enlace ha expirado o ya fue utilizado. Pide uno nuevo en "¿Olvidaste tu contraseña?".';
   } else if (err === 'account_deactivated') {
     paramError = mensajeCuentaDesactivada();
   } else if (err === 'unauthorized') {

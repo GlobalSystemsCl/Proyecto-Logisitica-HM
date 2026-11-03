@@ -1,22 +1,14 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
 import { Loader2 } from 'lucide-react';
-import type { SolicitudLista } from '@/types/solicitud.types';
-import type { UserRole } from '@/types/auth.types';
-import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import ModalConsultaSolicitud, { type SolicitudConsultada } from '@/components/ModalConsultaSolicitud';
 import { getSolicitudDetalleAction } from '@/app/actions/solicitudes.actions';
 
 interface Props {
   solicitudId: string;
   children: ReactNode;
   className?: string;
-}
-
-interface Abierta {
-  solicitud: SolicitudLista;
-  usuario: { id: string; rol: UserRole };
 }
 
 /**
@@ -26,7 +18,7 @@ interface Abierta {
  * Las acciones sobre la solicitud siguen en la vista de cada una.
  */
 export default function AbrirSolicitudDetalle({ solicitudId, children, className }: Props) {
-  const [abierta, setAbierta] = useState<Abierta | null>(null);
+  const [abierta, setAbierta] = useState<SolicitudConsultada | null>(null);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,25 +54,7 @@ export default function AbrirSolicitudDetalle({ solicitudId, children, className
         {cargando && <Loader2 className="w-3 h-3 animate-spin" />}
       </button>
       {error && !abierta && <span className="ml-1 text-[11px] text-red-600">{error}</span>}
-      {abierta && createPortal(
-        // El portal saca el modal de enlaces, tarjetas y otros modales en el DOM.
-        // React igual propaga sus eventos a la fila o tarjeta que contiene el
-        // botón (clics, arrastre y teclado): por eso se cortan aquí.
-        <div onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
-          <SolicitudDetalleModal
-            solicitud={abierta.solicitud}
-            vehiculosInventario={[]}
-            onClose={() => setAbierta(null)}
-            onMensaje={(tipo, mensaje) => { if (tipo === 'error') alert(mensaje); }}
-            onCancelar={() => {}}
-            puedeCancelar={false}
-            puedeGestionarVehiculos={false}
-            currentUserId={abierta.usuario.id}
-            currentUserRol={abierta.usuario.rol}
-          />
-        </div>,
-        document.body
-      )}
+      {abierta && <ModalConsultaSolicitud abierta={abierta} onClose={() => setAbierta(null)} />}
     </>
   );
 }

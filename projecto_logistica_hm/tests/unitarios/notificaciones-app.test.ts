@@ -9,6 +9,8 @@ import {
   textoNotificacion,
   tiempoRelativo,
   textoNotificacionNuevoUsuario,
+  rutaNuevoUsuario,
+  rutaAccion,
   type EventoApp,
 } from '@/lib/notificaciones-app';
 import { DESTINATARIOS_POR_EVENTO } from '@/lib/notificaciones';
@@ -64,6 +66,14 @@ describe('resolverDestinatariosApp', () => {
       null
     );
     expect(res.map((d) => d.id)).toEqual(['eje']);
+  });
+
+  it('should_tag_each_recipient_with_its_role', () => {
+    const res = resolverDestinatariosApp('solicitud_despachada', { jefe_recepcion: [persona('jl2')], ejecutivo: [persona('eje')] }, null);
+    expect(res.map((d) => [d.id, d.rol])).toEqual([
+      ['jl2', 'jefe_recepcion'],
+      ['eje', 'ejecutivo'],
+    ]);
   });
 
   it('should_return_empty_when_no_one_is_left', () => {
@@ -132,27 +142,52 @@ describe('tiempoRelativo', () => {
   });
 });
 
+describe('rutaAccion', () => {
+  it('should_send_each_role_to_the_screen_of_its_pending_action', () => {
+    expect(rutaAccion('solicitud_creada', 'jefe_origen', 'solicitud', 's-1')).toBe('/solicitudes/aprobaciones?solicitud=s-1');
+    expect(rutaAccion('solicitud_aprobada', 'logistica_zona', 'solicitud', 's-1')).toBe('/logistica/calendarizaciones?solicitud=s-1');
+    expect(rutaAccion('solicitud_asignada', 'logistica_encargado', 'solicitud', 's-1')).toBe('/logistica/calendarizaciones?solicitud=s-1');
+    expect(rutaAccion('solicitud_despachada', 'jefe_recepcion', 'solicitud', 's-1')).toBe('/solicitudes/recepciones?solicitud=s-1');
+  });
+
+  it('should_open_detail_in_solicitudes_when_role_has_no_pending_action', () => {
+    expect(rutaAccion('solicitud_aprobada', 'ejecutivo', 'solicitud', 's-1')).toBe('/solicitudes?solicitud=s-1');
+    expect(rutaAccion('solicitud_recepcionada', 'ejecutivo', 'solicitud', 's-1')).toBe('/solicitudes?solicitud=s-1');
+    expect(rutaAccion('solicitud_despachada', null, 'solicitud', 's-1')).toBe('/solicitudes?solicitud=s-1');
+  });
+
+  it('should_open_internal_transfer_detail_and_encode_ids', () => {
+    expect(rutaAccion('traslado_interno_cancelado', 'jefe_origen', 'traslado_interno', 't 1')).toBe('/solicitudes/traslados?traslado=t%201');
+  });
+});
+
 describe('rutaNotificacion', () => {
   it('should_open_solicitud_detail_by_id', () => {
     expect(rutaNotificacion('solicitud', 'abc-1')).toBe('/solicitudes?solicitud=abc-1');
   });
 
   it('should_open_transfers_inbox_for_internal_transfers', () => {
-    expect(rutaNotificacion('traslado_interno', 't-1')).toBe('/solicitudes/traslados');
+    expect(rutaNotificacion('traslado_interno', 't-1')).toBe('/solicitudes/traslados?traslado=t-1');
   });
 });
 
 describe('textoNotificacionNuevoUsuario', () => {
   it('should_include_name_email_and_branch_when_branch_is_known', () => {
     expect(textoNotificacionNuevoUsuario({ nombre: 'Ana Soto', email: 'ana@hmotores.cl', sucursal: 'Centro' })).toEqual({
-      titulo: 'Nueva cuenta por activar',
-      mensaje: 'Ana Soto (ana@hmotores.cl) se registró en Centro y espera que le asignes rol y sucursal.',
+      titulo: 'Nuevo usuario registrado',
+      mensaje: 'Ana Soto (ana@hmotores.cl) se registró como Ejecutivo en Centro. Revisa si el rol y la sucursal corresponden.',
     });
   });
 
   it('should_omit_branch_when_it_is_unknown', () => {
     expect(textoNotificacionNuevoUsuario({ nombre: 'Ana', email: 'a@hmotores.cl', sucursal: null }).mensaje).toBe(
-      'Ana (a@hmotores.cl) se registró y espera que le asignes rol y sucursal.'
+      'Ana (a@hmotores.cl) se registró como Ejecutivo. Revisa si el rol y la sucursal corresponden.'
     );
+  });
+});
+
+describe('rutaNuevoUsuario', () => {
+  it('should_open_users_filtered_by_encoded_email', () => {
+    expect(rutaNuevoUsuario('ana+1@hmotores.cl')).toBe('/admin/usuarios?q=ana%2B1%40hmotores.cl');
   });
 });

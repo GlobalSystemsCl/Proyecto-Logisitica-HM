@@ -24,6 +24,8 @@ import { formatFecha, hoyISO } from '@/lib/fechas';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { iniciadorNombre } from '@/lib/iniciador';
+import { urlSinParametro } from '@/lib/enlaceNotificacion';
+import AbrirSolicitudDesdeUrl from '@/components/AbrirSolicitudDesdeUrl';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -44,6 +46,8 @@ interface AprobacionesClientProps {
   /** Sucursales del Jefe Local: principal + las que encabeza como encargado. */
   sucursalesAsignadas: UsuarioSucursalAsignada[];
   viewer: ViewerInfo;
+  /** R2: solicitud que se abre al entrar desde una notificación (`?solicitud=`). */
+  solicitudInicialId?: string | null;
 }
 
 const PRE_DESPACHO: EstadoSolicitud[] = [
@@ -73,6 +77,7 @@ export default function AprobacionesClient({
   vehiculos,
   sucursalesAsignadas,
   viewer,
+  solicitudInicialId = null,
 }: AprobacionesClientProps) {
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -81,7 +86,8 @@ export default function AprobacionesClient({
   const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
   const [aprobacionFecha, setAprobacionFecha] = useState('');
   const [editarFecha, setEditarFecha] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(null);
+  const solicitudInicial = solicitudInicialId ? solicitudes.find((s) => s.id === solicitudInicialId) ?? null : null;
+  const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(solicitudInicial);
 
   const esAdmin = viewer.rol === 'administrador';
   const esJefeLocal = viewer.rol === 'jefe_local';
@@ -371,11 +377,17 @@ export default function AprobacionesClient({
         </div>
       )}
 
+      {/* Si la solicitud del aviso ya no está en esta lista, se abre en consulta. */}
+      {solicitudInicialId && !solicitudInicial && <AbrirSolicitudDesdeUrl solicitudId={solicitudInicialId} />}
+
       {detailTarget && (
         <SolicitudDetalleModal
           solicitud={detailTarget}
           vehiculosInventario={vehiculos}
-          onClose={() => setDetailTarget(null)}
+          onClose={() => {
+            setDetailTarget(null);
+            window.history.replaceState(null, '', urlSinParametro(window.location.href, 'solicitud'));
+          }}
           onMensaje={(tipo, mensaje) => setFeedback({ type: tipo, message: mensaje })}
           onCancelar={() => {}}
           puedeCancelar={false}

@@ -666,6 +666,9 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-10-21 | Fase G: cambio de ubicación masivo en el inventario (`cambiarUbicacionMasivaAction`, auditoría por vehículo) y "Vendido" pasa a mostrarse como "Entregado al cliente". Sin migración. Nueva sección 37 | Claude (asistido) |
 | 2026-10-21 | Fase H: preguntas frecuentes por rol y por pantalla (`src/config/faq.ts`), `/faq?vista=` y botón flotante de ayuda en todas las páginas con sesión. Sin migración. Nueva sección 38 | Claude (asistido) |
 | 2026-10-27 | Inventario: se recrea la tabla `vehiculo` (borrada con `DROP TABLE vehiculo CASCADE` el 2026-10-26) con las columnas del Excel de stock y compras (`tipo_vehiculo`, `marca_codigo`, `idv`) y las originales; "Importar Stock" lee ese formato y la tabla del inventario muestra sus columnas. Migración `20261027120000`. Nueva sección 39 | Claude (asistido) |
+| 2026-11-03 | Paso 1 del plan de requisitos: la sesión ya no se cierra cuando falla la lectura del estado de la cuenta (y se cierra solo en el dispositivo actual); la recuperación de clave se envía con Brevo y un enlace `token_hash`. Sin migración. Nueva sección 40 | Claude (asistido) |
+| 2026-11-03 | Paso 2 del plan de requisitos (R17): el registro crea la cuenta activa como ejecutivo; el administrador ya no aprueba, solo corrige rol o sucursal. Reemplaza la decisión del 2026-10-20 (sección 36). Sin migración. Nueva sección 41 | Claude (asistido) |
+| 2026-11-03 | Paso 3 del plan de requisitos (R2): cada notificación (campana y correo) lleva a la pantalla donde el destinatario hace su acción y abre el detalle. Sin migración. Nueva sección 42 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -978,3 +981,46 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
 - **Reglas de la importación:** el chasis debe tener 17 caracteres; los repetidos (en el archivo o en el inventario) se omiten. El catálogo `marca` se completa con el nombre del Excel cuando solo tenía el código (`asegurarMarcaCodigo(codigo, nombre)`), sin pisar nombres editados.
 - **Pantalla:** la tabla del inventario muestra Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación, Patente y Estado. Precio, año y fecha de registro se conservan en la BD y en los formularios, pero ya no son columnas de la tabla. La búsqueda también encuentra por IDV y por código de marca.
 - **Prueba con los archivos reales:** STOCK, 1.020 importables; COMPRAS, 1.820 importables y 12 filas con chasis repetido. En ambos, el chasis `9BWBL6DF9TT42113` (16 caracteres) queda como error. 370 chasis están en los dos archivos: el segundo que se importe los informa como duplicados.
+
+## 40. Sesión y recuperación de clave (2026-11-03, paso 1 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (E1 y E2).
+
+- **E1, la sesión se cerraba a veces al volver atrás.** El middleware lee `usuario.activo/aprobado/requiere_cambio_clave` en cada petición. Si esa lectura fallaba por un motivo transitorio, la fila quedaba `null`, se trataba como cuenta desactivada y se llamaba `signOut()` con alcance global (cerraba la sesión en todos los dispositivos). Ahora `decidirAcceso` recibe `lecturaFallida`: con sesión y lectura fallida deja pasar la petición sin cerrar la sesión (cada página vuelve a validar el perfil). Cuando sí corresponde cerrar (cuenta desactivada o pendiente), se usa `signOut({ scope: 'local' })`. Ambos casos dejan un `console.warn` con prefijo `[sesion]` para confirmar la causa en los logs de Vercel.
+- Se evaluó excluir del middleware las peticiones de prefetch y se descartó: el token se refrescaría desde Server Components, que no pueden guardar las cookies nuevas, y la rotación del refresh token se perdería.
+- **E2, la recuperación de clave nunca funcionó.** `auth.users.recovery_sent_at` era nulo en las 10 cuentas (caso reportado: `audit@hmotores.cl`): `resetPasswordForEmail` usa el SMTP por defecto de Supabase, que solo entrega a direcciones del equipo. Ahora `AuthService.sendPasswordResetEmail` genera el enlace con `auth.admin.generateLink({ type: 'recovery' })` y lo envía con Brevo (`EmailService.enviarCorreo`, plantilla en `src/lib/recuperacionClave.ts`). El enlace lleva `token_hash` al callback existente (`verifyOtp`), que funciona en cualquier navegador o dispositivo; el flujo PKCE anterior solo funcionaba en el navegador donde se pidió. Se mantiene la brecha 012: una cuenta inexistente, inactiva o pendiente no recibe correo y la respuesta es la misma.
+- El enlace vence según `mailer_otp_exp` de Supabase Auth (por defecto 1 hora). El mensaje de "enlace expirado" del login ahora indica pedir otro en "¿Olvidaste tu contraseña?".
+- Requiere `BREVO_API_KEY` y un remitente verificado (`BREVO_SENDER_EMAIL`) en el entorno, igual que el correo de credenciales.
+- **Tests:** `acceso.test.ts` (lectura fallida), `auth.service.test.ts` (enlace y envío por Brevo, errores) y `recuperacionClave.test.ts`.
+
+## 41. Registro activo como ejecutivo (2026-11-03, paso 2 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R17). **Reemplaza la decisión del 2026-10-20** descrita en la sección 36 (el registro dejaba la cuenta pendiente de aprobación).
+
+- `AuthService.register` crea el perfil con `rol = 'ejecutivo'`, `activo = true` y `aprobado = true` en la sucursal elegida. El dominio sigue restringido (`validarDominioCorreo`) y el administrador principal sigue sin poder autoregistrarse.
+- Mensaje al registrarse (`mensajeRegistroActivo`, `lib/soporte.ts`): "Tu cuenta está activa con el perfil Ejecutivo (vendedor) en la sucursal X y ya puedes ingresar. Si este no es tu rol o tu sucursal, escribe al administrador a <soporte>". El aviso del formulario dice "Cuenta creada".
+- Notificación `NUEVO_USUARIO` (campana, sin correo, solo administradores): "Nuevo usuario registrado — X se registró como Ejecutivo en Y. Revisa si el rol y la sucursal corresponden". Abre `/admin/usuarios?q=<correo>` (`rutaNuevoUsuario`), que deja la tabla filtrada por esa cuenta para cambiar el rol con "Editar usuario".
+- Lo que se mantiene: el panel "Cuentas por activar", el filtro "Pendientes" y la activación masiva siguen funcionando para cuentas pendientes de antes o creadas por el caso de perfil faltante (`getCurrentUserProfile`, brechas 002 y 025), que sigue creando el perfil inactivo. Al 2026-11-03 no hay cuentas pendientes ni inactivas en la BD, así que no hizo falta un script de datos.
+- **Tests:** `auth.service.test.ts`, `auth.actions.test.ts`, `soporte.test.ts`, `notificaciones-app.test.ts` y `notificacion.service.test.ts`.
+
+## 42. Notificaciones con enlace directo a la acción (2026-11-03, paso 3 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R2).
+
+- **Antes:** toda notificación de solicitud abría `/solicitudes?solicitud=<id>` y la de traslado `/solicitudes/traslados`; el botón de los correos llevaba a `/solicitudes` sin el id.
+- **Ahora:** `resolverDestinatarios` y `resolverDestinatariosApp` devuelven cada destinatario con el papel por el que recibe el aviso (`DestinatarioConRol`; si tiene dos, queda el primero del orden del evento). `rutaAccion(evento, rol, entidad, id)` (`lib/notificaciones-app.ts`) elige el enlace con `RUTA_ACCION`, tanto para la campana como para el botón del correo:
+
+| Evento | Destinatario | Enlace |
+|---|---|---|
+| Solicitud creada | Jefe de local de origen | `/solicitudes/aprobaciones?solicitud=<id>` |
+| Aprobada | Logística de la zona | `/logistica/calendarizaciones?solicitud=<id>` |
+| Asignada | Logística encargada | `/logistica/calendarizaciones?solicitud=<id>` |
+| Despachada | Jefe de local de recepción | `/solicitudes/recepciones?solicitud=<id>` |
+| Cualquier otro (solo informa) | — | `/solicitudes?solicitud=<id>` |
+| Traslado interno | — | `/solicitudes/traslados?traslado=<id>` |
+
+- El jefe de local aprueba y prioriza él mismo, así que no recibe aviso de eso; por eso Logística va al calendario desde la aprobación (la solicitud aparece en "por programar" al priorizarse). Prioridades no es destino de ningún aviso.
+- **Pantallas de destino:** Aprobaciones y el calendario abren su propio detalle (con acciones) si la solicitud está en lo cargado; si no (ya cambió de estado, otro mes, aún sin priorizar), `AbrirSolicitudDesdeUrl` la abre en consulta. Recepciones la abre en consulta ("Recepcionar" sigue en la tarjeta). Traslados abre el detalle del traslado. Al cerrar se quita el parámetro de la URL (`urlSinParametro`) para que recargar no lo reabra. Solicitudes ya lo hacía.
+- `ModalConsultaSolicitud` concentra el modal de consulta que usan `AbrirSolicitudDetalle` y `AbrirSolicitudDesdeUrl`. `lib/enlaceNotificacion.ts`: `idDesdeParam` y `urlSinParametro`.
+- Las notificaciones ya guardadas conservan su enlace anterior.
+- **Tests:** `notificaciones.test.ts`, `notificaciones-app.test.ts` (`rutaAccion`, papel de cada destinatario), `notificacion.service.test.ts` (enlaces por papel en campana y correo) y `enlaceNotificacion.test.ts`.

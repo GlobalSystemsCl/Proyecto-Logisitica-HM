@@ -9,18 +9,19 @@ import {
   resolverDestinatarios,
   type DatosCorreo,
   type Destinatario,
+  type DestinatarioConRol,
   type EventoNotificacion,
   type RolDestinatario,
 } from '@/lib/notificaciones';
 import {
-  RUTA_CUENTAS_PENDIENTES,
   TIPO_NOTIFICACION_POR_EVENTO,
   TIPO_NUEVO_USUARIO,
   esEventoConCorreo,
   resolverDestinatariosApp,
-  rutaNotificacion,
+  rutaAccion,
   textoNotificacion,
   textoNotificacionNuevoUsuario,
+  rutaNuevoUsuario,
   type DatosNotificacionApp,
   type DatosNuevoUsuario,
   type EventoApp,
@@ -117,23 +118,26 @@ export class NotificacionService {
     return NotificacionService.usuariosPorIds(ids, ['logistica']);
   }
 
-  /** Envía un correo por destinatario. */
+  /**
+   * Envía un correo por destinatario. El botón del correo lleva a la misma
+   * pantalla de acción que la notificación de la campana (R2).
+   */
   static async enviar(
     evento: EventoNotificacion,
-    destinatarios: Destinatario[],
+    destinatarios: DestinatarioConRol[],
     datos: DatosCorreo,
-    ruta: string
+    entidad: 'solicitud' | 'traslado_interno',
+    entidadId: string
   ): Promise<ResultadoNotificacion> {
     if (destinatarios.length === 0) return SIN_ENVIOS;
     const plantilla = plantillaCorreo(evento, datos);
-    const enlace = `${getAppUrl()}${ruta}`;
     const resultados = await Promise.all(
       destinatarios.map((d) =>
         EmailService.enviarCorreo({
           toEmail: d.email,
           toName: d.nombre,
           asunto: plantilla.asunto,
-          html: renderCorreoHtml(plantilla, d.nombre, enlace),
+          html: renderCorreoHtml(plantilla, d.nombre, `${getAppUrl()}${rutaAccion(evento, d.rol, entidad, entidadId)}`),
         })
       )
     );
@@ -149,7 +153,7 @@ export class NotificacionService {
    */
   static async crearNotificaciones(
     evento: EventoApp,
-    destinatarios: Destinatario[],
+    destinatarios: DestinatarioConRol[],
     emisorId: string,
     entidad: 'solicitud' | 'traslado_interno',
     entidadId: string,
@@ -165,7 +169,7 @@ export class NotificacionService {
       mensaje,
       entidad,
       entidad_id: entidadId,
-      ruta: rutaNotificacion(entidad, entidadId),
+      ruta: rutaAccion(evento, d.rol, entidad, entidadId),
     }));
     const admin = createAdminClient();
     const { error } = await admin.from('notificacion').insert(filas);
@@ -204,7 +208,7 @@ export class NotificacionService {
         mensaje,
         entidad: 'usuario',
         entidad_id: usuario.id,
-        ruta: RUTA_CUENTAS_PENDIENTES,
+        ruta: rutaNuevoUsuario(usuario.email),
       }));
       const { error: insertError } = await admin.from('notificacion').insert(filas);
       if (insertError) {
@@ -260,7 +264,7 @@ export class NotificacionService {
       };
 
       const correo = esEventoConCorreo(evento)
-        ? await NotificacionService.enviar(evento, resolverDestinatarios(evento, porRol, actorId), datos, '/solicitudes')
+        ? await NotificacionService.enviar(evento, resolverDestinatarios(evento, porRol, actorId), datos, 'solicitud', sol.id)
         : SIN_ENVIOS;
       // emisor_id es obligatorio: sin actor (procesos automáticos) no hay campana.
       const enApp = actorId
@@ -310,7 +314,8 @@ export class NotificacionService {
         evento,
         resolverDestinatarios(evento, porRol, actorId),
         datos,
-        '/solicitudes/traslados'
+        'traslado_interno',
+        t.id
       );
       const enApp = actorId
         ? await NotificacionService.crearNotificaciones(

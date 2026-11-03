@@ -105,5 +105,14 @@ describe('decidirAcceso', () => {
     it('should_continue_when_authenticated_user_opens_auth_callback', () => {
       expect(decidirAcceso('/auth/callback', true, cuentaOk)).toEqual({ accion: 'continuar' });
     });
+
+    it('should_continue_without_sign_out_when_account_read_fails', () => {
+      expect(decidirAcceso('/dashboard', true, null, true)).toEqual({ accion: 'continuar' });
+      expect(decidirAcceso('/solicitudes', true, null, true)).toEqual({ accion: 'continuar' });
+    });
+
+    it('should_still_require_login_when_read_fails_without_session', () => {
+      expect(decidirAcceso('/dashboard', false, null, true)).toEqual({ accion: 'redirigir', destino: '/login' });
+    });
   });
 });

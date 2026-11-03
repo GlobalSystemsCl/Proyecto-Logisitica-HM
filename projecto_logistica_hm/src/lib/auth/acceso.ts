@@ -37,10 +37,18 @@ export function motivoCuentaBloqueada(
   return null;
 }
 
+/**
+ * `lecturaFallida`: la consulta del estado de la cuenta falló (red, token
+ * recién rotado, límite de conexiones). No es lo mismo que una cuenta sin
+ * fila: no se puede concluir que esté bloqueada, así que se deja pasar sin
+ * cerrar la sesión. Cada página vuelve a validar el perfil al cargar. Antes se
+ * trataba como cuenta desactivada y la sesión se cerraba al volver atrás (E1).
+ */
 export function decidirAcceso(
   path: string,
   autenticado: boolean,
-  cuenta: EstadoCuenta | null
+  cuenta: EstadoCuenta | null,
+  lecturaFallida = false
 ): DecisionAcceso {
   const rutaAuth = esRutaAuth(path);
   const rutaClave = path === RUTA_ESTABLECER_CLAVE;
@@ -50,6 +58,8 @@ export function decidirAcceso(
     if (rutaPublica || rutaClave) return { accion: 'continuar' };
     return { accion: 'redirigir', destino: '/login' };
   }
+
+  if (lecturaFallida) return { accion: 'continuar' };
 
   // Cuenta desactivada, no aprobada o sin perfil: se cierra la sesión.
   const motivo = motivoCuentaBloqueada(cuenta);

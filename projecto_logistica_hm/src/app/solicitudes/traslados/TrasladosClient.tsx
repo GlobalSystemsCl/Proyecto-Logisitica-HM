@@ -55,6 +55,8 @@ interface TrasladosClientProps {
   viewerSucursales: number[];
   /** Transportistas activos (solo se cargan para Logística y el administrador). */
   transportistas?: Transportista[];
+  /** R2: traslado que se abre al entrar desde una notificación (`?traslado=`). */
+  trasladoInicialId?: string | null;
 }
 
 export default function TrasladosClient({
@@ -66,13 +68,16 @@ export default function TrasladosClient({
   viewerRol,
   viewerSucursales,
   transportistas = [],
+  trasladoInicialId = null,
 }: TrasladosClientProps) {
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [filtro, setFiltro] = useState<'todos' | TrasladoInterno['estado']>('todos');
   const [recibirTarget, setRecibirTarget] = useState<TrasladoInterno | null>(null);
   const [cancelarTarget, setCancelarTarget] = useState<TrasladoInterno | null>(null);
-  const [detalle, setDetalle] = useState<TrasladoInterno | null>(null);
+  const [detalle, setDetalle] = useState<TrasladoInterno | null>(
+    () => (trasladoInicialId ? traslados.find((t) => t.id === trasladoInicialId) ?? null : null)
+  );
 
   // Formulario de creación
   const [formOpen, setFormOpen] = useState(false);

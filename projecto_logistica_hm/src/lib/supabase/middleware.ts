@@ -37,19 +37,36 @@ export async function updateSession(request: NextRequest) {
   // Estado real de la cuenta desde public.usuario (la policy SELECT permite
   // leer la fila propia). No se usa user_metadata: lo controla el usuario.
   let cuenta: EstadoCuenta | null = null;
+  let lecturaFallida = false;
   if (user) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('usuario')
       .select('activo, aprobado, requiere_cambio_clave')
       .eq('id', user.id)
       .maybeSingle();
+    if (error) {
+      lecturaFallida = true;
+      console.warn('[sesion] No se pudo leer el estado de la cuenta; se deja pasar sin cerrar sesión.', {
+        usuario: user.id,
+        ruta: path,
+        error: error.message,
+      });
+    }
     cuenta = (data as EstadoCuenta | null) ?? null;
   }
 
-  const decision = decidirAcceso(path, Boolean(user), cuenta);
+  const decision = decidirAcceso(path, Boolean(user), cuenta, lecturaFallida);
 
   if (decision.cerrarSesion) {
-    await supabase.auth.signOut();
+    // Motivo en el log para poder confirmar en producción por qué se cerró.
+    console.warn('[sesion] Cierre de sesión por estado de la cuenta.', {
+      usuario: user?.id,
+      ruta: path,
+      motivo: decision.accion === 'redirigir' ? decision.error : 'cuenta_bloqueada',
+    });
+    // Solo en este navegador: el alcance global cerraba la sesión del usuario
+    // en todos sus dispositivos.
+    await supabase.auth.signOut({ scope: 'local' });
   }
 
   if (decision.accion === 'continuar') {

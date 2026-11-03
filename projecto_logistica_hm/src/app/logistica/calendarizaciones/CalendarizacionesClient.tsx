@@ -58,6 +58,8 @@ import {
   type FiltrosCalendario,
   type VistaCalendario,
 } from '@/lib/calendario';
+import { urlSinParametro } from '@/lib/enlaceNotificacion';
+import AbrirSolicitudDesdeUrl from '@/components/AbrirSolicitudDesdeUrl';
 
 interface Opcion {
   id: number | string;
@@ -81,6 +83,8 @@ interface Props {
   sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
   /** Transportistas activos (solo se cargan para Logística). */
   transportistas?: Transportista[];
+  /** R2: solicitud que se abre al entrar desde una notificación (`?solicitud=`). */
+  solicitudInicialId?: string | null;
 }
 
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
@@ -135,6 +139,7 @@ export default function CalendarizacionesClient({
   viewer,
   sucursales_asignadas = [],
   transportistas = [],
+  solicitudInicialId = null,
 }: Props) {
   const router = useRouter();
   const hoy = hoyISO();
@@ -150,7 +155,10 @@ export default function CalendarizacionesClient({
   const [recibirTarget, setRecibirTarget] = useState<SolicitudLista | null>(null);
   const [reprogramar, setReprogramar] = useState<{ sol: SolicitudLista; fecha: string | null } | null>(null);
   const [cancelarTarget, setCancelarTarget] = useState<SolicitudLista | null>(null);
-  const [detalle, setDetalle] = useState<SolicitudLista | null>(null);
+  const solicitudInicial = solicitudInicialId
+    ? [...porProgramar, ...programadas].find((s) => s.id === solicitudInicialId) ?? null
+    : null;
+  const [detalle, setDetalle] = useState<SolicitudLista | null>(solicitudInicial);
 
   const puedeCalendarizar = viewer.rol === 'logistica';
   const puedeDespachar = viewer.rol === 'administrador' || viewer.rol === 'logistica';
@@ -698,11 +706,17 @@ export default function CalendarizacionesClient({
       )}
 
       {/* Modales */}
+      {/* Si la solicitud del aviso no está en lo cargado (otro mes, aún sin priorizar), se abre en consulta. */}
+      {solicitudInicialId && !solicitudInicial && <AbrirSolicitudDesdeUrl solicitudId={solicitudInicialId} />}
+
       {detalle && (
         <SolicitudDetalleModal
           solicitud={detalle}
           vehiculosInventario={[]}
-          onClose={() => setDetalle(null)}
+          onClose={() => {
+            setDetalle(null);
+            window.history.replaceState(null, '', urlSinParametro(window.location.href, 'solicitud'));
+          }}
           onMensaje={(tipo, mensaje) => { if (tipo === 'error') alert(mensaje); }}
           onCancelar={() => {}}
           puedeCancelar={false}

@@ -83,7 +83,7 @@ function FormularioRegistro({ sucursales, dominios, onRegistrarOtra }: Props & {
             <div className="flex items-start gap-3 p-3.5 bg-green-50 border border-green-200 rounded-xl text-green-700 text-sm animate-in fade-in duration-200">
               <CheckCircle2 className="w-5 h-5 text-green-600 shrink-0 mt-0.5" />
               <div className="flex-1">
-                <span className="font-semibold block">Solicitud enviada</span>
+                <span className="font-semibold block">Cuenta creada</span>
                 <span className="text-xs leading-relaxed opacity-90">
                   {state.message}{' '}
                   <Link href="/login" className="underline font-semibold hover:text-green-900">

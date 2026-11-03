@@ -81,7 +81,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'general',
     pregunta: '¿Cómo me entero de los cambios en mis solicitudes?',
     respuesta:
-      'La campana del encabezado muestra los cambios de estado de las solicitudes y traslados en que participas, en el momento. Los hitos importantes (creada, aprobada, rechazada, programada, reprogramada, despachada, recibida y cancelación en tránsito) también llegan por correo. Nunca se te avisa de una acción que hiciste tú.',
+      'La campana del encabezado muestra los cambios de estado de las solicitudes y traslados en que participas, en el momento. Los hitos importantes (creada, aprobada, rechazada, programada, reprogramada, despachada, recibida y cancelación en tránsito) también llegan por correo. Nunca se te avisa de una acción que hiciste tú. Al abrir un aviso vas directo a la pantalla donde te toca actuar (por ejemplo, Aprobaciones o Recepciones) con el detalle de esa solicitud abierto.',
   },
   {
     vista: 'general',
@@ -99,13 +99,13 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'general',
     pregunta: 'Olvidé mi contraseña o mi cuenta está bloqueada, ¿qué hago?',
     respuesta:
-      'Usa "¿Olvidaste tu contraseña?" en la página de inicio de sesión: te llegará un enlace por correo. Después de 5 intentos fallidos la cuenta se bloquea 15 minutos. Si tu cuenta fue desactivada, contacta al administrador.',
+      'Usa "¿Olvidaste tu contraseña?" en la página de inicio de sesión: te llegará un enlace por correo que vence en 1 hora y sirve una sola vez (puedes abrirlo en el celular aunque lo hayas pedido en el computador). Después de 5 intentos fallidos la cuenta se bloquea 15 minutos. Si tu cuenta fue desactivada, contacta al administrador.',
   },
   {
     vista: 'general',
-    pregunta: 'Me registré y no puedo entrar, ¿por qué?',
+    pregunta: 'Me registré, ¿ya puedo entrar? ¿Y si mi rol no es Ejecutivo?',
     respuesta:
-      'Las cuentas creadas desde el registro quedan pendientes hasta que el administrador las active y confirme tu rol y sucursal. El administrador recibe un aviso cuando te registras. Solo se aceptan correos corporativos (@hmotores.cl).',
+      'Las cuentas creadas desde el registro quedan activas como Ejecutivo en la sucursal que elegiste, así que puedes entrar de inmediato. Solo se aceptan correos corporativos (@hmotores.cl). Si no puedes entrar, revisa la contraseña o usa "¿Olvidaste tu contraseña?". Si tu rol o sucursal no corresponden, contacta al administrador.',
   },
 
   // ---------- Dashboard ----------
@@ -126,9 +126,9 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   {
     vista: 'dashboard',
     roles: SOLO_ADMIN,
-    pregunta: '¿Cómo activo las cuentas que se registraron?',
+    pregunta: '¿Qué hago cuando alguien se registra?',
     respuesta:
-      'En "Cuentas por activar" usa "Activar cuenta" para revisar una por una (eliges rol y sucursal), o marca varias y usa "Activar seleccionadas" para darles el mismo rol de una vez. Por defecto cada cuenta conserva la sucursal que indicó al registrarse.',
+      'Nada, si es vendedor: las cuentas del registro quedan activas como Ejecutivo en la sucursal que eligieron. Te llega un aviso en la campana; ábrelo para ver la cuenta en Usuarios y, si el rol o la sucursal no corresponden, cámbialos con "Editar usuario".',
   },
   {
     vista: 'dashboard',
@@ -388,9 +388,9 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   {
     vista: 'usuarios',
     roles: SOLO_ADMIN,
-    pregunta: '¿Cómo activo varias cuentas pendientes?',
+    pregunta: '¿Cómo cambio el rol de una cuenta recién registrada?',
     respuesta:
-      'Filtra por "Pendientes" (o haz clic en la tarjeta de pendientes), marca las cuentas y usa "Activar seleccionadas". Eliges un rol en común (Ejecutivo, Logística u Operaciones) y la sucursal, o mantienes la que cada uno indicó. Jefes de local y administradores se activan de a uno.',
+      'Busca la cuenta (el aviso de la campana ya la deja filtrada) y usa "Editar usuario" para cambiar el rol y sus sucursales o zona. Si quedara alguna cuenta pendiente de una etapa anterior, filtra por "Pendientes", márcalas y usa "Activar seleccionadas".',
   },
   {
     vista: 'usuarios',

@@ -55,23 +55,27 @@ export interface Destinatario {
   nombre: string;
 }
 
+/** Destinatario con el papel por el que recibe el aviso (define su enlace, R2). */
+export type DestinatarioConRol = Destinatario & { rol: RolDestinatario };
+
 /**
  * Une los destinatarios de cada rol sin repetir correos y sin incluir a quien
- * realizó la acción (no se le avisa de lo que él mismo hizo).
+ * realizó la acción (no se le avisa de lo que él mismo hizo). Si alguien
+ * aparece en dos papeles, queda con el primero del orden del evento.
  */
 export function resolverDestinatarios(
   evento: EventoNotificacion,
   porRol: Partial<Record<RolDestinatario, Destinatario[]>>,
   actorId: string | null
-): Destinatario[] {
+): DestinatarioConRol[] {
   const vistos = new Set<string>();
-  const resultado: Destinatario[] = [];
+  const resultado: DestinatarioConRol[] = [];
   for (const rol of DESTINATARIOS_POR_EVENTO[evento]) {
     for (const d of porRol[rol] ?? []) {
       const email = d.email?.trim().toLowerCase();
       if (!email || d.id === actorId || vistos.has(email)) continue;
       vistos.add(email);
-      resultado.push({ ...d, email });
+      resultado.push({ ...d, email, rol });
     }
   }
   return resultado;

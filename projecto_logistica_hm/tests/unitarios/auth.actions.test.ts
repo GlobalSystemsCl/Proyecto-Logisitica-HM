@@ -36,14 +36,14 @@ beforeEach(() => {
 });
 
 describe('registerAction', () => {
-  it('should_notify_admins_and_return_pending_message_with_branch_when_registration_succeeds', async () => {
+  it('should_notify_admins_and_return_active_message_with_branch_when_registration_succeeds', async () => {
     register.mockResolvedValue({ success: true, usuarioId: 'u-new', sucursalNombre: 'Centro' });
 
     const res = await registerAction(null, formulario());
 
     expect(res.success).toBe(true);
     expect(res.message).toContain('en la sucursal Centro');
-    expect(res.message).toContain('El administrador debe activarla');
+    expect(res.message).toContain('Tu cuenta está activa');
     expect(notificarNuevoUsuario).toHaveBeenCalledWith({
       id: 'u-new',
       nombre: 'Ana Soto',

@@ -3,10 +3,15 @@ import { SolicitudesService } from '@/services/solicitudes.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import AprobacionesClient from './AprobacionesClient';
+import { idDesdeParam } from '@/lib/enlaceNotificacion';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AprobacionesPage() {
+export default async function AprobacionesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const profile = await AuthService.getCurrentUserProfile();
 
   if (!profile) {
@@ -34,6 +39,7 @@ export default async function AprobacionesPage() {
       solicitudes={solicitudes}
       vehiculos={vehiculos}
       sucursalesAsignadas={sucursalesAsignadas}
+      solicitudInicialId={idDesdeParam((await searchParams).solicitud)}
       viewer={{
         id: profile.id,
         nombre: profile.nombre,

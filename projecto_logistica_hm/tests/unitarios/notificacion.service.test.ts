@@ -215,6 +215,24 @@ describe('NotificacionService.notificarSolicitud', () => {
     expect(filas[0].mensaje).toContain('#ABCD1234 (Centro → Norte)');
   });
 
+  it('should_link_each_recipient_to_the_screen_of_its_action_in_app_and_email', async () => {
+    getSolicitudCompleta.mockResolvedValue(solicitud({ estado: 'en_transito' }));
+    participantes();
+
+    await NotificacionService.notificarSolicitud('solicitud_despachada', 's-1', 'log');
+
+    const filas = admin.callsTo('notificacion').find((c) => c[0] === 'insert')?.[1] as Array<Record<string, unknown>>;
+    const rutas = Object.fromEntries(filas.map((f) => [f.usuario_id, f.ruta]));
+    expect(rutas).toEqual({
+      jl2: '/solicitudes/recepciones?solicitud=abcd1234-0000-0000-0000-000000000000',
+      eje: '/solicitudes?solicitud=abcd1234-0000-0000-0000-000000000000',
+    });
+    const correos = Object.fromEntries(
+      enviarCorreo.mock.calls.map((c) => [(c[0] as { toEmail: string }).toEmail, (c[0] as { html: string }).html])
+    );
+    expect(correos['jl2@test.cl']).toContain('http://localhost:3000/solicitudes/recepciones?solicitud=abcd1234-0000-0000-0000-000000000000');
+  });
+
   it('should_create_in_app_notification_without_email_for_in_app_only_events', async () => {
     getSolicitudCompleta.mockResolvedValue(solicitud({ estado: 'finalizada' }));
     participantes();
@@ -283,14 +301,14 @@ describe('NotificacionService.notificarTrasladoInterno', () => {
     expect(res.enviados).toBe(3);
     const correo = enviarCorreo.mock.calls[0][0] as { asunto: string; html: string };
     expect(correo.asunto).toContain('Traslado interno #FFFF0000 cancelado');
-    expect(correo.html).toContain('http://localhost:3000/solicitudes/traslados');
+    expect(correo.html).toContain('http://localhost:3000/solicitudes/traslados?traslado=ffff0000-0000-0000-0000-000000000000');
     expect(res.enApp).toBe(3);
     const filas = admin.callsTo('notificacion').find((c) => c[0] === 'insert')?.[1] as Array<Record<string, unknown>>;
     expect(filas[0]).toMatchObject({
       tipo: 'TRASLADO_INTERNO_CANCELADO',
       entidad: 'traslado_interno',
       entidad_id: 'ffff0000-0000-0000-0000-000000000000',
-      ruta: '/solicitudes/traslados',
+      ruta: '/solicitudes/traslados?traslado=ffff0000-0000-0000-0000-000000000000',
     });
   });
 });
@@ -327,8 +345,8 @@ describe('NotificacionService.notificarNuevoUsuario', () => {
         tipo: 'NUEVO_USUARIO',
         entidad: 'usuario',
         entidad_id: 'u-new',
-        ruta: '/admin/usuarios?estado=pendientes',
-        titulo: 'Nueva cuenta por activar',
+        ruta: '/admin/usuarios?q=ana%40hmotores.cl',
+        titulo: 'Nuevo usuario registrado',
       }),
       expect.objectContaining({ usuario_id: 'adm-2' }),
     ]);

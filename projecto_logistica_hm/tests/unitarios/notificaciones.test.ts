@@ -48,7 +48,12 @@ describe('resolverDestinatarios', () => {
       { ejecutivo: [ana], jefe_origen: [jl] },
       null
     );
-    expect(res).toEqual([{ ...ana, email: 'ana@test.cl' }]);
+    expect(res).toEqual([{ ...ana, email: 'ana@test.cl', rol: 'ejecutivo' }]);
+  });
+
+  it('should_keep_the_first_role_of_the_event_order_when_someone_has_two', () => {
+    const res = resolverDestinatarios('solicitud_despachada', { ejecutivo: [jl], jefe_recepcion: [jl] }, null);
+    expect(res).toEqual([{ ...jl, rol: 'jefe_recepcion' }]);
   });
 
   it('should_deduplicate_by_email_and_skip_the_actor', () => {

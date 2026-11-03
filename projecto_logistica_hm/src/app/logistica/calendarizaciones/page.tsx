@@ -14,6 +14,7 @@ import {
   rangoVista,
   type VistaCalendario,
 } from '@/lib/calendario';
+import { idDesdeParam } from '@/lib/enlaceNotificacion';
 
 export const dynamic = 'force-dynamic';
 
@@ -97,6 +98,7 @@ export default async function LogisticaCalendarizacionesPage({
 
       <main className="flex-1 w-full px-4 sm:px-8 lg:px-12 pt-8 pb-24 sm:pb-8">
         <CalendarizacionesClient
+          solicitudInicialId={idDesdeParam(params.solicitud)}
           key={`${vista}-${fecha}`}
           vista={vista}
           fecha={fecha}

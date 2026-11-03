@@ -8,6 +8,8 @@ import { esAdminPrincipal } from '@/lib/auth/admin-principal';
 import { getAppUrl } from '@/lib/env';
 import { mensajeCuentaDesactivada } from '@/lib/soporte';
 import { validarDominioCorreo } from '@/lib/dominios';
+import { ASUNTO_RECUPERACION, enlaceRecuperacion, htmlCorreoRecuperacion } from '@/lib/recuperacionClave';
+import { EmailService } from '@/services/email.service';
 
 export const MAX_INTENTOS_FALLIDOS = 5;
 export const MINUTOS_BLOQUEO = 15;
@@ -253,8 +255,8 @@ export class AuthService {
         email: cleanEmail,
         password: data.password,
         email_confirm: true,
-        // Brecha 002: el rol no viaja en los metadatos; el trigger crea el
-        // perfil como ejecutivo inactivo y el upsert siguiente lo asegura.
+        // Brecha 002: el rol no viaja en los metadatos; el perfil (ejecutivo)
+        // lo crea el upsert siguiente.
         user_metadata: {
           nombre: data.nombre.trim(),
           apellido: data.apellido.trim(),
@@ -281,15 +283,18 @@ export class AuthService {
         return { success: false, error: 'No se pudo crear la cuenta. Intenta nuevamente.' };
       }
 
-      // Asegurar el perfil base en public.usuario
+      // Perfil base en public.usuario. R17 (2026-11-03): la cuenta queda activa
+      // como ejecutivo; el administrador no aprueba, solo cambia el rol o la
+      // sucursal si no corresponden (recibe NUEVO_USUARIO). El dominio ya se
+      // restringió arriba con validarDominioCorreo.
       const { error: perfilError } = await admin.from('usuario').upsert({
         id: authData.user.id,
         email: cleanEmail,
         nombre: data.nombre.trim(),
         apellido: data.apellido.trim(),
         rol: 'ejecutivo',
-        activo: false,
-        aprobado: false,
+        activo: true,
+        aprobado: true,
         requiere_cambio_clave: false,
         sucursal_id: sucursalId,
       });
@@ -444,36 +449,51 @@ export class AuthService {
    *
    * Brecha 012: la respuesta es la misma exista o no la cuenta, y una cuenta
    * desactivada o no aprobada simplemente no recibe el correo.
+   *
+   * E2 (2026-11-03): el enlace se genera con `auth.admin.generateLink` y se
+   * envía con Brevo. Antes se usaba `resetPasswordForEmail`, que envía con el
+   * SMTP por defecto de Supabase: nunca llegó a los usuarios.
    */
-  static async sendPasswordResetEmail(email: string, redirectToUrl?: string): Promise<{
+  static async sendPasswordResetEmail(email: string): Promise<{
     success: boolean;
     error?: string;
   }> {
     try {
-      const supabase = await createClient();
       const cleanEmail = email.trim().toLowerCase();
 
       const admin = createAdminClient();
       const { data: user } = await admin
         .from('usuario')
-        .select('activo, aprobado')
+        .select('nombre, activo, aprobado')
         .eq('email', cleanEmail)
         .single();
 
-      const fila = user as { activo: boolean; aprobado?: boolean } | null;
+      const fila = user as { nombre?: string | null; activo: boolean; aprobado?: boolean } | null;
       if (!fila || !fila.activo || fila.aprobado === false) {
         return { success: true };
       }
 
-      const redirect = redirectToUrl || `${getAppUrl()}/auth/callback?next=/establecer-clave`;
+      const errorEnvio = 'No se pudo enviar el correo en este momento. Intenta más tarde.';
 
-      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: redirect,
+      const { data: link, error } = await admin.auth.admin.generateLink({
+        type: 'recovery',
+        email: cleanEmail,
       });
+      const tokenHash = (link as { properties?: { hashed_token?: string } } | null)?.properties?.hashed_token;
+      if (error || !tokenHash) {
+        console.error('Error al generar el enlace de recuperación:', error);
+        return { success: false, error: errorEnvio };
+      }
 
-      if (error) {
-        console.error('Error al enviar el correo de recuperación:', error);
-        return { success: false, error: 'No se pudo enviar el correo en este momento. Intenta más tarde.' };
+      const envio = await EmailService.enviarCorreo({
+        toEmail: cleanEmail,
+        toName: fila.nombre || cleanEmail,
+        asunto: ASUNTO_RECUPERACION,
+        html: htmlCorreoRecuperacion(fila.nombre || '', enlaceRecuperacion(getAppUrl(), tokenHash)),
+      });
+      if (!envio.success) {
+        console.error('Error al enviar el correo de recuperación:', envio.error);
+        return { success: false, error: errorEnvio };
       }
 
       return { success: true };

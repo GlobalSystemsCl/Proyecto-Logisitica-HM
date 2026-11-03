@@ -113,6 +113,7 @@ export function createSupabaseMock(results: ResultsByTable = {}): SupabaseMock {
         createUser: vi.fn(async () => ({ data: {}, error: null })),
         updateUserById: vi.fn(async () => ({ data: {}, error: null })),
         deleteUser: vi.fn(async () => ({ data: {}, error: null })),
+        generateLink: vi.fn(async () => ({ data: { properties: { hashed_token: 'hash-123' } }, error: null })),
       },
     },
     storage: { from: vi.fn((bucket: string) => makeStorageChain(bucket)) },
