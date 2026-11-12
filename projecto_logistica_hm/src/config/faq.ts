@@ -129,6 +129,13 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   },
   {
     vista: 'dashboard',
+    roles: ['logistica'],
+    pregunta: '¿Por qué en "Espacios disponibles" no aparecen todas las sucursales?',
+    respuesta:
+      'El inicio muestra solo las 5 sucursales con más slots ocupados, para ver de un vistazo dónde falta espacio. Los totales de libres y de sucursales en alerta sí cuentan todas. "Ver todas" abre Slots de estacionamiento con la lista completa.',
+  },
+  {
+    vista: 'dashboard',
     roles: SOLO_ADMIN,
     pregunta: '¿Qué hago cuando alguien se registra?',
     respuesta:
