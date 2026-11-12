@@ -57,6 +57,7 @@ import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { tieneUbicacion } from '@/lib/vehiculo';
+import { MENSAJE_MEZCLA_SUCURSAL, clasificarVenta } from '@/lib/ventaSucursal';
 
 /**
  * Nomenclatura de negocio para los estados.
@@ -263,6 +264,16 @@ export default function SolicitudesClient({
   }, [vehiculos, sucursalesPorId]);
 
   const sinUbicacion = useMemo(() => vehiculos.filter((v) => !tieneUbicacion(v)).length, [vehiculos]);
+
+  // R1: una venta con todos sus vehículos ya en la sucursal de destino no lleva traslado; mezclar no se permite.
+  const claseVentaForm = useMemo(() => {
+    const ubicacionPorId = new Map(vehiculos.map((v) => [v.id, v.ubicacion]));
+    return clasificarVenta(
+      tipoSel,
+      Number(sucursalDestinoSel) || null,
+      Array.from(selectedVehiculos).map((id) => ubicacionPorId.get(id))
+    );
+  }, [vehiculos, tipoSel, sucursalDestinoSel, selectedVehiculos]);
 
   const vehiculosFiltrados = useMemo(() => {
     const term = vehiculoSearch.trim().toLowerCase();
@@ -483,6 +494,10 @@ export default function SolicitudesClient({
     if (selectedVehiculos.size === 0) {
       setVehiculoError(true);
       setCreateError('Debes seleccionar al menos un vehículo: una solicitud no puede existir sin vehículos.');
+      return;
+    }
+    if (claseVentaForm === 'mixta') {
+      setCreateError(MENSAJE_MEZCLA_SUCURSAL);
       return;
     }
     setVehiculoError(false);
@@ -1294,6 +1309,16 @@ export default function SolicitudesClient({
                     ))}
                   </select>
                 </div>
+
+                {claseVentaForm === 'sin_traslado' && (
+                  <p className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    Los vehículos elegidos ya están en la sucursal de destino: no requieren traslado. Al aprobarse, la solicitud
+                    quedará lista para entregar al cliente, sin pasar por Logística.
+                  </p>
+                )}
+                {claseVentaForm === 'mixta' && (
+                  <p className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{MENSAJE_MEZCLA_SUCURSAL}</p>
+                )}
 
                 {sinUbicacion > 0 && (
                   <p className="text-[11px] text-neutral-500">

@@ -242,6 +242,7 @@ describe('SolicitudesService.getSolicitudes', () => {
     expect(res[0].vehiculos[0]).toEqual({
       solicitud_vehiculo_id: 'sv-1',
       disponibilidad: 'reservado',
+      numero_guia: null,
       patente: 'ABC123',
       chasis: 'WBA3A5C50FF123456',
       marca: 'Toyota',
@@ -1095,7 +1096,7 @@ describe('SolicitudesService.aprobarSolicitud', () => {
     const auditoria = spyRegistrarAuditoria();
 
     const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, ' 2099-01-01 ');
-    expect(res).toEqual({ success: true });
+    expect(res).toEqual({ success: true, sinTraslado: false });
     const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
     expect(update?.[1]).toMatchObject({ estado: 'aprobada', fecha_limite: '2099-01-01' });
     // El servicio registra la fecha de confirmación explícitamente (no depende
@@ -1855,27 +1856,33 @@ describe('SolicitudesService.calendarizarSolicitud', () => {
     expect(auditoria).toHaveBeenCalled();
   });
 
-  it('should_store_transportista_when_scheduling_with_one', async () => {
+  it('should_store_company_plate_and_driver_when_scheduling_with_a_truck', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.solicitud = [fila(minimo({ estado: 'priorizada', sucursal: 1 })), fila(null), fila(null), fila([])];
-    admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
+    admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: true } })];
     const auditoria = spyRegistrarAuditoria();
 
-    const res = await SolicitudesService.calendarizarSolicitud('s-1', '2099-01-01', USUARIO_ID, 'logistica', 'tr-1');
+    const res = await SolicitudesService.calendarizarSolicitud('s-1', '2099-01-01', USUARIO_ID, 'logistica', { patente: 'abcd-12', conductorNombre: null });
 
     expect(res).toEqual({ success: true });
+    expect(admin.callsTo('camion')).toContainEqual(['eq', 'patente', 'ABCD12']);
     const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
-    expect(update?.[1]).toMatchObject({ estado: 'calendarizada', transportista_id: 'tr-1' });
-    expect(auditoria.mock.calls[0][5]).toMatchObject({ transportista_id: 'tr-1' });
+    expect(update?.[1]).toMatchObject({
+      estado: 'calendarizada',
+      transportista_id: 'tr-1',
+      patente_camion: 'ABCD12',
+      conductor_nombre: 'Pedro',
+    });
+    expect(auditoria.mock.calls[0][5]).toMatchObject({ transportista_id: 'tr-1', patente_camion: 'ABCD12' });
   });
 
-  it('should_reject_scheduling_when_transportista_is_inactive', async () => {
+  it('should_reject_scheduling_when_plate_is_not_registered', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'priorizada' }))];
-    admin.results.transportista = [fila(null)];
+    admin.results.camion = [fila(null)];
 
-    const res = await SolicitudesService.calendarizarSolicitud('s-1', '2099-01-01', USUARIO_ID, 'logistica', 'tr-x');
+    const res = await SolicitudesService.calendarizarSolicitud('s-1', '2099-01-01', USUARIO_ID, 'logistica', { patente: 'ABCD12', conductorNombre: null });
 
-    expect(res).toEqual({ success: false, error: 'El transportista no existe o está inactivo.' });
+    expect(res).toEqual({ success: false, error: 'La patente ABCD-12 no está registrada. Regístrala con su empresa de transporte.' });
     expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
   });
 });
@@ -2006,18 +2013,46 @@ describe('SolicitudesService.despacharSolicitud', () => {
 
   it('should_devolver_error_si_no_se_encuentra', async () => {
     admin.results.solicitud = [{ data: null, error: null }];
-    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID);
+    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID, { 'sv-1': 'G-1' });
     expect(res.error).toBe('Solicitud no encontrada.');
   });
 
   it('should_rechazar_estado_no_calendarizado', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'priorizada' }))];
-    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID);
+    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID, { 'sv-1': 'G-1' });
     expect(res.error).toBe('Solo las solicitudes Calendarizadas pueden despacharse.');
+  });
+
+  it('should_reject_without_touching_state_when_a_vehicle_has_no_guide', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'calendarizada' }))];
+    admin.results.solicitud_vehiculo = [fila([{ id: 'sv-1' }, { id: 'sv-2' }])];
+    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID, { 'sv-1': 'G-1' });
+    expect(res).toEqual({ success: false, error: 'Falta el número de guía de 1 vehículo: no se puede despachar sin guía.' });
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
+    expect(admin.callsTo('solicitud_vehiculo').some((c) => c[0] === 'update')).toBe(false);
+  });
+
+  it('should_save_guides_grouped_before_dispatching', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud = [fila(minimo({ estado: 'calendarizada', sucursal: 1 })), fila(null), fila(null), fila([])];
+    admin.results.solicitud_vehiculo = [fila([{ id: 'sv-1' }, { id: 'sv-2' }, { id: 'sv-3' }])];
+    spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID, { 'sv-1': ' 100 ', 'sv-2': '100', 'sv-3': '200' });
+
+    expect(res).toEqual({ success: true });
+    const updates = admin.callsTo('solicitud_vehiculo').filter((c) => c[0] === 'update' || c[0] === 'in');
+    expect(updates).toEqual([
+      ['update', { numero_guia: '100' }],
+      ['in', 'id', ['sv-1', 'sv-2']],
+      ['update', { numero_guia: '200' }],
+      ['in', 'id', ['sv-3']],
+    ]);
   });
 
   it('should_despachar_y_renumerar_cola', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud_vehiculo = [fila([{ id: 'sv-1' }])];
     admin.results.solicitud = [
       fila(minimo({ estado: 'calendarizada', sucursal: 1 })),
       fila(null),
@@ -2026,7 +2061,7 @@ describe('SolicitudesService.despacharSolicitud', () => {
     ];
     const auditoria = spyRegistrarAuditoria();
 
-    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID);
+    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID, { 'sv-1': 'G-1' });
     expect(res).toEqual({ success: true });
     const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
     expect(update?.[1]).toMatchObject({ estado: 'en_transito', posicion_prioridad: null });
@@ -2036,7 +2071,8 @@ describe('SolicitudesService.despacharSolicitud', () => {
 
   it('should_devolver_error_de_bd', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'calendarizada' })), errorResult('boom')];
-    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID);
+    admin.results.solicitud_vehiculo = [fila([{ id: 'sv-1' }])];
+    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID, { 'sv-1': 'G-1' });
     expect(res.success).toBe(false);
     expect(res.error).toMatch(/código de soporte/);
     expect(res.error).not.toContain('boom');
@@ -2285,5 +2321,73 @@ describe('SolicitudesService.validarVehiculosConUbicacion', () => {
   it('should_skip_query_when_there_are_no_vehicles', async () => {
     expect(await SolicitudesService.validarVehiculosConUbicacion(admin as never, [])).toBeNull();
     expect(admin.callsTo('vehiculo')).toHaveLength(0);
+  });
+});
+
+describe('SolicitudesService: venta desde la sucursal (R1)', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+    vi.spyOn(SolicitudesService, 'validarVehiculosConUbicacion').mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should_reject_a_sale_mixing_vehicles_at_destination_with_others', async () => {
+    admin.results.solicitud_vehiculo = [fila([])];
+    admin.results.vehiculo = [fila([{ id: 'v-1', ubicacion: 101 }, { id: 'v-2', ubicacion: 102 }])];
+
+    const res = await SolicitudesService.createSolicitud(
+      { sucursal: 101, sucursal_destino: 101, tipo_solicitud: 'venta' },
+      ['v-1', 'v-2'],
+      USUARIO_ID
+    );
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('No puedes mezclar');
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'insert')).toBe(false);
+  });
+
+  it('should_mark_without_transfer_and_skip_approval_queue_when_created_approved', async () => {
+    vi.spyOn(SolicitudesService, 'getSolicitudCompleta').mockResolvedValue(null);
+    admin.results.solicitud_vehiculo = [fila([]), fila(null)];
+    admin.results.vehiculo = [fila([{ id: 'v-1', ubicacion: 101 }])];
+    admin.results.solicitud = [fila({ id: 's-new' })];
+    spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.createSolicitud(
+      { sucursal: 101, sucursal_destino: 101, tipo_solicitud: 'venta', estado: 'aprobada' },
+      ['v-1'],
+      USUARIO_ID
+    );
+
+    expect(res.success).toBe(true);
+    const insert = admin.callsTo('solicitud').find((c) => c[0] === 'insert');
+    expect(insert?.[1]).toMatchObject({ sin_traslado: true, estado: 'entregada' });
+    expect(typeof (insert?.[1] as Record<string, unknown>).fecha_confirmacion).toBe('string');
+  });
+
+  it('should_approve_a_sale_without_transfer_straight_to_ready_for_delivery', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'pendiente_aprobacion', sin_traslado: true })), fila([{ id: 's-1' }])];
+    spyRegistrarAuditoria();
+
+    const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, '2099-01-01');
+
+    expect(res).toEqual({ success: true, sinTraslado: true });
+    const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
+    expect(update?.[1]).toMatchObject({ estado: 'entregada' });
+  });
+
+  it('should_reject_adding_a_vehicle_that_does_not_match_the_request_kind', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'aprobada', tipo_solicitud: 'venta', sucursal_destino: 101, sin_traslado: true }))];
+    admin.results.solicitud_vehiculo = [fila([])];
+    admin.results.vehiculo = [fila({ ubicacion: 102 })];
+
+    const res = await SolicitudesService.agregarVehiculo('s-1', 'v-9', USUARIO_ID);
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('no requiere traslado');
   });
 });

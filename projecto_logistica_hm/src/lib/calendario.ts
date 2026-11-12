@@ -1,5 +1,6 @@
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { coincideCodigoSolicitud } from '@/lib/codigoSolicitud';
+import { coincideTransporte } from '@/lib/transporte';
 
 /**
  * Calendario de logística (R16): vistas mensual, semanal y diaria, filtros
@@ -253,7 +254,8 @@ export function cumpleFiltros(s: SolicitudLista, f: FiltrosCalendario, ctx: Cont
     const enVehiculos = s.vehiculos.some(
       (v) => (v.patente ?? '').toLowerCase().includes(q) || v.chasis.toLowerCase().includes(q)
     );
-    if (!enVehiculos && !coincideCodigoSolicitud(s, q)) return false;
+    // R10: también por patente del camión o RUT de la empresa de transporte.
+    if (!enVehiculos && !coincideCodigoSolicitud(s, q) && !coincideTransporte(s, f.busqueda)) return false;
   }
   return true;
 }

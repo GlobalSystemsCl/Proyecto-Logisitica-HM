@@ -53,6 +53,7 @@ import { ACEPTA_DOCUMENTOS, TEXTO_FORMATOS_DOCUMENTO } from '@/lib/archivos';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 import { formatearRut } from '@/lib/rut';
+import { formatearPatente } from '@/lib/patente';
 import BadgeEvento from '@/components/BadgeEvento';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
@@ -827,11 +828,20 @@ export default function SolicitudDetalleModal({
                   </p>
                 </div>
                 <div className="bg-neutral-50 border border-neutral-200 rounded-xl p-4">
-                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Transportista</p>
-                  {solicitud.transportista ? (
+                  <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-1">Transporte</p>
+                  {solicitud.sin_traslado ? (
+                    <p className="text-sm text-green-800">
+                      No requiere: venta desde la sucursal (el vehículo ya estaba en el destino).
+                    </p>
+                  ) : solicitud.transportista ? (
                     <>
-                      <p className="text-sm text-neutral-900 font-medium">{solicitud.transportista.nombre}</p>
-                      <p className="text-xs text-neutral-500">RUT {formatearRut(solicitud.transportista.rut)}</p>
+                      {solicitud.patente_camion && (
+                        <p className="text-sm text-neutral-900 font-semibold font-mono">{formatearPatente(solicitud.patente_camion)}</p>
+                      )}
+                      {solicitud.conductor_nombre && <p className="text-sm text-neutral-900">{solicitud.conductor_nombre}</p>}
+                      <p className="text-xs text-neutral-500">
+                        {solicitud.transportista.nombre} · RUT {formatearRut(solicitud.transportista.rut)}
+                      </p>
                     </>
                   ) : (
                     <p className="text-sm text-neutral-400 italic">Sin asignar</p>
@@ -859,6 +869,7 @@ export default function SolicitudDetalleModal({
                             <p className="text-[11px] text-neutral-500 truncate">
                               {v.chasis} · {v.marca} {v.modelo}{v.anio ? ` · ${v.anio}` : ''}{v.color ? ` · ${v.color}` : ''}
                             </p>
+                            {v.numero_guia && <p className="text-[11px] text-neutral-700 font-semibold">Guía: {v.numero_guia}</p>}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">

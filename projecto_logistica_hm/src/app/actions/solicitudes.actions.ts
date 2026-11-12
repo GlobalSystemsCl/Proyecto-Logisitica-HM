@@ -21,7 +21,9 @@ import type { DatosCorreo } from '@/lib/notificaciones';
 import type { EventoApp } from '@/lib/notificaciones-app';
 import { enSegundoPlano } from '@/lib/segundoPlano';
 import { ocultarContacto, puedeVerContacto } from '@/lib/auth/contacto';
-import { MENSAJE_TRANSPORTISTA_REQUERIDO } from '@/services/transportista.service';
+import { MENSAJE_TRANSPORTE_REQUERIDO } from '@/services/transportista.service';
+import { mensajeSolicitudAprobada, mensajeSolicitudCreada } from '@/lib/ventaSucursal';
+import type { AsignacionTransporte } from '@/types/transportista.types';
 
 /**
  * Dev 2 — Validación multi-sucursal del Jefe Local.
@@ -193,9 +195,14 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
       return { success: false, error: result.error || 'Error al crear la solicitud.' };
     }
 
+    const sinTraslado = Boolean(result.solicitud?.sin_traslado);
     if (result.solicitud?.id) {
       notificar(
-        estadoInicial === 'pendiente_aprobacion' ? 'solicitud_creada' : 'solicitud_aprobada',
+        estadoInicial === 'pendiente_aprobacion'
+          ? 'solicitud_creada'
+          : sinTraslado
+            ? 'solicitud_lista_para_entregar'
+            : 'solicitud_aprobada',
         result.solicitud.id,
         profile.id
       );
@@ -204,10 +211,7 @@ export async function createSolicitudAction(data: CreateSolicitudData) {
     return {
       success: true,
       solicitudId: result.solicitud?.id,
-      message:
-        profile.rol === 'jefe_local'
-          ? 'Solicitud creada y aprobada automáticamente.'
-          : 'Solicitud creada. Pendiente de aprobación por el Jefe de Local.',
+      message: mensajeSolicitudCreada(profile.rol === 'jefe_local', sinTraslado),
     };
   } catch (err: unknown) {
     return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
@@ -240,9 +244,10 @@ export async function aprobarSolicitudAction(id: string, fecha: string) {
     const result = await SolicitudesService.aprobarSolicitud(id, profile.id, fecha);
     if (!result.success) return { success: false, error: result.error };
 
-    notificar('solicitud_aprobada', id, profile.id);
+    // R1: una venta sin traslado no avisa a Logística: queda lista para entregar.
+    notificar(result.sinTraslado ? 'solicitud_lista_para_entregar' : 'solicitud_aprobada', id, profile.id);
     revalidarSolicitudes();
-    return { success: true, message: 'Solicitud aprobada exitosamente.' };
+    return { success: true, message: mensajeSolicitudAprobada(Boolean(result.sinTraslado)) };
   } catch (err: unknown) {
     return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
@@ -628,7 +633,7 @@ export async function getEjecutivosPorSucursalAction(sucursalId: number | null):
 export async function calendarizarSolicitudAction(
   solicitudId: string,
   fechaDespacho: string,
-  transportistaId: string | null
+  transporte: AsignacionTransporte | null
 ) {
   try {
     const profile = await requireProfile();
@@ -643,8 +648,8 @@ export async function calendarizarSolicitudAction(
     if (esFechaAnteriorAHoy(fechaDespacho)) {
       return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
     }
-    if (!transportistaId) {
-      return { success: false, error: MENSAJE_TRANSPORTISTA_REQUERIDO };
+    if (!transporte?.patente?.trim()) {
+      return { success: false, error: MENSAJE_TRANSPORTE_REQUERIDO };
     }
 
     await requireSolicitudAccess(profile, solicitudId);
@@ -654,7 +659,7 @@ export async function calendarizarSolicitudAction(
       fechaDespacho,
       profile.id,
       profile.rol,
-      transportistaId
+      transporte
     );
     if (!result.success) return { success: false, error: result.error };
 
@@ -688,7 +693,8 @@ export async function descalendarizarSolicitudAction(solicitudId: string) {
   }
 }
 
-export async function despacharSolicitudAction(solicitudId: string) {
+/** R15: `guias` = id de solicitud_vehiculo -> número de guía (obligatorio por vehículo). */
+export async function despacharSolicitudAction(solicitudId: string, guias: Record<string, string>) {
   try {
     const profile = await requireProfile();
 
@@ -698,7 +704,7 @@ export async function despacharSolicitudAction(solicitudId: string) {
 
     await requireSolicitudAccess(profile, solicitudId);
 
-    const result = await SolicitudesService.despacharSolicitud(solicitudId, profile.id);
+    const result = await SolicitudesService.despacharSolicitud(solicitudId, profile.id, guias ?? {});
     if (!result.success) return { success: false, error: result.error };
 
     notificar('solicitud_despachada', solicitudId, profile.id);
@@ -769,14 +775,14 @@ export async function recalendarizarSolicitudAction(
   solicitudId: string,
   nuevaFecha: string,
   motivo?: string | null,
-  transportistaId?: string | null
+  transporte?: AsignacionTransporte | null
 ) {
   try {
     const profile = await requireProfile();
     requireRole(profile, ['logistica'], 'Solo Logística puede reprogramar traslados.');
     await requireSolicitudAccess(profile, solicitudId);
 
-    const result = await SolicitudesService.recalendarizarSolicitud(solicitudId, nuevaFecha, profile.id, motivo, transportistaId);
+    const result = await SolicitudesService.recalendarizarSolicitud(solicitudId, nuevaFecha, profile.id, motivo, transporte);
     if (!result.success) return { success: false, error: result.error };
 
     notificar('solicitud_recalendarizada', solicitudId, profile.id, {

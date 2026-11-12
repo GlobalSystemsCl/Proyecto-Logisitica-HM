@@ -247,9 +247,35 @@ describe('TrasladoService', () => {
     });
   });
 
+  describe('despacharTraslado', () => {
+    it('should_save_guide_and_dispatch_when_guide_is_given', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado()), fila(null)];
+      vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
+
+      const res = await TrasladoService.despacharTraslado('t-1', 'log-1', '  GD 77 ');
+
+      expect(res).toEqual({ success: true });
+      expect(admin.callsTo('traslado_interno_vehiculo')).toEqual([
+        ['update', { numero_guia: 'GD 77' }],
+        ['eq', 'traslado_id', 't-1'],
+      ]);
+      expect(admin.callsTo('traslado_interno')).toContainEqual(['update', expect.objectContaining({ estado: 'en_transito' })]);
+    });
+
+    it('should_reject_without_guide_and_keep_transfer_pending', async () => {
+      admin.results.traslado_interno = [fila(filaTraslado())];
+
+      const res = await TrasladoService.despacharTraslado('t-1', 'log-1', '   ');
+
+      expect(res).toEqual({ success: false, error: 'Falta el número de guía de 1 vehículo: no se puede despachar sin guía.' });
+      expect(admin.callsTo('traslado_interno').some((c) => c[0] === 'update')).toBe(false);
+      expect(admin.callsTo('traslado_interno_vehiculo')).toHaveLength(0);
+    });
+  });
+
   describe('crearTraslado', () => {
     it('should_crear_traslado_cuando_todos_los_vehiculos_estan_liberados_sin_validar_slots', async () => {
-      admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
+      admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: true } })];
       admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
       admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
       admin.results.traslado_interno_vehiculo = [fila([]), fila(null)];
@@ -259,7 +285,7 @@ describe('TrasladoService', () => {
       const auditoria = vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
 
       const res = await TrasladoService.crearTraslado(
-        { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' },
+        { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } },
         ['veh-1'],
         'log-1'
       );
@@ -271,7 +297,7 @@ describe('TrasladoService', () => {
       ]);
       expect(res.traslado?.id).toBe('t-1');
       const insert = admin.callsTo('traslado_interno').find((c) => c[0] === 'insert');
-      expect(insert?.[1]).toMatchObject({ transportista_id: 'tr-1' });
+      expect(insert?.[1]).toMatchObject({ transportista_id: 'tr-1', patente_camion: 'ABCD12', conductor_nombre: 'Pedro' });
       expect(JSON.stringify(admin.callsTo('sucursal'))).not.toContain('slots');
       expect(admin.callsTo('solicitud_vehiculo').length).toBeGreaterThan(0);
       expect(auditoria).toHaveBeenCalled();
@@ -280,14 +306,14 @@ describe('TrasladoService', () => {
     it('should_reject_when_vehicle_has_no_branch_or_is_in_another_branch', async () => {
       const preparar = (ubicacion: number | null) => {
         admin.reset();
-        admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
+        admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: true } })];
         admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
         admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
         admin.results.traslado_interno_vehiculo = [fila([])];
         admin.results.solicitud_vehiculo = [fila([]), fila([])];
         admin.results.vehiculo = [fila([{ id: 'veh-1', chasis: 'CH1', ubicacion }])];
       };
-      const entrada = { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' };
+      const entrada = { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } };
 
       preparar(null);
       const sinUbicacion = await TrasladoService.crearTraslado(entrada, ['veh-1'], 'log-1');
@@ -300,14 +326,14 @@ describe('TrasladoService', () => {
     });
 
     it('should_rechazar_traslado_cuando_un_vehiculo_esta_vendido', async () => {
-      admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
+      admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: true } })];
       admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
       admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
       admin.results.traslado_interno_vehiculo = [fila([])];
       admin.results.solicitud_vehiculo = [fila([]), fila([{ vehiculo_id: 'veh-2' }])];
 
       const res = await TrasladoService.crearTraslado(
-        { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' },
+        { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } },
         ['veh-2'],
         'log-1'
       );
@@ -318,14 +344,14 @@ describe('TrasladoService', () => {
     });
 
     it('should_rechazar_traslado_cuando_un_vehiculo_esta_reservado_en_solicitud_activa', async () => {
-      admin.results.transportista = [fila({ id: 'tr-1', activo: true })];
+      admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: true } })];
       admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
       admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
       admin.results.traslado_interno_vehiculo = [fila([])];
       admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'veh-2' }]), fila([])];
 
       const res = await TrasladoService.crearTraslado(
-        { origen_id: 1, destino_id: 2, transportista_id: 'tr-1' },
+        { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } },
         ['veh-2'],
         'log-1'
       );
@@ -336,30 +362,30 @@ describe('TrasladoService', () => {
     });
   });
 
-  describe('crearTraslado: transportista obligatorio', () => {
-    it('should_reject_when_transportista_is_missing', async () => {
-      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: null }, ['veh-1'], 'log-1');
-      expect(res).toEqual({ success: false, error: 'Indica el transportista del traslado.' });
+  describe('crearTraslado: transporte obligatorio (R10)', () => {
+    it('should_reject_when_transport_is_missing', async () => {
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transporte: null }, ['veh-1'], 'log-1');
+      expect(res).toEqual({ success: false, error: 'Indica la patente del camión y el transportista del traslado.' });
       expect(admin.callsTo('traslado_interno')).toHaveLength(0);
     });
 
-    it('should_reject_when_transportista_is_inactive_or_unknown', async () => {
-      admin.results.transportista = [fila({ id: 'tr-1', activo: false })];
-      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: 'tr-1' }, ['veh-1'], 'log-1');
-      expect(res).toEqual({ success: false, error: 'El transportista no existe o está inactivo.' });
+    it('should_reject_when_company_of_the_truck_is_inactive', async () => {
+      admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: false } })];
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } }, ['veh-1'], 'log-1');
+      expect(res).toEqual({ success: false, error: 'El camión ABCD-12 o su empresa están desactivados.' });
       expect(admin.callsTo('traslado_interno')).toHaveLength(0);
     });
   });
 
   describe('crearTraslado: un vehículo por traslado (R14)', () => {
     it('should_reject_when_more_than_one_vehicle_is_selected', async () => {
-      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: 'tr-1' }, ['veh-1', 'veh-2'], 'log-1');
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } }, ['veh-1', 'veh-2'], 'log-1');
       expect(res).toEqual({ success: false, error: 'Cada traslado interno lleva un solo vehículo.' });
       expect(admin.callsTo('traslado_interno')).toHaveLength(0);
     });
 
     it('should_reject_when_no_vehicle_is_selected', async () => {
-      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transportista_id: 'tr-1' }, [], 'log-1');
+      const res = await TrasladoService.crearTraslado({ origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } }, [], 'log-1');
       expect(res).toEqual({ success: false, error: 'Debes seleccionar el vehículo del traslado.' });
     });
   });
@@ -492,5 +518,59 @@ describe('TrasladoService', () => {
       expect(await TrasladoService.getTrasladosEnTransitoHacia([])).toEqual([]);
       expect(admin.callsTo('traslado_interno')).toHaveLength(0);
     });
+  });
+});
+
+describe('TrasladoService.crearTrasladosEnLote (R12)', () => {
+  const input = { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } };
+
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should_create_one_transfer_per_vehicle_and_report_skipped_ones', async () => {
+    const { TransportistaService } = await import('@/services/transportista.service');
+    vi.spyOn(TransportistaService, 'resolverTransporte').mockResolvedValue({
+      ok: true,
+      datos: { transportista_id: 'e1', patente_camion: 'ABCD12', conductor_nombre: 'Pedro' },
+    });
+    const crear = vi
+      .spyOn(TrasladoService, 'crearTraslado')
+      .mockResolvedValueOnce({ success: true, traslado: { id: 't-1' } as never })
+      .mockResolvedValueOnce({ success: false, error: 'Solo los vehículos disponibles pueden trasladarse.' });
+
+    const res = await TrasladoService.crearTrasladosEnLote(input, ['v1', 'v2', 'v1'], 'log-1');
+
+    expect(crear).toHaveBeenCalledTimes(2);
+    expect(crear).toHaveBeenNthCalledWith(1, input, ['v1'], 'log-1');
+    expect(crear).toHaveBeenNthCalledWith(2, input, ['v2'], 'log-1');
+    expect(res).toEqual({
+      success: true,
+      creados: [{ vehiculoId: 'v1', trasladoId: 't-1' }],
+      omitidos: [{ vehiculoId: 'v2', error: 'Solo los vehículos disponibles pueden trasladarse.' }],
+    });
+  });
+
+  it('should_not_try_any_transfer_when_transport_or_selection_is_invalid', async () => {
+    const { TransportistaService } = await import('@/services/transportista.service');
+    vi.spyOn(TransportistaService, 'resolverTransporte').mockResolvedValue({ ok: false, error: 'La patente no está registrada.' });
+    const crear = vi.spyOn(TrasladoService, 'crearTraslado');
+
+    expect(await TrasladoService.crearTrasladosEnLote(input, ['v1'], 'log-1')).toEqual({
+      success: false,
+      creados: [],
+      omitidos: [],
+      error: 'La patente no está registrada.',
+    });
+    expect((await TrasladoService.crearTrasladosEnLote(input, [], 'log-1')).error).toBe('Selecciona al menos un vehículo para trasladar.');
+    expect((await TrasladoService.crearTrasladosEnLote({ ...input, destino_id: 1 }, ['v1'], 'log-1')).error).toBe(
+      'El origen y el destino del traslado deben ser distintos.'
+    );
+    expect(crear).not.toHaveBeenCalled();
   });
 });

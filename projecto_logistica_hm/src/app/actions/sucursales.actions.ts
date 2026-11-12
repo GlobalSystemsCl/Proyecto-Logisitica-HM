@@ -5,6 +5,13 @@ import { mensajeErrorUsuario } from '@/lib/errores';
 import { CODIGO_SUCURSAL_MAX, parsearCodigoSucursal } from '@/lib/validaciones';
 import { SucursalesService } from '@/services/sucursales.service';
 import { revalidatePath } from 'next/cache';
+import { OrganizacionService } from '@/services/organizacion.service';
+import { VehiculoService } from '@/services/vehiculo.service';
+import { SolicitudesService } from '@/services/solicitudes.service';
+import { TrasladoService } from '@/services/traslado.service';
+import { filasEnTransito, type FilaTransito } from '@/lib/transito';
+import { hoyISO } from '@/lib/fechas';
+import type { VehiculoEnSucursal } from '@/types/vehiculo.types';
 
 async function verifyAdminPermission() {
   const profile = await requireProfile();
@@ -121,5 +128,34 @@ export async function deleteSucursalAction(id: number) {
   } catch (err: unknown) {
     const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
+  }
+}
+
+/**
+ * R4 (2026-11-11): vehículos que están en una sucursal y los que van en camino
+ * hacia ella, para el panel de Slots. Logística y administrador ven cualquier
+ * sucursal; el jefe de local, solo las suyas.
+ */
+export async function getVehiculosDeSucursalAction(sucursalId: number): Promise<
+  { success: true; enSucursal: VehiculoEnSucursal[]; enCamino: FilaTransito[] } | { success: false; error: string }
+> {
+  try {
+    const profile = await requireProfile();
+    requireRole(profile, ['administrador', 'logistica', 'jefe_local'], 'No tienes permisos para ver los vehículos de la sucursal.');
+    if (!Number.isInteger(sucursalId) || sucursalId <= 0) return { success: false, error: 'Sucursal no válida.' };
+    if (profile.rol === 'jefe_local' && !(await OrganizacionService.usuarioTieneSucursal(profile.id, sucursalId))) {
+      return { success: false, error: 'Solo puedes ver los vehículos de tus sucursales.' };
+    }
+
+    const [enSucursal, solicitudes, traslados] = await Promise.all([
+      VehiculoService.getVehiculosEnSucursal(sucursalId),
+      SolicitudesService.getRecepcionesPendientes([sucursalId]),
+      TrasladoService.getTrasladosEnTransitoHacia([sucursalId]),
+    ]);
+    // Los eventos de la sucursal también vienen en las recepciones: se dejan solo los que llegan a ella.
+    const hacia = solicitudes.filter((s) => s.sucursal_destino === sucursalId);
+    return { success: true, enSucursal, enCamino: filasEnTransito(hacia, traslados, hoyISO()) };
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }

@@ -186,6 +186,8 @@ export function calcularReporte(
   const pendientesMasAntiguos: PendienteDetalle[] = [];
 
   for (const s of solicitudes) {
+    // R1: una venta sin traslado no pasa por Logística: no cuenta en su reporte.
+    if (s.sin_traslado) continue;
     const f = fila(s.logistica_id);
     const atrasada = estadoPlazo(s, hoy) === 'atrasada';
 

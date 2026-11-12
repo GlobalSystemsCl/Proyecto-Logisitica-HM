@@ -10,6 +10,8 @@ import type {
 import { esFuncionInexistente, mensajeErrorUsuario } from '@/lib/errores';
 import { obtenerTodasLasFilas } from '@/lib/paginacion';
 import { mensajeVehiculosSinUbicacion } from '@/lib/vehiculo';
+import { normalizarGuia, validarGuias } from '@/lib/guiaDespacho';
+import { validarLoteTraslados, type OmitidoLote } from '@/lib/trasladosLote';
 import { sumarDias } from '@/lib/calendario';
 import { TransportistaService } from '@/services/transportista.service';
 import { sanitizarTerminoBusqueda } from '@/lib/busqueda';
@@ -42,12 +44,13 @@ import { validarMotivoCancelacion, validarRecepcion, type DatosRecepcion } from 
 const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
   fecha_despacho, fecha_recepcion, observacion, created_at, updated_at,
   motivo_cancelacion, fecha_cancelacion, recepcion_con_novedades, observacion_recepcion, transportista_id,
+  patente_camion, conductor_nombre,
   transportista:transportista_id(id, nombre, rut),
   origen:sucursal!traslado_interno_origen_id_fkey(nombre),
   destino:sucursal!traslado_interno_destino_id_fkey(nombre),
   logistica:usuario!traslado_interno_logistica_id_fkey(nombre, apellido),
   traslado_interno_vehiculo(
-    id, disponibilidad, vehiculo_id,
+    id, disponibilidad, vehiculo_id, numero_guia,
     vehiculo:vehiculo_id(id, chasis, patente, marca, modelo, anio, color, ubicacion)
   )`;
 
@@ -80,6 +83,8 @@ interface TrasladoRawRow {
   recepcion_con_novedades?: boolean | null;
   observacion_recepcion?: string | null;
   transportista?: { id: string; nombre: string; rut: string } | null;
+  patente_camion?: string | null;
+  conductor_nombre?: string | null;
   origen: { nombre: string | null } | null;
   destino: { nombre: string | null } | null;
   logistica: { nombre: string; apellido: string } | null;
@@ -87,6 +92,7 @@ interface TrasladoRawRow {
     id: string;
     disponibilidad: 'reservado' | 'liberado' | 'vendido';
     vehiculo_id: string;
+    numero_guia?: string | null;
     vehiculo: {
       id: string;
       chasis: string;
@@ -124,11 +130,14 @@ function mapTraslado(row: TrasladoRawRow): TrasladoInterno {
     recepcion_con_novedades: row.recepcion_con_novedades ?? null,
     observacion_recepcion: row.observacion_recepcion ?? null,
     transportista: row.transportista ?? null,
+    patente_camion: row.patente_camion ?? null,
+    conductor_nombre: row.conductor_nombre ?? null,
     vehiculos: (row.traslado_interno_vehiculo || [])
       .filter((tv) => tv.vehiculo)
       .map((tv) => ({
         traslado_vehiculo_id: tv.id,
         disponibilidad: tv.disponibilidad,
+        numero_guia: tv.numero_guia ?? null,
         id: tv.vehiculo!.id,
         chasis: tv.vehiculo!.chasis,
         patente: tv.vehiculo!.patente,
@@ -169,9 +178,9 @@ export class TrasladoService {
       if (input.origen_id === input.destino_id) {
         return { success: false, error: 'El origen y el destino del traslado deben ser distintos.' };
       }
-      // Pedido del cliente (2026-10-19): todo traslado registra su transportista.
-      const errTransportista = await TransportistaService.validarAsignable(input.transportista_id);
-      if (errTransportista) return { success: false, error: errTransportista };
+      // Todo traslado registra su transporte (R10: patente, empresa y transportista).
+      const transporte = await TransportistaService.resolverTransporte(input.transporte);
+      if (!transporte.ok) return { success: false, error: transporte.error };
 
       const { data: sucursales, error: sucError } = await admin
         .from('sucursal')
@@ -268,7 +277,7 @@ export class TrasladoService {
           logistica_id: logisticaId,
           estado: 'pendiente',
           observacion: input.observacion?.trim() || null,
-          transportista_id: input.transportista_id,
+          ...transporte.datos,
         })
         .select('id')
         .single();
@@ -312,9 +321,51 @@ export class TrasladoService {
   }
 
   /** Logística despacha: `pendiente` -> `en_transito` (+ `fecha_despacho`). */
+  /**
+   * R12: crea un traslado por vehículo con el mismo origen, destino y
+   * transporte. Cada traslado se valida por separado (disponible, en la
+   * sucursal de origen, sin otro traslado): los que fallan se informan con su
+   * motivo y no impiden crear los demás.
+   */
+  static async crearTrasladosEnLote(
+    input: CreateTrasladoInput,
+    vehiculosIds: string[],
+    userId: string
+  ): Promise<{
+    success: boolean;
+    creados: Array<{ vehiculoId: string; trasladoId: string }>;
+    omitidos: OmitidoLote[];
+    error?: string;
+  }> {
+    const errorLote = validarLoteTraslados(vehiculosIds);
+    if (errorLote) return { success: false, creados: [], omitidos: [], error: errorLote };
+    if (input.origen_id === input.destino_id) {
+      return { success: false, creados: [], omitidos: [], error: 'El origen y el destino del traslado deben ser distintos.' };
+    }
+    // El transporte es el mismo para todos: si no sirve, no se intenta ninguno.
+    const transporte = await TransportistaService.resolverTransporte(input.transporte);
+    if (!transporte.ok) return { success: false, creados: [], omitidos: [], error: transporte.error };
+
+    const creados: Array<{ vehiculoId: string; trasladoId: string }> = [];
+    const omitidos: OmitidoLote[] = [];
+    // En serie: el trigger de slots y las validaciones de cada traslado leen
+    // el estado que dejó el anterior.
+    for (const vehiculoId of [...new Set(vehiculosIds)]) {
+      const res = await TrasladoService.crearTraslado(input, [vehiculoId], userId);
+      if (res.success && res.traslado) creados.push({ vehiculoId, trasladoId: res.traslado.id });
+      else omitidos.push({ vehiculoId, error: res.error ?? 'No se pudo crear el traslado.' });
+    }
+    return { success: creados.length > 0, creados, omitidos };
+  }
+
+  /**
+   * Despacha: `pendiente` -> `en_transito`. R15: exige el número de guía (el
+   * traslado lleva un solo vehículo) y lo guarda antes de cambiar el estado.
+   */
   static async despacharTraslado(
     trasladoId: string,
-    logisticaId: string
+    logisticaId: string,
+    numeroGuia: string
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
@@ -332,6 +383,16 @@ export class TrasladoService {
         }
       }
 
+      const ids = actual.vehiculos.map((v) => v.traslado_vehiculo_id);
+      const guia = normalizarGuia(numeroGuia);
+      const validas = validarGuias(ids, Object.fromEntries(ids.map((vid) => [vid, guia])));
+      if (!validas.ok) return { success: false, error: validas.error };
+      const { error: guiaError } = await admin
+        .from('traslado_interno_vehiculo')
+        .update({ numero_guia: guia })
+        .eq('traslado_id', trasladoId);
+      if (guiaError) return { success: false, error: mensajeErrorUsuario(guiaError, 'No se pudo guardar el número de guía.') };
+
       const ahora = new Date().toISOString();
       const { error } = await admin
         .from('traslado_interno')
@@ -346,7 +407,7 @@ export class TrasladoService {
         trasladoId,
         'despacho',
         { estado: 'pendiente' },
-        { estado: 'en_transito', fecha_despacho: ahora }
+        { estado: 'en_transito', fecha_despacho: ahora, numero_guia: guia }
       );
 
       return { success: true };

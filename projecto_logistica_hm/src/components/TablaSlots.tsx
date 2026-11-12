@@ -22,6 +22,24 @@ interface TablaSlotsProps {
   /** Muestra la columna de zona (vista global del administrador). */
   conZona?: boolean;
   textoVacio?: string;
+  /** R4: si viene, el nombre de la sucursal abre sus vehículos. */
+  onVerVehiculos?: (sucursal: SlotSucursal) => void;
+}
+
+/** Nombre de la sucursal: botón si se pueden ver sus vehículos. */
+function NombreSucursal({ s, onVerVehiculos }: { s: SlotSucursal; onVerVehiculos?: (s: SlotSucursal) => void }) {
+  const nombre = s.nombre ?? `#${s.id}`;
+  if (!onVerVehiculos) return <>{nombre}</>;
+  return (
+    <button
+      type="button"
+      onClick={() => onVerVehiculos(s)}
+      title="Ver los vehículos de esta sucursal"
+      className="text-left underline decoration-dotted underline-offset-2 hover:decoration-solid cursor-pointer"
+    >
+      {nombre}
+    </button>
+  );
 }
 
 /** Barra de uso y etiqueta de estado: la comparten la tabla y las tarjetas móviles. */
@@ -44,7 +62,12 @@ function BarraEstado({ fila, className = '' }: { fila: FilaSlots<SlotSucursal>; 
  * Tabla de slots por sucursal. La comparten `/logistica/slots` y el panel del
  * Jefe de Local en el dashboard, para que ambas se vean igual.
  */
-export default function TablaSlots({ filas, conZona = false, textoVacio = 'No hay sucursales para mostrar.' }: TablaSlotsProps) {
+export default function TablaSlots({
+  filas,
+  conZona = false,
+  textoVacio = 'No hay sucursales para mostrar.',
+  onVerVehiculos,
+}: TablaSlotsProps) {
   const porcentajeExtra = Math.round(PORCENTAJE_SLOTS_EXTRA * 100);
   return (
     <>
@@ -58,7 +81,9 @@ export default function TablaSlots({ filas, conZona = false, textoVacio = 'No ha
           return (
             <li key={s.id} className="px-5 py-4 space-y-2.5">
               <div className="flex items-baseline justify-between gap-3">
-                <p className="font-semibold text-neutral-900 min-w-0 break-words">{s.nombre ?? `#${s.id}`}</p>
+                <p className="font-semibold text-neutral-900 min-w-0 break-words">
+                  <NombreSucursal s={s} onVerVehiculos={onVerVehiculos} />
+                </p>
                 {conZona && <span className="shrink-0 text-xs text-neutral-500">{s.zona_nombre ?? 'Sin zona'}</span>}
               </div>
               <BarraEstado fila={s} />
@@ -103,7 +128,9 @@ export default function TablaSlots({ filas, conZona = false, textoVacio = 'No ha
               const color = COLOR_ESTADO_SLOTS[s.estado];
               return (
                 <tr key={s.id} className="hover:bg-neutral-50 transition-colors">
-                  <td className="px-5 py-3 font-semibold text-neutral-900">{s.nombre ?? `#${s.id}`}</td>
+                  <td className="px-5 py-3 font-semibold text-neutral-900">
+                    <NombreSucursal s={s} onVerVehiculos={onVerVehiculos} />
+                  </td>
                   {conZona && <td className="px-5 py-3 text-neutral-500">{s.zona_nombre ?? '—'}</td>}
                   <td className="px-5 py-3 text-neutral-700">{s.real}</td>
                   <td className="px-5 py-3 text-neutral-700">{s.extra}</td>

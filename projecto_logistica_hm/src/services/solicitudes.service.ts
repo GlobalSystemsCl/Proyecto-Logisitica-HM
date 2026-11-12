@@ -17,8 +17,11 @@ import { mensajeErrorUsuario } from '@/lib/errores';
 import { obtenerTodasLasFilas, type ConsultaPaginable } from '@/lib/paginacion';
 import { sumarDias } from '@/lib/calendario';
 import { TransportistaService } from '@/services/transportista.service';
+import type { AsignacionTransporte, DatosTransporte } from '@/types/transportista.types';
 import { validarContenidoArchivo } from '@/lib/archivos';
 import { mensajeVehiculosSinUbicacion } from '@/lib/vehiculo';
+import { idsPorGuia, validarGuias } from '@/lib/guiaDespacho';
+import { MENSAJE_MEZCLA_SUCURSAL, clasificarVenta, errorAgregarVehiculo, estadoAlAprobar, type ClaseVenta } from '@/lib/ventaSucursal';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import {
   textoObservacionRecepcion,
@@ -105,9 +108,13 @@ interface SolicitudRawRow {
   logistica: { nombre: string; apellido: string } | null;
   creador: { nombre: string; apellido: string } | null;
   transportista?: { id: string; nombre: string; rut: string } | null;
+  patente_camion?: string | null;
+  conductor_nombre?: string | null;
+  sin_traslado?: boolean | null;
   solicitud_vehiculo: Array<{
     id: string;
     disponibilidad: DisponibilidadVehiculo;
+    numero_guia?: string | null;
     vehiculo: {
       chasis: string;
       patente: string;
@@ -124,7 +131,7 @@ function persona(p: { nombre: string; apellido: string } | null): string | null 
 }
 
 const SOLICITUD_SELECT = `id, sucursal, numero, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
-  ejecutivo_id, jefe_local_id, logistica_id, creado_por, transportista_id,
+  ejecutivo_id, jefe_local_id, logistica_id, creado_por, transportista_id, patente_camion, conductor_nombre, sin_traslado,
   fecha_creacion, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_limite, motivo_cancelacion,
   fecha_confirmacion, fecha_inicio_transito, fecha_recepcion, fecha_entrega_cliente,
   direccion_evento, titulo_evento,
@@ -135,7 +142,7 @@ const SOLICITUD_SELECT = `id, sucursal, numero, sucursal_destino, estado, tipo_s
   logistica:logistica_id(nombre, apellido),
   creador:creado_por(nombre, apellido),
   transportista:transportista_id(id, nombre, rut),
-  solicitud_vehiculo(id, disponibilidad, vehiculo(chasis, patente, marca, modelo, anio, color))`;
+  solicitud_vehiculo(id, disponibilidad, numero_guia, vehiculo(chasis, patente, marca, modelo, anio, color))`;
 
 function mapRow(row: SolicitudRawRow): SolicitudLista {
   return {
@@ -157,6 +164,9 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
     creado_por: row.creado_por ?? null,
     creado_por_nombre: persona(row.creador),
     transportista: row.transportista ?? null,
+    patente_camion: row.patente_camion ?? null,
+    conductor_nombre: row.conductor_nombre ?? null,
+    sin_traslado: row.sin_traslado ?? false,
     fecha_creacion: row.fecha_creacion,
     fecha_tentativa_despacho: row.fecha_tentativa_despacho,
     fecha_despacho: row.fecha_despacho,
@@ -175,6 +185,7 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
       .map((sv) => ({
         solicitud_vehiculo_id: sv.id,
         disponibilidad: sv.disponibilidad,
+        numero_guia: sv.numero_guia ?? null,
         patente: sv.vehiculo!.patente,
         chasis: sv.vehiculo!.chasis,
         marca: sv.vehiculo!.marca,
@@ -200,6 +211,9 @@ export interface SolicitudMinima {
   fecha_entrega: string | null;
   fecha_inicio_transito: string | null;
   transportista_id?: string | null;
+  patente_camion?: string | null;
+  conductor_nombre?: string | null;
+  sin_traslado?: boolean | null;
 }
 
 /**
@@ -643,7 +657,7 @@ export class SolicitudesService {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('solicitud')
-        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, logistica_id, tipo_solicitud, posicion_prioridad, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_inicio_transito, transportista_id')
+        .select('id, estado, sucursal, sucursal_destino, ejecutivo_id, jefe_local_id, logistica_id, tipo_solicitud, posicion_prioridad, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_inicio_transito, transportista_id, patente_camion, conductor_nombre, sin_traslado')
         .eq('id', id)
         .maybeSingle();
 
@@ -736,6 +750,19 @@ export class SolicitudesService {
 
       const errorUbicacion = await SolicitudesService.validarVehiculosConUbicacion(admin, vehiculoIds);
       if (errorUbicacion) return { success: false, error: errorUbicacion };
+
+      // R1: venta de vehículos que ya están en el destino: sin traslado. Si la
+      // crea un jefe de local (ya aprobada), queda directo lista para entregar.
+      const clase = await SolicitudesService.claseVenta(admin, input.tipo_solicitud, input.sucursal_destino ?? null, vehiculoIds);
+      if ('error' in clase) return { success: false, error: clase.error };
+      if (clase.clase === 'mixta') return { success: false, error: MENSAJE_MEZCLA_SUCURSAL };
+      if (clase.clase === 'sin_traslado') {
+        insertData.sin_traslado = true;
+        if (insertData.estado === 'aprobada') {
+          insertData.estado = estadoAlAprobar(true);
+          insertData.fecha_confirmacion = new Date().toISOString();
+        }
+      }
 
       const { data, error } = await admin
         .from('solicitud')
@@ -1261,11 +1288,15 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * Aprueba. R1: una venta sin traslado queda directo `entregada` (lista para
+   * entregar al cliente): no pasa por la cola ni por Logística.
+   */
   static async aprobarSolicitud(
     id: string,
     userId: string,
     fecha: string
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; sinTraslado?: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
@@ -1287,16 +1318,25 @@ export class SolicitudesService {
       }
 
       const ahora = new Date().toISOString();
+      const sinTraslado = Boolean(actual.sin_traslado);
+      const nuevoEstado = estadoAlAprobar(sinTraslado);
 
       const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
-          estado: 'aprobada',
+          estado: nuevoEstado,
           fecha_limite: fechaEntrega,
           fecha_confirmacion: ahora,
         });
       if (errEstado) return { success: false, error: errEstado };
 
-      await this.registrarAuditoria(userId, 'solicitud', id, 'aprobacion', { estado: actual.estado }, { estado: 'aprobada', fecha_entrega: fechaEntrega, fecha_confirmacion: ahora });
-      return { success: true };
+      await this.registrarAuditoria(
+        userId,
+        'solicitud',
+        id,
+        'aprobacion',
+        { estado: actual.estado },
+        { estado: nuevoEstado, fecha_entrega: fechaEntrega, fecha_confirmacion: ahora, ...(sinTraslado ? { sin_traslado: true } : {}) }
+      );
+      return { success: true, sinTraslado };
     } catch (err: unknown) {
       return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al aprobar') };
     }
@@ -1746,6 +1786,24 @@ export class SolicitudesService {
     return sinUbicacion.length > 0 ? mensajeVehiculosSinUbicacion(sinUbicacion) : null;
   }
 
+  /**
+   * R1: clase de una venta según dónde están sus vehículos respecto del
+   * destino (sin traslado, con traslado o mixta). Un evento siempre lleva
+   * traslado.
+   */
+  static async claseVenta(
+    admin: SupabaseClient,
+    tipo: SolicitudLista['tipo_solicitud'],
+    destino: number | null,
+    vehiculoIds: string[]
+  ): Promise<{ clase: ClaseVenta } | { error: string }> {
+    if (tipo !== 'venta' || !destino || vehiculoIds.length === 0) return { clase: 'con_traslado' };
+    const { data, error } = await admin.from('vehiculo').select('id, ubicacion').in('id', vehiculoIds);
+    if (error) return { error: mensajeErrorUsuario(error, 'No se pudo verificar dónde están los vehículos.') };
+    const ubicaciones = ((data ?? []) as Array<{ ubicacion: number | null }>).map((v) => v.ubicacion);
+    return { clase: clasificarVenta(tipo, destino, ubicaciones) };
+  }
+
   static async agregarVehiculo(
     solicitudId: string,
     vehiculoId: string,
@@ -1774,6 +1832,17 @@ export class SolicitudesService {
 
       const errorUbicacion = await SolicitudesService.validarVehiculosConUbicacion(admin, [vehiculoId]);
       if (errorUbicacion) return { success: false, error: errorUbicacion };
+
+      if (actual.tipo_solicitud === 'venta') {
+        const { data: veh } = await admin.from('vehiculo').select('ubicacion').eq('id', vehiculoId).maybeSingle();
+        const errorClase = errorAgregarVehiculo(
+          Boolean(actual.sin_traslado),
+          actual.tipo_solicitud,
+          actual.sucursal_destino,
+          (veh as { ubicacion: number | null } | null)?.ubicacion
+        );
+        if (errorClase) return { success: false, error: errorClase };
+      }
 
       const { data, error } = await admin
         .from('solicitud_vehiculo')
@@ -1854,21 +1923,27 @@ export class SolicitudesService {
    * `transportistaId`: quién hace el traslado (lo exige la action al programar
    * desde el calendario); si se indica, debe existir y estar activo.
    */
+  /**
+   * Programa la solicitud. R10: `transporte` (patente y transportista) se
+   * resuelve en la empresa, la patente y el conductor que quedan guardados.
+   */
   static async calendarizarSolicitud(
     id: string,
     fechaDespacho: string,
     usuarioId: string,
     rolActor?: UserRole,
-    transportistaId?: string | null
+    transporte?: AsignacionTransporte | null
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
 
       const actual = await this.getSolicitudById(id);
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
-      if (transportistaId) {
-        const errTransportista = await TransportistaService.validarAsignable(transportistaId);
-        if (errTransportista) return { success: false, error: errTransportista };
+      let datosTransporte: DatosTransporte | null = null;
+      if (transporte) {
+        const resuelto = await TransportistaService.resolverTransporte(transporte);
+        if (!resuelto.ok) return { success: false, error: resuelto.error };
+        datosTransporte = resuelto.datos;
       }
       if (esFechaAnteriorAHoy(fechaDespacho)) {
         return { success: false, error: 'La fecha de despacho no puede ser anterior al día de hoy.' };
@@ -1892,7 +1967,7 @@ export class SolicitudesService {
           logistica_id: actual.logistica_id ?? (rolActor === 'jefe_local' ? null : usuarioId),
           // Al calendarizar sale de la cola: libera el slot de prioridad
           posicion_prioridad: null,
-          ...(transportistaId ? { transportista_id: transportistaId } : {}),
+          ...(datosTransporte ?? {}),
         });
       if (errEstado) return { success: false, error: errEstado };
 
@@ -1914,7 +1989,7 @@ export class SolicitudesService {
           estado: 'calendarizada',
           fecha_tentativa_despacho: fechaDespacho,
           posicion_prioridad: null,
-          ...(transportistaId ? { transportista_id: transportistaId } : {}),
+          ...(datosTransporte ?? {}),
         }
       );
 
@@ -1970,9 +2045,15 @@ export class SolicitudesService {
    * Registra `fecha_despacho` + `fecha_inicio_transito` (respaldo en DB:
    * trigger `tr_registrar_fechas_flujo`).
    */
+  /**
+   * Despacha: `calendarizada` -> `en_transito`. R15: exige el número de guía de
+   * cada vehículo (`guias`: id de solicitud_vehiculo -> guía) y lo guarda antes
+   * de cambiar el estado; sin todas las guías no se despacha.
+   */
   static async despacharSolicitud(
     id: string,
-    usuarioId: string
+    usuarioId: string,
+    guias: Record<string, string>
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const admin = createAdminClient();
@@ -1981,6 +2062,19 @@ export class SolicitudesService {
       if (!actual) return { success: false, error: 'Solicitud no encontrada.' };
       if (actual.estado !== 'calendarizada') {
         return { success: false, error: 'Solo las solicitudes Calendarizadas pueden despacharse.' };
+      }
+
+      const { data: vinculos, error: vincError } = await admin
+        .from('solicitud_vehiculo')
+        .select('id')
+        .eq('solicitud_id', id);
+      if (vincError) return { success: false, error: mensajeErrorUsuario(vincError, 'No se pudieron leer los vehículos.') };
+      const validas = validarGuias(((vinculos ?? []) as Array<{ id: string }>).map((v) => v.id), guias);
+      if (!validas.ok) return { success: false, error: validas.error };
+
+      for (const [guia, ids] of idsPorGuia(validas.guias)) {
+        const { error: guiaError } = await admin.from('solicitud_vehiculo').update({ numero_guia: guia }).in('id', ids);
+        if (guiaError) return { success: false, error: mensajeErrorUsuario(guiaError, 'No se pudo guardar el número de guía.') };
       }
 
       const ahora = new Date().toISOString();
@@ -2004,7 +2098,7 @@ export class SolicitudesService {
         id,
         'despacho',
         { estado: 'calendarizada', fecha_despacho: null },
-        { estado: 'en_transito', fecha_despacho: ahora, fecha_inicio_transito: ahora }
+        { estado: 'en_transito', fecha_despacho: ahora, fecha_inicio_transito: ahora, guias: validas.guias }
       );
 
       return { success: true };
@@ -2147,7 +2241,7 @@ export class SolicitudesService {
     nuevaFecha: string,
     usuarioId: string,
     motivo?: string | null,
-    transportistaId?: string | null
+    transporte?: AsignacionTransporte | null
   ): Promise<{ success: boolean; fechaAnterior?: string | null; error?: string }> {
     try {
       const admin = createAdminClient();
@@ -2170,15 +2264,27 @@ export class SolicitudesService {
         return { success: false, error: 'La nueva fecha es igual a la fecha programada.' };
       }
 
-      const cambiaTransportista = !!transportistaId && transportistaId !== (actual.transportista_id ?? null);
-      if (cambiaTransportista) {
-        const errTransportista = await TransportistaService.validarAsignable(transportistaId);
-        if (errTransportista) return { success: false, error: errTransportista };
+      // R10: el transporte se cambia solo si se indica uno distinto del actual.
+      let nuevoTransporte: DatosTransporte | null = null;
+      if (transporte) {
+        const resuelto = await TransportistaService.resolverTransporte(transporte);
+        if (!resuelto.ok) return { success: false, error: resuelto.error };
+        const d = resuelto.datos;
+        const igual =
+          d.transportista_id === (actual.transportista_id ?? null) &&
+          d.patente_camion === (actual.patente_camion ?? null) &&
+          d.conductor_nombre === (actual.conductor_nombre ?? null);
+        if (!igual) nuevoTransporte = d;
       }
+      const transporteAnterior = {
+        transportista_id: actual.transportista_id ?? null,
+        patente_camion: actual.patente_camion ?? null,
+        conductor_nombre: actual.conductor_nombre ?? null,
+      };
 
       const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
         fecha_tentativa_despacho: nuevaFecha,
-        ...(cambiaTransportista ? { transportista_id: transportistaId } : {}),
+        ...(nuevoTransporte ?? {}),
       });
       if (errEstado) return { success: false, error: errEstado };
 
@@ -2189,12 +2295,12 @@ export class SolicitudesService {
         'recalendarizacion',
         {
           fecha_tentativa_despacho: fechaAnterior,
-          ...(cambiaTransportista ? { transportista_id: actual.transportista_id ?? null } : {}),
+          ...(nuevoTransporte ? transporteAnterior : {}),
         },
         {
           fecha_tentativa_despacho: nuevaFecha,
           motivo: motivo?.trim() || null,
-          ...(cambiaTransportista ? { transportista_id: transportistaId } : {}),
+          ...(nuevoTransporte ?? {}),
         }
       );
 

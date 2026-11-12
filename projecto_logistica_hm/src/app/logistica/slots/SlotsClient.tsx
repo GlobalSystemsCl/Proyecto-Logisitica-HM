@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { LayoutGrid, TrendingUp, TrendingDown } from 'lucide-react';
 import { PORCENTAJE_SLOTS_EXTRA, filaSlots, type EstadoCapacidad } from '@/lib/slots';
 import TablaSlots, { type SlotSucursal } from '@/components/TablaSlots';
+import PanelVehiculosSucursal from '@/components/PanelVehiculosSucursal';
 
 interface SlotsClientProps {
   /** Todas las sucursales (administrador y logística) en vez de solo las asignadas. */
@@ -19,6 +20,8 @@ interface SlotsClientProps {
  */
 export default function SlotsClient({ vistaGlobal, sucursales }: SlotsClientProps) {
   const [filtro, setFiltro] = useState<'todas' | EstadoCapacidad>('todas');
+  /** R4: sucursal cuyos vehículos se están viendo. */
+  const [verSucursal, setVerSucursal] = useState<SlotSucursal | null>(null);
 
   const filas = useMemo(() => sucursales.map(filaSlots), [sucursales]);
 
@@ -89,8 +92,11 @@ export default function SlotsClient({ vistaGlobal, sucursales }: SlotsClientProp
       </div>
 
       <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden shadow-sm">
-        <TablaSlots filas={visibles} conZona={vistaGlobal} />
+        <TablaSlots filas={visibles} conZona={vistaGlobal} onVerVehiculos={setVerSucursal} />
       </div>
+      <p className="text-xs text-neutral-500">Haz clic en el nombre de una sucursal para ver sus vehículos y los que van en camino hacia ella.</p>
+
+      {verSucursal && <PanelVehiculosSucursal sucursal={verSucursal} onCerrar={() => setVerSucursal(null)} />}
     </div>
   );
 }

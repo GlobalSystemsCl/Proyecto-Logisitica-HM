@@ -183,6 +183,13 @@ describe('cumpleFiltros', () => {
     expect(cumpleFiltros(sol(), f, ctx)).toBe(true);
   });
 
+  it('should_find_by_truck_plate_or_company_rut', () => {
+    const conCamion = sol({ patente_camion: 'ABCD12', transportista: { id: 'e1', nombre: 'Sur', rut: '76543210-3' } });
+    expect(cumpleFiltros(conCamion, { ...f, busqueda: 'abcd-12' }, ctx)).toBe(true);
+    expect(cumpleFiltros(conCamion, { ...f, busqueda: '76.543.210-3' }, ctx)).toBe(true);
+    expect(cumpleFiltros(conCamion, { ...f, busqueda: 'WXYZ99' }, ctx)).toBe(false);
+  });
+
   it('should_filter_by_branch_zone_state_type_and_manager', () => {
     expect(cumpleFiltros(sol(), { ...f, origen: '2' }, ctx)).toBe(false);
     expect(cumpleFiltros(sol(), { ...f, destino: '2' }, ctx)).toBe(true);

@@ -161,6 +161,8 @@ describe('config/dashboard-cards', () => {
         'movimientos',
         'slots',
         'solicitudes',
+        'transito',
+        'transportistas',
         'traslados',
         'vehiculos',
       ]);

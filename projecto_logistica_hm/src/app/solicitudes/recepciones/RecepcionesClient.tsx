@@ -14,6 +14,7 @@ import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { CHIP_ATRASO, getEstadoAtraso } from '../SolicitudesClient';
+import { guiasTexto } from '@/lib/guiaDespacho';
 
 interface Props {
   solicitudes: SolicitudLista[];
@@ -103,6 +104,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                         <p className="text-xs text-neutral-500 truncate">
                           {s.vehiculos.map((v) => etiquetaVehiculo(v)).filter(Boolean).join(' · ') || 'Sin vehículos'}
                         </p>
+                        {guiasTexto(s.vehiculos) && <p className="text-xs text-neutral-700 font-semibold">Guía: {guiasTexto(s.vehiculos)}</p>}
                         <p className="text-xs text-neutral-500">
                           Despacho: {formatFecha(s.fecha_despacho)} · {ETIQUETA_FECHA_LIMITE}: {formatFecha(s.fecha_limite)}
                         </p>
@@ -139,6 +141,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                       <p className="text-xs text-neutral-500 truncate">
                         {t.vehiculos.map((v) => `${v.patente ?? v.chasis} · ${v.marca} ${v.modelo}`).join(' · ') || 'Sin vehículo'}
                       </p>
+                      {guiasTexto(t.vehiculos) && <p className="text-xs text-neutral-700 font-semibold">Guía: {guiasTexto(t.vehiculos)}</p>}
                       <p className="text-xs text-neutral-500">
                         Despacho: {formatFecha(t.fecha_despacho)} · Logística: {t.logistica_nombre ?? '—'}
                       </p>

@@ -13,10 +13,11 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  CheckSquare,
 } from 'lucide-react';
 import {
   cancelarTrasladoAction,
-  crearTrasladoAction,
+  crearTrasladosAction,
   despacharTrasladoAction,
   recibirTrasladoAction,
   getVehiculosParaTrasladoAction,
@@ -31,10 +32,12 @@ import { Marca } from '@/types/vehiculo.types';
 import { formatFecha } from '@/lib/fechas';
 import { CancelarTransitoModal, RecepcionModal } from '@/components/ModalesTraslado';
 import type { DatosRecepcion } from '@/lib/recepcion';
-import SelectorTransportista from '@/components/SelectorTransportista';
-import { formatearRut } from '@/lib/rut';
+import SelectorCamion from '@/components/SelectorCamion';
+import { MAX_TRASLADOS_POR_LOTE, mensajeResultadoLote } from '@/lib/trasladosLote';
 import { codigoTraslado } from '@/lib/codigoSolicitud';
-import type { Transportista } from '@/types/transportista.types';
+import type { AsignacionTransporte, EmpresaTransporte } from '@/types/transportista.types';
+import { errorAsignacionTransporte, textoTransporte } from '@/lib/transporte';
+import ModalGuiaDespacho from '@/components/ModalGuiaDespacho';
 
 const PAGE_SIZE = 12;
 
@@ -53,8 +56,8 @@ interface TrasladosClientProps {
   esOperador: boolean;
   viewerRol: string;
   viewerSucursales: number[];
-  /** Transportistas activos (solo se cargan para Logística y el administrador). */
-  transportistas?: Transportista[];
+  /** R10: empresas activas con sus camiones activos (solo para Logística y el administrador). */
+  empresas?: EmpresaTransporte[];
   /** R2: traslado que se abre al entrar desde una notificación (`?traslado=`). */
   trasladoInicialId?: string | null;
 }
@@ -67,7 +70,7 @@ export default function TrasladosClient({
   esOperador,
   viewerRol,
   viewerSucursales,
-  transportistas = [],
+  empresas = [],
   trasladoInicialId = null,
 }: TrasladosClientProps) {
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
@@ -84,9 +87,11 @@ export default function TrasladosClient({
   const [origen, setOrigen] = useState<number | ''>('');
   const [destino, setDestino] = useState<number | ''>('');
   const [observacion, setObservacion] = useState('');
-  const [transportistaId, setTransportistaId] = useState<string | null>(null);
-  const [listaTransportistas, setListaTransportistas] = useState<Transportista[]>(transportistas);
+  const [transporte, setTransporte] = useState<AsignacionTransporte | null>(null);
+  const [listaEmpresas, setListaEmpresas] = useState<EmpresaTransporte[]>(empresas);
   const [seleccionados, setSeleccionados] = useState<string[]>([]);
+  /** R12: chasis o patente de cada vehículo elegido (para el resumen, aunque cambie de página). */
+  const [etiquetas, setEtiquetas] = useState<Record<string, string>>({});
 
   // Búsqueda y paginación de vehículos
   const [busqueda, setBusqueda] = useState('');
@@ -125,13 +130,46 @@ export default function TrasladosClient({
 
   const visibles = traslados.filter((t) => filtro === 'todos' || t.estado === filtro);
 
-  const toggleVehiculo = (id: string) => {
+  // R12: se eligen uno o varios vehículos; se crea un traslado por vehículo.
+  const toggleVehiculo = (id: string, etiqueta: string) => {
     if (cargandoVehiculos) return;
-    // R14: cada traslado interno lleva un solo vehículo.
-    setSeleccionados((prev) => (prev.includes(id) ? [] : [id]));
+    setSeleccionados((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      return prev.length >= MAX_TRASLADOS_POR_LOTE ? prev : [...prev, id];
+    });
+    setEtiquetas((prev) => ({ ...prev, [id]: etiqueta }));
   };
 
-  const puedeCrear = esOperador && origen !== '' && destino !== '' && seleccionados.length === 1 && !!transportistaId;
+  const seleccionablesPagina = resultados.vehiculos.filter((v) => !v.en_traslado_activo);
+  const paginaSeleccionada = seleccionablesPagina.length > 0 && seleccionablesPagina.every((v) => seleccionados.includes(v.id));
+
+  const alternarPagina = () => {
+    if (cargandoVehiculos) return;
+    if (paginaSeleccionada) {
+      const ids = new Set(seleccionablesPagina.map((v) => v.id));
+      setSeleccionados((prev) => prev.filter((x) => !ids.has(x)));
+      return;
+    }
+    setSeleccionados((prev) => {
+      const nuevos = seleccionablesPagina.map((v) => v.id).filter((id) => !prev.includes(id));
+      return [...prev, ...nuevos].slice(0, MAX_TRASLADOS_POR_LOTE);
+    });
+    setEtiquetas((prev) => ({ ...prev, ...Object.fromEntries(seleccionablesPagina.map((v) => [v.id, v.patente || v.chasis])) }));
+  };
+
+  /** Al elegir el origen, la lista muestra los vehículos de esa sucursal (solo esos se pueden trasladar). */
+  const cambiarOrigen = (valor: string) => {
+    const nuevo = valor === '' ? '' : Number(valor);
+    setOrigen(nuevo);
+    setSeleccionados([]);
+    if (nuevo !== '') {
+      setSucursalFiltro(nuevo);
+      setPagina(1);
+    }
+  };
+
+  const errorTransporte = errorAsignacionTransporte(listaEmpresas, transporte);
+  const puedeCrear = esOperador && origen !== '' && destino !== '' && seleccionados.length > 0 && !errorTransporte;
 
   const handleBusqueda = (valor: string) => {
     setBusqueda(valor);
@@ -153,39 +191,51 @@ export default function TrasladosClient({
 
   const handleCrear = async () => {
     if (!puedeCrear) {
-      setFeedback({ tipo: 'error', mensaje: 'Selecciona origen, destino, transportista y el vehículo a trasladar.' });
+      setFeedback({ tipo: 'error', mensaje: errorTransporte ?? 'Selecciona origen, destino y al menos un vehículo a trasladar.' });
       return;
     }
     const input: CreateTrasladoInput = {
       origen_id: Number(origen),
       destino_id: Number(destino),
       observacion: observacion.trim() || null,
-      transportista_id: transportistaId,
+      transporte,
     };
     setLoading('crear');
     try {
-      const result = await crearTrasladoAction(input, seleccionados);
-      if (!result.success) {
-        setFeedback({ tipo: 'error', mensaje: result.error ?? 'No se pudo crear el traslado.' });
+      const result = await crearTrasladosAction(input, seleccionados);
+      if (result.error) {
+        setFeedback({ tipo: 'error', mensaje: result.error });
         return;
       }
-      setFeedback({ tipo: 'success', mensaje: result.message ?? 'Traslado creado.' });
-      setFormOpen(false);
-      setSeleccionados([]);
-      setObservacion('');
-      setTransportistaId(null);
+      setFeedback({
+        tipo: result.omitidos.length === 0 ? 'success' : result.creados.length > 0 ? 'success' : 'error',
+        mensaje: mensajeResultadoLote(result.creados.length, result.omitidos, etiquetas),
+      });
+      if (result.omitidos.length === 0) {
+        setFormOpen(false);
+        setSeleccionados([]);
+        setObservacion('');
+        setTransporte(null);
+      } else {
+        // Quedan seleccionados solo los que no se pudieron crear, para corregir y reintentar.
+        setSeleccionados(result.omitidos.map((o) => o.vehiculoId));
+      }
     } finally {
       setLoading(null);
     }
   };
 
-  const handleDespachar = async (id: string) => {
+  /** R15: traslado a despachar (pide la guía del vehículo). */
+  const [despacharTarget, setDespacharTarget] = useState<TrasladoInterno | null>(null);
+
+  const handleDespachar = async (id: string, numeroGuia: string) => {
     setLoading(id);
     try {
-      const result = await despacharTrasladoAction(id);
+      const result = await despacharTrasladoAction(id, numeroGuia);
       if (!result.success) {
         setFeedback({ tipo: 'error', mensaje: result.error ?? 'Error al despachar.' });
       } else {
+        setDespacharTarget(null);
         setFeedback({ tipo: 'success', mensaje: result.message ?? 'Traslado despachado.' });
       }
     } finally {
@@ -272,7 +322,7 @@ export default function TrasladosClient({
               <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Origen *</label>
               <select
                 value={origen}
-                onChange={(e) => setOrigen(e.target.value === '' ? '' : Number(e.target.value))}
+                onChange={(e) => cambiarOrigen(e.target.value)}
                 className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 font-medium focus:outline-none focus:ring-2 focus:ring-neutral-900 cursor-pointer"
               >
                 <option value="">Selecciona origen</option>
@@ -297,11 +347,11 @@ export default function TrasladosClient({
               </select>
             </div>
             <div className="sm:col-span-2">
-              <SelectorTransportista
-                transportistas={listaTransportistas}
-                valor={transportistaId}
-                onCambiar={setTransportistaId}
-                onCreado={(t) => setListaTransportistas((prev) => [...prev, t].sort((a, b) => a.nombre.localeCompare(b.nombre)))}
+              <SelectorCamion
+                empresas={listaEmpresas}
+                valor={transporte}
+                onCambiar={setTransporte}
+                onEmpresasCambiadas={setListaEmpresas}
                 obligatorio
               />
             </div>
@@ -320,9 +370,31 @@ export default function TrasladosClient({
           <div className="mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
               <p className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                Vehículo a trasladar {seleccionados.length === 1 ? '(1 seleccionado)' : '(elige uno)'}
+                Vehículos a trasladar{' '}
+                {seleccionados.length > 0 ? `(${seleccionados.length} seleccionado${seleccionados.length === 1 ? '' : 's'})` : '(elige uno o varios)'}
               </p>
+              <div className="flex items-center gap-3">
+                {seleccionablesPagina.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={alternarPagina}
+                    disabled={cargandoVehiculos}
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-neutral-700 hover:underline cursor-pointer disabled:opacity-50"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    {paginaSeleccionada ? 'Quitar los de esta página' : 'Seleccionar los de esta página'}
+                  </button>
+                )}
+                {seleccionados.length > 0 && (
+                  <button type="button" onClick={() => setSeleccionados([])} className="text-xs font-semibold text-neutral-500 hover:underline cursor-pointer">
+                    Quitar selección
+                  </button>
+                )}
+              </div>
             </div>
+            <p className="text-[11px] text-neutral-500 mb-2">
+              Se crea un traslado por vehículo, con el mismo origen, destino y camión. Máximo {MAX_TRASLADOS_POR_LOTE} a la vez.
+            </p>
             <div className="flex flex-col lg:flex-row gap-2 mb-3">
               <div className="relative grow">
                 <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -382,7 +454,10 @@ export default function TrasladosClient({
                   return (
                     <button
                       key={v.id}
-                      onClick={() => toggleVehiculo(v.id)}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={activo}
+                      onClick={() => toggleVehiculo(v.id, v.patente || v.chasis)}
                       disabled={v.en_traslado_activo}
                       className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-colors ${
                         v.en_traslado_activo
@@ -392,6 +467,14 @@ export default function TrasladosClient({
                             : 'border-neutral-200 bg-white hover:border-neutral-400 cursor-pointer'
                       }`}
                     >
+                      <span
+                        aria-hidden="true"
+                        className={`w-4 h-4 shrink-0 rounded border flex items-center justify-center text-[10px] font-bold ${
+                          activo ? 'bg-white text-neutral-900 border-white' : 'border-neutral-300'
+                        }`}
+                      >
+                        {activo ? '✓' : ''}
+                      </span>
                       <Car className="w-4 h-4 shrink-0 opacity-70" />
                       <span className="min-w-0">
                         <span className="block text-sm font-bold truncate">{v.patente || v.chasis}</span>
@@ -440,7 +523,7 @@ export default function TrasladosClient({
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-900 hover:bg-neutral-700 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
               {loading === 'crear' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              Crear traslado
+              {seleccionados.length > 1 ? `Crear ${seleccionados.length} traslados` : 'Crear traslado'}
             </button>
           </div>
         </div>
@@ -492,7 +575,7 @@ export default function TrasladosClient({
                     </div>
                     <p className="mt-1 text-xs text-neutral-500">
                       Logística: {t.logistica_nombre ?? t.logistica_id} · Creado: {formatFecha(t.created_at)}
-                      {t.transportista && <> · Transportista: {t.transportista.nombre} ({formatearRut(t.transportista.rut)})</>}
+                      {t.transportista && <> · Transporte: {textoTransporte(t)}</>}
                     </p>
                     {t.observacion && (
                       <p className="mt-1 text-xs text-neutral-500 italic">“{t.observacion}”</p>
@@ -503,7 +586,7 @@ export default function TrasladosClient({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDespachar(t.id);
+                          setDespacharTarget(t);
                         }}
                         disabled={loading === t.id}
                         className="inline-flex items-center gap-1 px-3 py-2 sm:py-1.5 text-xs font-semibold text-white bg-sky-600 hover:bg-sky-700 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
@@ -602,10 +685,7 @@ export default function TrasladosClient({
                   Logística: {detalle.logistica_nombre ?? detalle.logistica_id} · Creado: {formatFecha(detalle.created_at)}
                 </p>
                 <p className="mt-1 text-xs text-neutral-500">
-                  Transportista:{' '}
-                  {detalle.transportista
-                    ? `${detalle.transportista.nombre} · RUT ${formatearRut(detalle.transportista.rut)}`
-                    : 'Sin registrar'}
+                  Transporte: {textoTransporte(detalle) || 'Sin registrar'}
                 </p>
                 {detalle.observacion && (
                   <p className="mt-1 text-xs text-neutral-500 italic">“{detalle.observacion}”</p>
@@ -656,6 +736,7 @@ export default function TrasladosClient({
                           {v.patente || '—'}
                           <span className="text-neutral-400 font-normal"> · {v.chasis}</span>
                         </p>
+                        {v.numero_guia && <p className="text-xs text-neutral-700 font-semibold">Guía: {v.numero_guia}</p>}
                         <p className="text-xs text-neutral-500 truncate">
                           {v.marca} {v.modelo} {v.anio}
                           {v.color ? ` · ${v.color}` : ''}
@@ -672,6 +753,22 @@ export default function TrasladosClient({
           </div>
         </div>
       )}
+      {despacharTarget && (
+        <ModalGuiaDespacho
+          titulo={`Despachar traslado ${codigoTraslado(despacharTarget.id)}`}
+          vehiculos={despacharTarget.vehiculos.map((v) => ({
+            id: v.traslado_vehiculo_id,
+            etiqueta: `${v.chasis} · ${v.marca} ${v.modelo}`,
+          }))}
+          ocupado={loading === despacharTarget.id}
+          onCancelar={() => setDespacharTarget(null)}
+          onConfirmar={(guias) => {
+            const guia = Object.values(guias)[0] ?? '';
+            void handleDespachar(despacharTarget.id, guia);
+          }}
+        />
+      )}
+
       {recibirTarget && (
         <RecepcionModal
           titulo="Recepcionar traslado"

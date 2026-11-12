@@ -105,6 +105,17 @@ describe('primeraCalendarizacion', () => {
 });
 
 describe('calcularReporte', () => {
+  it('should_ignore_branch_sales_without_transfer', () => {
+    const r = calcularReporte(
+      [sol({ id: 'v1', estado: 'entregada', logistica_id: null, sin_traslado: true, fecha_confirmacion: '2026-10-02T08:00:00Z' })],
+      [],
+      usuarios,
+      OPC
+    );
+    expect(r.porEncargado.find((f) => f.id !== 'ana' && f.id !== 'beto')).toBeUndefined();
+    expect(r.porEncargado.every((f) => f.recibidas === 0 && f.enCurso === 0)).toBe(true);
+  });
+
   it('should_measure_response_time_from_approval_to_first_calendarization', () => {
     const r = calcularReporte(
       [

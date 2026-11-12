@@ -154,36 +154,47 @@ describe('recalendarizarSolicitud', () => {
     expect(auditoria.mock.calls[0][5]).toEqual({ fecha_tentativa_despacho: '2026-10-15', motivo: null });
   });
 
-  it('should_change_transportista_and_audit_previous_when_a_new_one_is_given', async () => {
+  it('should_change_truck_and_audit_previous_transport_when_a_new_one_is_given', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'calendarizada', transportista_id: 'tr-1' })), fila([{ id: 's-1' }])];
-    admin.results.transportista = [fila({ id: 'tr-2', activo: true })];
+    admin.results.camion = [fila({ conductor_nombre: 'Ana', activo: true, transportista_id: 'tr-2', empresa: { activo: true } })];
     const auditoria = spyAuditoria();
 
-    const res = await SolicitudesService.recalendarizarSolicitud('s-1', '2026-10-15', USUARIO_ID, null, 'tr-2');
+    const res = await SolicitudesService.recalendarizarSolicitud('s-1', '2026-10-15', USUARIO_ID, null, { patente: 'WXYZ99', conductorNombre: null });
 
     expect(res.success).toBe(true);
-    expect(admin.callsTo('solicitud')).toContainEqual(['update', { fecha_tentativa_despacho: '2026-10-15', transportista_id: 'tr-2' }]);
-    expect(auditoria.mock.calls[0][4]).toEqual({ fecha_tentativa_despacho: '2026-10-12', transportista_id: 'tr-1' });
-    expect(auditoria.mock.calls[0][5]).toMatchObject({ transportista_id: 'tr-2' });
+    expect(admin.callsTo('solicitud')).toContainEqual([
+      'update',
+      { fecha_tentativa_despacho: '2026-10-15', transportista_id: 'tr-2', patente_camion: 'WXYZ99', conductor_nombre: 'Ana' },
+    ]);
+    expect(auditoria.mock.calls[0][4]).toEqual({
+      fecha_tentativa_despacho: '2026-10-12',
+      transportista_id: 'tr-1',
+      patente_camion: null,
+      conductor_nombre: null,
+    });
+    expect(auditoria.mock.calls[0][5]).toMatchObject({ transportista_id: 'tr-2', patente_camion: 'WXYZ99' });
   });
 
-  it('should_keep_transportista_without_lookup_when_it_does_not_change', async () => {
-    admin.results.solicitud = [fila(minimo({ estado: 'calendarizada', transportista_id: 'tr-1' })), fila([{ id: 's-1' }])];
+  it('should_keep_transport_when_the_same_truck_and_driver_are_given', async () => {
+    admin.results.solicitud = [
+      fila(minimo({ estado: 'calendarizada', transportista_id: 'tr-1', patente_camion: 'ABCD12', conductor_nombre: 'Pedro' })),
+      fila([{ id: 's-1' }]),
+    ];
+    admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: true } })];
     spyAuditoria();
 
-    await SolicitudesService.recalendarizarSolicitud('s-1', '2026-10-15', USUARIO_ID, null, 'tr-1');
+    await SolicitudesService.recalendarizarSolicitud('s-1', '2026-10-15', USUARIO_ID, null, { patente: 'ABCD12', conductorNombre: null });
 
-    expect(admin.callsTo('transportista')).toHaveLength(0);
     expect(admin.callsTo('solicitud')).toContainEqual(['update', { fecha_tentativa_despacho: '2026-10-15' }]);
   });
 
-  it('should_reject_inactive_transportista_when_rescheduling', async () => {
+  it('should_reject_inactive_truck_when_rescheduling', async () => {
     admin.results.solicitud = [fila(minimo({ estado: 'calendarizada' }))];
-    admin.results.transportista = [fila({ id: 'tr-9', activo: false })];
+    admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: false, transportista_id: 'tr-1', empresa: { activo: true } })];
 
-    const res = await SolicitudesService.recalendarizarSolicitud('s-1', '2026-10-15', USUARIO_ID, null, 'tr-9');
+    const res = await SolicitudesService.recalendarizarSolicitud('s-1', '2026-10-15', USUARIO_ID, null, { patente: 'ABCD12', conductorNombre: null });
 
-    expect(res).toEqual({ success: false, error: 'El transportista no existe o está inactivo.' });
+    expect(res).toEqual({ success: false, error: 'El camión ABCD-12 o su empresa están desactivados.' });
     expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
   });
 });

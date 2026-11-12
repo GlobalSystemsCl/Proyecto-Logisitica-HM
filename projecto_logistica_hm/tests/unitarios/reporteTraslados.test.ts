@@ -52,6 +52,8 @@ function solicitud(overrides: Partial<SolicitudLista> = {}): SolicitudLista {
     creado_por: null,
     creado_por_nombre: null,
     transportista: ANDES,
+    patente_camion: 'ABCD12',
+    conductor_nombre: 'Pedro Soto',
     fecha_creacion: '2026-10-01T12:00:00Z',
     fecha_tentativa_despacho: '2026-10-21',
     fecha_despacho: null,
@@ -90,6 +92,8 @@ function traslado(overrides: Partial<TrasladoInterno> = {}): TrasladoInterno {
     recepcion_con_novedades: null,
     observacion_recepcion: null,
     transportista: null,
+    patente_camion: null,
+    conductor_nombre: null,
     vehiculos: [
       {
         traslado_vehiculo_id: 'tv-1',
@@ -158,17 +162,21 @@ describe('filasExcelCalendarizacion', () => {
       'Fecha programada': '21/10/2026',
       Origen: 'VALPARAISO',
       Destino: '15 NORTE',
-      Transportista: 'Transportes Andes',
-      'RUT transportista': '76.543.210-3',
+      'Patente camión': 'ABCD-12',
+      Transportista: 'Pedro Soto',
+      'Empresa de transporte': 'Transportes Andes',
+      'RUT empresa': '76.543.210-3',
       Estado: 'Programada',
       Tipo: 'Sala de venta',
     });
   });
 
   it('should_keep_request_without_vehicles_or_carrier_as_single_row', () => {
-    const filas = filasExcelCalendarizacion([solicitud({ vehiculos: [], transportista: null, tipo_solicitud: 'evento' })]);
+    const filas = filasExcelCalendarizacion([
+      solicitud({ vehiculos: [], transportista: null, patente_camion: null, conductor_nombre: null, tipo_solicitud: 'evento' }),
+    ]);
     expect(filas).toHaveLength(1);
-    expect(filas[0]).toMatchObject({ Chasis: '', Transportista: '', 'RUT transportista': '', Tipo: 'Evento' });
+    expect(filas[0]).toMatchObject({ Chasis: '', 'Patente camión': '', Transportista: '', 'Empresa de transporte': '', 'RUT empresa': '', Tipo: 'Evento' });
   });
 
   it('should_show_request_code_when_request_has_number', () => {
@@ -237,6 +245,12 @@ describe('filtrarMovimientos', () => {
     expect(filtrarMovimientos(movs, { ...FILTROS_MOVIMIENTOS_VACIOS, transportista: SIN_TRANSPORTISTA }).map((m) => m.tipo)).toEqual(['interno']);
   });
 
+  it('should_filter_by_truck_plate_or_company_rut', () => {
+    expect(filtrarMovimientos(movs, { ...FILTROS_MOVIMIENTOS_VACIOS, transporte: 'abcd-12' }).map((m) => m.tipo)).toEqual(['solicitud']);
+    expect(filtrarMovimientos(movs, { ...FILTROS_MOVIMIENTOS_VACIOS, transporte: '76.543.210' }).map((m) => m.tipo)).toEqual(['solicitud']);
+    expect(filtrarMovimientos(movs, { ...FILTROS_MOVIMIENTOS_VACIOS, transporte: 'ZZZZ99' })).toHaveLength(0);
+  });
+
   it('should_filter_by_origin_destination_type_state_and_vehicle', () => {
     expect(filtrarMovimientos(movs, { ...FILTROS_MOVIMIENTOS_VACIOS, origen: '15 NORTE' })).toHaveLength(1);
     expect(filtrarMovimientos(movs, { ...FILTROS_MOVIMIENTOS_VACIOS, destino: '15 NORTE' })).toHaveLength(1);
@@ -280,7 +294,9 @@ describe('filasExcelMovimientos', () => {
       'Fecha despacho': '5/10/2026',
       Tipo: 'Traslado interno',
       Estado: 'Recepcionado',
+      'Patente camión': '',
       Transportista: '',
+      'Empresa de transporte': '',
       'Fecha recepción': '6/10/2026',
     });
   });

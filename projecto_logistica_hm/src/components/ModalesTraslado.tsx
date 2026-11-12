@@ -7,8 +7,9 @@ import { validarMotivoCancelacion, validarRecepcion } from '@/lib/recepcion';
 import { formatFechaLarga, hoyISO } from '@/lib/fechas';
 import { errorFechaProgramacion } from '@/lib/calendario';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
-import SelectorTransportista from '@/components/SelectorTransportista';
-import type { Transportista } from '@/types/transportista.types';
+import SelectorCamion from '@/components/SelectorCamion';
+import { errorAsignacionTransporte } from '@/lib/transporte';
+import type { AsignacionTransporte, EmpresaTransporte } from '@/types/transportista.types';
 
 /**
  * Modales compartidos por el calendario de logística, la bandeja de
@@ -270,26 +271,26 @@ interface ReprogramarModalProps {
   fechaActual: string | null;
   /** Fecha precargada (por ejemplo, el día al que se arrastró la tarjeta). */
   fechaPropuesta?: string | null;
-  /** Para cambiar el transportista junto con la fecha (opcional). */
-  transportistas?: Transportista[];
-  transportistaActualId?: string | null;
-  onTransportistaCreado?: (t: Transportista) => void;
+  /** R10: para cambiar el camión o el transportista junto con la fecha (opcional). */
+  empresas?: EmpresaTransporte[];
+  transporteActual?: AsignacionTransporte | null;
+  onEmpresasCambiadas?: (empresas: EmpresaTransporte[]) => void;
   onCerrar: () => void;
-  onConfirmar: (nuevaFecha: string, motivo: string, transportistaId: string | null) => Promise<string | null>;
+  onConfirmar: (nuevaFecha: string, motivo: string, transporte: AsignacionTransporte | null) => Promise<string | null>;
 }
 
 export function ReprogramarModal({
   subtitulo,
   fechaActual,
   fechaPropuesta,
-  transportistas,
-  transportistaActualId,
-  onTransportistaCreado,
+  empresas,
+  transporteActual,
+  onEmpresasCambiadas,
   onCerrar,
   onConfirmar,
 }: ReprogramarModalProps) {
   const [fecha, setFecha] = useState((fechaPropuesta ?? fechaActual ?? '').slice(0, 10));
-  const [transportistaId, setTransportistaId] = useState<string | null>(transportistaActualId ?? null);
+  const [transporte, setTransporte] = useState<AsignacionTransporte | null>(transporteActual ?? null);
   const [motivo, setMotivo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -300,9 +301,15 @@ export function ReprogramarModal({
       setError('Indica la nueva fecha de despacho.');
       return;
     }
+    // Sin camión indicado se mantiene el transporte actual.
+    const errorTransporte = empresas && transporte?.patente.trim() ? errorAsignacionTransporte(empresas, transporte) : null;
+    if (errorTransporte) {
+      setError(errorTransporte);
+      return;
+    }
     setEnviando(true);
     try {
-      const resultado = await onConfirmar(fecha, motivo.trim(), transportistaId);
+      const resultado = await onConfirmar(fecha, motivo.trim(), transporte?.patente.trim() ? transporte : null);
       if (resultado) setError(resultado);
     } finally {
       setEnviando(false);
@@ -337,12 +344,12 @@ export function ReprogramarModal({
             className="w-full rounded-xl border border-neutral-300 p-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-neutral-900"
           />
         </div>
-        {transportistas && (
-          <SelectorTransportista
-            transportistas={transportistas}
-            valor={transportistaId}
-            onCambiar={setTransportistaId}
-            onCreado={(t) => onTransportistaCreado?.(t)}
+        {empresas && (
+          <SelectorCamion
+            empresas={empresas}
+            valor={transporte}
+            onCambiar={setTransporte}
+            onEmpresasCambiadas={(lista) => onEmpresasCambiadas?.(lista)}
           />
         )}
         <p className="text-xs text-neutral-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -370,28 +377,29 @@ interface ProgramarModalProps {
   elegirFecha?: boolean;
   /** Fecha límite propuesta: si el día la supera, se muestra el aviso. */
   fechaLimite: string | null;
-  transportistas: Transportista[];
-  onTransportistaCreado: (t: Transportista) => void;
+  /** R10: empresas activas con sus camiones activos. */
+  empresas: EmpresaTransporte[];
+  onEmpresasCambiadas: (empresas: EmpresaTransporte[]) => void;
   onCerrar: () => void;
-  onConfirmar: (transportistaId: string, fecha: string) => Promise<string | null>;
+  onConfirmar: (transporte: AsignacionTransporte, fecha: string) => Promise<string | null>;
 }
 
 /**
- * Programar el traslado pide el transportista (obligatorio, pedido del
- * cliente del 2026-10-19) y avisa si el día supera la fecha límite propuesta.
+ * Programar el traslado pide la patente del camión y su transportista
+ * (obligatorios, R10) y avisa si el día supera la fecha límite propuesta.
  */
 export function ProgramarModal({
   subtitulo,
   fecha,
   elegirFecha = false,
   fechaLimite,
-  transportistas,
-  onTransportistaCreado,
+  empresas,
+  onEmpresasCambiadas,
   onCerrar,
   onConfirmar,
 }: ProgramarModalProps) {
   const [dia, setDia] = useState(fecha);
-  const [transportistaId, setTransportistaId] = useState<string | null>(null);
+  const [transporte, setTransporte] = useState<AsignacionTransporte | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const fueraDePlazo = !!fechaLimite && !!dia && dia > fechaLimite.slice(0, 10);
@@ -403,13 +411,14 @@ export function ProgramarModal({
       setError(errorFecha);
       return;
     }
-    if (!transportistaId) {
-      setError('Indica el transportista del traslado.');
+    const errorTransporte = errorAsignacionTransporte(empresas, transporte);
+    if (errorTransporte || !transporte) {
+      setError(errorTransporte);
       return;
     }
     setEnviando(true);
     try {
-      const resultado = await onConfirmar(transportistaId, dia);
+      const resultado = await onConfirmar(transporte, dia);
       if (resultado) setError(resultado);
     } finally {
       setEnviando(false);
@@ -456,11 +465,11 @@ export function ProgramarModal({
             La fecha supera la fecha límite de entrega propuesta. Si confirmas, quedará programada igual.
           </p>
         )}
-        <SelectorTransportista
-          transportistas={transportistas}
-          valor={transportistaId}
-          onCambiar={setTransportistaId}
-          onCreado={onTransportistaCreado}
+        <SelectorCamion
+          empresas={empresas}
+          valor={transporte}
+          onCambiar={setTransporte}
+          onEmpresasCambiadas={onEmpresasCambiadas}
           obligatorio
         />
         <MensajeError mensaje={error} />

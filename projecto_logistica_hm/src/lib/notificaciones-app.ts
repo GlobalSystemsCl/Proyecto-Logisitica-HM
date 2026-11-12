@@ -23,7 +23,8 @@ export type EventoApp =
   | 'solicitud_descalendarizada'
   | 'solicitud_despacho_revertido'
   | 'solicitud_finalizada'
-  | 'solicitud_cancelada';
+  | 'solicitud_cancelada'
+  | 'solicitud_lista_para_entregar';
 
 /** Valores del enum `public.tipo_notificacion` que usa la app. */
 export type TipoNotificacion =
@@ -57,6 +58,8 @@ export const DESTINATARIOS_APP: Record<EventoApp, RolDestinatario[]> = {
   solicitud_despachada: ['jefe_recepcion', 'ejecutivo'],
   solicitud_despacho_revertido: ['jefe_recepcion', 'ejecutivo'],
   solicitud_recepcionada: ['ejecutivo', 'logistica_encargado'],
+  // R1: venta sin traslado aprobada; Logística no participa.
+  solicitud_lista_para_entregar: ['ejecutivo'],
   solicitud_finalizada: ['jefe_origen', 'logistica_encargado'],
   solicitud_cancelada: ['ejecutivo', 'jefe_origen', 'logistica_encargado'],
   solicitud_cancelada_transito: ['ejecutivo', 'jefe_origen', 'jefe_recepcion', 'logistica_encargado'],
@@ -75,6 +78,7 @@ export const TIPO_NOTIFICACION_POR_EVENTO: Record<EventoApp, TipoNotificacion> =
   solicitud_despachada: 'SOLICITUD_EN_TRANSITO',
   solicitud_despacho_revertido: 'SOLICITUD_DESPACHO_REVERTIDO',
   solicitud_recepcionada: 'SOLICITUD_ENTREGADA',
+  solicitud_lista_para_entregar: 'SOLICITUD_ENTREGADA',
   solicitud_finalizada: 'SOLICITUD_FINALIZADA',
   solicitud_cancelada: 'SOLICITUD_CANCELADA',
   solicitud_cancelada_transito: 'SOLICITUD_CANCELADA_TRANSITO',
@@ -152,6 +156,10 @@ export function textoNotificacion(evento: EventoApp, d: DatosNotificacionApp): T
     solicitud_recepcionada: {
       titulo: d.conNovedades ? 'Recibida con novedades' : 'Vehículo recibido',
       mensaje: `La solicitud ${ref} fue recibida en destino${d.conNovedades ? ' con novedades' : ''}.`,
+    },
+    solicitud_lista_para_entregar: {
+      titulo: 'Lista para entregar',
+      mensaje: `La solicitud ${ref} fue aprobada y el vehículo ya está en la sucursal: no requiere traslado. Puedes entregarlo al cliente.`,
     },
     solicitud_finalizada: { titulo: 'Solicitud finalizada', mensaje: `La solicitud ${ref} se entregó al cliente y quedó finalizada.` },
     solicitud_cancelada: { titulo: 'Solicitud cancelada', mensaje: `La solicitud ${ref} fue cancelada.${motivo}` },

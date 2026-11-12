@@ -670,6 +670,12 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-11-03 | Paso 2 del plan de requisitos (R17): el registro crea la cuenta activa como ejecutivo; el administrador ya no aprueba, solo corrige rol o sucursal. Reemplaza la decisión del 2026-10-20 (sección 36). Sin migración. Nueva sección 41 | Claude (asistido) |
 | 2026-11-03 | Paso 3 del plan de requisitos (R2): cada notificación (campana y correo) lleva a la pantalla donde el destinatario hace su acción y abre el detalle. Sin migración. Nueva sección 42 | Claude (asistido) |
 | 2026-11-03 | Paso 4 del plan de requisitos (R6, R18, R11): los vehículos sin sucursal de origen no se pueden pedir ni trasladar; aviso y atajo en el inventario, búsqueda por lista de chasis o IDV; documentos solo PDF, Excel e imágenes. Migración `20261103120000`. Nueva sección 43 | Claude (asistido) |
+| 2026-11-11 | Paso 5 del plan de requisitos (R15): número de guía obligatorio por vehículo para despachar solicitudes y traslados internos. Migración `20261111120000`. Nueva sección 44 | Claude (asistido) |
+| 2026-11-11 | Paso 6a del plan de requisitos (R10): empresas de transporte con sus camiones (patente y transportista habitual) y pantalla `/logistica/transportistas`. Migración `20261111130000`. Nueva sección 45 | Claude (asistido) |
+| 2026-11-11 | Paso 6b del plan de requisitos (R10): programar, reprogramar y crear traslados escribiendo la patente del camión; se guardan empresa, patente y transportista; filtros por patente o RUT y columnas en los Excel. Sin migración nueva. Sección 45 | Claude (asistido) |
+| 2026-11-11 | Paso 7 del plan de requisitos (R12): traslados internos con selección múltiple; se crea un traslado por vehículo con el mismo origen, destino y camión. Sin migración. Nueva sección 46 | Claude (asistido) |
+| 2026-11-11 | Paso 8 del plan de requisitos (R1): venta de vehículos que ya están en la sucursal de destino, sin traslado ni Logística; al aprobarla queda lista para entregar. Migración `20261111140000`. Nueva sección 47 | Claude (asistido) |
+| 2026-11-11 | Paso 9 del plan de requisitos (R5, R4): pantalla "En tránsito" (`/logistica/transito`) y vehículos de cada sucursal desde Slots. Sin migración. Nueva sección 48 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -1036,3 +1042,67 @@ Plan: `auditoria/plan-requisitos-2026-11-03.md` (R6, R18 y R11).
 - **R11, documentos: solo PDF, Excel e imágenes** (decisión del cliente; HEIC no). `TIPOS_DOCUMENTO` (`lib/archivos.ts`) queda con PDF, PNG, JPEG, WEBP, `.xlsx` y `.xls` (nuevo, firma OLE `D0 CF 11 E0 A1 B1 1A E1`); se quitan Word, PowerPoint, texto, CSV y ZIP. `ACEPTA_DOCUMENTOS` y `TEXTO_FORMATOS_DOCUMENTO` salen de ahí y el detalle muestra los formatos junto al botón. Los documentos ya subidos no se tocan.
 - **Migración `20261103120000_documentos_excel_pdf_imagenes.sql`:** deja la misma lista en `allowed_mime_types` del bucket `solicitud-documentos` (antes no incluía `.xls`). Un test compara la lista del bucket con `TIPOS_DOCUMENTO`.
 - **Tests:** `vehiculo.test.ts`, `filtrosVehiculos.test.ts`, `solicitudes.service.test.ts` (`validarVehiculosConUbicacion`), `traslado.service.test.ts`, `archivos.test.ts` y `migracion-documentos.test.ts`.
+
+## 44. Número de guía obligatorio al despachar (2026-11-11, paso 5 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R15).
+
+- **Pedido:** antes de despachar, Logística ingresa el número de guía; sin guía no se despacha. La guía se asocia al chasis y se puede repetir en varios vehículos.
+- **Migración `20261111120000_numero_guia_despacho.sql`:** `numero_guia text` (nula, no única, 1 a 40 caracteres) en `solicitud_vehiculo` y `traslado_interno_vehiculo`, con índice para buscar. **Aplicarla antes de desplegar el código:** las listas leen la columna.
+- **Reglas** (`src/lib/guiaDespacho.ts`): `validarGuias` exige una guía por vínculo (máximo `MAX_LARGO_GUIA` = 40, igual que el check), `normalizarGuia` quita espacios de los extremos y repetidos, `idsPorGuia` agrupa para guardar con una sentencia por guía y `guiasTexto` arma "1001, 1002" para mostrar.
+- **Despacho:** `despacharSolicitud(id, usuarioId, guias)` (`guias`: id de solicitud_vehiculo → guía) y `despacharTraslado(id, usuarioId, numeroGuia)` validan todas las guías, las guardan y recién después cambian el estado; la auditoría del despacho incluye las guías. "Revertir despacho" las conserva.
+- **Pantalla:** "Despachar" (calendario y traslados internos) abre `ModalGuiaDespacho`: un campo por vehículo y "Misma guía para todos". La guía se ve en el detalle de la solicitud y del traslado, en Recepciones, en Movimientos (también se puede buscar por guía) y en los Excel del calendario y de movimientos (columna "N° guía").
+- Las solicitudes y traslados despachados antes del 2026-11-11 no tienen guía.
+- **Tests:** `guiaDespacho.test.ts`, `migracion-numero-guia.test.ts`, `solicitudes.service.test.ts`, `solicitudes.brechas.test.ts` y `traslado.service.test.ts`.
+
+## 45. Empresas de transporte y camiones (2026-11-11, paso 6 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R10). Decisión del cliente: en vez de "transportista" se registra la empresa (RUT y nombre), el nombre del transportista (conductor) y la patente del camión; al programar se escribe la patente.
+
+**Parte 6a (modelo y gestión):**
+- **Migración `20261111130000_camion_transporte.sql`:** `public.transportista` pasa a representar la empresa (sin cambios de columnas). Tabla `camion` (patente única normalizada `^[A-Z0-9]{5,8}$`, empresa con ON DELETE RESTRICT, conductor habitual opcional de 3 a 120 caracteres, activo) con RLS de solo lectura. Agrega `patente_camion` y `conductor_nombre` a `solicitud` y `traslado_interno` (las usará la parte 6b para guardar lo usado en cada traslado).
+- `src/lib/patente.ts`: `normalizarPatente` (`abcd-12` → `ABCD12`), `validarPatente` (5 a 8 caracteres con letras y números) y `formatearPatente` (`ABCD-12`, `AB-1234`). `src/lib/transporte.ts`: búsqueda de empresas por nombre, RUT, patente o transportista.
+- `TransportistaService`: `listarEmpresas` (con camiones), `actualizarEmpresa`, `crearCamion` (patente duplicada → mensaje claro) y `actualizarCamion`. Acciones en `transportistas.actions.ts`, solo Logística y administrador.
+- **Pantalla `/logistica/transportistas`** (tarjeta "Transportistas" del inicio para Logística y administrador): nueva empresa con nombre y RUT, editar nombre, activar o desactivar; por empresa, agregar camiones (patente y transportista habitual), editar el transportista y activar o desactivar. Nada se borra, para no perder el historial. Búsqueda por empresa, RUT, patente o transportista, y "Mostrar inactivas".
+- **Tests:** `migracion-camion.test.ts`, `patente.test.ts`, `transporte.test.ts`, `transportista.service.test.ts`, `transportistas.actions.test.ts` y `dashboard-cards.test.ts`.
+
+**Parte 6b (programar con la patente):**
+- Programar, reprogramar y crear un traslado interno piden la **patente del camión** (`SelectorCamion`, reemplaza a `SelectorTransportista`, que se eliminó). Al reconocer la patente se muestran la empresa y su RUT y se propone el transportista habitual, que se puede cambiar para ese viaje. Si la patente no existe, se registra ahí mismo con una empresa existente o nueva. El formulario valida con `errorAsignacionTransporte`.
+- Las acciones reciben `AsignacionTransporte` (`{ patente, conductorNombre }`) y el servidor la resuelve con `TransportistaService.resolverTransporte`: el camión y su empresa deben estar activos y el transportista es obligatorio (el indicado o el habitual). Se guardan `transportista_id` (empresa), `patente_camion` y `conductor_nombre` en la solicitud o el traslado; al reprogramar solo cambian si son distintos, y la auditoría guarda el transporte anterior.
+- Se muestran en el detalle de la solicitud y del traslado, en las tarjetas del calendario y en Movimientos (`textoTransporte`). La búsqueda del calendario y el filtro nuevo "Patente del camión o RUT" de Movimientos encuentran por patente o RUT de la empresa (`coincideTransporte`, `coincideTransporteMovimiento`). Los Excel del calendario y de movimientos tienen las columnas "Patente camión", "Transportista", "Empresa de transporte" y "RUT empresa".
+- Lo programado antes del 2026-11-11 solo tiene la empresa.
+- Quedaron sin uso en la app `TransportistaService.validarAsignable`, `listarActivos` y `getTransportistasAction` (tienen tests); se pueden quitar más adelante.
+- **Tests:** `transporte.test.ts`, `transportista.service.test.ts` (`resolverTransporte`), `solicitudes.service.test.ts`, `solicitudes.fase2.test.ts`, `traslado.service.test.ts`, `notificaciones.actions.test.ts`, `reporteTraslados.test.ts` y `calendario.test.ts`.
+
+## 46. Traslados internos con selección múltiple (2026-11-11, paso 7 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R12).
+
+- **Formulario:** los vehículos se eligen con casillas, uno por uno o con "Seleccionar los de esta página" (y "Quitar selección"). Al elegir el origen, la lista se filtra por esa sucursal (solo esos se pueden trasladar) y se limpia la selección. El botón dice "Crear N traslados".
+- **Regla que se mantiene:** cada traslado lleva un solo vehículo (`fn_validar_un_vehiculo_por_traslado`). Por eso `TrasladoService.crearTrasladosEnLote` crea **un traslado por vehículo**, en serie, con el mismo origen, destino, observación y transporte, reutilizando `crearTraslado` (cada uno valida disponibilidad, ubicación en el origen y traslado activo). El transporte, la selección (`validarLoteTraslados`: 1 a `MAX_TRASLADOS_POR_LOTE` = 50, sin repetidos) y que origen y destino sean distintos se validan una vez antes de empezar.
+- **Resultado:** `crearTrasladosAction` devuelve los creados y los omitidos con su motivo; `mensajeResultadoLote` arma el aviso ("Se crearon 3 traslados. No se crearon 1: CH9: …"). Si alguno falla, el formulario queda abierto con esos vehículos seleccionados para corregir y reintentar. La recepción, el despacho (con su guía) y la cancelación siguen siendo por traslado.
+- `crearTrasladoAction` (uno solo) se mantiene por compatibilidad.
+- **Tests:** `trasladosLote.test.ts`, `traslado.service.test.ts` y `traslados.actions.test.ts`.
+
+## 47. Venta desde la sucursal, sin traslado (2026-11-11, paso 8 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R1). Pedido del cliente: si el vehículo ya está en la sucursal del vendedor, no hay traslado ni pasa por Logística; el jefe de local aprueba y lo siguiente es la entrega al cliente. Decisión: no se mezclan vehículos que están en la sucursal con otros que no.
+
+- **Solo ventas** (`tipo_solicitud = 'venta'` con destino). Un evento siempre lleva traslado a la dirección del evento.
+- **Migración `20261111140000_venta_sin_traslado.sql`:** `solicitud.sin_traslado boolean not null default false`, y `fn_recalcular_slots_sucursal` deja de contar como reserva los vehículos de una solicitud sin traslado (ya ocupan su slot físico; antes se contarían dos veces). Rollback restaura la función anterior.
+- **Reglas** (`src/lib/ventaSucursal.ts`): `clasificarVenta` (todos en el destino → `sin_traslado`; ninguno → `con_traslado`; algunos → `mixta`), `estadoAlAprobar`, `errorAgregarVehiculo` y los mensajes al usuario.
+- **Crear** (`createSolicitud` → `claseVenta`): una venta mixta se rechaza (`MENSAJE_MEZCLA_SUCURSAL`); una sin traslado se guarda con `sin_traslado = true` y, si la crea un jefe de local (ya aprobada), queda directo `entregada` con `fecha_confirmacion`.
+- **Aprobar** (`aprobarSolicitud`): una sin traslado pasa a `entregada` ("Recepcionada", lista para entregar) en vez de `aprobada`; el trigger `fn_entregar_solicitud_vehiculos` deja el vehículo en el destino (donde ya estaba) y `fn_registrar_fechas_flujo` fija `fecha_recepcion`. Luego el ejecutivo o el jefe de destino usan "Entregar a cliente" como siempre.
+- **Agregar vehículos** a una solicitud existente debe respetar su clase (en una sin traslado, solo vehículos del destino; en una con traslado, ninguno del destino). Mientras están reservados, los vehículos no se pueden mover de sucursal, así que la clase no cambia.
+- **Avisos:** evento nuevo `solicitud_lista_para_entregar` (solo campana, al ejecutivo, tipo `SOLICITUD_ENTREGADA`): reemplaza a `solicitud_aprobada`, así Logística no recibe aviso.
+- **Pantalla:** el formulario de "Nueva Solicitud" avisa cuando los vehículos elegidos no requieren traslado y bloquea la mezcla; el detalle muestra "Transporte: no requiere (venta desde la sucursal)". El reporte de Logística ignora estas solicitudes.
+- **Tests:** `ventaSucursal.test.ts`, `migracion-venta-sin-traslado.test.ts`, `solicitudes.service.test.ts`, `solicitudes.brechas.test.ts`, `reporteLogistica.test.ts` y `notificaciones-app.test.ts`.
+
+## 48. Vehículos en tránsito y vehículos por sucursal (2026-11-11, paso 9 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R5 y R4). Decisión: no hay estados intermedios; un vehículo va en camino desde el despacho hasta la recepción.
+
+- **`src/lib/transito.ts`:** `filasEnTransito(solicitudes, traslados, hoy)` arma una fila por vehículo en tránsito (código, origen, destino, chasis, guía, patente del camión, transportista, empresa y RUT, fecha de despacho, días en camino con `diasEntre`, fecha límite y si va atrasado), ordenadas por días en camino. `coincideFilaTransito` busca por chasis, guía, código, patente o RUT; `filasExcelTransito` arma el Excel.
+- **R5, pantalla `/logistica/transito`** (Logística y administrador; tarjeta "En tránsito" del inicio): solicitudes `en_transito` del alcance del usuario (`getSolicitudesFiltradas`) y traslados internos en tránsito con origen o destino en sus zonas. Indicadores (en camino, atrasados), búsqueda, filtro por tipo y "Solo atrasados", y exporte a Excel. El código abre el detalle de la solicitud o del traslado.
+- **R4, vehículos por sucursal desde Slots:** el nombre de cada sucursal en `TablaSlots` (prop `onVerVehiculos`) abre `PanelVehiculosSucursal`: vehículos que están en la sucursal (`VehiculoService.getVehiculosEnSucursal`, con disponible o reservado) y los que van en camino hacia ella (solicitudes en tránsito con ese destino y traslados internos), con exporte a Excel en dos hojas. `getVehiculosDeSucursalAction` (`sucursales.actions.ts`): Logística y administrador, cualquier sucursal; el jefe de local, solo las suyas (`usuarioTieneSucursal`).
+- **Tests:** `transito.test.ts`, `sucursales.actions.test.ts`, `vehiculo.service.test.ts` y `dashboard-cards.test.ts`.

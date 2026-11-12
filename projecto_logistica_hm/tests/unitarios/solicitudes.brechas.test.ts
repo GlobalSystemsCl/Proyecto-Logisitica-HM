@@ -66,7 +66,7 @@ describe('transiciones condicionadas al estado (brecha 010)', () => {
 
     const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, '2026-10-20');
 
-    expect(res).toEqual({ success: true });
+    expect(res).toEqual({ success: true, sinTraslado: false });
     expect(admin.callsTo('solicitud')).toContainEqual(['eq', 'estado', 'pendiente_aprobacion']);
     expect(admin.callsTo('solicitud')).toContainEqual(['select', 'id']);
   });
@@ -86,9 +86,10 @@ describe('transiciones condicionadas al estado (brecha 010)', () => {
       fila(minimo({ estado: 'calendarizada' })),
       errorResult('El vehículo ya fue vendido y no se puede reservar.', 'P0001'),
     ];
+    admin.results.solicitud_vehiculo = [fila([{ id: 'sv-1' }])];
     spyRegistrarAuditoria();
 
-    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID);
+    const res = await SolicitudesService.despacharSolicitud('s-1', USUARIO_ID, { 'sv-1': 'G-1' });
 
     expect(res).toEqual({ success: false, error: 'El vehículo ya fue vendido y no se puede reservar.' });
   });

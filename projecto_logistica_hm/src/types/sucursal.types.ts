@@ -81,6 +81,8 @@ export interface UpdateSucursalInput {
 export interface VehiculoAsociado {
   solicitud_vehiculo_id: string;
   disponibilidad: DisponibilidadVehiculo;
+  /** R15: guía de despacho del vehículo (se ingresa al despachar). */
+  numero_guia?: string | null;
   patente: string | null;
   chasis: string;
   marca: string;

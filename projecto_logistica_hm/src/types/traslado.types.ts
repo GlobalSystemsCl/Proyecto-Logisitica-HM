@@ -1,5 +1,5 @@
 import type { DisponibilidadVehiculo } from './sucursal.types';
-import type { TransportistaResumen } from './transportista.types';
+import type { AsignacionTransporte, TransportistaResumen } from './transportista.types';
 
 /**
  * Estados de `public.traslado_interno` (enum PostgreSQL `estado_traslado`).
@@ -16,6 +16,8 @@ export type EstadoTraslado = 'pendiente' | 'en_transito' | 'recepcionado' | 'can
 export interface TrasladoVehiculo {
   traslado_vehiculo_id: string;
   disponibilidad: DisponibilidadVehiculo;
+  /** R15: guía de despacho del vehículo (se ingresa al despachar). */
+  numero_guia?: string | null;
   id: string;
   chasis: string;
   patente: string | null;
@@ -46,8 +48,11 @@ export interface TrasladoInterno {
   /** R13: registro de la recepción en destino. */
   recepcion_con_novedades: boolean | null;
   observacion_recepcion: string | null;
-  /** Transportista del traslado (obligatorio desde el 2026-10-20; los anteriores no tienen). */
+  /** Empresa de transporte (obligatoria desde el 2026-10-20; los anteriores no tienen). */
   transportista: TransportistaResumen | null;
+  /** R10: patente del camión y transportista (conductor) usados (desde el 2026-11-11). */
+  patente_camion: string | null;
+  conductor_nombre: string | null;
   /** R14: los traslados nuevos llevan un solo vehículo; los históricos pueden tener varios. */
   vehiculos: TrasladoVehiculo[];
 }
@@ -56,8 +61,8 @@ export interface CreateTrasladoInput {
   origen_id: number;
   destino_id: number;
   observacion?: string | null;
-  /** Obligatorio: quién realiza el traslado. */
-  transportista_id: string | null;
+  /** Obligatorio (R10): patente del camión y transportista del viaje. */
+  transporte: AsignacionTransporte | null;
 }
 
 /**

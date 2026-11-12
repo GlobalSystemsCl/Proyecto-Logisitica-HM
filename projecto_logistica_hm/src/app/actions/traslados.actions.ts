@@ -47,7 +47,33 @@ export async function crearTrasladoAction(
 }
 
 /** Logística despacha el traslado: pendiente -> en tránsito. */
-export async function despacharTrasladoAction(trasladoId: string) {
+/**
+ * R12: crea un traslado por cada vehículo seleccionado (mismo origen, destino
+ * y transporte). Devuelve los creados y los omitidos con su motivo.
+ */
+export async function crearTrasladosAction(input: CreateTrasladoInput, vehiculoIds: string[]) {
+  try {
+    const profile = await getProfileOrThrow();
+
+    if (!esLogistica(profile)) {
+      return {
+        success: false,
+        creados: [],
+        omitidos: [],
+        error: 'Solo Logística o el Administrador pueden crear traslados internos.',
+      };
+    }
+
+    const result = await TrasladoService.crearTrasladosEnLote(input, vehiculoIds, profile.id);
+    if (result.creados.length > 0) revalidarSolicitudes();
+    return result;
+  } catch (err: unknown) {
+    return { success: false, creados: [], omitidos: [], error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
+/** R15: el número de guía es obligatorio para despachar. */
+export async function despacharTrasladoAction(trasladoId: string, numeroGuia: string) {
   try {
     const profile = await getProfileOrThrow();
 
@@ -55,7 +81,7 @@ export async function despacharTrasladoAction(trasladoId: string) {
       return { success: false, error: 'Solo Logística o el Administrador pueden despachar traslados.' };
     }
 
-    const result = await TrasladoService.despacharTraslado(trasladoId, profile.id);
+    const result = await TrasladoService.despacharTraslado(trasladoId, profile.id, numeroGuia ?? '');
     if (!result.success) return { success: false, error: result.error };
 
     revalidarSolicitudes();

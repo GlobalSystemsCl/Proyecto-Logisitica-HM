@@ -198,6 +198,42 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     ],
   },
   {
+    clave: 'transito',
+    href: '/logistica/transito',
+    icono: 'Truck',
+    grupo: 'operacion',
+    orden: 51,
+    nombre: 'En tránsito',
+    tituloAdmin: 'Vehículos en tránsito',
+    tituloPorRol: {
+      logistica: 'Revisa aquí lo que va en camino',
+    },
+    descripcion: 'Lo despachado que aún no se recepciona, con guía, camión, días en camino y atrasos.',
+    acciones: [
+      'Ver solicitudes y traslados internos en camino',
+      'Buscar por chasis, guía, patente del camión o RUT',
+      'Ver los atrasados y exportar a Excel',
+    ],
+  },
+  {
+    clave: 'transportistas',
+    href: '/logistica/transportistas',
+    icono: 'Truck',
+    grupo: 'operacion',
+    orden: 53,
+    nombre: 'Transportistas',
+    tituloAdmin: 'Empresas de transporte',
+    tituloPorRol: {
+      logistica: 'Administra aquí las empresas de transporte y sus camiones',
+    },
+    descripcion: 'Empresas de transporte con su RUT y sus camiones, con la patente y el transportista habitual.',
+    acciones: [
+      'Registrar una empresa con su RUT',
+      'Agregar camiones con su patente y transportista',
+      'Desactivar empresas o camiones que ya no se usan',
+    ],
+  },
+  {
     clave: 'reportes',
     href: '/logistica/reportes',
     icono: 'BarChart3',

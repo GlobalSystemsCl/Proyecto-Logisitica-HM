@@ -6,6 +6,7 @@ import { Download, FileSpreadsheet, Search, Truck } from 'lucide-react';
 import { descargarExcel } from '@/lib/excel';
 import { formatFecha } from '@/lib/fechas';
 import { formatearRut } from '@/lib/rut';
+import { formatearPatente } from '@/lib/patente';
 import {
   FILTROS_MOVIMIENTOS_VACIOS,
   SIN_TRANSPORTISTA,
@@ -28,8 +29,8 @@ interface Props {
 }
 
 const COLUMNAS_EXCEL = [
-  'Fecha despacho', 'Tipo', 'Código', 'Origen', 'Destino', 'Chasis', 'Patente', 'Marca', 'Modelo',
-  'Transportista', 'RUT transportista', 'Logística', 'Estado', 'Fecha recepción',
+  'Fecha despacho', 'Tipo', 'Código', 'Origen', 'Destino', 'Chasis', 'Patente', 'Marca', 'Modelo', 'N° guía',
+  'Patente camión', 'Transportista', 'Empresa de transporte', 'RUT empresa', 'Logística', 'Estado', 'Fecha recepción',
 ];
 
 export default function MovimientosClient({ desde, hasta, errorRango, movimientos, sinZonas }: Props) {
@@ -97,14 +98,25 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
         </p>
       )}
 
-      <div className="bg-white border border-neutral-200 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+      <div className="bg-white border border-neutral-200 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <select value={filtros.transportista} onChange={(e) => setFiltros({ ...filtros, transportista: e.target.value })} className={selectCls} aria-label="Transportista">
-          <option value="">Todos los transportistas</option>
+          <option value="">Todas las empresas de transporte</option>
           {opciones.transportistas.map((t) => (
             <option key={t.id} value={t.id}>{t.nombre}</option>
           ))}
-          <option value={SIN_TRANSPORTISTA}>Sin transportista</option>
+          <option value={SIN_TRANSPORTISTA}>Sin empresa registrada</option>
         </select>
+        <div className="relative">
+          <Truck className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            value={filtros.transporte}
+            onChange={(e) => setFiltros({ ...filtros, transporte: e.target.value.slice(0, 20) })}
+            placeholder="Patente del camión o RUT"
+            aria-label="Buscar por patente del camión o RUT de la empresa"
+            className={`${selectCls} w-full pl-9`}
+          />
+        </div>
         <select value={filtros.origen} onChange={(e) => setFiltros({ ...filtros, origen: e.target.value })} className={selectCls} aria-label="Origen">
           <option value="">Todos los orígenes</option>
           {opciones.origenes.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -128,7 +140,7 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
             type="search"
             value={filtros.vehiculo}
             onChange={(e) => setFiltros({ ...filtros, vehiculo: e.target.value.slice(0, 30) })}
-            placeholder="Chasis o patente"
+            placeholder="Chasis, patente o guía"
             aria-label="Buscar chasis o patente"
             className={`${selectCls} w-full pl-9`}
           />
@@ -177,15 +189,18 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
                   </p>
                   <p className="text-xs text-neutral-600">
                     {m.marca} {m.modelo} · <span className="font-mono break-all">{m.chasis}</span>
+                    {m.numeroGuia && <> · Guía {m.numeroGuia}</>}
                   </p>
                   <p className="text-xs text-neutral-500">
                     {m.transportistaNombre ? (
                       <>
+                        {m.patenteCamion && <>{formatearPatente(m.patenteCamion)} · </>}
+                        {m.conductor && <>{m.conductor} · </>}
                         {m.transportistaNombre}
                         {m.transportistaRut && <> · {formatearRut(m.transportistaRut)}</>}
                       </>
                     ) : (
-                      <span className="italic text-neutral-400">Transportista sin registrar</span>
+                      <span className="italic text-neutral-400">Transporte sin registrar</span>
                     )}
                   </p>
                 </li>
@@ -215,10 +230,13 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
                       <td className="px-4 py-2">
                         <span className="font-mono text-xs">{m.chasis}</span>
                         <span className="block text-xs text-neutral-500">{m.marca} {m.modelo}</span>
+                        {m.numeroGuia && <span className="block text-xs text-neutral-700">Guía {m.numeroGuia}</span>}
                       </td>
                       <td className="px-4 py-2">
                         {m.transportistaNombre ? (
                           <>
+                            {m.patenteCamion && <span className="block font-mono text-xs">{formatearPatente(m.patenteCamion)}</span>}
+                            {m.conductor && <span className="block text-xs">{m.conductor}</span>}
                             {m.transportistaNombre}
                             {m.transportistaRut && <span className="block text-xs text-neutral-500">{formatearRut(m.transportistaRut)}</span>}
                           </>

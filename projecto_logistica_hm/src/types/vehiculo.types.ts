@@ -72,3 +72,16 @@ export interface UpdateMarcaInput {
   codigo?: string;
   nombre?: string;
 }
+
+/** R4: vehículo físicamente en una sucursal (panel de Slots). */
+export interface VehiculoEnSucursal {
+  id: string;
+  chasis: string;
+  patente: string | null;
+  marca: string;
+  modelo: string;
+  color: string | null;
+  idv: string | null;
+  /** Reservado en una solicitud (aún no entregado). */
+  reservado: boolean;
+}

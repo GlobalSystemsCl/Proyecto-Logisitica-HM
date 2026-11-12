@@ -8,6 +8,7 @@ import type { UserProfile } from '@/types/auth.types';
 
 const getCurrentUserProfile = vi.fn();
 const cancelarTraslado = vi.fn();
+const crearTrasladosEnLote = vi.fn();
 const notificarTrasladoInterno = vi.fn(async () => ({ enviados: 1, fallidos: 0 }));
 const getBranch = vi.fn();
 
@@ -16,7 +17,10 @@ vi.mock('@/services/auth.service', () => ({
 }));
 vi.mock('@/services/solicitudes.service', () => ({ SolicitudesService: {} }));
 vi.mock('@/services/traslado.service', () => ({
-  TrasladoService: { cancelarTraslado: (...a: unknown[]) => cancelarTraslado(...a) },
+  TrasladoService: {
+    cancelarTraslado: (...a: unknown[]) => cancelarTraslado(...a),
+    crearTrasladosEnLote: (...a: unknown[]) => crearTrasladosEnLote(...a),
+  },
 }));
 vi.mock('@/services/organizacion.service', () => ({
   OrganizacionService: { getBranch: (id: number) => getBranch(id) },
@@ -35,7 +39,8 @@ vi.mock('@/lib/segundoPlano', () => ({
 }));
 vi.mock('@/lib/rutas', () => ({ revalidarSolicitudes: vi.fn() }));
 
-const { cancelarTrasladoAction } = await import('@/app/actions/traslados.actions');
+const { cancelarTrasladoAction, crearTrasladosAction } = await import('@/app/actions/traslados.actions');
+const { revalidarSolicitudes } = await import('@/lib/rutas');
 
 function perfil(overrides: Partial<UserProfile> = {}): UserProfile {
   return {
@@ -105,5 +110,37 @@ describe('cancelarTrasladoAction', () => {
 
     expect(res).toEqual({ success: false, error: 'Solo los traslados en tránsito pueden cancelarse.' });
     expect(notificarTrasladoInterno).not.toHaveBeenCalled();
+  });
+});
+
+describe('crearTrasladosAction', () => {
+  const input = { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } };
+
+  it('should_create_batch_with_actor_and_refresh_when_some_are_created', async () => {
+    crearTrasladosEnLote.mockResolvedValue({ success: true, creados: [{ vehiculoId: 'v1', trasladoId: 't1' }], omitidos: [] });
+
+    const res = await crearTrasladosAction(input, ['v1']);
+
+    expect(res.success).toBe(true);
+    expect(crearTrasladosEnLote).toHaveBeenCalledWith(input, ['v1'], 'u-1');
+    expect(revalidarSolicitudes).toHaveBeenCalled();
+  });
+
+  it('should_not_refresh_when_nothing_was_created', async () => {
+    crearTrasladosEnLote.mockResolvedValue({ success: false, creados: [], omitidos: [{ vehiculoId: 'v1', error: 'x' }] });
+    await crearTrasladosAction(input, ['v1']);
+    expect(revalidarSolicitudes).not.toHaveBeenCalled();
+  });
+
+  it('should_reject_when_user_is_not_logistica', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'ejecutivo' }));
+    const res = await crearTrasladosAction(input, ['v1']);
+    expect(res).toEqual({
+      success: false,
+      creados: [],
+      omitidos: [],
+      error: 'Solo Logística o el Administrador pueden crear traslados internos.',
+    });
+    expect(crearTrasladosEnLote).not.toHaveBeenCalled();
   });
 });

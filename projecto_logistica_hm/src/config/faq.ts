@@ -18,6 +18,8 @@ export type VistaFaq =
   | 'calendario'
   | 'traslados'
   | 'movimientos'
+  | 'transportistas'
+  | 'transito'
   | 'reportes'
   | 'slots'
   | 'inventario'
@@ -36,6 +38,8 @@ export const ETIQUETA_VISTA: Record<VistaFaq, string> = {
   calendario: 'Calendario de traslados',
   traslados: 'Traslados internos',
   movimientos: 'Movimientos (factura del transportista)',
+  transportistas: 'Empresas de transporte',
+  transito: 'Vehículos en tránsito',
   reportes: 'Reportes de Logística',
   slots: 'Slots de estacionamiento',
   inventario: 'Inventario de vehículos',
@@ -75,7 +79,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'general',
     pregunta: '¿Qué significa cada estado de una solicitud?',
     respuesta:
-      'Pendiente de aprobación: espera al jefe de local. Aprobada: lista para entrar a la cola. Priorizada: tiene una posición en la cola de su sucursal. Asignada: ya tiene Logística asignada. Programada: tiene fecha de despacho y transportista. En tránsito: el vehículo salió. Recepcionada: llegó a la sucursal de destino. Entregada al cliente: cierre de la venta. Rechazada o Cancelada: terminó sin traslado.',
+      'Pendiente de aprobación: espera al jefe de local. Aprobada: lista para entrar a la cola. Priorizada: tiene una posición en la cola de su sucursal. Asignada: ya tiene Logística asignada. Programada: tiene fecha de despacho, camión y transportista. En tránsito: el vehículo salió. Recepcionada: llegó a la sucursal de destino. Entregada al cliente: cierre de la venta. Rechazada o Cancelada: terminó sin traslado.',
   },
   {
     vista: 'general',
@@ -144,6 +148,13 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     pregunta: '¿Cómo creo una solicitud?',
     respuesta:
       'Usa "Nueva Solicitud", elige el tipo (venta o evento), los vehículos (al menos uno; puedes buscarlos por chasis o patente; solo aparecen los que tienen sucursal de origen, los que están en tránsito o en container no se pueden pedir) y la fecha límite de entrega propuesta, que no puede ser anterior a hoy. Si la crea un ejecutivo, en una venta el destino es su sucursal y queda pendiente de aprobación. Si la crea un jefe de local, queda aprobada.',
+  },
+  {
+    vista: 'solicitudes',
+    roles: CREAN,
+    pregunta: '¿Y si el vehículo ya está en mi sucursal?',
+    respuesta:
+      'Crea la solicitud de venta igual. Si todos los vehículos ya están en la sucursal de destino, el formulario lo indica: no requiere traslado. Cuando el jefe de local la aprueba, queda directo "Recepcionada" (lista para entregar), sin pasar por la cola ni por Logística, y el ejecutivo recibe el aviso para usar "Entregar a cliente". No se pueden mezclar en una misma solicitud vehículos que ya están en la sucursal con otros que vienen de otra: crea dos solicitudes.',
   },
   {
     vista: 'solicitudes',
@@ -245,14 +256,14 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: ['logistica'],
     pregunta: '¿Cómo programo un traslado?',
     respuesta:
-      'Arrastra la solicitud desde "Por programar" al día del despacho, o usa el botón "Programar" de la tarjeta y elige el día (la forma más cómoda en el celular). Luego indica el transportista (obligatorio). Si no está en la lista, créalo ahí mismo con su nombre y RUT. Si la fecha queda después de la fecha límite, el sistema avisa pero te deja continuar.',
+      'Arrastra la solicitud desde "Por programar" al día del despacho, o usa el botón "Programar" de la tarjeta y elige el día (la forma más cómoda en el celular). Luego escribe la patente del camión (obligatoria): se completan la empresa de transporte con su RUT y el transportista habitual, que puedes cambiar para ese viaje. Si la patente no está registrada, regístrala ahí mismo con su empresa (existente o nueva). Si la fecha queda después de la fecha límite, el sistema avisa pero te deja continuar.',
   },
   {
     vista: 'calendario',
     roles: ['logistica'],
     pregunta: '¿Cómo reprogramo una fecha?',
     respuesta:
-      'En la vista semanal arrastra la solicitud a otro día, o usa "Reprogramar" en la tarjeta. Debes indicar un motivo y puedes cambiar el transportista. Solo Logística puede reprogramar, y el aviso llega como urgente al ejecutivo y a los jefes de origen y destino.',
+      'En la vista semanal arrastra la solicitud a otro día, o usa "Reprogramar" en la tarjeta. Debes indicar un motivo y puedes cambiar el camión (patente) o el transportista. Solo Logística puede reprogramar, y el aviso llega como urgente al ejecutivo y a los jefes de origen y destino.',
   },
   {
     vista: 'calendario',
@@ -266,14 +277,14 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: OPERAN_TRASLADOS,
     pregunta: '¿Cómo marco que un vehículo salió?',
     respuesta:
-      'Usa "Despachar" en la tarjeta de la solicitud programada. Pasa a En tránsito y el jefe de destino recibe el aviso para recibirlo.',
+      'Usa "Despachar" en la tarjeta de la solicitud programada e ingresa el número de guía de cada vehículo (es obligatorio; si una guía ampara varios autos, usa "Usar para todos"). Pasa a En tránsito y el jefe de destino recibe el aviso para recibirlo. La guía queda en el detalle, en Recepciones y en los Excel.',
   },
   {
     vista: 'calendario',
     roles: CALENDARIO,
     pregunta: '¿Puedo descargar la programación en Excel?',
     respuesta:
-      'Sí, con "Descargar Excel". Por defecto trae los traslados de mañana, y puedes elegir un rango de hasta 93 días. Incluye una fila por vehículo con origen, destino, chasis, transportista, RUT y Logística asignada.',
+      'Sí, con "Descargar Excel". Por defecto trae los traslados de mañana, y puedes elegir un rango de hasta 93 días. Incluye una fila por vehículo con origen, destino, chasis, N° de guía, patente del camión, transportista, empresa de transporte con su RUT y Logística asignada.',
   },
   {
     vista: 'calendario',
@@ -296,7 +307,14 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: OPERAN_TRASLADOS,
     pregunta: '¿Qué vehículos puedo trasladar?',
     respuesta:
-      'Solo vehículos disponibles: no se pueden trasladar los reservados en una solicitud activa ni los entregados al cliente. Búscalos por chasis o patente. Al crear el traslado debes elegir el transportista.',
+      'Solo vehículos disponibles que estén en la sucursal de origen: no se pueden trasladar los reservados en una solicitud activa, los entregados al cliente ni los que no tienen sucursal. Búscalos por chasis o patente. Al crear el traslado debes indicar la patente del camión y el transportista.',
+  },
+  {
+    vista: 'traslados',
+    roles: OPERAN_TRASLADOS,
+    pregunta: '¿Puedo trasladar varios vehículos a la vez?',
+    respuesta:
+      'Sí. Elige el origen (la lista muestra los vehículos de esa sucursal), marca los vehículos uno por uno o con "Seleccionar los de esta página" y usa "Crear N traslados". Se crea un traslado por vehículo, con el mismo origen, destino y camión, hasta 50 a la vez. Si alguno no se puede crear, el sistema dice cuál y por qué, y lo deja seleccionado para que lo corrijas.',
   },
   {
     vista: 'traslados',
@@ -312,7 +330,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: OPERAN_TRASLADOS,
     pregunta: '¿Para qué sirve el reporte de movimientos?',
     respuesta:
-      'Para revisar la factura del transportista: muestra todo lo despachado en el período (solicitudes y traslados internos), con una fila por vehículo. Por defecto muestra el mes en curso. Filtra por transportista, origen, destino, tipo, estado o chasis, y compara con el panel "Vehículos por transportista".',
+      'Para revisar la factura del transportista: muestra todo lo despachado en el período (solicitudes y traslados internos), con una fila por vehículo. Por defecto muestra el mes en curso. Filtra por empresa de transporte, patente del camión o RUT, origen, destino, tipo, estado, chasis o guía, y compara con el panel "Vehículos por transportista".',
   },
   {
     vista: 'movimientos',
@@ -320,6 +338,27 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     pregunta: '¿Cómo lo exporto?',
     respuesta:
       '"Exportar a Excel" descarga lo filtrado en dos hojas: el detalle y el resumen por transportista. Lo programado antes del 20-10-2026 aparece como "Sin registrar" porque aún no se pedía el transportista.',
+  },
+  {
+    vista: 'transito',
+    roles: OPERAN_TRASLADOS,
+    pregunta: '¿Qué muestra "En tránsito"?',
+    respuesta:
+      'Todo lo despachado que aún no se recepciona (solicitudes y traslados internos de tus zonas), un vehículo por fila, con su guía, camión, transportista y los días que lleva en camino. Las solicitudes que ya pasaron su fecha límite aparecen como atrasadas. Puedes buscar por chasis, guía, código, patente del camión o RUT, y exportar a Excel. No hay estados intermedios: el vehículo deja de aparecer cuando se recepciona.',
+  },
+  {
+    vista: 'transportistas',
+    roles: OPERAN_TRASLADOS,
+    pregunta: '¿Cómo registro una empresa de transporte y sus camiones?',
+    respuesta:
+      'En "Transportistas" usa "Nueva empresa" con su nombre y RUT. Luego, en la tarjeta de la empresa, agrega cada camión con su patente (por ejemplo ABCD-12) y, si quieres, el transportista que lo maneja habitualmente. Una patente pertenece a una sola empresa.',
+  },
+  {
+    vista: 'transportistas',
+    roles: OPERAN_TRASLADOS,
+    pregunta: '¿Puedo borrar una empresa o un camión?',
+    respuesta:
+      'No se borran, porque quedan en el historial de los traslados. Usa "Desactivar": deja de ofrecerse al programar y puedes volver a activarlo cuando quieras. Con "Mostrar inactivas" las vuelves a ver.',
   },
 
   // ---------- Reportes ----------
@@ -338,6 +377,13 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     pregunta: '¿Qué es un slot?',
     respuesta:
       'Es un lugar de estacionamiento en una sucursal. La pantalla muestra la capacidad de cada sucursal, los lugares libres y las que están excedidas. Durante la marcha blanca los slots solo avisan y nunca bloquean.',
+  },
+  {
+    vista: 'slots',
+    roles: CALENDARIO,
+    pregunta: '¿Cómo veo qué vehículos hay en una sucursal?',
+    respuesta:
+      'Haz clic en el nombre de la sucursal. Se abre la lista de los vehículos que están ahí (disponibles o reservados) y de los que van en camino hacia ella, con su guía y camión. Con "Excel" la descargas. El jefe de local solo ve sus sucursales.',
   },
 
   // ---------- Inventario ----------
@@ -436,6 +482,8 @@ const RUTAS_VISTA: Array<[string, VistaFaq]> = [
   ['/solicitudes', 'solicitudes'],
   ['/logistica/calendarizaciones', 'calendario'],
   ['/logistica/movimientos', 'movimientos'],
+  ['/logistica/transportistas', 'transportistas'],
+  ['/logistica/transito', 'transito'],
   ['/logistica/reportes', 'reportes'],
   ['/logistica/slots', 'slots'],
   ['/admin/vehiculos', 'inventario'],

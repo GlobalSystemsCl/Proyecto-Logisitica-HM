@@ -137,7 +137,7 @@ describe('notificaciones desde las actions', () => {
   it('should_reject_scheduling_when_transportista_is_missing', async () => {
     getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'logistica' }));
     const res = await actions.calendarizarSolicitudAction('s-1', '2099-01-01', null);
-    expect(res).toEqual({ success: false, error: 'Indica el transportista del traslado.' });
+    expect(res).toEqual({ success: false, error: 'Indica la patente del camión y el transportista del traslado.' });
     expect(svc.calendarizarSolicitud).not.toHaveBeenCalled();
   });
 
@@ -147,11 +147,11 @@ describe('notificaciones desde las actions', () => {
     svc.getSolicitudById.mockResolvedValue({ ...solicitud, estado: 'priorizada' });
     svc.calendarizarSolicitud.mockResolvedValue({ success: true });
 
-    const res = await actions.calendarizarSolicitudAction('s-1', '2099-01-01', 'tr-1');
+    const res = await actions.calendarizarSolicitudAction('s-1', '2099-01-01', { patente: 'ABCD12', conductorNombre: null });
     await tick();
 
     expect(res.success).toBe(true);
-    expect(svc.calendarizarSolicitud).toHaveBeenCalledWith('s-1', '2099-01-01', 'u-1', 'logistica', 'tr-1');
+    expect(svc.calendarizarSolicitud).toHaveBeenCalledWith('s-1', '2099-01-01', 'u-1', 'logistica', { patente: 'ABCD12', conductorNombre: null });
     expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_calendarizada', 's-1', 'u-1', undefined);
   });
 
@@ -160,9 +160,9 @@ describe('notificaciones desde las actions', () => {
     getBranch.mockResolvedValue({ id: 1, nombre: 'Centro', zona_id: 7 });
     svc.recalendarizarSolicitud.mockResolvedValue({ success: true, fechaAnterior: null });
 
-    await actions.recalendarizarSolicitudAction('s-1', '2026-10-15', 'Lluvia', 'tr-2');
+    await actions.recalendarizarSolicitudAction('s-1', '2026-10-15', 'Lluvia', { patente: 'ABCD12', conductorNombre: null });
 
-    expect(svc.recalendarizarSolicitud).toHaveBeenCalledWith('s-1', '2026-10-15', 'u-1', 'Lluvia', 'tr-2');
+    expect(svc.recalendarizarSolicitud).toHaveBeenCalledWith('s-1', '2026-10-15', 'u-1', 'Lluvia', { patente: 'ABCD12', conductorNombre: null });
   });
 
   it('should_send_cancellation_with_reason_and_final_location_name', async () => {

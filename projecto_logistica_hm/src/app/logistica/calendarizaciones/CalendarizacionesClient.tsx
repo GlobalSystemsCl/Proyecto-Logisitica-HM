@@ -34,8 +34,8 @@ import {
   cancelarEnTransitoAction,
 } from '@/app/actions/solicitudes.actions';
 import { CancelarTransitoModal, ProgramarModal, RecepcionModal, ReprogramarModal } from '@/components/ModalesTraslado';
-import { formatearRut } from '@/lib/rut';
-import type { Transportista } from '@/types/transportista.types';
+import type { EmpresaTransporte } from '@/types/transportista.types';
+import { textoTransporte } from '@/lib/transporte';
 import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
 import { formatFecha, formatFechaLarga, hoyISO } from '@/lib/fechas';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
@@ -60,6 +60,7 @@ import {
 } from '@/lib/calendario';
 import { urlSinParametro } from '@/lib/enlaceNotificacion';
 import AbrirSolicitudDesdeUrl from '@/components/AbrirSolicitudDesdeUrl';
+import ModalGuiaDespacho from '@/components/ModalGuiaDespacho';
 
 interface Opcion {
   id: number | string;
@@ -81,8 +82,8 @@ interface Props {
   encargados: Array<{ id: string; nombre: string }>;
   viewer: { id: string; rol: string; sucursal_id: number | null };
   sucursales_asignadas?: Array<{ id: number; nombre: string | null }>;
-  /** Transportistas activos (solo se cargan para Logística). */
-  transportistas?: Transportista[];
+  /** R10: empresas activas con sus camiones activos (solo se cargan para Logística). */
+  empresas?: EmpresaTransporte[];
   /** R2: solicitud que se abre al entrar desde una notificación (`?solicitud=`). */
   solicitudInicialId?: string | null;
 }
@@ -138,7 +139,7 @@ export default function CalendarizacionesClient({
   encargados,
   viewer,
   sucursales_asignadas = [],
-  transportistas = [],
+  empresas = [],
   solicitudInicialId = null,
 }: Props) {
   const router = useRouter();
@@ -151,7 +152,7 @@ export default function CalendarizacionesClient({
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [programar, setProgramar] = useState<{ id: string; fecha: string; elegirFecha?: boolean } | null>(null);
-  const [listaTransportistas, setListaTransportistas] = useState<Transportista[]>(transportistas);
+  const [listaEmpresas, setListaEmpresas] = useState<EmpresaTransporte[]>(empresas);
   const [recibirTarget, setRecibirTarget] = useState<SolicitudLista | null>(null);
   const [reprogramar, setReprogramar] = useState<{ sol: SolicitudLista; fecha: string | null } | null>(null);
   const [cancelarTarget, setCancelarTarget] = useState<SolicitudLista | null>(null);
@@ -159,6 +160,8 @@ export default function CalendarizacionesClient({
     ? [...porProgramar, ...programadas].find((s) => s.id === solicitudInicialId) ?? null
     : null;
   const [detalle, setDetalle] = useState<SolicitudLista | null>(solicitudInicial);
+  /** R15: solicitud a despachar (pide la guía de cada vehículo). */
+  const [despachar, setDespachar] = useState<SolicitudLista | null>(null);
 
   const puedeCalendarizar = viewer.rol === 'logistica';
   const puedeDespachar = viewer.rol === 'administrador' || viewer.rol === 'logistica';
@@ -220,9 +223,6 @@ export default function CalendarizacionesClient({
     setDropTarget(dia);
   }
 
-  function agregarTransportista(t: Transportista) {
-    setListaTransportistas((prev) => [...prev, t].sort((a, b) => a.nombre.localeCompare(b.nombre)));
-  }
 
   async function handleDrop(e: DragEvent<HTMLDivElement>, dia: string) {
     e.preventDefault();
@@ -285,7 +285,7 @@ export default function CalendarizacionesClient({
           <Eye className="w-3 h-3" /> Ver detalle
         </button>
         {puedeDespachar && s.estado === 'calendarizada' && (
-          <button onClick={() => accion(s.id, () => despacharSolicitudAction(s.id))} disabled={ocupado} className={`${btn} text-white bg-sky-600 hover:bg-sky-700`}>
+          <button onClick={() => setDespachar(s)} disabled={ocupado} className={`${btn} text-white bg-sky-600 hover:bg-sky-700`}>
             <PackageSearch className="w-3 h-3" /> Despachar
           </button>
         )}
@@ -347,7 +347,7 @@ export default function CalendarizacionesClient({
           {s.logistica_nombre && <span>Logística: {s.logistica_nombre}</span>}
           {s.transportista && (
             <span className="flex items-center gap-1">
-              <Truck className="w-3 h-3" /> {s.transportista.nombre} · {formatearRut(s.transportista.rut)}
+              <Truck className="w-3 h-3" /> {textoTransporte(s)}
             </span>
           )}
         </div>
@@ -429,7 +429,7 @@ export default function CalendarizacionesClient({
               type="search"
               value={filtros.busqueda}
               onChange={(e) => setFiltros({ ...filtros, busqueda: e.target.value.replace(/^#/, '').slice(0, 40) })}
-              placeholder="Buscar N° de solicitud, patente o chasis"
+              placeholder="Buscar N° de solicitud, chasis, patente del camión o RUT"
               aria-label="Buscar solicitud"
               className={`${selectCls} w-full pl-9`}
             />
@@ -706,6 +706,26 @@ export default function CalendarizacionesClient({
       )}
 
       {/* Modales */}
+      {despachar && (
+        <ModalGuiaDespacho
+          titulo={`Despachar solicitud ${numero(despachar)}`}
+          vehiculos={despachar.vehiculos.map((v) => ({
+            id: v.solicitud_vehiculo_id,
+            etiqueta: `${v.chasis} · ${v.marca} ${v.modelo}`,
+          }))}
+          ocupado={loading === despachar.id}
+          onCancelar={() => setDespachar(null)}
+          onConfirmar={(guias) => {
+            const s = despachar;
+            void accion(s.id, async () => {
+              const res = await despacharSolicitudAction(s.id, guias);
+              if (res.success) setDespachar(null);
+              return res;
+            });
+          }}
+        />
+      )}
+
       {/* Si la solicitud del aviso no está en lo cargado (otro mes, aún sin priorizar), se abre en consulta. */}
       {solicitudInicialId && !solicitudInicial && <AbrirSolicitudDesdeUrl solicitudId={solicitudInicialId} />}
 
@@ -747,12 +767,16 @@ export default function CalendarizacionesClient({
           subtitulo={ruta(reprogramar.sol)}
           fechaActual={reprogramar.sol.fecha_tentativa_despacho}
           fechaPropuesta={reprogramar.fecha}
-          transportistas={listaTransportistas}
-          transportistaActualId={reprogramar.sol.transportista?.id ?? null}
-          onTransportistaCreado={agregarTransportista}
+          empresas={listaEmpresas}
+          transporteActual={
+            reprogramar.sol.patente_camion
+              ? { patente: reprogramar.sol.patente_camion, conductorNombre: reprogramar.sol.conductor_nombre }
+              : null
+          }
+          onEmpresasCambiadas={setListaEmpresas}
           onCerrar={() => setReprogramar(null)}
-          onConfirmar={async (nuevaFecha, motivo, transportistaId) => {
-            const result = await recalendarizarSolicitudAction(reprogramar.sol.id, nuevaFecha, motivo, transportistaId);
+          onConfirmar={async (nuevaFecha, motivo, transporte) => {
+            const result = await recalendarizarSolicitudAction(reprogramar.sol.id, nuevaFecha, motivo, transporte);
             if (!result.success) return result.error ?? 'No se pudo reprogramar.';
             setReprogramar(null);
             return null;
@@ -784,11 +808,11 @@ export default function CalendarizacionesClient({
             fecha={programar.fecha}
             elegirFecha={programar.elegirFecha}
             fechaLimite={sol?.fecha_limite ?? null}
-            transportistas={listaTransportistas}
-            onTransportistaCreado={agregarTransportista}
+            empresas={listaEmpresas}
+            onEmpresasCambiadas={setListaEmpresas}
             onCerrar={() => setProgramar(null)}
-            onConfirmar={async (transportistaId, dia) => {
-              const result = await calendarizarSolicitudAction(programar.id, dia, transportistaId);
+            onConfirmar={async (transporte, dia) => {
+              const result = await calendarizarSolicitudAction(programar.id, dia, transporte);
               if (!result.success) return result.error ?? 'No se pudo programar el traslado.';
               setProgramar(null);
               return null;

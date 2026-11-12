@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { Vehiculo, VehiculoConDisponibilidad, CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
+import { Vehiculo, VehiculoConDisponibilidad, VehiculoEnSucursal, CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
 import { OrganizacionService } from '@/services/organizacion.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mensajeErrorUsuario } from '@/lib/errores';
@@ -118,6 +118,41 @@ export class VehiculoService {
       vistos.add(id);
       return true;
     });
+  }
+
+  /**
+   * R4 (2026-11-11): vehículos que están físicamente en una sucursal, con su
+   * estado (disponible o reservado), para el panel de Slots. Paginado.
+   */
+  static async getVehiculosEnSucursal(sucursalId: number): Promise<VehiculoEnSucursal[]> {
+    try {
+      const admin = createAdminClient();
+      const filas = await this.fetchAllRowsPaginated(
+        admin
+          .from('vehiculo')
+          .select('id, chasis, patente, marca, modelo, color, idv, solicitud_vehiculo!solicitud_vehiculo_vehiculo_fk(disponibilidad)')
+          .eq('ubicacion', sucursalId)
+          .order('chasis', { ascending: true })
+          .order('id', { ascending: true }),
+        (error) => console.error('Error al listar vehículos de la sucursal:', error)
+      );
+      return this.deduplicarPorId(filas ?? []).map((v) => {
+        const vinculos = (v.solicitud_vehiculo as Array<{ disponibilidad: string }> | null) ?? [];
+        return {
+          id: v.id as string,
+          chasis: v.chasis as string,
+          patente: (v.patente as string | null) ?? null,
+          marca: v.marca as string,
+          modelo: v.modelo as string,
+          color: (v.color as string | null) ?? null,
+          idv: (v.idv as string | null) ?? null,
+          reservado: vinculos.some((s) => s.disponibilidad === 'reservado'),
+        };
+      });
+    } catch (err) {
+      console.error('Error en getVehiculosEnSucursal:', err);
+      return [];
+    }
   }
 
   /**

@@ -8,8 +8,8 @@ import { hoyISO } from '@/lib/fechas';
 import { rangoPorDefectoCalendarizacion, validarRangoExporte } from '@/lib/reporteTraslados';
 
 const COLUMNAS = [
-  'Solicitud', 'Fecha programada', 'Origen', 'Destino', 'Chasis', 'Patente', 'Marca', 'Modelo', 'Color',
-  'Tipo', 'Transportista', 'RUT transportista', 'Logística asignada', 'Estado',
+  'Solicitud', 'Fecha programada', 'Origen', 'Destino', 'Chasis', 'Patente', 'Marca', 'Modelo', 'Color', 'N° guía',
+  'Tipo', 'Patente camión', 'Transportista', 'Empresa de transporte', 'RUT empresa', 'Logística asignada', 'Estado',
 ];
 
 /**

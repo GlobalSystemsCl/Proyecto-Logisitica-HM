@@ -783,3 +783,33 @@ describe('VehiculoService.getDestinosEnTransito (R2)', () => {
     expect(await VehiculoService.getDestinosEnTransito()).toEqual({ v3: 'Sur' });
   });
 });
+
+describe('VehiculoService.getVehiculosEnSucursal (R4)', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_list_vehicles_of_the_branch_marking_reserved_ones', async () => {
+    admin.results.vehiculo = [
+      fila([
+        { id: 'v1', chasis: 'A', patente: null, marca: 'Kia', modelo: 'Rio', color: null, idv: '1', solicitud_vehiculo: [{ disponibilidad: 'reservado' }] },
+        { id: 'v2', chasis: 'B', patente: null, marca: 'Kia', modelo: 'Rio', color: 'Rojo', idv: null, solicitud_vehiculo: [] },
+      ]),
+    ];
+
+    const res = await VehiculoService.getVehiculosEnSucursal(101);
+
+    expect(admin.callsTo('vehiculo')).toContainEqual(['eq', 'ubicacion', 101]);
+    expect(res.map((v) => [v.id, v.reservado])).toEqual([
+      ['v1', true],
+      ['v2', false],
+    ]);
+  });
+
+  it('should_return_empty_when_query_fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.vehiculo = [{ data: null, error: { message: 'boom' } }];
+    expect(await VehiculoService.getVehiculosEnSucursal(101)).toEqual([]);
+  });
+});

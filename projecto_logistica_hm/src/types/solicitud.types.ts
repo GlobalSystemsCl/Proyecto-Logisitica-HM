@@ -28,8 +28,13 @@ export interface SolicitudLista {
   /** Quién inició la solicitud (ejecutivo, jefe de local o administrador). UI: "Iniciada por". */
   creado_por: string | null;
   creado_por_nombre: string | null;
-  /** Transportista del traslado: lo indica Logística al programar. */
+  /** Empresa de transporte del traslado: sale del camión que indica Logística al programar. */
   transportista: TransportistaResumen | null;
+  /** R10: patente del camión y transportista (conductor) usados (desde el 2026-11-11). */
+  patente_camion: string | null;
+  conductor_nombre: string | null;
+  /** R1: venta de vehículos que ya están en la sucursal de destino (sin traslado ni Logística). */
+  sin_traslado?: boolean;
   fecha_creacion: string | null;
   /** Fecha estimada de despacho (UI: "Fecha estimada"). La fija Logística al calendarizar. */
   fecha_tentativa_despacho: string | null;

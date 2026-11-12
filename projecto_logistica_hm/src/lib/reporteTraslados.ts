@@ -3,6 +3,7 @@ import type { TrasladoInterno } from '@/types/traslado.types';
 import { formatFecha, partesFecha } from '@/lib/fechas';
 import { esFechaValida, sumarDias } from '@/lib/calendario';
 import { formatearRut } from '@/lib/rut';
+import { formatearPatente, normalizarPatente } from '@/lib/patente';
 import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
 
 /**
@@ -79,9 +80,12 @@ export function filasExcelCalendarizacion(solicitudes: SolicitudLista[]): Array<
       Marca: v?.marca ?? '',
       Modelo: v?.modelo ?? '',
       Color: v?.color ?? '',
+      'N° guía': v?.numero_guia ?? '',
       Tipo: s.tipo_solicitud === 'evento' ? 'Evento' : 'Sala de venta',
-      Transportista: s.transportista?.nombre ?? '',
-      'RUT transportista': s.transportista ? formatearRut(s.transportista.rut) : '',
+      'Patente camión': s.patente_camion ? formatearPatente(s.patente_camion) : '',
+      Transportista: s.conductor_nombre ?? '',
+      'Empresa de transporte': s.transportista?.nombre ?? '',
+      'RUT empresa': s.transportista ? formatearRut(s.transportista.rut) : '',
       'Logística asignada': s.logistica_nombre ?? '',
       Estado: etiquetaEstadoMovimiento(s.estado),
     }));
@@ -108,9 +112,15 @@ export interface MovimientoTraslado {
   patente: string | null;
   marca: string;
   modelo: string;
+  /** R15: guía de despacho del vehículo. */
+  numeroGuia: string | null;
+  /** Empresa de transporte (`public.transportista`). */
   transportistaId: string | null;
   transportistaNombre: string | null;
   transportistaRut: string | null;
+  /** R10: camión y transportista (conductor) del viaje. */
+  patenteCamion: string | null;
+  conductor: string | null;
   logistica: string | null;
   estado: string;
 }
@@ -132,9 +142,12 @@ export function movimientosDesdeSolicitudes(solicitudes: SolicitudLista[]): Movi
       patente: v.patente,
       marca: v.marca,
       modelo: v.modelo,
+      numeroGuia: v.numero_guia ?? null,
       transportistaId: s.transportista?.id ?? null,
       transportistaNombre: s.transportista?.nombre ?? null,
       transportistaRut: s.transportista?.rut ?? null,
+      patenteCamion: s.patente_camion ?? null,
+      conductor: s.conductor_nombre ?? null,
       logistica: s.logistica_nombre,
       estado: s.estado,
     }));
@@ -158,9 +171,12 @@ export function movimientosDesdeTraslados(traslados: TrasladoInterno[]): Movimie
       patente: v.patente,
       marca: v.marca,
       modelo: v.modelo,
+      numeroGuia: v.numero_guia ?? null,
       transportistaId: t.transportista?.id ?? null,
       transportistaNombre: t.transportista?.nombre ?? null,
       transportistaRut: t.transportista?.rut ?? null,
+      patenteCamion: t.patente_camion ?? null,
+      conductor: t.conductor_nombre ?? null,
       logistica: t.logistica_nombre,
       estado: t.estado,
     }));
@@ -189,8 +205,10 @@ export interface FiltrosMovimientos {
   destino: string;
   tipo: '' | TipoMovimiento;
   estado: string;
-  /** Búsqueda por chasis o patente. */
+  /** Búsqueda por chasis, patente o número de guía. */
   vehiculo: string;
+  /** R10: patente del camión o RUT de la empresa de transporte. */
+  transporte: string;
 }
 
 export const FILTROS_MOVIMIENTOS_VACIOS: FiltrosMovimientos = {
@@ -200,6 +218,7 @@ export const FILTROS_MOVIMIENTOS_VACIOS: FiltrosMovimientos = {
   tipo: '',
   estado: '',
   vehiculo: '',
+  transporte: '',
 };
 
 export function filtrarMovimientos(movimientos: MovimientoTraslado[], f: FiltrosMovimientos): MovimientoTraslado[] {
@@ -212,11 +231,25 @@ export function filtrarMovimientos(movimientos: MovimientoTraslado[], f: Filtros
     if (f.destino && m.destino !== f.destino) return false;
     if (f.tipo && m.tipo !== f.tipo) return false;
     if (f.estado && m.estado !== f.estado) return false;
-    if (busqueda && !m.chasis.toLowerCase().includes(busqueda) && !(m.patente ?? '').toLowerCase().includes(busqueda)) {
+    if (f.transporte && !coincideTransporteMovimiento(m, f.transporte)) return false;
+    if (
+      busqueda &&
+      !m.chasis.toLowerCase().includes(busqueda) &&
+      !(m.patente ?? '').toLowerCase().includes(busqueda) &&
+      !(m.numeroGuia ?? '').toLowerCase().includes(busqueda)
+    ) {
       return false;
     }
     return true;
   });
+}
+
+/** Coincide con la patente del camión o el RUT de la empresa (con o sin puntos ni guion). */
+export function coincideTransporteMovimiento(m: MovimientoTraslado, texto: string): boolean {
+  const patente = normalizarPatente(texto);
+  const rut = texto.toLowerCase().replace(/[^0-9k]/g, '');
+  if (patente.length >= 2 && (m.patenteCamion ?? '').includes(patente)) return true;
+  return rut.length >= 3 && (m.transportistaRut ?? '').toLowerCase().replace(/[^0-9k]/g, '').includes(rut);
 }
 
 /** Opciones de los filtros, a partir de los movimientos cargados. */
@@ -266,8 +299,11 @@ export function filasExcelMovimientos(movimientos: MovimientoTraslado[]): Array<
     Patente: m.patente ?? '',
     Marca: m.marca,
     Modelo: m.modelo,
-    Transportista: m.transportistaNombre ?? '',
-    'RUT transportista': m.transportistaRut ? formatearRut(m.transportistaRut) : '',
+    'N° guía': m.numeroGuia ?? '',
+    'Patente camión': m.patenteCamion ? formatearPatente(m.patenteCamion) : '',
+    Transportista: m.conductor ?? '',
+    'Empresa de transporte': m.transportistaNombre ?? '',
+    'RUT empresa': m.transportistaRut ? formatearRut(m.transportistaRut) : '',
     'Logística': m.logistica ?? '',
     Estado: etiquetaEstadoMovimiento(m.estado),
     'Fecha recepción': m.fechaRecepcion ? formatFecha(m.fechaRecepcion) : '',
