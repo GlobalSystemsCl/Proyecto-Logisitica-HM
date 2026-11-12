@@ -20,6 +20,8 @@ const svc = {
   priorizarSolicitud: vi.fn(),
   priorizarEnPosicion: vi.fn(),
   cancelarSolicitud: vi.fn(),
+  insistirSolicitud: vi.fn(),
+  agregarObservacion: vi.fn(),
   descalendarizarSolicitud: vi.fn(),
   cancelarDespacharSolicitud: vi.fn(),
   finalizarSolicitud: vi.fn(),
@@ -234,11 +236,86 @@ describe('notificaciones desde las actions', () => {
     svc.cancelarSolicitud.mockResolvedValue({ success: true });
     await actions.cancelarSolicitudAction('s-1', ' Cliente desistió ');
     await tick();
-    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_cancelada', 's-1', 'u-1', { motivo: 'Cliente desistió' });
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_cancelada', 's-1', 'u-1', {
+      motivo: 'Cliente desistió',
+      estadoAnterior: 'calendarizada',
+      canceladoPor: 'U Test (Administrador)',
+    });
+  });
+
+  it('should_send_previous_state_when_executive_cancels_pending_request', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ id: 'e-1', rol: 'ejecutivo', nombre: 'Eva', apellido: 'Rojas' }));
+    svc.getSolicitudById.mockResolvedValue({ ...solicitud, estado: 'pendiente_aprobacion' });
+    svc.cancelarSolicitud.mockResolvedValue({ success: true });
+
+    await actions.cancelarSolicitudAction('s-1', 'Ya no lo necesito');
+    await tick();
+
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_cancelada', 's-1', 'e-1', {
+      motivo: 'Ya no lo necesito',
+      estadoAnterior: 'pendiente_aprobacion',
+      canceladoPor: 'Eva Rojas (Ejecutivo)',
+    });
+  });
+
+  it('should_send_cancelled_date_when_schedule_is_removed', async () => {
+    svc.getSolicitudById.mockResolvedValue({ ...solicitud, fecha_tentativa_despacho: '2026-11-20T00:00:00Z' });
+    svc.descalendarizarSolicitud.mockResolvedValue({ success: true });
+
+    await actions.descalendarizarSolicitudAction('s-1');
+    await tick();
+
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_descalendarizada', 's-1', 'u-1', { fechaAnterior: '20/11/2026' });
+  });
+
+  it('should_notify_who_holds_the_request_when_executive_insists', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ id: 'e-1', rol: 'ejecutivo' }));
+    svc.insistirSolicitud.mockResolvedValue({ success: true, proxima_insistencia_en_h: 24 });
+
+    const res = await actions.insistirSolicitudAction('s-1', '  El cliente viene el lunes ');
+    await tick();
+
+    expect(res.success).toBe(true);
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_insistencia', 's-1', 'e-1', { mensaje: 'El cliente viene el lunes' });
+  });
+
+  it('should_not_notify_when_insistence_is_in_cooldown', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ id: 'e-1', rol: 'ejecutivo' }));
+    svc.insistirSolicitud.mockResolvedValue({ success: false, error: 'Ya insististe', proxima_insistencia_en_h: 5 });
+
+    await actions.insistirSolicitudAction('s-1');
+    await tick();
+
+    expect(notificarSolicitud).not.toHaveBeenCalled();
+  });
+
+  it('should_send_insistence_without_message_as_null', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ id: 'e-1', rol: 'ejecutivo' }));
+    svc.insistirSolicitud.mockResolvedValue({ success: true, proxima_insistencia_en_h: 24 });
+
+    await actions.insistirSolicitudAction('s-1', '   ');
+    await tick();
+
+    expect(notificarSolicitud).toHaveBeenCalledWith('solicitud_insistencia', 's-1', 'e-1', { mensaje: null });
+  });
+
+  it('should_notify_new_observation_in_app', async () => {
+    svc.agregarObservacion.mockResolvedValue({ success: true });
+
+    await actions.agregarObservacionAction('s-1', '  Llega con patente provisoria ');
+    await tick();
+
+    expect(notificarSolicitud).toHaveBeenCalledWith('nueva_observacion', 's-1', 'u-1', { mensaje: 'Llega con patente provisoria' });
+  });
+
+  it('should_not_notify_observation_when_saving_fails', async () => {
+    svc.agregarObservacion.mockResolvedValue({ success: false, error: 'x' });
+    await actions.agregarObservacionAction('s-1', 'hola');
+    await tick();
+    expect(notificarSolicitud).not.toHaveBeenCalled();
   });
 
   it.each([
-    ['descalendarizarSolicitudAction', 'descalendarizarSolicitud', 'solicitud_descalendarizada'],
     ['cancelarDespachoSolicitudAction', 'cancelarDespacharSolicitud', 'solicitud_despacho_revertido'],
     ['finalizarSolicitudAction', 'finalizarSolicitud', 'solicitud_finalizada'],
     ['asignarEncargadoAction', 'asignarEncargadoLogistica', 'solicitud_asignada'],

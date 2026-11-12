@@ -471,6 +471,28 @@ describe('TrasladoService', () => {
     });
   });
 
+  describe('getTrasladosDeSucursal', () => {
+    it('should_list_transfers_leaving_or_arriving_at_the_branch', async () => {
+      admin.results.traslado_interno = [fila([filaTraslado()])];
+
+      const res = await TrasladoService.getTrasladosDeSucursal(1);
+
+      expect(res).toHaveLength(1);
+      expect(admin.callsTo('traslado_interno')).toContainEqual(['or', 'origen_id.eq.1,destino_id.eq.1']);
+    });
+
+    it('should_return_empty_without_querying_when_branch_is_not_an_integer', async () => {
+      expect(await TrasladoService.getTrasladosDeSucursal(Number.NaN)).toEqual([]);
+      expect(admin.callsTo('traslado_interno')).toHaveLength(0);
+    });
+
+    it('should_return_empty_when_query_fails', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      admin.results.traslado_interno = [{ data: null, error: { message: 'x' } }];
+      expect(await TrasladoService.getTrasladosDeSucursal(1)).toEqual([]);
+    });
+  });
+
   describe('getTrasladosEnTransitoHacia (R13)', () => {
     it('should_filter_in_transit_by_destination_branches', async () => {
       admin.results.traslado_interno = [fila([filaTraslado({ estado: 'en_transito' })])];

@@ -17,7 +17,7 @@ import {
 } from '@/lib/auth/guards';
 import type { DatosRecepcion } from '@/lib/recepcion';
 import { NotificacionService } from '@/services/notificacion.service';
-import type { DatosCorreo } from '@/lib/notificaciones';
+import { textoActor, type DatosCorreo } from '@/lib/notificaciones';
 import type { EventoApp } from '@/lib/notificaciones-app';
 import { enSegundoPlano } from '@/lib/segundoPlano';
 import { ocultarContacto, puedeVerContacto } from '@/lib/auth/contacto';
@@ -420,7 +420,12 @@ export async function cancelarSolicitudAction(id: string, motivo: string) {
     const result = await SolicitudesService.cancelarSolicitud(id, motivo, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    notificar('solicitud_cancelada', id, profile.id, { motivo: motivo.trim() });
+    // El estado antes de cancelar define a quién se avisa: solo a quien ya sabía de ella.
+    notificar('solicitud_cancelada', id, profile.id, {
+      motivo: motivo.trim(),
+      estadoAnterior: solicitud.estado,
+      canceladoPor: textoActor(profile),
+    });
 
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud cancelada.' };
@@ -508,6 +513,9 @@ export async function agregarObservacionAction(solicitudId: string, texto: strin
 
     const result = await SolicitudesService.agregarObservacion(solicitudId, profile.id, texto);
     if (!result.success) return { success: false, error: result.error };
+
+    // Solo campana: una observación no genera correo.
+    notificar('nueva_observacion', solicitudId, profile.id, { mensaje: texto.trim() });
 
     revalidarSolicitudes();
     return { success: true, message: 'Observación agregada.' };
@@ -674,12 +682,14 @@ export async function descalendarizarSolicitudAction(solicitudId: string) {
       return { success: false, error: 'No tienes permisos para descalendarizar solicitudes.' };
     }
 
-    await requireSolicitudAccess(profile, solicitudId);
+    const solicitud = await requireSolicitudAccess(profile, solicitudId);
 
     const result = await SolicitudesService.descalendarizarSolicitud(solicitudId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
-    notificar('solicitud_descalendarizada', solicitudId, profile.id);
+    notificar('solicitud_descalendarizada', solicitudId, profile.id, {
+      fechaAnterior: solicitud.fecha_tentativa_despacho ? formatFecha(solicitud.fecha_tentativa_despacho) : null,
+    });
 
     revalidarSolicitudes();
     return { success: true, message: 'Solicitud devuelta a priorizada.' };
@@ -920,6 +930,9 @@ export async function insistirSolicitudAction(solicitudId: string, mensaje?: str
         horas_restantes: result.proxima_insistencia_en_h ?? null,
       };
     }
+
+    // Avisa a quien tiene la solicitud detenida según su estado (Jefe de Local o Logística).
+    notificar('solicitud_insistencia', solicitudId, profile.id, { mensaje: mensaje?.trim() || null });
 
     revalidarSolicitudes();
     return {

@@ -38,6 +38,10 @@ export async function crearTrasladoAction(
     const result = await TrasladoService.crearTraslado(input, vehiculoIds, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    const trasladoId = result.traslado?.id;
+    if (trasladoId) {
+      enSegundoPlano(() => NotificacionService.notificarTrasladoInterno('traslado_interno_creado', trasladoId, profile.id));
+    }
     revalidarSolicitudes();
     return { success: true, message: 'Traslado interno creado.', traslado: result.traslado };
   } catch (err: unknown) {
@@ -58,6 +62,7 @@ export async function despacharTrasladoAction(trasladoId: string) {
     const result = await TrasladoService.despacharTraslado(trasladoId, profile.id);
     if (!result.success) return { success: false, error: result.error };
 
+    enSegundoPlano(() => NotificacionService.notificarTrasladoInterno('traslado_interno_despachado', trasladoId, profile.id));
     revalidarSolicitudes();
     return { success: true, message: 'Traslado despachado.' };
   } catch (err: unknown) {
@@ -81,6 +86,13 @@ export async function recibirTrasladoAction(trasladoId: string, recepcion?: Dato
     const result = await TrasladoService.recibirTraslado(trasladoId, profile.id, recepcion);
     if (!result.success) return { success: false, error: result.error };
 
+    // Correo a Logística solo si hubo novedades; la campana siempre.
+    enSegundoPlano(() =>
+      NotificacionService.notificarTrasladoInterno('traslado_interno_recepcionado', trasladoId, profile.id, {
+        conNovedades: recepcion?.conNovedades ?? false,
+        observacion: recepcion?.observacion?.trim() || null,
+      })
+    );
     revalidarSolicitudes();
     return { success: true, message: 'Traslado recepcionado en destino.' };
   } catch (err: unknown) {
@@ -133,7 +145,8 @@ export async function getTrasladosAction() {
       const sucursales = await OrganizacionService.getUserAssignedBranches(profile.id);
       const unicos = [...new Set(sucursales.map((s) => s.id))];
       const listas = await Promise.all(
-        unicos.map((sid) => TrasladoService.getTrasladosByDestinoSucursal(sid))
+        // Origen o destino: el Jefe de Local también ve (y abre desde un aviso) los que salen de su sucursal.
+        unicos.map((sid) => TrasladoService.getTrasladosDeSucursal(sid))
       );
       const todas = listas.flat();
       const porId = new Map(todas.map((t) => [t.id, t]));

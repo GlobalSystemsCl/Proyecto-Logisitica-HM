@@ -328,6 +328,7 @@ export class UsersService {
         recipientName: `${user.nombre} ${user.apellido}`,
         tempPassword,
         role: user.rol,
+        motivo: 'restablecida',
       });
 
       return {

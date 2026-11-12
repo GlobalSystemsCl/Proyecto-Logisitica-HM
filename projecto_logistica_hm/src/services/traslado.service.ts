@@ -550,22 +550,24 @@ export class TrasladoService {
   }
 
   /** Traslados que llegan a la sucursal indicada (JL destino o admin). */
-  static async getTrasladosByDestinoSucursal(sucursalId: number): Promise<TrasladoInterno[]> {
+  /** Traslados que salen de la sucursal o llegan a ella (vista del Jefe de Local). */
+  static async getTrasladosDeSucursal(sucursalId: number): Promise<TrasladoInterno[]> {
+    if (!Number.isInteger(sucursalId)) return [];
     try {
       const admin = createAdminClient();
       const { data, error } = await admin
         .from('traslado_interno')
         .select(TRASLADO_SELECT)
-        .eq('destino_id', sucursalId)
+        .or(`origen_id.eq.${sucursalId},destino_id.eq.${sucursalId}`)
         .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error al listar traslados por destino:', error);
+        console.error('Error al listar traslados de la sucursal:', error);
         return [];
       }
       return ((data || []) as unknown as TrasladoRawRow[]).map(mapTraslado);
     } catch (err) {
-      console.error('Error en getTrasladosByDestinoSucursal:', err);
+      console.error('Error en getTrasladosDeSucursal:', err);
       return [];
     }
   }
