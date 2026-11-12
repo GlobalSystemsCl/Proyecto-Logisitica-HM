@@ -434,7 +434,10 @@ describe('UsersService', () => {
       expect(inserts).toEqual([['insert', [{ usuario_id: 'u-log', zona_id: 2 }]]]);
     });
 
-    it('should_reject_logistica_with_more_than_one_zone', async () => {
+    it('should_assign_every_zone_when_logistica_has_several', async () => {
+      admin.results.usuario = [{ data: null, error: null }, fila({ id: 'u-9', rol: 'logistica' })];
+      admin.auth.admin.createUser.mockResolvedValue({ data: { user: { id: 'u-9' } }, error: null });
+
       const res = await UsersService.createUser({
         nombre: 'Leo',
         apellido: 'Zona',
@@ -444,8 +447,14 @@ describe('UsersService', () => {
         zonas_ids: [1, 2],
       });
 
-      expect(res).toEqual({ success: false, error: 'Un usuario de Logística debe tener exactamente una zona asignada.' });
-      expect(admin.auth.admin.createUser).not.toHaveBeenCalled();
+      expect(res.success).toBe(true);
+      expect(admin.callsTo('usuario_zona')).toContainEqual([
+        'insert',
+        [
+          { usuario_id: 'u-9', zona_id: 1 },
+          { usuario_id: 'u-9', zona_id: 2 },
+        ],
+      ]);
     });
 
     it('should_not_assign_zones_when_role_is_not_logistica', async () => {
@@ -756,6 +765,30 @@ describe('UsersService', () => {
       expect(res.success).toBe(true);
       const inserts = admin.callsTo('usuario_zona').filter((c) => c[0] === 'insert');
       expect(inserts).toEqual([['insert', [{ usuario_id: 'u-10', zona_id: 5 }]]]);
+    });
+
+    it('should_make_a_temporary_substitute_zone_permanent_when_admin_assigns_it', async () => {
+      admin.results.usuario = [
+        fila({ rol: 'logistica', sucursal_id: 1 }),
+        fila({ id: 'u-12', ...perfil, rol: 'logistica', sucursal_id: 1 }),
+      ];
+      admin.results.sucursal = [fila([]), { data: null, error: null }];
+      admin.results.usuario_zona = [
+        fila([]),
+        { data: null, error: null },
+        fila([{ zona_id: 5 }]),
+        { data: null, error: null },
+        { data: null, error: null },
+      ];
+
+      const res = await UsersService.updateUser('u-12', { rol: 'logistica', zonas_ids: [5, 6] });
+
+      expect(res.success).toBe(true);
+      const llamadas = admin.callsTo('usuario_zona');
+      expect(llamadas).toContainEqual(['is', 'ausencia_id', null]);
+      expect(llamadas).toContainEqual(['update', { ausencia_id: null }]);
+      expect(llamadas).toContainEqual(['in', 'zona_id', [5]]);
+      expect(llamadas.filter((c) => c[0] === 'insert')).toEqual([['insert', [{ usuario_id: 'u-12', zona_id: 6 }]]]);
     });
 
     it('should_not_touch_assignments_when_only_the_name_changes', async () => {

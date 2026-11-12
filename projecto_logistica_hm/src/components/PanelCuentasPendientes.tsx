@@ -177,8 +177,8 @@ export default function PanelCuentasPendientes({ usuarios, sucursales, zonas }: 
       });
     } else if (rol === 'logistica') {
       resumen.push({ etiqueta: 'Sucursal base', valor: base ?? 'Sin asignar', falta: !base });
-      const zona = zonas.find((z) => z.id === zonasIds[0])?.nombre;
-      resumen.push({ etiqueta: 'Zona asignada', valor: zona ?? 'Sin asignar', falta: !zona });
+      const nombresZonas = zonasIds.map((id) => zonas.find((z) => z.id === id)?.nombre).filter(Boolean).join(', ');
+      resumen.push({ etiqueta: 'Zonas asignadas', valor: nombresZonas || 'Sin asignar', falta: !nombresZonas });
     } else {
       resumen.push({ etiqueta: 'Sucursal', valor: base ?? 'Sin sucursal (opcional)' });
     }

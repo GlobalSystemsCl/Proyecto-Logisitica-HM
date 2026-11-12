@@ -139,7 +139,7 @@ describe('validarFilasImportacion', () => {
       catalogo()
     );
     expect(res[0].errores).toEqual(['Debes asignar la sucursal base del usuario.']);
-    expect(res[1].errores).toEqual(['Un usuario de Logística debe tener exactamente una zona asignada.']);
+    expect(res[1].errores).toEqual(['Un usuario de Logística debe tener al menos una zona asignada.']);
   });
 
   it('should_allow_operaciones_without_branch', () => {

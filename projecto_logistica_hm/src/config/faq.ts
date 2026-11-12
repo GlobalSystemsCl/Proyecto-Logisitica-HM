@@ -335,9 +335,16 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   {
     vista: 'movimientos',
     roles: OPERAN_TRASLADOS,
+    pregunta: '¿Cómo veo el desempeño de cada empresa de transporte?',
+    respuesta:
+      'En Movimientos elige el período y usa las pestañas "Por empresa", "Por camión" o "Por tramo". Para cada una ves los viajes, los vehículos, cuántos se recibieron, el tiempo promedio y mediano de llegada (del despacho a la recepción), el porcentaje a tiempo (recibido a más tardar en la fecha límite; solo solicitudes) y los atrasados que siguen en camino. Respeta los filtros de la pantalla y se exporta en el mismo Excel.',
+  },
+  {
+    vista: 'movimientos',
+    roles: OPERAN_TRASLADOS,
     pregunta: '¿Cómo lo exporto?',
     respuesta:
-      '"Exportar a Excel" descarga lo filtrado en dos hojas: el detalle y el resumen por transportista. Lo programado antes del 20-10-2026 aparece como "Sin registrar" porque aún no se pedía el transportista.',
+      '"Exportar a Excel" descarga lo filtrado: el detalle, el resumen por transportista y las hojas por empresa, por camión y por tramo. Lo programado antes del 20-10-2026 aparece como "Sin registrar" porque aún no se pedía el transportista.',
   },
   {
     vista: 'transito',
@@ -422,7 +429,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: SOLO_ADMIN,
     pregunta: '¿Cómo creo un usuario?',
     respuesta:
-      'Con "Registrar Nuevo Usuario": nombre, correo corporativo, rol y sus sucursales o zona. El usuario recibe por correo una contraseña provisoria y debe cambiarla al entrar. Si el correo falla, la contraseña se muestra en pantalla para que se la entregues.',
+      'Con "Registrar Nuevo Usuario": nombre, correo corporativo, rol y sus sucursales o zonas (un usuario de Logística puede tener varias). El usuario recibe por correo una contraseña provisoria y debe cambiarla al entrar. Si el correo falla, la contraseña se muestra en pantalla para que se la entregues.',
   },
   {
     vista: 'usuarios',
@@ -434,9 +441,16 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   {
     vista: 'usuarios',
     roles: SOLO_ADMIN,
+    pregunta: '¿Qué hago si alguien de Logística sale de vacaciones?',
+    respuesta:
+      'En "Ausencias" registra a quien se ausenta, su sustituto y las fechas (la fecha hasta es su último día). El primer día la cuenta del titular se congela, sus solicitudes y traslados en curso pasan al sustituto y este atiende también sus zonas. El día siguiente a la fecha hasta todo vuelve solo: la cuenta se reactiva y lo traspasado que siga abierto regresa al titular (lo que el sustituto cerró queda a su nombre). Puedes terminarla antes con "Terminar ahora".',
+  },
+  {
+    vista: 'usuarios',
+    roles: SOLO_ADMIN,
     pregunta: '¿Cómo cambio el rol de una cuenta recién registrada?',
     respuesta:
-      'Busca la cuenta (el aviso de la campana ya la deja filtrada) y usa "Editar usuario" para cambiar el rol y sus sucursales o zona. Si quedara alguna cuenta pendiente de una etapa anterior, filtra por "Pendientes", márcalas y usa "Activar seleccionadas".',
+      'Busca la cuenta (el aviso de la campana ya la deja filtrada) y usa "Editar usuario" para cambiar el rol y sus sucursales o zonas (un usuario de Logística puede tener varias). Si quedara alguna cuenta pendiente de una etapa anterior, filtra por "Pendientes", márcalas y usa "Activar seleccionadas".',
   },
   {
     vista: 'usuarios',
@@ -469,7 +483,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'perfil',
     pregunta: '¿Qué puedo cambiar en mi perfil?',
     respuesta:
-      'Tu nombre, apellido y teléfono. El rol, la sucursal y la zona los asigna el administrador: si no corresponden, contáctalo.',
+      'Tu nombre, apellido y teléfono. El rol, la sucursal y las zonas los asigna el administrador: si no corresponden, contáctalo.',
   },
 ];
 
@@ -488,6 +502,7 @@ const RUTAS_VISTA: Array<[string, VistaFaq]> = [
   ['/logistica/slots', 'slots'],
   ['/admin/vehiculos', 'inventario'],
   ['/admin/usuarios', 'usuarios'],
+  ['/admin/ausencias', 'usuarios'],
   ['/admin/sucursales', 'sucursales'],
   ['/admin/historial', 'historial'],
   ['/dashboard', 'dashboard'],

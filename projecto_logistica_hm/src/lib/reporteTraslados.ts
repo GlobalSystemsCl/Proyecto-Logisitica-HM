@@ -106,6 +106,11 @@ export interface MovimientoTraslado {
   /** Día del despacho en hora de Chile, `YYYY-MM-DD`. */
   fechaDespacho: string;
   fechaRecepcion: string | null;
+  /** R16: fecha y hora exactas de despacho y recepción (para medir tiempos). */
+  despachoISO: string | null;
+  recepcionISO: string | null;
+  /** Fecha límite propuesta (`YYYY-MM-DD`), solo en solicitudes. */
+  fechaLimite: string | null;
   origen: string;
   destino: string;
   chasis: string;
@@ -136,6 +141,9 @@ export function movimientosDesdeSolicitudes(solicitudes: SolicitudLista[]): Movi
       codigo: codigoSolicitud(s),
       fechaDespacho,
       fechaRecepcion: diaChile(s.fecha_recepcion),
+      despachoISO: s.fecha_despacho,
+      recepcionISO: s.fecha_recepcion ?? null,
+      fechaLimite: diaChile(s.fecha_limite),
       origen: s.sucursal_nombre ?? '',
       destino: s.sucursal_destino_nombre ?? s.titulo_evento ?? '',
       chasis: v.chasis,
@@ -165,6 +173,9 @@ export function movimientosDesdeTraslados(traslados: TrasladoInterno[]): Movimie
       codigo: codigoTraslado(t.id),
       fechaDespacho,
       fechaRecepcion: diaChile(t.fecha_recepcion),
+      despachoISO: t.fecha_despacho,
+      recepcionISO: t.fecha_recepcion ?? null,
+      fechaLimite: null,
       origen: t.origen_nombre ?? '',
       destino: t.destino_nombre ?? '',
       chasis: v.chasis,

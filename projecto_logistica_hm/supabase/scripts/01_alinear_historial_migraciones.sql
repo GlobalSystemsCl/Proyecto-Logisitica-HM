@@ -50,12 +50,14 @@ values
   ('20261103120000', 'documentos_excel_pdf_imagenes'),
   ('20261111120000', 'numero_guia_despacho'),
   ('20261111130000', 'camion_transporte'),
-  ('20261111140000', 'venta_sin_traslado')
+  ('20261111140000', 'venta_sin_traslado'),
+  ('20261112120000', 'logistica_varias_zonas'),
+  ('20261112130000', 'ausencias_logistica')
 on conflict (version) do nothing;
 
 commit;
 
 -- -----------------------------------------------------------------------------
--- Verificación (ejecutar por separado): una fila por archivo de migrations/ (28 al 2026-11-11)
+-- Verificación (ejecutar por separado): una fila por archivo de migrations/ (30 al 2026-11-12)
 -- -----------------------------------------------------------------------------
 -- select version, name from supabase_migrations.schema_migrations order by version;

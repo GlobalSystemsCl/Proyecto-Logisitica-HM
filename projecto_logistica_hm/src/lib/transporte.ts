@@ -1,5 +1,4 @@
-import { normalizarPatente } from '@/lib/patente';
-import { formatearPatente } from '@/lib/patente';
+import { formatearPatente, normalizarPatente } from '@/lib/patente';
 import { formatearRut } from '@/lib/rut';
 import type { Camion, EmpresaTransporte, TransportistaResumen } from '@/types/transportista.types';
 

@@ -52,6 +52,7 @@ Convenciones de test (ver `tests/plan_maestro_testing.md`):
 - El registro crea la cuenta **activa** como ejecutivo (decisión del 2026-11-03): no volver a dejarla pendiente de aprobación. El administrador solo corrige rol o sucursal.
 - El administrador solo recibe la notificación `NUEVO_USUARIO` (campana, sin correo); no agregarlo a los destinatarios del flujo de solicitudes.
 - Los correos de Auth (recuperación de clave) se envían con Brevo usando `auth.admin.generateLink` y un enlace `token_hash` al callback. No usar `resetPasswordForEmail`: el SMTP por defecto de Supabase no entrega a los usuarios.
+- Ausencias de Logística (`AusenciaService`, `/admin/ausencias`): las zonas temporales del sustituto se guardan en `usuario_zona` con `ausencia_id`. Toda lectura de las zonas **propias** de un usuario filtra `.is('ausencia_id', null)`; el alcance de Logística (qué ve el sustituto) sí las incluye. Las rutas `/api/cron/*` se autorizan con `autorizadoCron` y quedan fuera del middleware.
 - El middleware nunca cierra la sesión por un error al leer la cuenta, y cuando la cierra usa `signOut({ scope: 'local' })`.
 
 ## Ayuda

@@ -676,6 +676,9 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-11-11 | Paso 7 del plan de requisitos (R12): traslados internos con selección múltiple; se crea un traslado por vehículo con el mismo origen, destino y camión. Sin migración. Nueva sección 46 | Claude (asistido) |
 | 2026-11-11 | Paso 8 del plan de requisitos (R1): venta de vehículos que ya están en la sucursal de destino, sin traslado ni Logística; al aprobarla queda lista para entregar. Migración `20261111140000`. Nueva sección 47 | Claude (asistido) |
 | 2026-11-11 | Paso 9 del plan de requisitos (R5, R4): pantalla "En tránsito" (`/logistica/transito`) y vehículos de cada sucursal desde Slots. Sin migración. Nueva sección 48 | Claude (asistido) |
+| 2026-11-12 | Paso 10 del plan de requisitos (R16): reportería de empresas de transporte en Movimientos (por empresa, camión y tramo), con tiempos de llegada, porcentaje a tiempo y atrasados, y hojas en el Excel. Sin migración. Nueva sección 49 | Claude (asistido) |
+| 2026-11-12 | Paso 11 del plan de requisitos (R3): un usuario de Logística puede tener varias zonas. Migración `20261112120000`. Nueva sección 50 | Claude (asistido) |
+| 2026-11-12 | Paso 12 del plan de requisitos (R9): ausencias de Logística con sustituto, traspaso automático y cron diario. Migración `20261112130000`. Nueva sección 51 | Claude (asistido) |
 
 ## 29. Cambios del 2026-10-13
 
@@ -1106,3 +1109,43 @@ Plan: `auditoria/plan-requisitos-2026-11-03.md` (R5 y R4). Decisión: no hay est
 - **R5, pantalla `/logistica/transito`** (Logística y administrador; tarjeta "En tránsito" del inicio): solicitudes `en_transito` del alcance del usuario (`getSolicitudesFiltradas`) y traslados internos en tránsito con origen o destino en sus zonas. Indicadores (en camino, atrasados), búsqueda, filtro por tipo y "Solo atrasados", y exporte a Excel. El código abre el detalle de la solicitud o del traslado.
 - **R4, vehículos por sucursal desde Slots:** el nombre de cada sucursal en `TablaSlots` (prop `onVerVehiculos`) abre `PanelVehiculosSucursal`: vehículos que están en la sucursal (`VehiculoService.getVehiculosEnSucursal`, con disponible o reservado) y los que van en camino hacia ella (solicitudes en tránsito con ese destino y traslados internos), con exporte a Excel en dos hojas. `getVehiculosDeSucursalAction` (`sucursales.actions.ts`): Logística y administrador, cualquier sucursal; el jefe de local, solo las suyas (`usuarioTieneSucursal`).
 - **Tests:** `transito.test.ts`, `sucursales.actions.test.ts`, `vehiculo.service.test.ts` y `dashboard-cards.test.ts`.
+
+## 49. Reportería de empresas de transporte (2026-11-12, paso 10 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R16). Pedido: trackeo de cada transportista filtrando por rangos de tiempo (origen, destino, fecha y todo lo que hizo), tiempos de llegada y exporte a Excel, con el mismo enfoque que la reportería de Logística.
+
+- **Dónde:** pantalla de Movimientos (`/logistica/movimientos`), que ya tiene el período por fecha de despacho y los filtros por empresa, patente o RUT, origen, destino, tipo, estado y chasis o guía. Pestañas nuevas "Por empresa", "Por camión" y "Por tramo" (además de "Detalle"), calculadas sobre lo filtrado (`TablaResumenTransporte`).
+- **Datos:** `MovimientoTraslado` suma `despachoISO`, `recepcionISO` y `fechaLimite` (solo solicitudes).
+- **Reglas** (`src/lib/reporteTransportes.ts`): viaje = una solicitud o un traslado (un código); tiempo de llegada = horas del despacho a la recepción (`horasEntre`; promedio y mediana con `promedio`/`mediana` de `reporteLogistica`); a tiempo = recibido a más tardar el día de la fecha límite (`textoATiempo`); atrasado en camino = sin recibir y con la fecha límite vencida. Los cancelados no cuentan. Lo programado antes del 2026-11-11 aparece como "Sin camión registrado".
+- **Excel:** el mismo botón agrega las hojas "Por empresa", "Por camión" y "Por tramo" (`filasExcelResumen`).
+- **Tests:** `reporteTransportes.test.ts` (y `reporteTraslados.test.ts` sigue en verde con los campos nuevos).
+
+## 50. Logística con varias zonas (2026-11-12, paso 11 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R3). Reemplaza la regla "una zona por usuario de Logística" de la migración `20261013155000` (punto D).
+
+- **Migración `20261112120000_logistica_varias_zonas.sql`:** elimina el índice único `usuario_zona_una_por_usuario`. Se mantiene la clave primaria `(usuario_id, zona_id)`. El rollback lo vuelve a crear y falla si algún usuario ya tiene varias zonas.
+- **Regla** (`normalizarAsignaciones`, `lib/asignaciones.ts`): Logística debe tener **al menos una** zona (antes, exactamente una); los ids repetidos se descartan.
+- **Pantalla:** en crear y editar usuario, las zonas de Logística se eligen con casillas (`AsignacionesUsuarioFields`); el resumen de "Cuentas por activar" lista todas las zonas. La activación masiva y la carga masiva siguen asignando una zona (se agregan más desde "Editar usuario").
+- **Sin cambios necesarios en el alcance:** `getSucursalIdsDeZonasUsuario`, las notificaciones por zona (`logisticaDeSucursal`), los listados de Logística, Movimientos, En tránsito y la RLS ya trabajaban con listas de zonas, y `setZonasAsignadas` ya guardaba varias filas.
+- **Tests:** `asignaciones.test.ts`, `importUsuarios.test.ts`, `users.service.test.ts` y `migracion-varias-zonas.test.ts`.
+
+## 51. Ausencias de Logística con sustituto (2026-11-12, paso 12 del plan de requisitos)
+
+Plan: `auditoria/plan-requisitos-2026-11-03.md` (R9). Pantalla `/admin/ausencias` (solo administrador; tarjeta "Ausencias" en Soporte).
+
+- **Migración `20261112130000_ausencias_logistica.sql`:**
+  - `ausencia_usuario` (titular, sustituto, desde, hasta, estado `programada | activa | finalizada | cancelada`, motivo, creada_por, fechas de inicio y fin). Un titular solo puede tener una ausencia programada o activa a la vez (índice único parcial); el titular y el sustituto deben ser distintos.
+  - `ausencia_traspaso` registra qué solicitudes y traslados internos se movieron, para devolverlos al final.
+  - `usuario_zona.ausencia_id`: marca las zonas **temporales** del sustituto. Las zonas permanentes tienen `ausencia_id` nulo.
+  - RLS: solo lectura para el administrador; las escrituras van por el servicio (service_role).
+- **Al iniciar** (`AusenciaService.iniciar`):
+  - las solicitudes del titular en estados abiertos (`ESTADOS_SOLICITUD_TRASPASABLES`, `lib/ausencias.ts`) y sus traslados internos pendientes o en tránsito pasan al sustituto;
+  - el sustituto recibe como temporales las zonas del titular que no tenía;
+  - la cuenta del titular queda inactiva (congelada).
+- **Al terminar** (`finalizar`): vuelve al titular lo traspasado que siga abierto y siga a cargo del sustituto; se borran las zonas temporales y se reactiva la cuenta. "Cancelar" una programada no toca nada; "Terminar ahora" una activa equivale a finalizarla.
+- **Inicio y fin automáticos:** cron diario de Vercel (`vercel.json`, `/api/cron/ausencias`, 05:00 UTC ≈ 01:00–02:00 en Chile) protegido con `CRON_SECRET` (`lib/cron.ts`, mínimo 16 caracteres); el middleware no intercepta `/api/cron`. Como respaldo, abrir `/admin/ausencias` procesa las pendientes. Las fechas se calculan en hora de Chile (`hoyChile`). Una ausencia programada cuya fecha final ya pasó sin iniciarse se marca finalizada sin mover nada.
+- **Usuarios:** los listados y la edición de usuarios ignoran las zonas temporales. Si el administrador asigna como propia una zona que el sustituto tiene temporal, esta pasa a ser permanente y ya no se quita al terminar la ausencia.
+- **Auditoría:** se registran la creación, el inicio y el fin de cada ausencia.
+- **Tests:** `ausencias.test.ts`, `ausencia.service.test.ts`, `ausencias.actions.test.ts`, `cron.test.ts`, `migracion-ausencias.test.ts` y `users.service.test.ts`.
+

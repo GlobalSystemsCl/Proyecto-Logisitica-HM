@@ -4,9 +4,11 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Download, FileSpreadsheet, Search, Truck } from 'lucide-react';
 import { descargarExcel } from '@/lib/excel';
-import { formatFecha } from '@/lib/fechas';
+import { formatFecha, hoyISO } from '@/lib/fechas';
 import { formatearRut } from '@/lib/rut';
 import { formatearPatente } from '@/lib/patente';
+import { filasExcelResumen, resumenPorCamion, resumenPorEmpresa, resumenPorTramo } from '@/lib/reporteTransportes';
+import TablaResumenTransporte from '@/components/TablaResumenTransporte';
 import {
   FILTROS_MOVIMIENTOS_VACIOS,
   SIN_TRANSPORTISTA,
@@ -28,6 +30,15 @@ interface Props {
   sinZonas: boolean;
 }
 
+type VistaReporte = 'detalle' | 'empresa' | 'camion' | 'tramo';
+
+const PESTANAS: Array<{ id: VistaReporte; etiqueta: string }> = [
+  { id: 'detalle', etiqueta: 'Detalle' },
+  { id: 'empresa', etiqueta: 'Por empresa' },
+  { id: 'camion', etiqueta: 'Por camión' },
+  { id: 'tramo', etiqueta: 'Por tramo' },
+];
+
 const COLUMNAS_EXCEL = [
   'Fecha despacho', 'Tipo', 'Código', 'Origen', 'Destino', 'Chasis', 'Patente', 'Marca', 'Modelo', 'N° guía',
   'Patente camión', 'Transportista', 'Empresa de transporte', 'RUT empresa', 'Logística', 'Estado', 'Fecha recepción',
@@ -41,6 +52,12 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
   const opciones = useMemo(() => opcionesFiltrosMovimientos(movimientos), [movimientos]);
   const visibles = useMemo(() => filtrarMovimientos(movimientos, filtros), [movimientos, filtros]);
   const resumen = useMemo(() => resumenPorTransportista(visibles), [visibles]);
+  // R16: reportería de transporte sobre lo filtrado (por empresa, camión y tramo).
+  const [vista, setVista] = useState<VistaReporte>('detalle');
+  const hoy = hoyISO();
+  const porEmpresa = useMemo(() => resumenPorEmpresa(visibles, hoy), [visibles, hoy]);
+  const porCamion = useMemo(() => resumenPorCamion(visibles, hoy), [visibles, hoy]);
+  const porTramo = useMemo(() => resumenPorTramo(visibles, hoy), [visibles, hoy]);
   const hayFiltros = Object.values(filtros).some(Boolean);
 
   function aplicarRango(e: React.FormEvent) {
@@ -56,6 +73,9 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
         filas: resumen.map((r) => ({ Transportista: r.transportista, RUT: r.rut, Vehículos: r.vehiculos })),
         encabezados: ['Transportista', 'RUT', 'Vehículos'],
       },
+      { nombre: 'Por empresa', filas: filasExcelResumen(porEmpresa, 'Empresa', 'RUT') },
+      { nombre: 'Por camión', filas: filasExcelResumen(porCamion, 'Camión', 'Transportista y empresa') },
+      { nombre: 'Por tramo', filas: filasExcelResumen(porTramo, 'Tramo', 'Detalle') },
     ]);
   }
 
@@ -147,7 +167,43 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div role="tablist" aria-label="Vista del reporte" className="flex flex-wrap gap-2">
+        {PESTANAS.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            role="tab"
+            aria-selected={vista === t.id}
+            onClick={() => setVista(t.id)}
+            className={`px-3 py-1.5 rounded-full border text-xs font-semibold cursor-pointer ${
+              vista === t.id ? 'bg-neutral-900 border-neutral-900 text-white' : 'bg-white border-neutral-300 text-neutral-700 hover:border-neutral-900'
+            }`}
+          >
+            {t.etiqueta}
+          </button>
+        ))}
+      </div>
+
+      {vista !== 'detalle' && (
+        <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-b border-neutral-200">
+            <p className="text-sm text-neutral-600">
+              {visibles.length} vehículo(s) · {formatFecha(desde)} al {formatFecha(hasta)}. Llegada: del despacho a la recepción. A tiempo: recibido a más tardar en la fecha límite (solo solicitudes).
+            </p>
+            <button
+              onClick={exportar}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-neutral-300 bg-white text-sm font-semibold text-neutral-700 hover:bg-neutral-50 cursor-pointer shrink-0"
+            >
+              <Download className="w-4 h-4" /> Exportar a Excel
+            </button>
+          </div>
+          {vista === 'empresa' && <TablaResumenTransporte filas={porEmpresa} titulo="Empresa" />}
+          {vista === 'camion' && <TablaResumenTransporte filas={porCamion} titulo="Camión" />}
+          {vista === 'tramo' && <TablaResumenTransporte filas={porTramo} titulo="Tramo" />}
+        </div>
+      )}
+
+      <div className={`grid grid-cols-1 lg:grid-cols-4 gap-6 ${vista === 'detalle' ? '' : 'hidden'}`}>
         <div className="lg:col-span-3 bg-white border border-neutral-200 rounded-2xl overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-3 border-b border-neutral-200">
             <p className="text-sm font-semibold text-neutral-900">

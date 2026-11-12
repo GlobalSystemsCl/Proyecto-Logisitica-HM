@@ -26,9 +26,15 @@ describe('normalizarAsignaciones', () => {
     expect(res).toEqual({ ok: true, asignaciones: { sucursal_id: 6, sucursales_a_cargo: [6, 7, 9], zonas_ids: [] } });
   });
 
-  it('should_require_exactly_one_zone_when_role_is_logistica', () => {
-    expect(normalizarAsignaciones({ rol: 'logistica', sucursal_id: 6, zonas_ids: [] }).ok).toBe(false);
-    expect(normalizarAsignaciones({ rol: 'logistica', sucursal_id: 6, zonas_ids: [1, 2] }).ok).toBe(false);
+  it('should_require_at_least_one_zone_and_accept_several_when_role_is_logistica', () => {
+    expect(normalizarAsignaciones({ rol: 'logistica', sucursal_id: 6, zonas_ids: [] })).toEqual({
+      ok: false,
+      error: 'Un usuario de Logística debe tener al menos una zona asignada.',
+    });
+    expect(normalizarAsignaciones({ rol: 'logistica', sucursal_id: 6, zonas_ids: [1, 2, 2] })).toEqual({
+      ok: true,
+      asignaciones: { sucursal_id: 6, sucursales_a_cargo: [], zonas_ids: [1, 2] },
+    });
 
     const res = normalizarAsignaciones({ rol: 'logistica', sucursal_id: 6, sucursales_ids: [7], zonas_ids: [1] });
     expect(res).toEqual({ ok: true, asignaciones: { sucursal_id: 6, sucursales_a_cargo: [], zonas_ids: [1] } });
@@ -108,7 +114,7 @@ describe('validarAsignacionesFormulario', () => {
 
   it('should_return_rule_error_before_checking_conflicts', () => {
     expect(validarAsignacionesFormulario({ rol: 'logistica', sucursal_id: 6, zonas_ids: [] }, new Map(), sucursales)).toBe(
-      'Un usuario de Logística debe tener exactamente una zona asignada.'
+      'Un usuario de Logística debe tener al menos una zona asignada.'
     );
   });
 

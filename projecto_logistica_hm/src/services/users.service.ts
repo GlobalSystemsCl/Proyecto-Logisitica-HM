@@ -65,9 +65,11 @@ export class UsersService {
           .from('sucursal')
           .select('id, nombre, usuario_id')
           .not('usuario_id', 'is', null),
+        // R9: solo zonas propias; las temporales de una ausencia no se editan aquí.
         admin
           .from('usuario_zona')
-          .select('usuario_id, zona_id, zona:zona_id(id, nombre)'),
+          .select('usuario_id, zona_id, zona:zona_id(id, nombre)')
+          .is('ausencia_id', null),
       ]);
 
       if (usuariosRes.error) {
@@ -670,7 +672,7 @@ export class UsersService {
     const [usuarioRes, sucursalesRes, zonasRes] = await Promise.all([
       admin.from('usuario').select('rol, sucursal_id').eq('id', userId).maybeSingle(),
       admin.from('sucursal').select('id').eq('usuario_id', userId),
-      admin.from('usuario_zona').select('zona_id').eq('usuario_id', userId),
+      admin.from('usuario_zona').select('zona_id').eq('usuario_id', userId).is('ausencia_id', null),
     ]);
     const usuario = usuarioRes.data as { rol: UserProfile['rol']; sucursal_id: number | null } | null;
     if (usuarioRes.error || !usuario) return null;
@@ -757,8 +759,10 @@ export class UsersService {
   }
 
   /**
-   * Reemplaza la zona del usuario (`usuario_zona`). Solo Logística recibe una
-   * zona (ver `normalizarAsignaciones`); para el resto se eliminan.
+   * Reemplaza las zonas propias del usuario (`usuario_zona`). Solo Logística
+   * recibe zonas, una o varias (ver `normalizarAsignaciones`); para el resto se
+   * eliminan. R9: las zonas temporales de una ausencia que cubre no se tocan;
+   * si una de ellas pasa a ser propia, se convierte (deja de ser temporal).
    * Devuelve el mensaje de error, o `null` si se guardó.
    */
   private static async setZonasAsignadas(
@@ -766,13 +770,31 @@ export class UsersService {
     userId: string,
     zonas: number[]
   ): Promise<string | null> {
-    const { error: errorLimpiar } = await admin.from('usuario_zona').delete().eq('usuario_id', userId);
+    const { error: errorLimpiar } = await admin.from('usuario_zona').delete().eq('usuario_id', userId).is('ausencia_id', null);
     if (errorLimpiar) return mensajeErrorUsuario(errorLimpiar, 'No se pudo actualizar la zona.');
 
     if (zonas.length === 0) return null;
+    const { data: temporales } = await admin
+      .from('usuario_zona')
+      .select('zona_id')
+      .eq('usuario_id', userId)
+      .not('ausencia_id', 'is', null);
+    const idsTemporales = new Set(((temporales ?? []) as Array<{ zona_id: number }>).map((z) => z.zona_id));
+    const aConvertir = zonas.filter((z) => idsTemporales.has(z));
+    const aInsertar = zonas.filter((z) => !idsTemporales.has(z));
+
+    if (aConvertir.length > 0) {
+      const { error } = await admin
+        .from('usuario_zona')
+        .update({ ausencia_id: null })
+        .eq('usuario_id', userId)
+        .in('zona_id', aConvertir);
+      if (error) return mensajeErrorUsuario(error, 'No se pudo asignar la zona.');
+    }
+    if (aInsertar.length === 0) return null;
     const { error } = await admin
       .from('usuario_zona')
-      .insert(zonas.map((zona_id) => ({ usuario_id: userId, zona_id })));
+      .insert(aInsertar.map((zona_id) => ({ usuario_id: userId, zona_id })));
     if (error) return mensajeErrorUsuario(error, 'No se pudo asignar la zona.');
     return null;
   }

@@ -14,20 +14,20 @@ Análisis de los pedidos de la reunión, contrastados con el código de la rama 
 | E2 | No se pudo recuperar la clave (`audit@hmotores.cl`) | M | No | **Hecho (paso 1)**: envío por Brevo |
 | R1 | Venta de un vehículo que ya está en la sucursal | M | Sí | **Hecho (paso 8)**; solo ventas, no eventos |
 | R2 | Notificación con enlace directo a la acción | S | No | **Hecho (paso 3)** |
-| R3 | Logística con varias zonas | M | Sí | Listo para implementar |
+| R3 | Logística con varias zonas | M | Sí | **Hecho (paso 11)** |
 | R4 | Ver los vehículos de cada sucursal desde Slots | S | No | **Hecho (paso 9)** |
 | R5 | Ver los vehículos en tránsito | S | No | **Hecho (paso 9)** |
 | R6 | Vehículo sin ubicación no se puede pedir | S | No | **Hecho (paso 4)** |
 | R7 | Torquemada Acopio / Torquemada Vitrina | S | Datos | Bloqueado: falta el Excel |
 | R8 | Nuevas sucursales y sus códigos | S | Datos | Bloqueado: falta el Excel |
-| R9 | Congelar cuenta de Logística y traspasar a un sustituto | L | Sí | Decidido (vuelven solas al titular); depende de R3 |
+| R9 | Congelar cuenta de Logística y traspasar a un sustituto | L | Sí | **Hecho (paso 12)** |
 | R10 | Empresas de transporte (RUT, transportista, patente) | M | Sí | **Hecho (paso 6)** |
 | R11 | Documentos permitidos: Excel, PDF e imágenes | S | Sí | **Hecho (paso 4)**; migración del bucket |
 | R12 | Traslados internos con selección múltiple | M | No | **Hecho (paso 7)** |
 | R14 | Logística corrige el chasis de un vehículo reservado | S | No | Decidido: caso eventual, prioridad baja |
 | R18 | Asignar ubicación en bloque con casillas | S | No | **Hecho (paso 4)** |
 | R15 | Número de guía obligatorio al despachar | M | Sí | **Hecho (paso 5)** |
-| R16 | Reportería y trackeo de empresas de transporte | L | No | Depende de R10 y R15 |
+| R16 | Reportería y trackeo de empresas de transporte | L | No | **Hecho (paso 10)**: pestañas en Movimientos |
 | R17 | Todos entran como ejecutivo activo | S | No | **Hecho (paso 2)** |
 
 (R13, "al volver atrás", resultó ser el error E1.)

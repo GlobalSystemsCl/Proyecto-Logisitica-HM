@@ -75,7 +75,7 @@ const ROTULO_SUCURSAL_BASE: Record<UserRole, string> = {
 
 /**
  * Campos de asignación según el rol (ver `lib/asignaciones.ts`):
- * ejecutivo → una sucursal; logística → sucursal base y una zona; jefe de
+ * ejecutivo → una sucursal; logística → sucursal base y una o más zonas; jefe de
  * local → sucursal base y sucursales adicionales a su cargo. Las sucursales
  * que ya tiene otro jefe de local aparecen bloqueadas.
  */
@@ -150,22 +150,13 @@ export default function AsignacionesFields({
       )}
 
       {rol === 'logistica' && (
-        <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-            Zona de logística *
-          </label>
-          <select
-            required
-            value={zonasIds[0] ?? ''}
-            onChange={(e) => onZonasIds(e.target.value ? [Number(e.target.value)] : [])}
-            className={selectCls}
-          >
-            <option value="">Seleccionar zona...</option>
-            {zonas.map((z) => (
-              <option key={z.id} value={z.id}>{z.nombre}</option>
-            ))}
-          </select>
-        </div>
+        <MultiCheckSelector
+          title="Zonas de logística *"
+          ayuda="Puede atender una o varias zonas: verá y gestionará las sucursales de todas ellas."
+          options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
+          selected={zonasIds}
+          onToggle={(id) => onZonasIds(toggleId(zonasIds, id))}
+        />
       )}
 
       {error && (

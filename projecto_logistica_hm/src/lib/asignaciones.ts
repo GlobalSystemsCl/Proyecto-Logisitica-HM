@@ -4,7 +4,8 @@ import type { UserRole } from '@/types/auth.types';
  * Reglas de asignación de sucursales y zonas por rol.
  *
  *  - Ejecutivo: una sola sucursal (su sucursal base, `usuario.sucursal_id`).
- *  - Logística: una sucursal base y una sola zona (`usuario_zona`).
+ *  - Logística: una sucursal base y una o más zonas (`usuario_zona`; varias
+ *    desde el 2026-11-12, R3).
  *  - Jefe de local: una sucursal base y, opcionalmente, sucursales
  *    adicionales. Todas quedan a su cargo en `sucursal.usuario_id`, por eso
  *    una sucursal nunca tiene dos jefes de local.
@@ -52,8 +53,8 @@ export function normalizarAsignaciones(entrada: AsignacionesEntrada): ResultadoA
 
   if (entrada.rol === 'logistica') {
     const zonas = idsValidos(entrada.zonas_ids);
-    if (zonas.length !== 1) {
-      return { ok: false, error: 'Un usuario de Logística debe tener exactamente una zona asignada.' };
+    if (zonas.length === 0) {
+      return { ok: false, error: 'Un usuario de Logística debe tener al menos una zona asignada.' };
     }
     return { ok: true, asignaciones: { sucursal_id: base, sucursales_a_cargo: [], zonas_ids: zonas } };
   }
