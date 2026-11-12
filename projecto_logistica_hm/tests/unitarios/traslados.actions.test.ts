@@ -9,7 +9,13 @@ import type { UserProfile } from '@/types/auth.types';
 const getCurrentUserProfile = vi.fn();
 const cancelarTraslado = vi.fn();
 const crearTrasladosEnLote = vi.fn();
+const crearTraslado = vi.fn();
+const despacharTraslado = vi.fn();
+const recibirTraslado = vi.fn();
+const getTrasladosDeSucursal = vi.fn();
+const getUserAssignedBranches = vi.fn();
 const notificarTrasladoInterno = vi.fn(async () => ({ enviados: 1, fallidos: 0 }));
+const notificarLoteTraslados = vi.fn(async () => ({ enviados: 1, fallidos: 0 }));
 const getBranch = vi.fn();
 
 vi.mock('@/services/auth.service', () => ({
@@ -20,15 +26,23 @@ vi.mock('@/services/traslado.service', () => ({
   TrasladoService: {
     cancelarTraslado: (...a: unknown[]) => cancelarTraslado(...a),
     crearTrasladosEnLote: (...a: unknown[]) => crearTrasladosEnLote(...a),
+    crearTraslado: (...a: unknown[]) => crearTraslado(...a),
+    despacharTraslado: (...a: unknown[]) => despacharTraslado(...a),
+    recibirTraslado: (...a: unknown[]) => recibirTraslado(...a),
+    getTrasladosDeSucursal: (id: number) => getTrasladosDeSucursal(id),
   },
 }));
 vi.mock('@/services/organizacion.service', () => ({
-  OrganizacionService: { getBranch: (id: number) => getBranch(id) },
+  OrganizacionService: {
+    getBranch: (id: number) => getBranch(id),
+    getUserAssignedBranches: (id: string) => getUserAssignedBranches(id),
+  },
 }));
 vi.mock('@/services/sucursales.service', () => ({ SucursalesService: {} }));
 vi.mock('@/services/notificacion.service', () => ({
   NotificacionService: {
     notificarTrasladoInterno: (...a: unknown[]) => notificarTrasladoInterno(...(a as [])),
+    notificarLoteTraslados: (...a: unknown[]) => notificarLoteTraslados(...(a as [])),
   },
 }));
 // Ejecuta la tarea de inmediato para poder verificarla.
@@ -39,7 +53,14 @@ vi.mock('@/lib/segundoPlano', () => ({
 }));
 vi.mock('@/lib/rutas', () => ({ revalidarSolicitudes: vi.fn() }));
 
-const { cancelarTrasladoAction, crearTrasladosAction } = await import('@/app/actions/traslados.actions');
+const {
+  cancelarTrasladoAction,
+  crearTrasladoAction,
+  crearTrasladosAction,
+  despacharTrasladoAction,
+  recibirTrasladoAction,
+  getTrasladosAction,
+} = await import('@/app/actions/traslados.actions');
 const { revalidarSolicitudes } = await import('@/lib/rutas');
 
 function perfil(overrides: Partial<UserProfile> = {}): UserProfile {
@@ -142,5 +163,97 @@ describe('crearTrasladosAction', () => {
       error: 'Solo Logística o el Administrador pueden crear traslados internos.',
     });
     expect(crearTrasladosEnLote).not.toHaveBeenCalled();
+  });
+});
+
+describe('avisos de traslados internos', () => {
+  it('should_notify_creation_with_the_new_transfer_id', async () => {
+    crearTraslado.mockResolvedValue({ success: true, traslado: { id: 't-9' } });
+
+    const res = await crearTrasladoAction({ origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } }, ['v-1']);
+    await tick();
+
+    expect(res.success).toBe(true);
+    expect(notificarTrasladoInterno).toHaveBeenCalledWith('traslado_interno_creado', 't-9', 'u-1');
+  });
+
+  it('should_not_notify_creation_when_it_fails', async () => {
+    crearTraslado.mockResolvedValue({ success: false, error: 'x' });
+    await crearTrasladoAction({ origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } }, ['v-1']);
+    await tick();
+    expect(notificarTrasladoInterno).not.toHaveBeenCalled();
+  });
+
+  it('should_notify_dispatch', async () => {
+    despacharTraslado.mockResolvedValue({ success: true });
+    await despacharTrasladoAction('t-1', 'G-100');
+    await tick();
+    expect(notificarTrasladoInterno).toHaveBeenCalledWith('traslado_interno_despachado', 't-1', 'u-1');
+  });
+
+  it('should_notify_reception_with_issues_and_trimmed_note', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+    recibirTraslado.mockResolvedValue({ success: true });
+
+    await recibirTrasladoAction('t-1', { conNovedades: true, observacion: ' Rayón ' });
+    await tick();
+
+    expect(notificarTrasladoInterno).toHaveBeenCalledWith('traslado_interno_recepcionado', 't-1', 'u-1', {
+      conNovedades: true,
+      observacion: 'Rayón',
+    });
+  });
+
+  it('should_not_notify_reception_when_it_fails', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+    recibirTraslado.mockResolvedValue({ success: false, error: 'x' });
+    await recibirTrasladoAction('t-1');
+    await tick();
+    expect(notificarTrasladoInterno).not.toHaveBeenCalled();
+  });
+});
+
+describe('getTrasladosAction (Jefe de Local)', () => {
+  it('should_list_transfers_of_every_branch_without_repeating', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+    getUserAssignedBranches.mockResolvedValue([{ id: 1 }, { id: 2 }, { id: 1 }]);
+    getTrasladosDeSucursal.mockImplementation(async (id: number) =>
+      id === 1
+        ? [{ id: 't-a', created_at: '2026-11-01T10:00:00Z' }]
+        : [{ id: 't-a', created_at: '2026-11-01T10:00:00Z' }, { id: 't-b', created_at: '2026-11-05T10:00:00Z' }]
+    );
+
+    const res = await getTrasladosAction();
+
+    expect(getTrasladosDeSucursal).toHaveBeenCalledTimes(2);
+    expect(res.map((t) => t.id)).toEqual(['t-b', 't-a']);
+  });
+});
+
+describe('crearTrasladosAction (aviso del lote)', () => {
+  const input = { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } };
+
+  it('should_send_a_single_notice_with_every_created_transfer', async () => {
+    crearTrasladosEnLote.mockResolvedValue({
+      success: true,
+      creados: [
+        { vehiculoId: 'v1', trasladoId: 't1' },
+        { vehiculoId: 'v2', trasladoId: 't2' },
+      ],
+      omitidos: [],
+    });
+
+    await crearTrasladosAction(input, ['v1', 'v2']);
+    await tick();
+
+    expect(notificarLoteTraslados).toHaveBeenCalledTimes(1);
+    expect(notificarLoteTraslados).toHaveBeenCalledWith(['t1', 't2'], 'u-1');
+  });
+
+  it('should_not_notify_when_nothing_was_created', async () => {
+    crearTrasladosEnLote.mockResolvedValue({ success: false, creados: [], omitidos: [{ vehiculoId: 'v1', error: 'x' }] });
+    await crearTrasladosAction(input, ['v1']);
+    await tick();
+    expect(notificarLoteTraslados).not.toHaveBeenCalled();
   });
 });

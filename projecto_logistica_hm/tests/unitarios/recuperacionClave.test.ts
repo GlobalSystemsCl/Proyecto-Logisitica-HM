@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ASUNTO_RECUPERACION, VIGENCIA_ENLACE, enlaceRecuperacion, htmlCorreoRecuperacion } from '@/lib/recuperacionClave';
+import {
+  ASUNTO_RECUPERACION,
+  VIGENCIA_ENLACE,
+  enlaceRecuperacion,
+  htmlCorreoRecuperacion,
+  textoCorreoRecuperacion,
+} from '@/lib/recuperacionClave';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -21,7 +27,7 @@ describe('enlaceRecuperacion', () => {
 
 describe('htmlCorreoRecuperacion', () => {
   it('should_include_escaped_name_link_and_validity', () => {
-    const html = htmlCorreoRecuperacion('<Ana>', 'https://app.test/auth/callback?token_hash=x&type=recovery');
+    const html = htmlCorreoRecuperacion('<Ana>', 'https://app.test/auth/callback?token_hash=x&type=recovery', 'https://app.test');
     expect(html).toContain('Hola, &lt;Ana&gt;.');
     expect(html).toContain('href="https://app.test/auth/callback?token_hash=x&amp;type=recovery"');
     expect(html).toContain(`vence en ${VIGENCIA_ENLACE}`);
@@ -29,7 +35,23 @@ describe('htmlCorreoRecuperacion', () => {
   });
 
   it('should_use_the_recovery_subject_as_title', () => {
-    expect(htmlCorreoRecuperacion('Ana', 'https://x')).toContain('<title>[H.Motores] Restablece tu contraseña</title>');
+    expect(htmlCorreoRecuperacion('Ana', 'https://x', 'https://app.test')).toContain('<title>[H.Motores] Restablece tu contraseña</title>');
     expect(ASUNTO_RECUPERACION).toBe('[H.Motores] Restablece tu contraseña');
+  });
+});
+
+describe('htmlCorreoRecuperacion (plantilla)', () => {
+  it('should_show_the_logo_from_the_app_url', () => {
+    expect(htmlCorreoRecuperacion('Ana', 'https://x', 'https://app.test/')).toContain('src="https://app.test/correo/logo-hmotores.png"');
+  });
+});
+
+describe('textoCorreoRecuperacion', () => {
+  it('should_include_greeting_link_and_validity_without_html', () => {
+    const t = textoCorreoRecuperacion('Ana', 'https://app.test/auth/callback?token_hash=x&type=recovery', 'https://app.test');
+    expect(t).toContain('Hola, Ana.');
+    expect(t).toContain('Elegir nueva contraseña: https://app.test/auth/callback?token_hash=x&type=recovery');
+    expect(t).toContain(`vence en ${VIGENCIA_ENLACE}`);
+    expect(t).not.toContain('<');
   });
 });

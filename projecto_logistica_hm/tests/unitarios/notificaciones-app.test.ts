@@ -11,6 +11,7 @@ import {
   textoNotificacionNuevoUsuario,
   rutaNuevoUsuario,
   rutaAccion,
+  rolesApp,
   type EventoApp,
 } from '@/lib/notificaciones-app';
 import { DESTINATARIOS_POR_EVENTO } from '@/lib/notificaciones';
@@ -31,9 +32,14 @@ describe('DESTINATARIOS_APP', () => {
     for (const evento of EVENTOS) expect(TIPO_NOTIFICACION_POR_EVENTO[evento], evento).toBeTruthy();
   });
 
-  it('should_notify_dispatch_to_executive_in_app_but_not_by_email', () => {
-    expect(DESTINATARIOS_APP.solicitud_despachada).toEqual(['jefe_recepcion', 'ejecutivo']);
-    expect(DESTINATARIOS_POR_EVENTO.solicitud_despachada).toEqual(['jefe_recepcion']);
+  it('should_notify_vehicle_branch_manager_of_dispatch_in_app_but_not_by_email', () => {
+    expect(DESTINATARIOS_APP.solicitud_despachada).toEqual(['jefe_recepcion', 'ejecutivo', 'jefe_ubicacion']);
+    expect(DESTINATARIOS_POR_EVENTO.solicitud_despachada).toEqual(['jefe_recepcion', 'ejecutivo']);
+  });
+
+  it('should_notify_observations_only_in_app', () => {
+    expect(DESTINATARIOS_APP.nueva_observacion).toEqual(['ejecutivo', 'jefe_origen', 'logistica_encargado']);
+    expect(esEventoConCorreo('nueva_observacion')).toBe(false);
   });
 });
 
@@ -45,7 +51,7 @@ describe('esEventoConCorreo', () => {
 
   it('should_return_false_for_in_app_only_events', () => {
     expect(esEventoConCorreo('solicitud_priorizada')).toBe(false);
-    expect(esEventoConCorreo('solicitud_finalizada')).toBe(false);
+    expect(esEventoConCorreo('solicitud_asignada')).toBe(false);
   });
 });
 
@@ -189,5 +195,58 @@ describe('textoNotificacionNuevoUsuario', () => {
 describe('rutaNuevoUsuario', () => {
   it('should_open_users_filtered_by_encoded_email', () => {
     expect(rutaNuevoUsuario('ana+1@hmotores.cl')).toBe('/admin/usuarios?q=ana%2B1%40hmotores.cl');
+  });
+});
+
+describe('rolesApp', () => {
+  it('should_use_the_state_for_cancellation_and_insistence', () => {
+    expect(rolesApp('solicitud_cancelada', { estadoAnterior: 'pendiente_aprobacion' })).toEqual(['ejecutivo', 'jefe_origen']);
+    expect(rolesApp('solicitud_insistencia', { estado: 'priorizada' })).toEqual(['logistica_encargado', 'logistica_zona']);
+  });
+
+  it('should_use_the_fixed_list_for_other_events', () => {
+    expect(rolesApp('solicitud_priorizada')).toEqual(['ejecutivo']);
+  });
+});
+
+describe('resolverDestinatariosApp con estado', () => {
+  it('should_skip_logistics_when_pending_request_is_cancelled', () => {
+    const res = resolverDestinatariosApp(
+      'solicitud_cancelada',
+      { ejecutivo: [persona('eje')], jefe_origen: [persona('jl1')], logistica_encargado: [persona('log')] },
+      'jl1',
+      { estadoAnterior: 'pendiente_aprobacion' }
+    );
+    expect(res.map((d) => d.id)).toEqual(['eje']);
+  });
+});
+
+describe('textoNotificacion (eventos nuevos)', () => {
+  it('should_quote_the_executive_message_on_insistence', () => {
+    expect(textoNotificacion('solicitud_insistencia', { ...DATOS, mensaje: ' Urge ' }).mensaje).toBe(
+      'El ejecutivo pide avanzar la solicitud 101-15 (Centro → Norte). "Urge"'
+    );
+  });
+
+  it('should_quote_the_new_observation', () => {
+    expect(textoNotificacion('nueva_observacion', { ...DATOS, mensaje: 'Revisar llantas' }).mensaje).toBe(
+      'Nueva observación en la solicitud 101-15 (Centro → Norte): "Revisar llantas"'
+    );
+  });
+
+  it('should_mark_internal_transfer_reception_with_issues', () => {
+    expect(textoNotificacion('traslado_interno_recepcionado', { ...DATOS, conNovedades: true }).titulo).toBe(
+      'Traslado recibido con novedades'
+    );
+  });
+});
+
+describe('rutaAccion (insistencia)', () => {
+  it('should_send_manager_to_approvals_and_logistics_to_calendar', () => {
+    expect(rutaAccion('solicitud_insistencia', 'jefe_origen', 'solicitud', 's-1')).toBe('/solicitudes/aprobaciones?solicitud=s-1');
+    expect(rutaAccion('solicitud_insistencia', 'logistica_zona', 'solicitud', 's-1')).toBe('/logistica/calendarizaciones?solicitud=s-1');
+    expect(rutaAccion('solicitud_insistencia', 'logistica_encargado', 'solicitud', 's-1')).toBe(
+      '/logistica/calendarizaciones?solicitud=s-1'
+    );
   });
 });

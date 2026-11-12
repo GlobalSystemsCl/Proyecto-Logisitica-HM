@@ -1,5 +1,6 @@
 import {
   DESTINATARIOS_POR_EVENTO,
+  rolesSegunEstado,
   type Destinatario,
   type DestinatarioConRol,
   type EventoNotificacion,
@@ -10,21 +11,13 @@ import {
  * Notificaciones dentro de la app (campana del encabezado) por cada cambio de
  * estado de una solicitud o traslado interno.
  *
- * Complementan a los correos de R7 (`lib/notificaciones.ts`): cubren todos los
- * cambios de estado, no solo los hitos críticos. Los correos no cambian.
+ * Complementan a los correos (`lib/notificaciones.ts`): cubren todos los
+ * cambios de estado y las observaciones, no solo los hitos con correo.
  *
  * Funciones puras: no tocan la BD, la red ni React.
  */
 
-export type EventoApp =
-  | EventoNotificacion
-  | 'solicitud_priorizada'
-  | 'solicitud_asignada'
-  | 'solicitud_descalendarizada'
-  | 'solicitud_despacho_revertido'
-  | 'solicitud_finalizada'
-  | 'solicitud_cancelada'
-  | 'solicitud_lista_para_entregar';
+export type EventoApp = EventoNotificacion | 'solicitud_priorizada' | 'solicitud_asignada' | 'nueva_observacion';
 
 /** Valores del enum `public.tipo_notificacion` que usa la app. */
 export type TipoNotificacion =
@@ -42,27 +35,42 @@ export type TipoNotificacion =
   | 'SOLICITUD_FINALIZADA'
   | 'SOLICITUD_CANCELADA'
   | 'SOLICITUD_CANCELADA_TRANSITO'
+  | 'SOLICITUD_INSISTENCIA'
+  | 'NUEVA_OBSERVACION'
+  | 'TRASLADO_INTERNO_CREADO'
+  | 'TRASLADO_INTERNO_EN_TRANSITO'
+  | 'TRASLADO_INTERNO_RECEPCIONADO'
   | 'TRASLADO_INTERNO_CANCELADO'
   | 'NUEVO_USUARIO';
 
-/** Quién recibe la notificación en la app por cada evento (acordado el 2026-10-14). */
+/**
+ * Quién recibe la notificación en la app por cada evento (acordado el
+ * 2026-10-14, completado el 2026-11-11). Siempre incluye a quienes reciben el
+ * correo del mismo evento. En `solicitud_cancelada` y `solicitud_insistencia`
+ * es el máximo posible: los reales dependen del estado (`rolesSegunEstado`).
+ */
 export const DESTINATARIOS_APP: Record<EventoApp, RolDestinatario[]> = {
   solicitud_creada: ['jefe_origen'],
   solicitud_aprobada: ['ejecutivo', 'logistica_zona'],
   solicitud_rechazada: ['ejecutivo'],
   solicitud_priorizada: ['ejecutivo'],
   solicitud_asignada: ['logistica_encargado', 'ejecutivo'],
-  solicitud_calendarizada: ['ejecutivo', 'jefe_origen', 'jefe_recepcion'],
-  solicitud_recalendarizada: ['ejecutivo', 'jefe_origen', 'jefe_recepcion'],
-  solicitud_descalendarizada: ['ejecutivo', 'jefe_origen'],
-  solicitud_despachada: ['jefe_recepcion', 'ejecutivo'],
-  solicitud_despacho_revertido: ['jefe_recepcion', 'ejecutivo'],
-  solicitud_recepcionada: ['ejecutivo', 'logistica_encargado'],
+  solicitud_calendarizada: ['ejecutivo', 'jefe_origen', 'jefe_recepcion', 'jefe_ubicacion'],
+  solicitud_recalendarizada: ['ejecutivo', 'jefe_origen', 'jefe_recepcion', 'jefe_ubicacion'],
+  solicitud_descalendarizada: ['ejecutivo', 'jefe_origen', 'jefe_recepcion', 'jefe_ubicacion'],
+  solicitud_despachada: ['jefe_recepcion', 'ejecutivo', 'jefe_ubicacion'],
+  solicitud_despacho_revertido: ['jefe_recepcion', 'ejecutivo', 'jefe_ubicacion'],
+  solicitud_recepcionada: ['ejecutivo', 'logistica_encargado', 'jefe_origen'],
   // R1: venta sin traslado aprobada; Logística no participa.
   solicitud_lista_para_entregar: ['ejecutivo'],
-  solicitud_finalizada: ['jefe_origen', 'logistica_encargado'],
-  solicitud_cancelada: ['ejecutivo', 'jefe_origen', 'logistica_encargado'],
+  solicitud_finalizada: ['ejecutivo', 'jefe_origen', 'logistica_encargado'],
+  solicitud_cancelada: [...DESTINATARIOS_POR_EVENTO.solicitud_cancelada],
   solicitud_cancelada_transito: ['ejecutivo', 'jefe_origen', 'jefe_recepcion', 'logistica_encargado'],
+  solicitud_insistencia: [...DESTINATARIOS_POR_EVENTO.solicitud_insistencia],
+  nueva_observacion: ['ejecutivo', 'jefe_origen', 'logistica_encargado'],
+  traslado_interno_creado: ['jefe_recepcion', 'jefe_origen'],
+  traslado_interno_despachado: ['jefe_recepcion', 'jefe_origen'],
+  traslado_interno_recepcionado: ['logistica_encargado', 'jefe_origen'],
   traslado_interno_cancelado: ['jefe_origen', 'jefe_recepcion', 'logistica_encargado'],
 };
 
@@ -82,12 +90,25 @@ export const TIPO_NOTIFICACION_POR_EVENTO: Record<EventoApp, TipoNotificacion> =
   solicitud_finalizada: 'SOLICITUD_FINALIZADA',
   solicitud_cancelada: 'SOLICITUD_CANCELADA',
   solicitud_cancelada_transito: 'SOLICITUD_CANCELADA_TRANSITO',
+  solicitud_insistencia: 'SOLICITUD_INSISTENCIA',
+  nueva_observacion: 'NUEVA_OBSERVACION',
+  traslado_interno_creado: 'TRASLADO_INTERNO_CREADO',
+  traslado_interno_despachado: 'TRASLADO_INTERNO_EN_TRANSITO',
+  traslado_interno_recepcionado: 'TRASLADO_INTERNO_RECEPCIONADO',
   traslado_interno_cancelado: 'TRASLADO_INTERNO_CANCELADO',
 };
 
-/** El evento también tiene correo (R7). */
+/** El evento también tiene correo. */
 export function esEventoConCorreo(evento: EventoApp): evento is EventoNotificacion {
   return Object.prototype.hasOwnProperty.call(DESTINATARIOS_POR_EVENTO, evento);
+}
+
+/** Roles que reciben la notificación en la app, con los datos del caso. */
+export function rolesApp(
+  evento: EventoApp,
+  datos?: { estado?: string | null; estadoAnterior?: string | null }
+): RolDestinatario[] {
+  return rolesSegunEstado(evento, datos) ?? DESTINATARIOS_APP[evento];
 }
 
 /**
@@ -97,11 +118,12 @@ export function esEventoConCorreo(evento: EventoApp): evento is EventoNotificaci
 export function resolverDestinatariosApp(
   evento: EventoApp,
   porRol: Partial<Record<RolDestinatario, Destinatario[]>>,
-  actorId: string | null
+  actorId: string | null,
+  datos?: { estado?: string | null; estadoAnterior?: string | null }
 ): DestinatarioConRol[] {
   const vistos = new Set<string>();
   const resultado: DestinatarioConRol[] = [];
-  for (const rol of DESTINATARIOS_APP[evento]) {
+  for (const rol of rolesApp(evento, datos)) {
     for (const d of porRol[rol] ?? []) {
       if (!d.id || d.id === actorId || vistos.has(d.id)) continue;
       vistos.add(d.id);
@@ -120,6 +142,8 @@ export interface DatosNotificacionApp {
   fechaAnterior?: string | null;
   motivo?: string | null;
   conNovedades?: boolean;
+  /** Texto del usuario: mensaje de la insistencia o de la observación. */
+  mensaje?: string | null;
 }
 
 export interface TextoNotificacion {
@@ -138,6 +162,7 @@ export function textoNotificacion(evento: EventoApp, d: DatosNotificacionApp): T
   const ref = `${d.codigo} (${d.origen} → ${d.destino})`;
   const motivo = d.motivo?.trim() ? ` Motivo: ${d.motivo.trim()}` : '';
   const fecha = d.fechaProgramada ? ` para el ${d.fechaProgramada}` : '';
+  const texto = d.mensaje?.trim() ? ` "${d.mensaje.trim()}"` : '';
 
   const textos: Record<EventoApp, TextoNotificacion> = {
     solicitud_creada: { titulo: 'Nueva solicitud por aprobar', mensaje: `La solicitud ${ref} espera tu aprobación.` },
@@ -164,9 +189,17 @@ export function textoNotificacion(evento: EventoApp, d: DatosNotificacionApp): T
     solicitud_finalizada: { titulo: 'Solicitud finalizada', mensaje: `La solicitud ${ref} se entregó al cliente y quedó finalizada.` },
     solicitud_cancelada: { titulo: 'Solicitud cancelada', mensaje: `La solicitud ${ref} fue cancelada.${motivo}` },
     solicitud_cancelada_transito: { titulo: 'Traslado cancelado en tránsito', mensaje: `El traslado de la solicitud ${ref} se canceló en tránsito.${motivo}` },
+    solicitud_insistencia: { titulo: 'El ejecutivo insiste', mensaje: `El ejecutivo pide avanzar la solicitud ${ref}.${texto}` },
+    nueva_observacion: { titulo: 'Nueva observación', mensaje: `Nueva observación en la solicitud ${ref}:${texto || ' (sin texto)'}` },
+    traslado_interno_creado: { titulo: 'Nuevo traslado interno', mensaje: `Se creó el traslado interno ${ref}.` },
+    traslado_interno_despachado: { titulo: 'Traslado interno en camino', mensaje: `El traslado interno ${ref} fue despachado y va en camino.` },
+    traslado_interno_recepcionado: {
+      titulo: d.conNovedades ? 'Traslado recibido con novedades' : 'Traslado interno recibido',
+      mensaje: `El traslado interno ${ref} fue recibido en destino${d.conNovedades ? ' con novedades' : ''}.`,
+    },
     traslado_interno_cancelado: {
       titulo: 'Traslado interno cancelado',
-      mensaje: `El traslado interno ${d.codigo} (${d.origen} → ${d.destino}) se canceló en tránsito.${motivo}`,
+      mensaje: `El traslado interno ${ref} se canceló en tránsito.${motivo}`,
     },
   };
 
@@ -191,7 +224,6 @@ export function tiempoRelativo(fechaIso: string, ahora: Date = new Date()): stri
   return fecha.toLocaleDateString('es-CL', { timeZone: 'America/Santiago' });
 }
 
-/** Ruta que abre la notificación: el detalle de la solicitud o la bandeja de traslados. */
 /**
  * Usuario nuevo registrado (fase F): solo para los administradores, solo en la
  * campana y sin correo. No forma parte de `DESTINATARIOS_APP` porque no es un
@@ -224,13 +256,20 @@ export function textoNotificacionNuevoUsuario(d: DatosNuevoUsuario): TextoNotifi
  *
  * Flujo: el jefe de local aprueba y prioriza (no se le avisa de lo que hace él
  * mismo); la solicitud priorizada aparece en el calendario de Logística, que la
- * programa. Por eso Logística va al calendario desde la aprobación.
+ * programa. Por eso Logística va al calendario desde la aprobación. Una
+ * insistencia lleva al Jefe a Aprobaciones (que abre el detalle aunque la
+ * solicitud ya no esté pendiente) y a Logística al calendario.
  */
 export const RUTA_ACCION: Partial<Record<EventoApp, Partial<Record<RolDestinatario, string>>>> = {
   solicitud_creada: { jefe_origen: '/solicitudes/aprobaciones' },
   solicitud_aprobada: { logistica_zona: '/logistica/calendarizaciones' },
   solicitud_asignada: { logistica_encargado: '/logistica/calendarizaciones' },
   solicitud_despachada: { jefe_recepcion: '/solicitudes/recepciones' },
+  solicitud_insistencia: {
+    jefe_origen: '/solicitudes/aprobaciones',
+    logistica_encargado: '/logistica/calendarizaciones',
+    logistica_zona: '/logistica/calendarizaciones',
+  },
 };
 
 /** Enlace de la notificación para un destinatario según su papel en el evento. */

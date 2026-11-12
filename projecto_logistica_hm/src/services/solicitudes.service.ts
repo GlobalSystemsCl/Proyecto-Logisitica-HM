@@ -122,6 +122,7 @@ interface SolicitudRawRow {
       modelo: string;
       anio: number;
       color: string | null;
+      ubicacion?: number | null;
     } | null;
   }> | null;
 }
@@ -142,7 +143,7 @@ const SOLICITUD_SELECT = `id, sucursal, numero, sucursal_destino, estado, tipo_s
   logistica:logistica_id(nombre, apellido),
   creador:creado_por(nombre, apellido),
   transportista:transportista_id(id, nombre, rut),
-  solicitud_vehiculo(id, disponibilidad, numero_guia, vehiculo(chasis, patente, marca, modelo, anio, color))`;
+  solicitud_vehiculo(id, disponibilidad, numero_guia, vehiculo(chasis, patente, marca, modelo, anio, color, ubicacion))`;
 
 function mapRow(row: SolicitudRawRow): SolicitudLista {
   return {
@@ -192,6 +193,7 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
         modelo: sv.vehiculo!.modelo,
         anio: sv.vehiculo!.anio,
         color: sv.vehiculo!.color,
+        ubicacion: sv.vehiculo!.ubicacion ?? null,
       })),
   };
 }

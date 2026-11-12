@@ -8,7 +8,12 @@ import { esAdminPrincipal } from '@/lib/auth/admin-principal';
 import { getAppUrl } from '@/lib/env';
 import { mensajeCuentaDesactivada } from '@/lib/soporte';
 import { validarDominioCorreo } from '@/lib/dominios';
-import { ASUNTO_RECUPERACION, enlaceRecuperacion, htmlCorreoRecuperacion } from '@/lib/recuperacionClave';
+import {
+  ASUNTO_RECUPERACION,
+  enlaceRecuperacion,
+  htmlCorreoRecuperacion,
+  textoCorreoRecuperacion,
+} from '@/lib/recuperacionClave';
 import { EmailService } from '@/services/email.service';
 
 export const MAX_INTENTOS_FALLIDOS = 5;
@@ -485,11 +490,14 @@ export class AuthService {
         return { success: false, error: errorEnvio };
       }
 
+      const appUrl = getAppUrl();
+      const enlace = enlaceRecuperacion(appUrl, tokenHash);
       const envio = await EmailService.enviarCorreo({
         toEmail: cleanEmail,
         toName: fila.nombre || cleanEmail,
         asunto: ASUNTO_RECUPERACION,
-        html: htmlCorreoRecuperacion(fila.nombre || '', enlaceRecuperacion(getAppUrl(), tokenHash)),
+        html: htmlCorreoRecuperacion(fila.nombre || '', enlace, appUrl),
+        texto: textoCorreoRecuperacion(fila.nombre || '', enlace, appUrl),
       });
       if (!envio.success) {
         console.error('Error al enviar el correo de recuperación:', envio.error);

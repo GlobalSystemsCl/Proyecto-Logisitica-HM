@@ -249,6 +249,7 @@ describe('SolicitudesService.getSolicitudes', () => {
       modelo: 'Corolla',
       anio: 2020,
       color: 'Rojo',
+      ubicacion: null,
     });
   });
 

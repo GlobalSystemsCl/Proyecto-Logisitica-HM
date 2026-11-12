@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { esFechaAnteriorAHoy, formatFecha, formatFechaLarga, hoyISO, partesFecha } from '@/lib/fechas';
+import { esFechaAnteriorAHoy, formatFecha, formatFechaHora, formatFechaLarga, hoyISO, partesFecha } from '@/lib/fechas';
 
 const HOY = '2026-01-15T12:00:00Z';
 
@@ -151,6 +151,28 @@ describe('fechas', () => {
 
     it('should_return_dash_when_date_is_invalid', () => {
       expect(formatFechaLarga('fecha-invalida')).toBe('—');
+    });
+  });
+
+  describe('formatFechaHora', () => {
+    it('should_show_chile_date_and_time_when_value_has_time', () => {
+      // 14/10 a las 22:47 en Chile (UTC-3) es 15/10 01:47 en UTC.
+      expect(formatFechaHora('2026-10-15T01:47:00.000Z')).toBe('14/10/2026 22:47');
+    });
+
+    it('should_use_24_hour_clock_with_two_digits', () => {
+      expect(formatFechaHora('2026-10-14T12:05:00.000Z')).toBe('14/10/2026 09:05');
+    });
+
+    it('should_return_only_the_date_when_value_has_no_time', () => {
+      expect(formatFechaHora('2026-10-21')).toBe('21/10/2026');
+      expect(formatFechaHora('2026-10-21T00:00:00Z')).toBe('21/10/2026');
+    });
+
+    it('should_return_dash_when_value_is_missing_or_invalid', () => {
+      expect(formatFechaHora(null)).toBe('—');
+      expect(formatFechaHora(undefined)).toBe('—');
+      expect(formatFechaHora('no-es-fecha')).toBe('—');
     });
   });
 });
