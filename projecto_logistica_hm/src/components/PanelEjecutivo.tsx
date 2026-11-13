@@ -5,12 +5,15 @@ import { Clock, Flag, Loader2, PackageCheck, Truck, X, XCircle } from 'lucide-re
 import type { SolicitudLista } from '@/types/solicitud.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { finalizarSolicitudAction } from '@/app/actions/solicitudes.actions';
 import { gruposPanelEjecutivo, recortar, LIMITE_PANEL_EJECUTIVO } from '@/lib/panel';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
-import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { confirmacionEntregaCliente, ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { useConfirmacion } from '@/components/Confirmacion';
+import { rutaSolicitud } from '@/lib/origenSolicitud';
 
 interface Props {
   solicitudes: SolicitudLista[];
@@ -28,7 +31,7 @@ const ESTADO_EN_CURSO: Record<string, string> = {
 };
 
 function ruta(s: SolicitudLista): string {
-  return `${s.sucursal_nombre ?? `Sucursal ${s.sucursal}`} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento'}`;
+  return rutaSolicitud(s);
 }
 
 function vehiculos(s: SolicitudLista): string {
@@ -41,6 +44,7 @@ function vehiculos(s: SolicitudLista): string {
  */
 export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
   const [entregando, setEntregando] = useState<string | null>(null);
+  const { confirmar, dialogoConfirmacion } = useConfirmacion();
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const grupos = gruposPanelEjecutivo(solicitudes);
 
@@ -50,7 +54,7 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
   const rechazadas = recortar(grupos.rechazadas, LIMITE_PANEL_EJECUTIVO);
 
   async function entregar(s: SolicitudLista) {
-    if (!window.confirm(`¿Confirmas la entrega al cliente de la solicitud ${codigoSolicitud(s)}?`)) return;
+    if (!(await confirmar(confirmacionEntregaCliente(codigoSolicitud(s))))) return;
     setEntregando(s.id);
     try {
       const res = await finalizarSolicitudAction(s.id);
@@ -90,7 +94,7 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
           tono="neutro"
         >
           {pendientes.items.map((s) => (
-            <li key={s.id} className="px-5 py-3">
+            <li key={s.id} onClick={abrirDetalleDeFila} className="cursor-pointer hover:bg-neutral-50 transition-colors px-5 py-3">
               <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
                 {codigoSolicitud(s)}
               </AbrirSolicitudDetalle>
@@ -112,7 +116,7 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
           tono="azul"
         >
           {enCurso.items.map((s) => (
-            <li key={s.id} className="px-5 py-3">
+            <li key={s.id} onClick={abrirDetalleDeFila} className="cursor-pointer hover:bg-neutral-50 transition-colors px-5 py-3">
               <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
                 {codigoSolicitud(s)}
               </AbrirSolicitudDetalle>
@@ -140,14 +144,14 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
           tono="verde"
         >
           {porEntregar.items.map((s) => (
-            <li key={s.id} className="px-5 py-3 flex items-center gap-3">
+            <li key={s.id} onClick={abrirDetalleDeFila} className="cursor-pointer hover:bg-neutral-50 transition-colors px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
                   {codigoSolicitud(s)}
                 </AbrirSolicitudDetalle>
                 <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
                 <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
-                <p className="text-[11px] text-neutral-400">Recibida {formatFecha(s.fecha_recepcion ?? s.fecha_entrega)}</p>
+                <p className="text-[11px] text-neutral-400">Recepcionada el {formatFecha(s.fecha_recepcion ?? s.fecha_entrega)}</p>
               </div>
               <button
                 onClick={() => entregar(s)}
@@ -172,12 +176,18 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
           tono="rojo"
         >
           {rechazadas.items.map((s) => (
-            <li key={s.id} className="px-5 py-3">
+            <li key={s.id} onClick={abrirDetalleDeFila} className="cursor-pointer hover:bg-neutral-50 transition-colors px-5 py-3">
               <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
                 {codigoSolicitud(s)}
               </AbrirSolicitudDetalle>
               <p className="text-sm font-semibold text-neutral-900 truncate">{ruta(s)}</p>
               <p className="text-xs text-neutral-500 truncate">{vehiculos(s)}</p>
+              {s.motivo_cancelacion && (
+                <p className="text-xs text-red-700 line-clamp-2" title={s.motivo_cancelacion}>
+                  {s.estado === 'rechazada' ? 'Rechazada: ' : 'Cancelada: '}
+                  {s.motivo_cancelacion}
+                </p>
+              )}
             </li>
           ))}
           {onCrearNueva && rechazadas.total > 0 && (
@@ -192,6 +202,7 @@ export default function PanelEjecutivo({ solicitudes, onCrearNueva }: Props) {
           )}
         </PanelAcciones>
       </div>
+      {dialogoConfirmacion}
     </div>
   );
 }

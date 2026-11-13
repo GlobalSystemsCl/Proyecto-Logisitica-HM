@@ -1,13 +1,14 @@
 'use server';
 
 import { requireProfile } from '@/lib/auth/guards';
-import { mensajeErrorUsuario } from '@/lib/errores';
+import { ErrorUsuario, mensajeErrorUsuario } from '@/lib/errores';
+import { puedeAccederTraslado } from '@/lib/accesoTraslado';
 import { revalidarSolicitudes } from '@/lib/rutas';
 import { TrasladoService } from '@/services/traslado.service';
 import { OrganizacionService } from '@/services/organizacion.service';
 import { SucursalesService } from '@/services/sucursales.service';
 import { UserProfile } from '@/types/auth.types';
-import type { CreateTrasladoInput } from '@/types/traslado.types';
+import type { CreateTrasladoInput, DocumentoTraslado } from '@/types/traslado.types';
 import type { DatosRecepcion } from '@/lib/recepcion';
 import { NotificacionService } from '@/services/notificacion.service';
 import { enSegundoPlano } from '@/lib/segundoPlano';
@@ -124,6 +125,7 @@ export async function recibirTrasladoAction(trasladoId: string, recepcion?: Dato
 export async function cancelarTrasladoAction(trasladoId: string, motivo: string, ubicacionId: number | null) {
   try {
     const profile = await getProfileOrThrow();
+    // Decisión confirmada el 2026-11-13 (QA #47): el administrador no cancela.
     if (profile.rol !== 'logistica') {
       return { success: false, error: 'Solo Logística puede cancelar un traslado en tránsito.' };
     }
@@ -201,5 +203,78 @@ export async function getSucursalesTrasladoAction() {
     return await SucursalesService.getSucursales();
   } catch {
     return [];
+  }
+}
+
+// -----------------------------------------------------------------------------
+// QA #49: fotos y documentos de un traslado interno
+// -----------------------------------------------------------------------------
+
+const MENSAJE_SIN_ACCESO_TRASLADO = 'No tienes acceso a este traslado.';
+
+/** Valida que el usuario tenga alcance sobre el traslado (lanza ErrorUsuario si no). */
+async function requireTrasladoAccess(profile: UserProfile, trasladoId: string) {
+  const traslado = await TrasladoService.getTrasladoById(trasladoId);
+  if (!traslado) throw new ErrorUsuario('Traslado no encontrado.');
+  let alcance: number[] = [];
+  if (profile.rol === 'logistica') {
+    alcance = await OrganizacionService.getSucursalIdsDeZonasUsuario(profile.id);
+  } else if (profile.rol === 'jefe_local') {
+    alcance = (await OrganizacionService.getUserAssignedBranches(profile.id)).map((s) => s.id);
+  }
+  if (!puedeAccederTraslado(profile.rol, profile.id, traslado, alcance)) {
+    throw new ErrorUsuario(MENSAJE_SIN_ACCESO_TRASLADO);
+  }
+  return traslado;
+}
+
+export async function subirDocumentosTrasladoAction(trasladoId: string, formData: FormData) {
+  try {
+    if (!trasladoId) return { success: false, error: 'Traslado inválido.' };
+    const profile = await getProfileOrThrow();
+    await requireTrasladoAccess(profile, trasladoId);
+    const archivos = formData.getAll('archivos') as File[];
+    if (!archivos.length) return { success: false, error: 'No se seleccionaron archivos.' };
+    const preparados = await Promise.all(
+      archivos.map(async (f) => ({ nombre: f.name, tipo: f.type, tamano: f.size, buffer: await f.arrayBuffer() }))
+    );
+    const result = await TrasladoService.subirDocumentos(trasladoId, profile.id, preparados);
+    if (!result.success) return { success: false, error: result.error };
+    return { success: true, message: 'Documentos subidos correctamente.' };
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al subir documentos') };
+  }
+}
+
+export async function getDocumentosTrasladoAction(trasladoId: string): Promise<DocumentoTraslado[]> {
+  try {
+    const profile = await getProfileOrThrow();
+    await requireTrasladoAccess(profile, trasladoId);
+    return await TrasladoService.getDocumentos(trasladoId);
+  } catch {
+    return [];
+  }
+}
+
+export async function getVistasPreviasTrasladoAction(trasladoId: string): Promise<Record<string, string>> {
+  try {
+    const profile = await getProfileOrThrow();
+    await requireTrasladoAccess(profile, trasladoId);
+    return await TrasladoService.getURLsVistaPrevia(trasladoId);
+  } catch {
+    return {};
+  }
+}
+
+export async function descargarDocumentoTrasladoAction(documentoId: string) {
+  try {
+    if (!documentoId) return { success: false, error: 'Documento inválido.' };
+    const profile = await getProfileOrThrow();
+    const trasladoId = await TrasladoService.getTrasladoIdDeDocumento(documentoId);
+    if (!trasladoId) return { success: false, error: 'El documento no existe.' };
+    await requireTrasladoAccess(profile, trasladoId);
+    return await TrasladoService.getURLDescarga(documentoId);
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al generar la descarga') };
   }
 }

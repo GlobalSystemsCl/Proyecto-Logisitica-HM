@@ -28,8 +28,23 @@ export interface TrasladoVehiculo {
   ubicacion: number | null;
 }
 
+/** QA #49: foto o documento de un traslado interno (`traslado_documento`). */
+export interface DocumentoTraslado {
+  id: string;
+  traslado_id: string;
+  nombre_archivo: string;
+  tipo_mime: string;
+  tamano_bytes: number;
+  ruta_storage: string;
+  subido_por: string | null;
+  subido_por_nombre?: string | null;
+  created_at: string;
+}
+
 export interface TrasladoInterno {
   id: string;
+  /** QA #48: correlativo visible (T-15); lo asigna la BD. */
+  numero?: number | null;
   origen_id: number;
   origen_nombre: string | null;
   destino_id: number;

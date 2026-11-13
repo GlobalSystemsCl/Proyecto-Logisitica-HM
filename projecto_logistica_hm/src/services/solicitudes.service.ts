@@ -18,7 +18,7 @@ import { obtenerTodasLasFilas, type ConsultaPaginable } from '@/lib/paginacion';
 import { sumarDias } from '@/lib/calendario';
 import { TransportistaService } from '@/services/transportista.service';
 import type { AsignacionTransporte, DatosTransporte } from '@/types/transportista.types';
-import { validarContenidoArchivo } from '@/lib/archivos';
+import { admiteVistaPrevia, TAMANO_MAXIMO_DOCUMENTO, validarContenidoArchivo } from '@/lib/archivos';
 import { mensajeVehiculosSinUbicacion } from '@/lib/vehiculo';
 import { idsPorGuia, validarGuias } from '@/lib/guiaDespacho';
 import { MENSAJE_MEZCLA_SUCURSAL, clasificarVenta, errorAgregarVehiculo, estadoAlAprobar, type ClaseVenta } from '@/lib/ventaSucursal';
@@ -48,6 +48,16 @@ export const ESTADOS_ACTIVOS_RESERVA = [
   'en_transito',
 ] as const;
 
+/**
+ * Estados en los que un vehículo NO puede pedirse en otra solicitud ni moverse
+ * en un traslado interno: los de reserva más `entregada` (recepcionada en
+ * destino, falta la entrega al cliente). `ESTADOS_ACTIVOS_RESERVA` se usa para
+ * los slots; esta lista, para la disponibilidad del vehículo. Debe coincidir
+ * con `fn_validar_reserva_unica_vehiculo` y `fn_validar_vehiculo_trasladable`
+ * (migración 20261112140000); un test compara las listas.
+ */
+export const ESTADOS_BLOQUEAN_VEHICULO = [...ESTADOS_ACTIVOS_RESERVA, 'entregada'] as const;
+
 const ESTADOS_PRE_DESPACHO = [
   'pendiente_aprobacion',
   'aprobada',
@@ -74,8 +84,8 @@ export const MENSAJE_CONFLICTO_ESTADO =
 /** Cooldown para la insistencia del Ejecutivo: 24 horas. */
 export const COOLDOWN_INSISTENCIA_HORAS = 24;
 
-const BUCKET_DOCUMENTOS = 'solicitud-documentos';
-const MAX_TAMANO_DOCUMENTO = 10 * 1024 * 1024;
+export const BUCKET_DOCUMENTOS = 'solicitud-documentos';
+const MAX_TAMANO_DOCUMENTO = TAMANO_MAXIMO_DOCUMENTO;
 
 interface SolicitudRawRow {
   id: string;
@@ -115,6 +125,8 @@ interface SolicitudRawRow {
     id: string;
     disponibilidad: DisponibilidadVehiculo;
     numero_guia?: string | null;
+    sucursal_origen?: number | null;
+    origen?: { nombre: string | null } | null;
     vehiculo: {
       chasis: string;
       patente: string;
@@ -142,7 +154,9 @@ const SOLICITUD_SELECT = `id, sucursal, numero, sucursal_destino, estado, tipo_s
   logistica:logistica_id(nombre, apellido),
   creador:creado_por(nombre, apellido),
   transportista:transportista_id(id, nombre, rut),
-  solicitud_vehiculo(id, disponibilidad, numero_guia, vehiculo(chasis, patente, marca, modelo, anio, color))`;
+  solicitud_vehiculo(id, disponibilidad, numero_guia, sucursal_origen,
+    origen:sucursal!solicitud_vehiculo_sucursal_origen_fkey(nombre),
+    vehiculo(chasis, patente, marca, modelo, anio, color))`;
 
 function mapRow(row: SolicitudRawRow): SolicitudLista {
   return {
@@ -186,6 +200,8 @@ function mapRow(row: SolicitudRawRow): SolicitudLista {
         solicitud_vehiculo_id: sv.id,
         disponibilidad: sv.disponibilidad,
         numero_guia: sv.numero_guia ?? null,
+        sucursal_origen: sv.sucursal_origen ?? null,
+        sucursal_origen_nombre: sv.origen?.nombre ?? null,
         patente: sv.vehiculo!.patente,
         chasis: sv.vehiculo!.chasis,
         marca: sv.vehiculo!.marca,
@@ -622,7 +638,7 @@ export class SolicitudesService {
           .from('solicitud_vehiculo')
           .select('vehiculo_id, solicitud!inner(estado)')
           .eq('disponibilidad', 'reservado')
-          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
+          .in('solicitud.estado', [...ESTADOS_BLOQUEAN_VEHICULO])
           .order('id', { ascending: true }),
         (error) => console.error('Error al consultar reservas activas:', error)
       );
@@ -732,7 +748,7 @@ export class SolicitudesService {
         .select('vehiculo_id, solicitud!inner(estado)')
         .in('vehiculo_id', vehiculoIds)
         .eq('disponibilidad', 'reservado')
-        .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA]);
+        .in('solicitud.estado', [...ESTADOS_BLOQUEAN_VEHICULO]);
 
       if (reservasError) {
         return {
@@ -1317,6 +1333,21 @@ export class SolicitudesService {
         return { success: false, error: 'Solo se pueden aprobar solicitudes pendientes de aprobación.' };
       }
 
+      // QA #17: las solicitudes creadas antes de R6 pueden traer vehículos sin
+      // sucursal de origen; no se aprueban (Logística no tendría desde dónde sacarlos).
+      const { data: filasSv, error: svError } = await admin
+        .from('solicitud_vehiculo')
+        .select('vehiculo_id')
+        .eq('solicitud_id', id);
+      if (svError) return { success: false, error: mensajeErrorUsuario(svError, 'No se pudieron leer los vehículos de la solicitud.') };
+      const errorUbicacion = await SolicitudesService.validarVehiculosConUbicacion(
+        admin,
+        ((filasSv ?? []) as Array<{ vehiculo_id: string }>).map((f) => f.vehiculo_id),
+      );
+      if (errorUbicacion) {
+        return { success: false, error: `${errorUbicacion} Si no se puede, rechaza la solicitud.` };
+      }
+
       const ahora = new Date().toISOString();
       const sinTraslado = Boolean(actual.sin_traslado);
       const nuevoEstado = estadoAlAprobar(sinTraslado);
@@ -1359,7 +1390,12 @@ export class SolicitudesService {
         return { success: false, error: 'El motivo de rechazo debe tener al menos 5 caracteres.' };
       }
 
-      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, { estado: 'rechazada' });
+      // QA #12: el motivo también queda en la solicitud para mostrarlo en las tarjetas
+      // (la observación [RECHAZO] se mantiene para el historial).
+      const errEstado = await SolicitudesService.actualizarSiEstado(admin, id, actual.estado, {
+        estado: 'rechazada',
+        motivo_cancelacion: motivo.trim(),
+      });
       if (errEstado) return { success: false, error: errEstado };
 
       const { error: obsError } = await admin.from('observacion').insert({
@@ -1620,6 +1656,43 @@ export class SolicitudesService {
     }
   }
 
+  /**
+   * QA #52: enlaces firmados para ver en el navegador (sin forzar descarga) las
+   * imágenes y PDF de una solicitud. Un solo pedido a Storage; vencen en 10
+   * minutos. Devuelve { [documentoId]: url }; los demás tipos no se incluyen.
+   */
+  static async getURLsVistaPrevia(solicitudId: string): Promise<Record<string, string>> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('solicitud_documento')
+        .select('id, ruta_storage, tipo_mime')
+        .eq('solicitud_id', solicitudId);
+      if (error || !data) return {};
+      const docs = (data as Array<{ id: string; ruta_storage: string; tipo_mime: string }>).filter((d) =>
+        admiteVistaPrevia(d.tipo_mime)
+      );
+      if (docs.length === 0) return {};
+      const { data: firmadas, error: eSign } = await admin.storage
+        .from(BUCKET_DOCUMENTOS)
+        .createSignedUrls(docs.map((d) => d.ruta_storage), 600);
+      if (eSign || !firmadas) {
+        if (eSign) console.error('Error al firmar vistas previas:', eSign);
+        return {};
+      }
+      const porRuta = new Map(firmadas.filter((f) => f.signedUrl && !f.error).map((f) => [f.path, f.signedUrl]));
+      const urls: Record<string, string> = {};
+      for (const d of docs) {
+        const url = porRuta.get(d.ruta_storage);
+        if (url) urls[d.id] = url;
+      }
+      return urls;
+    } catch (err) {
+      console.error('Error en getURLsVistaPrevia:', err);
+      return {};
+    }
+  }
+
   static async getURLDescarga(
     documentoId: string
   ): Promise<{ success: boolean; url?: string; error?: string }> {
@@ -1823,7 +1896,7 @@ export class SolicitudesService {
         .select('id, solicitud!inner(estado)')
         .eq('vehiculo_id', vehiculoId)
         .eq('disponibilidad', 'reservado')
-        .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
+        .in('solicitud.estado', [...ESTADOS_BLOQUEAN_VEHICULO])
         .limit(1);
 
       if (reservaActiva && reservaActiva.length > 0) {
@@ -2621,10 +2694,57 @@ export class SolicitudesService {
   ): Promise<{ horas_restantes: number | null; ultima: string | null }> {
     const ultima = await this.getUltimaInsistencia(solicitudId, usuarioId);
     if (!ultima) return { horas_restantes: null, ultima: null };
-
-    const transcurridoHoras = (Date.now() - new Date(ultima.created_at).getTime()) / 3_600_000;
-    const restantes = COOLDOWN_INSISTENCIA_HORAS - transcurridoHoras;
-    if (restantes <= 0) return { horas_restantes: null, ultima: ultima.created_at };
-    return { horas_restantes: Math.ceil(restantes), ultima: ultima.created_at };
+    return { horas_restantes: horasRestantesInsistencia(ultima.created_at), ultima: ultima.created_at };
   }
+
+  /**
+   * QA #2: cooldown de "Insistir" de varias solicitudes con UNA consulta (antes
+   * la lista hacía una server action por solicitud, en serie). Solo mira las
+   * insistencias del propio usuario de las últimas 24 h; las que no tienen
+   * quedan en `null` (puede insistir). Los ids van en grupos para no exceder el
+   * largo de la URL de PostgREST.
+   */
+  static async getCooldownsInsistencia(
+    solicitudIds: string[],
+    usuarioId: string,
+    ahora: number = Date.now()
+  ): Promise<Record<string, number | null>> {
+    const ids = [...new Set(solicitudIds.filter(Boolean))];
+    const resultado: Record<string, number | null> = Object.fromEntries(ids.map((id) => [id, null]));
+    if (ids.length === 0) return resultado;
+
+    const desde = new Date(ahora - COOLDOWN_INSISTENCIA_HORAS * 3_600_000).toISOString();
+    const admin = createAdminClient();
+    for (let i = 0; i < ids.length; i += TAMANO_LOTE_IDS) {
+      const { data, error } = await admin
+        .from('insistencia')
+        .select('solicitud_id, created_at')
+        .in('solicitud_id', ids.slice(i, i + TAMANO_LOTE_IDS))
+        .eq('usuario_id', usuarioId)
+        .gte('created_at', desde)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error en getCooldownsInsistencia:', error);
+        continue;
+      }
+      for (const fila of (data ?? []) as Array<{ solicitud_id: string; created_at: string }>) {
+        if (resultado[fila.solicitud_id] !== null) continue; // ya se tomó la más reciente
+        resultado[fila.solicitud_id] = horasRestantesInsistencia(fila.created_at, ahora);
+      }
+    }
+    return resultado;
+  }
+}
+
+/** Ids por consulta `.in(...)`: ~37 caracteres cada uno mantiene la URL corta. */
+const TAMANO_LOTE_IDS = 100;
+
+/**
+ * Horas que faltan para volver a insistir (redondeadas hacia arriba), o `null`
+ * si ya pasaron las {@link COOLDOWN_INSISTENCIA_HORAS} horas desde `ultimaIso`.
+ */
+export function horasRestantesInsistencia(ultimaIso: string, ahora: number = Date.now()): number | null {
+  const transcurridoHoras = (ahora - new Date(ultimaIso).getTime()) / 3_600_000;
+  const restantes = COOLDOWN_INSISTENCIA_HORAS - transcurridoHoras;
+  return restantes > 0 ? Math.ceil(restantes) : null;
 }

@@ -842,7 +842,7 @@ export async function finalizarSolicitudAction(solicitudId: string) {
     notificar('solicitud_finalizada', solicitudId, profile.id);
 
     revalidarSolicitudes();
-    return { success: true, message: 'Solicitud finalizada.' };
+    return { success: true, message: 'Entrega al cliente registrada.' };
   } catch (err: unknown) {
     return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
@@ -949,6 +949,21 @@ export async function getCooldownInsistenciaAction(solicitudId: string) {
   }
 }
 
+/**
+ * QA #2: cooldowns de "Insistir" de varias solicitudes en una sola llamada.
+ * Solo devuelve datos del propio usuario (filtra por su id), así que no expone
+ * nada de solicitudes ajenas.
+ */
+export async function getCooldownsInsistenciaAction(solicitudIds: string[]): Promise<Record<string, number | null>> {
+  try {
+    const profile = await requireProfile();
+    if (profile.rol !== 'ejecutivo' || !Array.isArray(solicitudIds)) return {};
+    return await SolicitudesService.getCooldownsInsistencia(solicitudIds.slice(0, 1000), profile.id);
+  } catch {
+    return {};
+  }
+}
+
 /** Historial de insistencias de una solicitud. */
 export async function getInsistenciasAction(solicitudId: string) {
   try {
@@ -994,6 +1009,17 @@ export async function getDocumentosSolicitudAction(solicitudId: string) {
     return await SolicitudesService.getDocumentos(solicitudId);
   } catch {
     return [];
+  }
+}
+
+/** QA #52: enlaces para ver imágenes y PDF de la solicitud sin descargarlos. */
+export async function getVistasPreviasDocumentosAction(solicitudId: string): Promise<Record<string, string>> {
+  try {
+    const profile = await requireProfile();
+    await requireSolicitudAccess(profile, solicitudId);
+    return await SolicitudesService.getURLsVistaPrevia(solicitudId);
+  } catch {
+    return {};
   }
 }
 

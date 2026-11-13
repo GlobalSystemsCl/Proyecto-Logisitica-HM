@@ -71,9 +71,9 @@ describe('config/dashboard-cards', () => {
       expect(tituloDeCard(historial, 'jefe_local')).toBe('Historial y Trazabilidad');
     });
 
-    it('debería_invitar_a_operaciones_a_cargar_vehiculos', () => {
+    it('debería_invitar_a_operaciones_solo_a_consultar_vehiculos', () => {
       const vehiculos = DASHBOARD_CARDS.find((c) => c.clave === 'vehiculos')!;
-      expect(tituloDeCard(vehiculos, 'operaciones')).toBe('Carga aquí los vehículos al inventario');
+      expect(tituloDeCard(vehiculos, 'operaciones')).toBe('Consulta aquí el inventario de vehículos');
       expect(tituloDeCard(vehiculos, 'administrador')).toBe('Gestión de Vehículos');
     });
 

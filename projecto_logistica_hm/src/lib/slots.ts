@@ -5,7 +5,8 @@
  * los triggers de reservas, traslados y vehículos los recalculan con
  * `fn_recalcular_slots_sucursal` (brecha 011): reservados = reservas activas
  * de solicitudes y traslados hacia la sucursal; ocupados = vehículos en la
- * sucursal + reservados. La app solo los lee. Este módulo es la
+ * sucursal + reservados (QA #32: `slots_ocupados` YA incluye los reservados,
+ * no hay que volver a sumarlos). La app solo los lee. Este módulo es la
  * única fuente del cálculo de "libres" para la UI, de modo que el indicador del
  * dashboard y el panel `/logistica/slots` no puedan discrepar.
  *
@@ -27,7 +28,7 @@ export interface ResumenSlots {
   libres: number;
   /** Suma de la capacidad total declarada. */
   total: number;
-  /** Suma de los slots ocupados o reservados. */
+  /** Suma de los slots en uso (vehículos en la sucursal + reservados). */
   ocupados: number;
   /** `critico` sin ningún slot libre, `atencion` con menos del 20 % libre. */
   criticidad: CriticidadSlots;
@@ -60,15 +61,22 @@ function aNumero(valor: number | null | undefined): number {
 }
 
 /**
- * Slots libres de una sucursal: capacidad menos lo ocupado y lo reservado,
- * nunca negativo. Normaliza `null`/`undefined`/no finitos a 0 para no producir
- * `NaN` en la UI.
+ * Slots en uso: `slots_ocupados`, que la BD ya calcula como vehículos en la
+ * sucursal + reservados. Normaliza `null`/`undefined`/no finitos a 0 para no
+ * producir `NaN` en la UI.
  */
+export function usoSlots(sucursal: SlotSucursalResumen): number {
+  return aNumero(sucursal.slots_ocupados);
+}
+
+/** Vehículos físicamente en la sucursal: los en uso menos los reservados (nunca negativo). */
+export function enSucursal(sucursal: SlotSucursalResumen): number {
+  return Math.max(usoSlots(sucursal) - aNumero(sucursal.slots_reservados), 0);
+}
+
+/** Slots libres de una sucursal: capacidad menos lo en uso, nunca negativo. */
 export function slotsLibres(sucursal: SlotSucursalResumen): number {
-  const total = aNumero(sucursal.slots);
-  const ocupados = aNumero(sucursal.slots_ocupados);
-  const reservados = aNumero(sucursal.slots_reservados);
-  return Math.max(total - ocupados - reservados, 0);
+  return Math.max(aNumero(sucursal.slots) - usoSlots(sucursal), 0);
 }
 
 /** Slots extra de una sucursal: 20 % de la capacidad real, redondeado hacia arriba. */
@@ -79,11 +87,6 @@ export function capacidadExtra(sucursal: SlotSucursalResumen): number {
 /** Capacidad real más la extra. */
 export function capacidadTotal(sucursal: SlotSucursalResumen): number {
   return aNumero(sucursal.slots) + capacidadExtra(sucursal);
-}
-
-/** Slots en uso: ocupados más reservados. */
-export function usoSlots(sucursal: SlotSucursalResumen): number {
-  return aNumero(sucursal.slots_ocupados) + aNumero(sucursal.slots_reservados);
 }
 
 /** Extras todavía libres (nunca negativo). */
@@ -97,12 +100,13 @@ export function extraLibres(sucursal: SlotSucursalResumen): number {
  *  - `disponible`: quedan slots reales libres
  *  - `usando_extra`: la capacidad real está completa y se usan (o quedan) extras
  *  - `excedido`: se superó también la capacidad extra
- *  - `sin_capacidad`: la sucursal no tiene slots declarados ni vehículos
+ *  - `sin_capacidad`: la sucursal no tiene slots declarados (aunque tenga
+ *    vehículos: sin capacidad no se puede hablar de exceso; QA #30)
  */
 export function estadoCapacidad(sucursal: SlotSucursalResumen): EstadoCapacidad {
   const real = aNumero(sucursal.slots);
   const uso = usoSlots(sucursal);
-  if (real === 0) return uso > 0 ? 'excedido' : 'sin_capacidad';
+  if (real === 0) return 'sin_capacidad';
   if (uso < real) return 'disponible';
   if (uso <= capacidadTotal(sucursal)) return 'usando_extra';
   return 'excedido';
@@ -137,7 +141,7 @@ export function resumenSlots(sucursales: SlotSucursalResumen[] | null | undefine
     const libresSucursal = slotsLibres(sucursal);
     libres += libresSucursal;
     total += aNumero(sucursal.slots);
-    ocupados += aNumero(sucursal.slots_ocupados) + aNumero(sucursal.slots_reservados);
+    ocupados += usoSlots(sucursal);
     if (libresSucursal === 0) {
       sucursalesCriticas.push(nombreSucursal(sucursal));
     }
@@ -188,6 +192,8 @@ export type FilaSlots<T extends SlotSucursalResumen> = T & {
   real: number;
   extra: number;
   uso: number;
+  /** Vehículos físicamente en la sucursal (uso − reservados). */
+  enSucursal: number;
   libres: number;
   extraLibres: number;
   estado: EstadoCapacidad;
@@ -209,6 +215,7 @@ export function filaSlots<T extends SlotSucursalResumen>(sucursal: T): FilaSlots
     real,
     extra,
     uso,
+    enSucursal: enSucursal(sucursal),
     libres: slotsLibres(sucursal),
     extraLibres: extraLibres(sucursal),
     estado: estadoCapacidad(sucursal),

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createSupabaseMock, fila } from '../mocks/supabase';
+import { createSupabaseMock, fila, filaConCount } from '../mocks/supabase';
 
 const admin = createSupabaseMock();
 
@@ -808,5 +808,92 @@ describe('UsersService', () => {
 
       expect(res).toEqual({ success: false, error: 'Usuario no encontrado.' });
     });
+  });
+});
+
+describe('UsersService: trabajo abierto de Logística (QA #25)', () => {
+  const perfil = { email: 'l@test.com', nombre: 'Lu', apellido: 'Gi', activo: true, created_at: '2026-01-01T00:00:00Z' };
+
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_count_open_requests_and_transfers_with_the_absence_states', async () => {
+    admin.results.solicitud = [filaConCount(3)];
+    admin.results.traslado_interno = [filaConCount(1)];
+
+    expect(await UsersService.contarTrabajoLogistica('l-1')).toEqual({ solicitudes: 3, traslados: 1 });
+    expect(admin.callsTo('solicitud')).toContainEqual(['eq', 'logistica_id', 'l-1']);
+    expect(admin.callsTo('traslado_interno')).toContainEqual(['in', 'estado', ['pendiente', 'en_transito']]);
+  });
+
+  it('should_refuse_to_change_the_role_when_there_is_open_work_and_no_receiver', async () => {
+    admin.results.usuario = [fila({ rol: 'logistica', sucursal_id: 1 })];
+    admin.results.sucursal = [fila([])];
+    admin.results.usuario_zona = [fila([{ zona_id: 3 }])];
+    admin.results.solicitud = [filaConCount(2)];
+    admin.results.traslado_interno = [filaConCount(0)];
+
+    const res = await UsersService.updateUser('l-1', { rol: 'ejecutivo' }, 'adm');
+
+    expect(res.success).toBe(false);
+    expect(res.error).toBe('Tiene a su cargo 2 solicitudes sin cerrar. Elige a qué usuario de Logística traspasarlos antes de cambiar su rol.');
+    expect(admin.callsTo('usuario').some((c) => c[0] === 'update')).toBe(false);
+  });
+
+  it('should_transfer_open_work_to_the_chosen_logistics_user_before_changing_the_role', async () => {
+    admin.results.usuario = [
+      fila({ rol: 'logistica', sucursal_id: 1 }),
+      fila({ rol: 'logistica', activo: true }),
+      fila({ id: 'l-1', ...perfil, rol: 'ejecutivo', sucursal_id: 1 }),
+    ];
+    admin.results.sucursal = [fila([]), { data: null, error: null }];
+    admin.results.usuario_zona = [fila([{ zona_id: 3 }]), { data: null, error: null }];
+    admin.results.solicitud = [filaConCount(2), { data: null, error: null }];
+    admin.results.traslado_interno = [filaConCount(1), { data: null, error: null }];
+
+    const res = await UsersService.updateUser('l-1', { rol: 'ejecutivo', traspasarA: 'l-2' }, 'adm');
+
+    expect(res.success).toBe(true);
+    expect(admin.callsTo('solicitud')).toContainEqual(['update', { logistica_id: 'l-2' }]);
+    expect(admin.callsTo('traslado_interno')).toContainEqual(['update', { logistica_id: 'l-2' }]);
+    expect(admin.callsTo('auditoria')).toContainEqual(['insert', expect.objectContaining({ accion: 'traspaso_logistica', entidad_id: 'l-1' })]);
+    expect(admin.callsTo('usuario')).toContainEqual(['update', expect.objectContaining({ rol: 'ejecutivo' })]);
+  });
+
+  it('should_reject_a_receiver_that_is_not_an_active_logistics_user', async () => {
+    admin.results.usuario = [fila({ rol: 'logistica', sucursal_id: 1 }), fila({ rol: 'ejecutivo', activo: true })];
+    admin.results.sucursal = [fila([])];
+    admin.results.usuario_zona = [fila([{ zona_id: 3 }])];
+    admin.results.solicitud = [filaConCount(1)];
+    admin.results.traslado_interno = [filaConCount(0)];
+
+    const res = await UsersService.updateUser('l-1', { rol: 'ejecutivo', traspasarA: 'e-9' }, 'adm');
+
+    expect(res).toEqual({ success: false, error: 'Quien recibe el trabajo debe ser un usuario de Logística activo.' });
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
+  });
+
+  it('should_not_ask_for_a_receiver_when_there_is_no_open_work', async () => {
+    admin.results.usuario = [fila({ rol: 'logistica', sucursal_id: 1 }), fila({ id: 'l-1', ...perfil, rol: 'ejecutivo', sucursal_id: 1 })];
+    admin.results.sucursal = [fila([]), { data: null, error: null }];
+    admin.results.usuario_zona = [fila([{ zona_id: 3 }]), { data: null, error: null }];
+    admin.results.solicitud = [filaConCount(0)];
+    admin.results.traslado_interno = [filaConCount(0)];
+
+    expect((await UsersService.updateUser('l-1', { rol: 'ejecutivo' }, 'adm')).success).toBe(true);
+  });
+
+  it('should_block_deactivating_a_logistics_user_with_open_work', async () => {
+    admin.results.usuario = [fila({ email: 'l@test.com', aprobado: true, rol: 'logistica' })];
+    admin.results.solicitud = [filaConCount(0)];
+    admin.results.traslado_interno = [filaConCount(2)];
+
+    const res = await UsersService.toggleUserStatus('l-1', false, 'adm');
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('Tiene a su cargo 2 traslados internos sin cerrar.');
+    expect(admin.callsTo('usuario').some((c) => c[0] === 'update')).toBe(false);
   });
 });

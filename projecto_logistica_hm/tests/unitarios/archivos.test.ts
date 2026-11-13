@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ACEPTA_DOCUMENTOS, TIPOS_DOCUMENTO, extensionDe, validarContenidoArchivo } from '@/lib/archivos';
+import { ACEPTA_DOCUMENTOS, admiteVistaPrevia, esImagen, TAMANO_MAXIMO_DOCUMENTO, TIPOS_DOCUMENTO, extensionDe, revisarArchivoElegido, validarContenidoArchivo } from '@/lib/archivos';
 
 const bytes = (...valores: number[]) => new Uint8Array(valores);
 const texto = (t: string) => new TextEncoder().encode(t);
@@ -89,5 +89,41 @@ describe('ACEPTA_DOCUMENTOS', () => {
     for (const mime of Object.keys(TIPOS_DOCUMENTO)) expect(ACEPTA_DOCUMENTOS).toContain(mime);
     expect(ACEPTA_DOCUMENTOS.split(',')).toEqual(expect.arrayContaining(['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.xlsx', '.xls']));
     expect(ACEPTA_DOCUMENTOS).not.toContain('.zip');
+  });
+});
+
+describe('revisarArchivoElegido (QA #3)', () => {
+  it('should_accept_allowed_formats_within_the_size_limit', () => {
+    for (const nombre of ['guia.pdf', 'foto.JPG', 'foto.jpeg', 'img.png', 'img.webp', 'stock.xlsx', 'stock.xls']) {
+      expect(revisarArchivoElegido(nombre, 1024), nombre).toBeNull();
+    }
+  });
+
+  it('should_reject_formats_removed_in_R11_and_heic', () => {
+    for (const nombre of ['carta.docx', 'deck.pptx', 'notas.txt', 'datos.csv', 'todo.zip', 'foto.heic', 'sin_extension']) {
+      expect(revisarArchivoElegido(nombre, 1024), nombre).toContain('no es un formato permitido');
+    }
+  });
+
+  it('should_reject_files_over_10_mb', () => {
+    expect(revisarArchivoElegido('grande.pdf', TAMANO_MAXIMO_DOCUMENTO)).toBeNull();
+    expect(revisarArchivoElegido('grande.pdf', TAMANO_MAXIMO_DOCUMENTO + 1)).toBe('"grande.pdf" pesa más de 10 MB.');
+  });
+});
+
+describe('admiteVistaPrevia / esImagen (QA #52)', () => {
+  it('should_allow_preview_of_images_and_pdf', () => {
+    expect(admiteVistaPrevia('image/png')).toBe(true);
+    expect(admiteVistaPrevia('application/pdf')).toBe(true);
+    expect(esImagen('image/webp')).toBe(true);
+    expect(esImagen('application/pdf')).toBe(false);
+  });
+
+  it('should_reject_excel_html_svg_and_missing_types', () => {
+    expect(admiteVistaPrevia('application/vnd.ms-excel')).toBe(false);
+    expect(admiteVistaPrevia('text/html')).toBe(false);
+    expect(admiteVistaPrevia('image/svg+xml')).toBe(false);
+    expect(esImagen('image/svg+xml')).toBe(false);
+    expect(admiteVistaPrevia(null)).toBe(false);
   });
 });

@@ -37,6 +37,9 @@ import { formatFecha } from '@/lib/fechas';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
+import { usoSlots as usoSlotsSucursal } from '@/lib/slots';
+import { coincideFiltroZona, FILTRO_SIN_ZONA, type FiltroZona, resumenSinZona } from '@/lib/sucursalesSinZona';
+import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -93,7 +96,9 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
   const [zonaDeleteTarget, setZonaDeleteTarget] = useState<Zona | null>(null);
   const [zonaDeleteError, setZonaDeleteError] = useState<string | null>(null);
   const [zonaDeleting, setZonaDeleting] = useState(false);
-  const [zonaFiltro, setZonaFiltro] = useState<number | 'todas'>('todas');
+  const [zonaFiltro, setZonaFiltro] = useState<FiltroZona>('todas');
+  // QA #26: sin zona, ningún usuario de Logística ve las solicitudes de la sucursal.
+  const sinZona = useMemo(() => resumenSinZona(sucursales, solicitudes), [sucursales, solicitudes]);
 
   const sucursalesPorZona = useMemo(() => {
     const map = new Map<number, Sucursal[]>();
@@ -111,8 +116,9 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
     () => sucursales.reduce((acc, s) => acc + (s.slots || 0), 0),
     [sucursales]
   );
-  const estacionados = useMemo(
-    () => sucursales.reduce((acc, s) => acc + (s.slots_ocupados || 0), 0),
+  // QA #32: slots_ocupados ya incluye los reservados.
+  const enUso = useMemo(
+    () => sucursales.reduce((acc, s) => acc + usoSlotsSucursal(s), 0),
     [sucursales]
   );
   const reservados = useMemo(
@@ -138,7 +144,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
         String(s.id).startsWith(term) ||
         (s.nombre || '').toLowerCase().includes(term) ||
         (s.direccion || '').toLowerCase().includes(term);
-      const matchesZona = zonaFiltro === 'todas' || s.zona_id === zonaFiltro;
+      const matchesZona = coincideFiltroZona(s.zona_id, zonaFiltro);
       return matchesTerm && matchesZona;
     });
   }, [sucursales, searchTerm, zonaFiltro]);
@@ -267,7 +273,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
               `Zona #${sucursal.zona_id}`}
           </span>
         ) : (
-          <span className="text-xs text-neutral-400 italic">Sin zona</span>
+          <span className="text-xs text-amber-700 italic">Sin zona</span>
         )}
       </>
     );
@@ -298,9 +304,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
   }
 
   function capacidadSucursal(sucursal: Sucursal) {
-    const ocupados = sucursal.slots_ocupados || 0;
-    const reservados = sucursal.slots_reservados || 0;
-    const usoSlots = ocupados + reservados;
+    const usoSlots = usoSlotsSucursal(sucursal);
     const total = sucursal.slots;
     const pct =
       total && total > 0 ? Math.min(100, Math.round((usoSlots / total) * 100)) : 0;
@@ -329,7 +333,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
               />
             </div>
             <p className="text-[10px] text-neutral-400">
-              {ocupados} estacionados · {reservados} reservados
+              {Math.max(usoSlots - (sucursal.slots_reservados || 0), 0)} en la sucursal · {sucursal.slots_reservados || 0} reservados
             </p>
           </div>
         )}
@@ -415,10 +419,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
 
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
-            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Reservados + Ocupados</p>
-            <p className="text-3xl font-bold text-neutral-900 mt-1">{reservados + estacionados}</p>
+            <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Slots en uso</p>
+            <p className="text-3xl font-bold text-neutral-900 mt-1">{enUso}</p>
             <p className="text-xs text-neutral-400 mt-0.5">
-              {reservados} reservados · {estacionados} ocupados
+              {enUso - reservados} en las sucursales · {reservados} reservados
             </p>
           </div>
           <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-500">
@@ -426,6 +430,35 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
           </div>
         </div>
       </div>
+
+      {sinZona.total > 0 && (
+        <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+          <div className="flex items-start gap-2.5 text-sm text-amber-900">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <p>
+              <strong>
+                {sinZona.total} {sinZona.total === 1 ? 'sucursal no tiene' : 'sucursales no tienen'} zona.
+              </strong>{' '}
+              Ningún usuario de Logística ve sus solicitudes ni sus traslados.
+              {sinZona.conSolicitudesAbiertas.length > 0 && (
+                <>
+                  {' '}
+                  Con solicitudes esperando a Logística: <strong>{sinZona.conSolicitudesAbiertas.join(', ')}</strong>.
+                </>
+              )}
+            </p>
+          </div>
+          {zonaFiltro !== FILTRO_SIN_ZONA && (
+            <button
+              type="button"
+              onClick={() => setZonaFiltro(FILTRO_SIN_ZONA)}
+              className="shrink-0 px-3 py-1.5 rounded-xl border border-amber-300 bg-white text-xs font-semibold text-amber-900 hover:bg-amber-100"
+            >
+              Ver sucursales sin zona
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Feedback Banner */}
       {feedback && (
@@ -567,13 +600,18 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
               Zona:
             </label>
             <select
-              value={zonaFiltro === 'todas' ? 'todas' : zonaFiltro}
+              value={zonaFiltro}
               onChange={(e) =>
-                setZonaFiltro(e.target.value === 'todas' ? 'todas' : Number(e.target.value))
+                setZonaFiltro(
+                  e.target.value === 'todas' || e.target.value === FILTRO_SIN_ZONA
+                    ? (e.target.value as FiltroZona)
+                    : Number(e.target.value),
+                )
               }
               className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
             >
               <option value="todas">Todas las zonas</option>
+              <option value={FILTRO_SIN_ZONA}>Sin zona ({sinZona.total})</option>
               {zonas.map((z) => (
                 <option key={z.id} value={z.id}>
                   {z.nombre}
@@ -1070,7 +1108,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                     )}{' '}
                     ·{' '}
                     {detailSucursal.slots !== null && detailSucursal.slots !== undefined
-                      ? `${(detailSucursal.slots_ocupados || 0) + (detailSucursal.slots_reservados || 0)}/${detailSucursal.slots} espacios · ${detailSucursal.slots_reservados || 0} reservados`
+                      ? `${usoSlotsSucursal(detailSucursal)}/${detailSucursal.slots} espacios · ${detailSucursal.slots_reservados || 0} reservados`
                       : 'capacidad no definida'}
                   </p>
                 </div>
@@ -1098,7 +1136,8 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                   return (
                     <div
                       key={sol.id}
-                      className="border border-neutral-200 rounded-2xl p-4 space-y-3 hover:border-neutral-300 transition-colors"
+                      onClick={abrirDetalleDeFila}
+                      className="border border-neutral-200 rounded-2xl p-4 space-y-3 hover:border-neutral-300 transition-colors cursor-pointer"
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <AbrirSolicitudDetalle solicitudId={sol.id} className="text-[10px] font-mono font-bold text-neutral-500">

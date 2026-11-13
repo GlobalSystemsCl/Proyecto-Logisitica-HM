@@ -11,6 +11,14 @@ const cancelarTraslado = vi.fn();
 const crearTrasladosEnLote = vi.fn();
 const notificarTrasladoInterno = vi.fn(async () => ({ enviados: 1, fallidos: 0 }));
 const getBranch = vi.fn();
+const getTrasladoById = vi.fn();
+const getDocumentos = vi.fn(async () => [{ id: 'd-1' }]);
+const getURLsVistaPrevia = vi.fn(async () => ({ 'd-1': 'https://vista' }));
+const subirDocumentos = vi.fn(async () => ({ success: true, subidos: 1 }));
+const getTrasladoIdDeDocumento = vi.fn();
+const getURLDescarga = vi.fn(async () => ({ success: true, url: 'https://descarga' }));
+const getSucursalIdsDeZonasUsuario = vi.fn(async () => [] as number[]);
+const getUserAssignedBranches = vi.fn(async () => [] as Array<{ id: number }>);
 
 vi.mock('@/services/auth.service', () => ({
   AuthService: { getCurrentUserProfile: () => getCurrentUserProfile() },
@@ -20,10 +28,20 @@ vi.mock('@/services/traslado.service', () => ({
   TrasladoService: {
     cancelarTraslado: (...a: unknown[]) => cancelarTraslado(...a),
     crearTrasladosEnLote: (...a: unknown[]) => crearTrasladosEnLote(...a),
+    getTrasladoById: (...a: unknown[]) => getTrasladoById(...a),
+    getDocumentos: (...a: unknown[]) => getDocumentos(...(a as [])),
+    getURLsVistaPrevia: (...a: unknown[]) => getURLsVistaPrevia(...(a as [])),
+    subirDocumentos: (...a: unknown[]) => subirDocumentos(...(a as [])),
+    getTrasladoIdDeDocumento: (...a: unknown[]) => getTrasladoIdDeDocumento(...a),
+    getURLDescarga: (...a: unknown[]) => getURLDescarga(...(a as [])),
   },
 }));
 vi.mock('@/services/organizacion.service', () => ({
-  OrganizacionService: { getBranch: (id: number) => getBranch(id) },
+  OrganizacionService: {
+    getBranch: (id: number) => getBranch(id),
+    getSucursalIdsDeZonasUsuario: (...a: unknown[]) => getSucursalIdsDeZonasUsuario(...(a as [])),
+    getUserAssignedBranches: (...a: unknown[]) => getUserAssignedBranches(...(a as [])),
+  },
 }));
 vi.mock('@/services/sucursales.service', () => ({ SucursalesService: {} }));
 vi.mock('@/services/notificacion.service', () => ({
@@ -39,7 +57,14 @@ vi.mock('@/lib/segundoPlano', () => ({
 }));
 vi.mock('@/lib/rutas', () => ({ revalidarSolicitudes: vi.fn() }));
 
-const { cancelarTrasladoAction, crearTrasladosAction } = await import('@/app/actions/traslados.actions');
+const {
+  cancelarTrasladoAction,
+  crearTrasladosAction,
+  descargarDocumentoTrasladoAction,
+  getDocumentosTrasladoAction,
+  getVistasPreviasTrasladoAction,
+  subirDocumentosTrasladoAction,
+} = await import('@/app/actions/traslados.actions');
 const { revalidarSolicitudes } = await import('@/lib/rutas');
 
 function perfil(overrides: Partial<UserProfile> = {}): UserProfile {
@@ -142,5 +167,55 @@ describe('crearTrasladosAction', () => {
       error: 'Solo Logística o el Administrador pueden crear traslados internos.',
     });
     expect(crearTrasladosEnLote).not.toHaveBeenCalled();
+  });
+});
+
+describe('documentos de traslado (QA #49)', () => {
+  const traslado = { id: 't-1', logistica_id: 'log-9', origen_id: 101, destino_id: 135 };
+
+  it('should_list_documents_and_previews_when_jefe_receives_at_destination', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+    getTrasladoById.mockResolvedValue(traslado);
+    getUserAssignedBranches.mockResolvedValue([{ id: 135 }]);
+
+    expect(await getDocumentosTrasladoAction('t-1')).toEqual([{ id: 'd-1' }]);
+    expect(await getVistasPreviasTrasladoAction('t-1')).toEqual({ 'd-1': 'https://vista' });
+  });
+
+  it('should_deny_documents_when_jefe_has_no_branch_in_the_transfer', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+    getTrasladoById.mockResolvedValue(traslado);
+    getUserAssignedBranches.mockResolvedValue([{ id: 999 }]);
+
+    expect(await getDocumentosTrasladoAction('t-1')).toEqual([]);
+    expect(getDocumentos).not.toHaveBeenCalled();
+    const fd = new FormData();
+    fd.append('archivos', new File(['x'], 'a.png', { type: 'image/png' }));
+    expect(await subirDocumentosTrasladoAction('t-1', fd)).toEqual({ success: false, error: 'No tienes acceso a este traslado.' });
+    expect(subirDocumentos).not.toHaveBeenCalled();
+  });
+
+  it('should_upload_photos_when_logistica_zone_covers_origin', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'logistica' }));
+    getTrasladoById.mockResolvedValue(traslado);
+    getSucursalIdsDeZonasUsuario.mockResolvedValue([101]);
+    const fd = new FormData();
+    fd.append('archivos', new File(['x'], 'a.png', { type: 'image/png' }));
+
+    const res = await subirDocumentosTrasladoAction('t-1', fd);
+
+    expect(res.success).toBe(true);
+    expect(subirDocumentos).toHaveBeenCalledWith('t-1', 'u-1', [expect.objectContaining({ nombre: 'a.png', tipo: 'image/png' })]);
+  });
+
+  it('should_check_access_through_the_document_transfer_before_signing_download', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'ejecutivo' }));
+    getTrasladoIdDeDocumento.mockResolvedValue('t-1');
+    getTrasladoById.mockResolvedValue(traslado);
+
+    const res = await descargarDocumentoTrasladoAction('d-1');
+
+    expect(res).toEqual({ success: false, error: 'No tienes acceso a este traslado.' });
+    expect(getURLDescarga).not.toHaveBeenCalled();
   });
 });

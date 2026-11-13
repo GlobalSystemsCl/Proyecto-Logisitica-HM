@@ -185,3 +185,33 @@ describe('cambiarUbicacionMasivaAction (fase G)', () => {
     expect(svc.cambiarUbicacionMasiva).not.toHaveBeenCalled();
   });
 });
+
+describe('permisos de gestión de vehículos (QA #15)', () => {
+  it.each(['jefe_local', 'operaciones', 'ejecutivo'] as const)(
+    'should_reject_import_and_move_when_role_is_%s',
+    async (rol) => {
+      getCurrentUserProfile.mockResolvedValue(perfil({ rol }));
+
+      const importar = await actions.importVehiculosAction({ csv: 'Marca,Modelo,Chasis' });
+      const mover = await actions.cambiarUbicacionMasivaAction(['veh-1'], 4);
+      const editar = await actions.updateVehiculoAction('veh-1', { ubicacion: 4 });
+
+      expect(importar.success).toBe(false);
+      expect(mover.success).toBe(false);
+      expect(editar.success).toBe(false);
+      expect(svc.importVehiculosCSV).not.toHaveBeenCalled();
+      expect(svc.cambiarUbicacionMasiva).not.toHaveBeenCalled();
+      expect(svc.updateVehiculo).not.toHaveBeenCalled();
+    },
+  );
+
+  it('should_allow_import_when_role_is_administrador', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'administrador' }));
+    svc.importVehiculosCSV.mockResolvedValue({ success: true, importados: 0 });
+
+    const res = await actions.importVehiculosAction({ csv: 'Marca,Modelo,Chasis' });
+
+    expect(res.success).toBe(true);
+    expect(svc.importVehiculosCSV).toHaveBeenCalled();
+  });
+});

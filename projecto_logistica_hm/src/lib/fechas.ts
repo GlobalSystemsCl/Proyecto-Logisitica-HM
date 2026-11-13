@@ -49,7 +49,8 @@ export function formatFecha(iso: string | null | undefined): string {
   if (!iso) return '—';
   const p = partesFecha(iso);
   if (!p) return '—';
-  return `${p.dia}/${String(p.mes).padStart(2, '0')}/${p.anio}`;
+  // QA #13: día con dos dígitos (05/11/2026), igual que el resto de las fechas.
+  return `${String(p.dia).padStart(2, '0')}/${String(p.mes).padStart(2, '0')}/${p.anio}`;
 }
 
 export function formatFechaLarga(iso: string | null | undefined): string {

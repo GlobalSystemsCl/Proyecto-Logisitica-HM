@@ -8,6 +8,9 @@ import { esAdminPrincipal } from '@/lib/auth/admin-principal';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { conflictoJefeLocal, normalizarAsignaciones, type AsignacionesNormalizadas } from '@/lib/asignaciones';
 import { validarDominioCorreo } from '@/lib/dominios';
+import { ESTADOS_SOLICITUD_TRASPASABLES, ESTADOS_TRASLADO_TRASPASABLES } from '@/lib/ausencias';
+import { SolicitudesService } from '@/services/solicitudes.service';
+import { textoTrabajoAbierto } from '@/lib/trabajoLogistica';
 import {
   asignacionParaUsuario,
   idsUnicos,
@@ -399,7 +402,7 @@ export class UsersService {
 
       const { data: targetUser } = await admin
         .from('usuario')
-        .select('email, aprobado')
+        .select('email, aprobado, rol')
         .eq('id', userId)
         .single();
 
@@ -415,6 +418,17 @@ export class UsersService {
           success: false,
           error: 'La cuenta aún no está autorizada. Usa la opción "Autorizar" para habilitarla.',
         };
+      }
+
+      // QA #25: un usuario de Logística con trabajo abierto no se desactiva sin traspasarlo.
+      if (!activo && targetUser?.rol === 'logistica') {
+        const abierto = await this.contarTrabajoLogistica(userId);
+        if (abierto.solicitudes + abierto.traslados > 0) {
+          return {
+            success: false,
+            error: `${textoTrabajoAbierto(abierto)} Antes de desactivarlo, traspásalos a otro usuario de Logística desde "Editar usuario" (cambiando su rol) o registra una ausencia con sustituto.`,
+          };
+        }
       }
 
       const { error } = await admin
@@ -446,7 +460,7 @@ export class UsersService {
   /**
    * Actualiza datos de un usuario (Nombre, Apellido, Rol)
    */
-  static async updateUser(userId: string, input: UpdateUserInput): Promise<{
+  static async updateUser(userId: string, input: UpdateUserInput, actorId?: string): Promise<{
     success: boolean;
     user?: UserProfile;
     error?: string;
@@ -490,6 +504,12 @@ export class UsersService {
 
         const errorConflicto = await this.validarSucursalesLibres(admin, userId, asignaciones.sucursales_a_cargo);
         if (errorConflicto) return { success: false, error: errorConflicto };
+
+        // QA #25: si deja de ser Logística, su trabajo abierto pasa a otro usuario de Logística.
+        if (actual.rol === 'logistica' && (input.rol ?? actual.rol) !== 'logistica') {
+          const errorTraspaso = await this.traspasarTrabajoLogistica(userId, input.traspasarA ?? null, actorId ?? null);
+          if (errorTraspaso) return { success: false, error: errorTraspaso };
+        }
 
         updateData.sucursal_id = asignaciones.sucursal_id;
       }
@@ -665,6 +685,75 @@ export class UsersService {
   }
 
   /** Rol, sucursal base, sucursales adicionales a cargo y zonas actuales del usuario. */
+  /**
+   * QA #25: solicitudes y traslados internos abiertos a cargo de un usuario de
+   * Logística (mismos estados que traspasa una ausencia).
+   */
+  static async contarTrabajoLogistica(userId: string): Promise<{ solicitudes: number; traslados: number }> {
+    const admin = createAdminClient();
+    const [sol, tras] = await Promise.all([
+      admin
+        .from('solicitud')
+        .select('id', { count: 'exact', head: true })
+        .eq('logistica_id', userId)
+        .in('estado', [...ESTADOS_SOLICITUD_TRASPASABLES]),
+      admin
+        .from('traslado_interno')
+        .select('id', { count: 'exact', head: true })
+        .eq('logistica_id', userId)
+        .in('estado', [...ESTADOS_TRASLADO_TRASPASABLES]),
+    ]);
+    return { solicitudes: sol.count ?? 0, traslados: tras.count ?? 0 };
+  }
+
+  /**
+   * QA #25: pasa el trabajo abierto de `deId` a `aId` (Logística activo).
+   * Sin trabajo abierto no hace nada. Devuelve el mensaje de error, o `null`.
+   */
+  private static async traspasarTrabajoLogistica(
+    deId: string,
+    aId: string | null,
+    actorId: string | null
+  ): Promise<string | null> {
+    const abierto = await this.contarTrabajoLogistica(deId);
+    if (abierto.solicitudes + abierto.traslados === 0) return null;
+    if (!aId) {
+      return `${textoTrabajoAbierto(abierto)} Elige a qué usuario de Logística traspasarlos antes de cambiar su rol.`;
+    }
+    if (aId === deId) return 'Elige a otro usuario de Logística para recibir su trabajo.';
+
+    const admin = createAdminClient();
+    const { data: destino } = await admin.from('usuario').select('rol, activo').eq('id', aId).maybeSingle();
+    const receptor = destino as { rol: UserProfile['rol']; activo: boolean } | null;
+    if (!receptor || receptor.rol !== 'logistica' || !receptor.activo) {
+      return 'Quien recibe el trabajo debe ser un usuario de Logística activo.';
+    }
+
+    const [sol, tras] = await Promise.all([
+      admin
+        .from('solicitud')
+        .update({ logistica_id: aId })
+        .eq('logistica_id', deId)
+        .in('estado', [...ESTADOS_SOLICITUD_TRASPASABLES]),
+      admin
+        .from('traslado_interno')
+        .update({ logistica_id: aId })
+        .eq('logistica_id', deId)
+        .in('estado', [...ESTADOS_TRASLADO_TRASPASABLES]),
+    ]);
+    if (sol.error || tras.error) {
+      return mensajeErrorUsuario(sol.error ?? tras.error, 'No se pudo traspasar el trabajo de Logística.');
+    }
+
+    if (actorId) {
+      await SolicitudesService.registrarAuditoria(actorId, 'usuario', deId, 'traspaso_logistica', { logistica_id: deId }, {
+        logistica_id: aId,
+        ...abierto,
+      });
+    }
+    return null;
+  }
+
   private static async getAsignacionesActuales(
     admin: SupabaseClient,
     userId: string
@@ -799,3 +888,4 @@ export class UsersService {
     return null;
   }
 }
+

@@ -302,7 +302,7 @@ export class NotificacionService {
       ]);
 
       const datos: DatosCorreo = {
-        codigo: codigoTraslado(t.id),
+        codigo: codigoTraslado(t),
         origen: t.origen_nombre ?? `Sucursal ${t.origen_id}`,
         destino: t.destino_nombre ?? `Sucursal ${t.destino_id}`,
         vehiculos: t.vehiculos.map((v) => `${v.patente ?? v.chasis} · ${v.marca} ${v.modelo}`),

@@ -1,8 +1,10 @@
 import { createAdminClient } from '@/lib/supabase/admin';
 import { OrganizacionService } from '@/services/organizacion.service';
-import { ESTADOS_ACTIVOS_RESERVA, SolicitudesService } from '@/services/solicitudes.service';
+import { BUCKET_DOCUMENTOS, ESTADOS_BLOQUEAN_VEHICULO, SolicitudesService } from '@/services/solicitudes.service';
+import { admiteVistaPrevia, TAMANO_MAXIMO_DOCUMENTO, validarContenidoArchivo } from '@/lib/archivos';
 import type {
   CreateTrasladoInput,
+  DocumentoTraslado,
   EstadoTraslado,
   TrasladoInterno,
   VehiculosParaTrasladoResult,
@@ -41,7 +43,7 @@ import { validarMotivoCancelacion, validarRecepcion, type DatosRecepcion } from 
  * fue eliminada — los slots son solo informativos y pueden sobrepasarse.
  * Este servicio solo valida permisos/estado y escribe las filas.
  */
-const TRASLADO_SELECT = `id, origen_id, destino_id, logistica_id, estado,
+const TRASLADO_SELECT = `id, numero, origen_id, destino_id, logistica_id, estado,
   fecha_despacho, fecha_recepcion, observacion, created_at, updated_at,
   motivo_cancelacion, fecha_cancelacion, recepcion_con_novedades, observacion_recepcion, transportista_id,
   patente_camion, conductor_nombre,
@@ -69,6 +71,7 @@ interface FilaVehiculoTraslado {
 
 interface TrasladoRawRow {
   id: string;
+  numero?: number | null;
   origen_id: number;
   destino_id: number;
   logistica_id: string;
@@ -113,6 +116,7 @@ function mapTraslado(row: TrasladoRawRow): TrasladoInterno {
 
   return {
     id: row.id,
+    numero: row.numero ?? null,
     origen_id: row.origen_id,
     origen_nombre: row.origen?.nombre ?? null,
     destino_id: row.destino_id,
@@ -228,7 +232,7 @@ export class TrasladoService {
           .select('vehiculo_id, solicitud!inner(estado)')
           .eq('disponibilidad', 'reservado')
           .in('vehiculo_id', vehiculosIds)
-          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA]),
+          .in('solicitud.estado', [...ESTADOS_BLOQUEAN_VEHICULO]),
         admin
           .from('solicitud_vehiculo')
           .select('vehiculo_id')
@@ -778,7 +782,7 @@ export class TrasladoService {
           .from('solicitud_vehiculo')
           .select('vehiculo_id, solicitud!inner(estado)')
           .eq('disponibilidad', 'reservado')
-          .in('solicitud.estado', [...ESTADOS_ACTIVOS_RESERVA])
+          .in('solicitud.estado', [...ESTADOS_BLOQUEAN_VEHICULO])
           .order('id', { ascending: true }),
         (error) => console.error('Error al consultar reservas activas:', error)
       ),
@@ -831,5 +835,145 @@ export class TrasladoService {
     >).map(({ sucursal, ...v }) => ({ ...v, ubicacion_nombre: sucursal?.nombre ?? null }));
 
     return { filas, total: count ?? 0 };
+  }
+
+  // ==========================================================================
+  // QA #49 (decisión 2026-11-13): fotos y documentos de un traslado interno.
+  // Mismas reglas que los de una solicitud (tipos, tamaño y firma del
+  // contenido), en la tabla `traslado_documento` y el mismo bucket, bajo
+  // `traslados/<id>/`.
+  // ==========================================================================
+
+  static async subirDocumentos(
+    trasladoId: string,
+    usuarioId: string,
+    archivos: Array<{ nombre: string; tipo: string; tamano: number; buffer: ArrayBuffer }>
+  ): Promise<{ success: boolean; subidos?: number; error?: string }> {
+    try {
+      if (!archivos.length) return { success: false, error: 'No se seleccionaron archivos.' };
+      const actual = await TrasladoService.getTrasladoById(trasladoId);
+      if (!actual) return { success: false, error: 'Traslado no encontrado.' };
+      if (actual.estado === 'cancelado') {
+        return { success: false, error: 'El traslado está cancelado: ya no admite documentos.' };
+      }
+      for (const a of archivos) {
+        if (a.tamano <= 0) return { success: false, error: `El archivo "${a.nombre}" está vacío.` };
+        if (a.tamano > TAMANO_MAXIMO_DOCUMENTO) {
+          return { success: false, error: `El archivo "${a.nombre}" supera el máximo de 10 MB.` };
+        }
+        const errorContenido = validarContenidoArchivo(a.nombre, a.tipo, a.buffer);
+        if (errorContenido) return { success: false, error: errorContenido };
+      }
+
+      const admin = createAdminClient();
+      const subidos: string[] = [];
+      try {
+        for (const a of archivos) {
+          const nombreLimpio = a.nombre.replace(/[\\/:*?"<>|]/g, '_').slice(0, 120);
+          const ruta = `traslados/${trasladoId}/${crypto.randomUUID()}-${nombreLimpio}`;
+          const { error: eSub } = await admin.storage.from(BUCKET_DOCUMENTOS).upload(ruta, a.buffer, {
+            contentType: a.tipo,
+            upsert: false,
+          });
+          if (eSub) throw eSub;
+          subidos.push(ruta);
+
+          const { error: eRow } = await admin.from('traslado_documento').insert({
+            traslado_id: trasladoId,
+            nombre_archivo: a.nombre.slice(0, 255),
+            tipo_mime: a.tipo,
+            tamano_bytes: a.tamano,
+            ruta_storage: ruta,
+            subido_por: usuarioId,
+          });
+          if (eRow) throw eRow;
+
+          await SolicitudesService.registrarAuditoria(usuarioId, 'traslado_interno', trasladoId, 'subir_documento', null, {
+            nombre_archivo: a.nombre,
+            ruta_storage: ruta,
+          });
+        }
+        return { success: true, subidos: subidos.length };
+      } catch (err) {
+        if (subidos.length) await admin.storage.from(BUCKET_DOCUMENTOS).remove(subidos);
+        return { success: false, error: mensajeErrorUsuario(err, 'Error al subir los documentos') };
+      }
+    } catch (err: unknown) {
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al subir documentos') };
+    }
+  }
+
+  static async getDocumentos(trasladoId: string): Promise<DocumentoTraslado[]> {
+    try {
+      const admin = createAdminClient();
+      const { data, error } = await admin
+        .from('traslado_documento')
+        .select('id, traslado_id, nombre_archivo, tipo_mime, tamano_bytes, ruta_storage, subido_por, created_at, usuario:subido_por(nombre, apellido)')
+        .eq('traslado_id', trasladoId)
+        .order('created_at', { ascending: true });
+      if (error || !data) return [];
+      return (data as unknown as Array<DocumentoTraslado & { usuario: { nombre: string; apellido: string } | null }>).map(
+        ({ usuario, ...d }) => ({
+          ...d,
+          subido_por_nombre: usuario ? `${usuario.nombre} ${usuario.apellido}`.trim() : null,
+        })
+      );
+    } catch (err) {
+      console.error('Error en getDocumentos (traslado):', err);
+      return [];
+    }
+  }
+
+  /** Enlaces firmados (10 min) para ver imágenes y PDF sin descargarlos: { [documentoId]: url }. */
+  static async getURLsVistaPrevia(trasladoId: string): Promise<Record<string, string>> {
+    try {
+      const docs = (await TrasladoService.getDocumentos(trasladoId)).filter((d) => admiteVistaPrevia(d.tipo_mime));
+      if (docs.length === 0) return {};
+      const admin = createAdminClient();
+      const { data, error } = await admin.storage
+        .from(BUCKET_DOCUMENTOS)
+        .createSignedUrls(docs.map((d) => d.ruta_storage), 600);
+      if (error || !data) {
+        if (error) console.error('Error al firmar vistas previas (traslado):', error);
+        return {};
+      }
+      const porRuta = new Map(data.filter((f) => f.signedUrl && !f.error).map((f) => [f.path, f.signedUrl]));
+      const urls: Record<string, string> = {};
+      for (const d of docs) {
+        const url = porRuta.get(d.ruta_storage);
+        if (url) urls[d.id] = url;
+      }
+      return urls;
+    } catch (err) {
+      console.error('Error en getURLsVistaPrevia (traslado):', err);
+      return {};
+    }
+  }
+
+  /** Traslado al que pertenece un documento (para validar el acceso). */
+  static async getTrasladoIdDeDocumento(documentoId: string): Promise<string | null> {
+    const admin = createAdminClient();
+    const { data } = await admin.from('traslado_documento').select('traslado_id').eq('id', documentoId).maybeSingle();
+    return (data as { traslado_id: string } | null)?.traslado_id ?? null;
+  }
+
+  /** Descarga como adjunto (enlace de 5 minutos), igual que los de solicitud. */
+  static async getURLDescarga(documentoId: string): Promise<{ success: boolean; url?: string; error?: string }> {
+    try {
+      const admin = createAdminClient();
+      const { data: doc, error } = await admin
+        .from('traslado_documento')
+        .select('ruta_storage, nombre_archivo')
+        .eq('id', documentoId)
+        .single();
+      if (error || !doc) return { success: false, error: 'El documento no existe.' };
+      const { data: firma, error: eFirma } = await admin.storage
+        .from(BUCKET_DOCUMENTOS)
+        .createSignedUrl(doc.ruta_storage, 300, { download: doc.nombre_archivo || true });
+      if (eFirma || !firma?.signedUrl) return { success: false, error: 'No se pudo generar el enlace de descarga.' };
+      return { success: true, url: firma.signedUrl };
+    } catch (err: unknown) {
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al generar la descarga') };
+    }
   }
 }

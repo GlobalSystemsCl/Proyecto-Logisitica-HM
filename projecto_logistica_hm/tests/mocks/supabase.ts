@@ -55,7 +55,7 @@ const CHAIN_METHODS = [
   'maybeSingle',
 ];
 
-const STORAGE_METHODS = ['upload', 'remove', 'createSignedUrl', 'list', 'getPublicUrl'];
+const STORAGE_METHODS = ['upload', 'remove', 'createSignedUrl', 'createSignedUrls', 'list', 'getPublicUrl'];
 
 const OK: MockResult = { data: null, error: null };
 

@@ -2,6 +2,7 @@ import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
+import { rutaSolicitud } from '@/lib/origenSolicitud';
 
 /**
  * Paneles de acciones del dashboard (R11, R12). Cada contenedor muestra las
@@ -54,7 +55,7 @@ export function itemsRecepcion(solicitudes: SolicitudLista[], traslados: Traslad
     tipo: 'solicitud',
     id: s.id,
     codigo: codigoSolicitud(s),
-    ruta: `${s.sucursal_nombre ?? `Sucursal ${s.sucursal}`} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento'}`,
+    ruta: rutaSolicitud(s),
     vehiculos: s.vehiculos.map((v) => etiquetaVehiculo(v)).filter(Boolean).join(' · ') || 'Sin vehículos',
     fechaReferencia: s.fecha_limite,
   }));
@@ -62,7 +63,7 @@ export function itemsRecepcion(solicitudes: SolicitudLista[], traslados: Traslad
     clave: `t-${t.id}`,
     tipo: 'traslado',
     id: t.id,
-    codigo: codigoTraslado(t.id),
+    codigo: codigoTraslado(t),
     ruta: `${t.origen_nombre ?? `Sucursal ${t.origen_id}`} → ${t.destino_nombre ?? `Sucursal ${t.destino_id}`}`,
     vehiculos: t.vehiculos.map((v) => `${v.patente ?? v.chasis} · ${v.marca} ${v.modelo}`).join(' · ') || 'Sin vehículo',
     fechaReferencia: t.fecha_despacho,

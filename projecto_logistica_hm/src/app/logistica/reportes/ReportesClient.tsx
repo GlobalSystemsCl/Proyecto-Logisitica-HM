@@ -14,6 +14,7 @@ import {
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
 import { formatFecha } from '@/lib/fechas';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
 
 interface Props {
   desde: string;
@@ -219,7 +220,7 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
         ) : (
           <ul className="divide-y divide-neutral-100">
             {reporte.pendientesMasAntiguos.slice(0, 10).map((p) => (
-              <li key={p.id} className="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+              <li key={p.id} onClick={abrirDetalleDeFila} className="px-5 py-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm cursor-pointer hover:bg-neutral-50">
                 <AbrirSolicitudDetalle solicitudId={p.id} className="font-mono text-xs text-neutral-500">
                   {p.codigo}
                 </AbrirSolicitudDetalle>

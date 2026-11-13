@@ -83,6 +83,9 @@ export interface VehiculoAsociado {
   disponibilidad: DisponibilidadVehiculo;
   /** R15: guía de despacho del vehículo (se ingresa al despachar). */
   numero_guia?: string | null;
+  /** QA #38: sucursal desde la que sale el vehículo (nula si no se conoce). */
+  sucursal_origen?: number | null;
+  sucursal_origen_nombre?: string | null;
   patente: string | null;
   chasis: string;
   marca: string;

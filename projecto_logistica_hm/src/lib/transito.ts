@@ -5,6 +5,7 @@ import { diaChile } from '@/lib/reporteTraslados';
 import { formatFecha } from '@/lib/fechas';
 import { formatearPatente, normalizarPatente } from '@/lib/patente';
 import { formatearRut } from '@/lib/rut';
+import { origenVehiculo } from '@/lib/origenSolicitud';
 
 /**
  * R5 y R4 (2026-11-11): vehículos en tránsito. Sin estados intermedios
@@ -57,7 +58,7 @@ export function filasEnTransito(solicitudes: SolicitudLista[], traslados: Trasla
         tipo: 'solicitud',
         entidadId: s.id,
         codigo: codigoSolicitud(s),
-        origen: s.sucursal_nombre ?? '',
+        origen: origenVehiculo(s, v),
         destino: s.sucursal_destino_nombre ?? s.titulo_evento ?? '',
         chasis: v.chasis,
         vehiculo: `${v.marca} ${v.modelo}`.trim(),
@@ -80,7 +81,7 @@ export function filasEnTransito(solicitudes: SolicitudLista[], traslados: Trasla
         clave: `${t.id}:${v.traslado_vehiculo_id}`,
         tipo: 'interno',
         entidadId: t.id,
-        codigo: codigoTraslado(t.id),
+        codigo: codigoTraslado(t),
         origen: t.origen_nombre ?? '',
         destino: t.destino_nombre ?? '',
         chasis: v.chasis,

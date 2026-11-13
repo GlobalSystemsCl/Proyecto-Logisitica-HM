@@ -29,6 +29,9 @@ import {
   ListOrdered,
   Inbox,
   GripVertical,
+  ChevronUp,
+  ChevronDown,
+  ListPlus,
 } from 'lucide-react';
 import {
   priorizarSolicitudAction,
@@ -36,17 +39,19 @@ import {
   reordenarColaAction,
   sacarDeColaAction,
 } from '@/app/actions/solicitudes.actions';
-import { SolicitudLista, TipoSolicitud, VehiculoAsociado } from '@/types/solicitud.types';
+import { SolicitudLista, VehiculoAsociado } from '@/types/solicitud.types';
 import { UsuarioSucursalAsignada } from '@/types/auth.types';
+import { ETIQUETA_TIPO_SOLICITUD } from '@/lib/textos';
 import { formatFecha } from '@/lib/fechas';
 import { nombreVehiculoConAnio } from '@/lib/vehiculo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import BadgeEvento from '@/components/BadgeEvento';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
-import { colaDeSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
+import { colaDeSucursal, moverEnColaSucursal, posicionEnColaSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
 import { getEstadoAtraso, BORDE_ATRASO, CHIP_ATRASO } from '../SolicitudesClient';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
+import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -62,10 +67,7 @@ interface PrioridadesClientProps {
   sucursalesAsignadas: UsuarioSucursalAsignada[];
 }
 
-const tipoLabel: Record<TipoSolicitud, string> = {
-  venta: 'Venta',
-  evento: 'Evento',
-};
+const tipoLabel = ETIQUETA_TIPO_SOLICITUD;
 
 // IDs de zonas droppables auxiliares
 const ZONA_COLA_VACIA = 'zona-cola-vacia';
@@ -235,17 +237,6 @@ export default function PrioridadesClient({
     // Arrastre dentro de "Por Priorizar": sin efecto
   }
 
-  // Cantidad de ítems de la misma sucursal que preceden al destino
-  // (soporta la cola mixta por sucursal que ve el administrador).
-  function itemsAntesEnSucursal(aId: string, sucursal: number): number {
-    let antes = 0;
-    for (const qid of listasRef.current.orden) {
-      if (qid === aId) break;
-      if (dataPorId.get(qid)?.sucursal === sucursal) antes++;
-    }
-    return antes;
-  }
-
   // Índice en la cola local donde insertar `sol` al soltarla sobre `overIdTarget`
   // (delante del bloque de su sucursal o, si no aplica, al final de la cola).
   function indiceInsercion(sol: SolicitudLista, overIdTarget: string | null): number {
@@ -267,6 +258,12 @@ export default function PrioridadesClient({
     return idx;
   }
 
+  // QA #35: alternativa al arrastre (teclado y celular): subir o bajar un puesto.
+  function moverConBoton(sol: SolicitudLista, direccion: -1 | 1) {
+    const nuevo = moverEnColaSucursal(listasRef.current.orden, sol.id, direccion, (id2) => dataPorId.get(id2)?.sucursal);
+    if (nuevo && sol.sucursal !== null && sol.sucursal !== undefined) programarReorden(nuevo, sol.sucursal);
+  }
+
   // Prioriza `sol` de forma optimista (se mueve al instante) y persiste en segundo plano.
   // Las operaciones se encolan en serie para evitar choques contra la clave única
   // (sucursal, posicion_prioridad) y transiciones de estado inválidas.
@@ -282,13 +279,9 @@ export default function PrioridadesClient({
     encolarOperacion(async () => {
       // Recalcular la posición al ejecutar, contra el estado local ya optimista,
       // para que sea coherente con las operaciones previas ya persistidas.
-      let posicion: number | null = null;
-      if (overIdTarget && listasRef.current.orden.includes(overIdTarget)) {
-        const overSol = dataPorId.get(overIdTarget);
-        if (overSol && overSol.sucursal === sol.sucursal) {
-          posicion = itemsAntesEnSucursal(overIdTarget, sol.sucursal) + 1;
-        }
-      }
+      // QA #37: la posición es la que ocupa la tarjeta ya insertada (antes se
+      // contaba a sí misma y quedaba una más abajo).
+      const posicion = posicionEnColaSucursal(listasRef.current.orden, sol.id, (id2) => dataPorId.get(id2)?.sucursal);
       const result =
         posicion !== null
           ? await priorizarEnPosicionAction(sol.id, posicion)
@@ -355,7 +348,7 @@ export default function PrioridadesClient({
         <p className="text-sm text-neutral-500">
           Cada sucursal tiene su propia cola. Elige la sucursal y arrastra una solicitud desde &quot;Por Priorizar&quot;
           hacia la cola para priorizarla en la posición donde la sueltes. Arrastra dentro de la cola para
-          reordenarla; arrástrala fuera de la cola para sacarla.
+          reordenarla; arrástrala fuera de la cola para sacarla. También puedes usar &quot;Priorizar&quot; y las flechas.
         </p>
       </div>
 
@@ -363,6 +356,23 @@ export default function PrioridadesClient({
         <div className="p-10 text-center border border-dashed rounded-2xl border-neutral-200 text-neutral-400 bg-white">
           No tienes sucursales asignadas para gestionar prioridades.
         </div>
+      ) : resumen.length > 8 ? (
+        // QA #34: con muchas sucursales (el administrador ve 42) los botones ocupaban media pantalla.
+        <label className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm">
+          <span className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">Sucursal</span>
+          <select
+            value={sucursalActiva ?? ''}
+            onChange={(e) => setSucursalActiva(Number(e.target.value))}
+            disabled={pendingOps > 0}
+            className="w-full sm:w-96 bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900 disabled:opacity-50"
+          >
+            {resumen.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.nombre} — {r.enCola} en cola{r.porPriorizar > 0 ? ` · ${r.porPriorizar} por priorizar` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : (
         <div role="tablist" aria-label="Sucursales" className="flex flex-wrap gap-2">
           {resumen.map((r) => {
@@ -435,7 +445,16 @@ export default function PrioridadesClient({
                   if (!sol) return null;
                   const esDestino = overId === id && activeId !== null && porIdsSet.has(activeId);
                   return (
-                    <SolicitudCard key={id} id={id} sol={sol} variant="cola" pos={idx + 1} onSacar={sacarDeColaOptimista} resaltado={esDestino} />
+                    <SolicitudCard
+                      key={id}
+                      id={id}
+                      sol={sol}
+                      variant="cola"
+                      pos={idx + 1}
+                      onSacar={sacarDeColaOptimista}
+                      onMover={pendingOps > 0 ? undefined : moverConBoton}
+                      resaltado={esDestino}
+                    />
                   );
                 })}
               </div>
@@ -462,7 +481,13 @@ export default function PrioridadesClient({
                   const sol = dataPorId.get(id);
                   if (!sol) return null;
                   return (
-                    <SolicitudCard key={sol.id} id={sol.id} sol={sol} variant="porPriorizar" />
+                    <SolicitudCard
+                      key={sol.id}
+                      id={sol.id}
+                      sol={sol}
+                      variant="porPriorizar"
+                      onPriorizar={pendingOps > 0 ? undefined : (s) => priorizarOptimista(s, null)}
+                    />
                   );
                 })}
               </div>
@@ -509,6 +534,8 @@ function SolicitudCard({
   variant,
   pos,
   onSacar,
+  onMover,
+  onPriorizar,
   resaltado,
 }: {
   id: string;
@@ -516,6 +543,8 @@ function SolicitudCard({
   variant: 'cola' | 'porPriorizar';
   pos?: number;
   onSacar?: (sol: SolicitudLista) => void;
+  onMover?: (sol: SolicitudLista, direccion: -1 | 1) => void;
+  onPriorizar?: (sol: SolicitudLista) => void;
   resaltado?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
@@ -528,6 +557,7 @@ function SolicitudCard({
       style={{ transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
+      onClick={abrirDetalleDeFila}
       className={`p-3 rounded-xl border bg-white cursor-grab active:cursor-grabbing transition-colors ${
         isDragging
           ? 'border-neutral-900 ring-2 ring-neutral-900 shadow-lg opacity-60'
@@ -587,9 +617,46 @@ function SolicitudCard({
           </div>
         </div>
 
+        {variant === 'cola' && onMover && (
+          <div className="flex flex-col shrink-0">
+            <button
+              onClick={() => onMover(sol, -1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              title="Subir un puesto"
+              aria-label="Subir un puesto"
+              className="p-1 rounded-lg text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 cursor-pointer"
+            >
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => onMover(sol, 1)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+              title="Bajar un puesto"
+              aria-label="Bajar un puesto"
+              className="p-1 rounded-lg text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100 cursor-pointer"
+            >
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+        {variant === 'porPriorizar' && onPriorizar && (
+          <button
+            onClick={() => onPriorizar(sol)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            title="Agregar al final de la cola"
+            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-semibold text-neutral-700 border border-neutral-300 hover:border-neutral-900 hover:text-neutral-900 cursor-pointer shrink-0"
+          >
+            <ListPlus className="w-3.5 h-3.5" /> Priorizar
+          </button>
+        )}
         {variant === 'cola' && onSacar && (
           <button
             onClick={() => onSacar(sol)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
             title="Sacar de la cola"
             className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
           >

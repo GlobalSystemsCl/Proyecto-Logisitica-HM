@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, DragEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Calendar,
@@ -20,7 +20,7 @@ import {
   Truck,
   X,
 } from 'lucide-react';
-import type { SolicitudLista, TipoSolicitud } from '@/types/solicitud.types';
+import type { SolicitudLista } from '@/types/solicitud.types';
 import type { UserRole } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import BadgeEvento from '@/components/BadgeEvento';
@@ -42,6 +42,7 @@ import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import {
   ACCIONES_DESHACER_TRASLADO,
   ETIQUETA_FECHA_LIMITE,
+  ETIQUETA_TIPO_SOLICITUD,
   textoConfirmacionDeshacer,
   type AccionDeshacerTraslado,
 } from '@/lib/textos';
@@ -61,6 +62,10 @@ import {
 import { urlSinParametro } from '@/lib/enlaceNotificacion';
 import AbrirSolicitudDesdeUrl from '@/components/AbrirSolicitudDesdeUrl';
 import ModalGuiaDespacho from '@/components/ModalGuiaDespacho';
+import { useConfirmacion } from '@/components/Confirmacion';
+import { lineasVehiculos } from '@/lib/vehiculo';
+import { rutaSolicitud } from '@/lib/origenSolicitud';
+import { ordenarPorPrioridad } from '@/lib/prioridades';
 
 interface Opcion {
   id: number | string;
@@ -91,10 +96,7 @@ interface Props {
 const DIAS_SEMANA = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 const ETIQUETA_VISTA: Record<VistaCalendario, string> = { mes: 'Mes', semana: 'Semana', dia: 'Día' };
 
-const tipoLabel: Record<TipoSolicitud, string> = {
-  venta: 'Sala de venta',
-  evento: 'Evento',
-};
+const tipoLabel = ETIQUETA_TIPO_SOLICITUD;
 
 const ESTADO_TARJETA: Record<string, { texto: string; clase: string }> = {
   calendarizada: { texto: 'Programada', clase: 'bg-blue-100 text-blue-800' },
@@ -109,7 +111,7 @@ const CHIP_PLAZO = {
 } as const;
 
 function ruta(s: SolicitudLista): string {
-  return `${s.sucursal_nombre ?? ''} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? ''}`;
+  return rutaSolicitud(s);
 }
 
 /** N° visible de la solicitud: el mismo que muestra su detalle. */
@@ -146,11 +148,26 @@ export default function CalendarizacionesClient({
   const hoy = hoyISO();
 
   const [filtros, setFiltrosState] = useState<FiltrosCalendario>(filtrosIniciales);
+  const { confirmar, avisar, dialogoConfirmacion } = useConfirmacion();
   const [mostrarFiltros, setMostrarFiltros] = useState(hayFiltrosCalendario(filtrosIniciales));
   const [diaSeleccionado, setDiaSeleccionado] = useState<string | null>(vista === 'dia' ? fecha : null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
+  // QA #41: confirmación breve al programar o reprogramar.
+  const [exito, setExito] = useState<string | null>(null);
+  // QA #40: al elegir un día, su detalle (bajo el calendario) se desplaza a la vista.
+  const panelDiaRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (diaSeleccionado && vista !== 'dia') {
+      panelDiaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [diaSeleccionado, vista]);
+  useEffect(() => {
+    if (!exito) return;
+    const t = setTimeout(() => setExito(null), 4000);
+    return () => clearTimeout(t);
+  }, [exito]);
   const [programar, setProgramar] = useState<{ id: string; fecha: string; elegirFecha?: boolean } | null>(null);
   const [listaEmpresas, setListaEmpresas] = useState<EmpresaTransporte[]>(empresas);
   const [recibirTarget, setRecibirTarget] = useState<SolicitudLista | null>(null);
@@ -201,7 +218,8 @@ export default function CalendarizacionesClient({
   const pendientes = useMemo(() => {
     // Las pendientes no tienen estado de calendario ni fecha: se ignoran esos filtros.
     const sinEstado = { ...filtros, estado: '' as const, soloReprogramadas: false };
-    return porProgramar.filter((s) => cumpleFiltros(s, sinEstado, ctx));
+    // QA #39: en el orden de la cola (prioridad y luego fecha límite).
+    return ordenarPorPrioridad(porProgramar.filter((s) => cumpleFiltros(s, sinEstado, ctx)));
   }, [porProgramar, filtros, ctx]);
   const porDia = useMemo(() => agruparPorDia(visibles), [visibles]);
   const indicadores = useMemo(() => indicadoresCalendario(visibles, pendientes, ctx), [visibles, pendientes, ctx]);
@@ -248,15 +266,15 @@ export default function CalendarizacionesClient({
     setLoading(id);
     try {
       const result = await fn();
-      if (!result.success) alert(result.error);
+      if (!result.success) void avisar(result.error ?? 'No se pudo completar la acción.', 'No se pudo completar');
     } finally {
       setLoading(null);
     }
   }
 
   /** Las acciones que deshacen un paso piden confirmación (explican qué hacen). */
-  function deshacer(s: SolicitudLista, tipo: AccionDeshacerTraslado, fn: () => Promise<{ success: boolean; error?: string }>) {
-    if (!window.confirm(textoConfirmacionDeshacer(tipo, numero(s)))) return;
+  async function deshacer(s: SolicitudLista, tipo: AccionDeshacerTraslado, fn: () => Promise<{ success: boolean; error?: string }>) {
+    if (!(await confirmar({ titulo: ACCIONES_DESHACER_TRASLADO[tipo].etiqueta, mensaje: textoConfirmacionDeshacer(tipo, numero(s)), textoConfirmar: ACCIONES_DESHACER_TRASLADO[tipo].etiqueta }))) return;
     void accion(s.id, fn);
   }
 
@@ -414,12 +432,15 @@ export default function CalendarizacionesClient({
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-neutral-900 flex items-center gap-2">
-            <Calendar className="w-6 h-6" /> Gestión Logística
+            {/* QA #23: "Gestión" solo para quien programa; el resto consulta. */}
+            <Calendar className="w-6 h-6" /> {puedeCalendarizar ? 'Gestión Logística' : 'Calendario de traslados'}
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
             {puedeCalendarizar
               ? 'Arrastra las solicitudes al calendario para programarlas. En la vista semanal puedes arrastrar una ya programada para reprogramarla.'
-              : 'Haz clic en un día para ver sus traslados.'}
+              : viewer.rol === 'administrador'
+                ? 'Solo Logística programa los traslados: aquí ves lo programado y lo que falta por programar. Haz clic en un día para ver sus traslados.'
+                : 'Haz clic en un día para ver sus traslados.'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -680,7 +701,7 @@ export default function CalendarizacionesClient({
 
       {/* Detalle del día (vistas mes y semana) */}
       {vista !== 'dia' && diaSeleccionado && (
-        <div className="bg-white border border-neutral-200 rounded-2xl overflow-hidden">
+        <div ref={panelDiaRef} className="bg-white border border-neutral-200 rounded-2xl overflow-hidden scroll-mt-4">
           <div className="flex items-center justify-between p-4 border-b border-neutral-200 bg-neutral-50">
             <div>
               <h3 className="font-bold text-neutral-900">Traslados del {formatFechaLarga(diaSeleccionado + 'T12:00:00Z')}</h3>
@@ -737,7 +758,7 @@ export default function CalendarizacionesClient({
             setDetalle(null);
             window.history.replaceState(null, '', urlSinParametro(window.location.href, 'solicitud'));
           }}
-          onMensaje={(tipo, mensaje) => { if (tipo === 'error') alert(mensaje); }}
+          onMensaje={(tipo, mensaje) => { if (tipo === 'error') void avisar(mensaje, 'No se pudo completar'); }}
           onCancelar={() => {}}
           puedeCancelar={false}
           puedeGestionarVehiculos={false}
@@ -748,15 +769,16 @@ export default function CalendarizacionesClient({
 
       {recibirTarget && (
         <RecepcionModal
-          titulo="Registrar recepción"
+          titulo={`Registrar recepción ${numero(recibirTarget)}`}
           subtitulo={ruta(recibirTarget)}
+          vehiculos={lineasVehiculos(recibirTarget.vehiculos)}
           permitirFotos
           onCerrar={() => setRecibirTarget(null)}
           onConfirmar={async (datos, fotos) => {
             const { error, aviso } = await recibirSolicitudConFotos(recibirTarget.id, datos, fotos);
             if (error) return error;
             setRecibirTarget(null);
-            if (aviso) alert(aviso);
+            if (aviso) void avisar(aviso, 'Recepción registrada');
             return null;
           }}
         />
@@ -778,6 +800,7 @@ export default function CalendarizacionesClient({
           onConfirmar={async (nuevaFecha, motivo, transporte) => {
             const result = await recalendarizarSolicitudAction(reprogramar.sol.id, nuevaFecha, motivo, transporte);
             if (!result.success) return result.error ?? 'No se pudo reprogramar.';
+            setExito(`Solicitud ${numero(reprogramar.sol)} reprogramada.`);
             setReprogramar(null);
             return null;
           }}
@@ -814,12 +837,22 @@ export default function CalendarizacionesClient({
             onConfirmar={async (transporte, dia) => {
               const result = await calendarizarSolicitudAction(programar.id, dia, transporte);
               if (!result.success) return result.error ?? 'No se pudo programar el traslado.';
+              setExito(sol ? `Solicitud ${numero(sol)} programada.` : 'Traslado programado.');
               setProgramar(null);
               return null;
             }}
           />
         );
       })()}
+      {exito && (
+        <div
+          role="status"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] px-4 py-3 rounded-xl bg-green-700 text-white text-sm font-semibold shadow-lg"
+        >
+          {exito}
+        </div>
+      )}
+      {dialogoConfirmacion}
     </div>
   );
 }

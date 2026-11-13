@@ -10,9 +10,11 @@ const svc = {
   getAuditoria: vi.fn(async () => [{ id: 'a-1' }]),
   getDocumentos: vi.fn(async () => [{ id: 'd-1' }]),
   getURLDescarga: vi.fn(async () => ({ success: true, url: 'https://firmada' })),
+  getURLsVistaPrevia: vi.fn(async () => ({ 'd-1': 'https://vista' })),
   getSolicitudIdDeDocumento: vi.fn(),
   agregarObservacion: vi.fn(async () => ({ success: true })),
   cancelarSolicitud: vi.fn(async () => ({ success: true })),
+  getCooldownsInsistencia: vi.fn(async () => ({ 's-1': 5, 's-2': null })),
 };
 const getUsuarioDetalleById = vi.fn();
 const getBranch = vi.fn();
@@ -166,6 +168,21 @@ describe('getSolicitudDetalleAction', () => {
 });
 
 describe('documentos (brecha 006)', () => {
+  it('should_not_sign_previews_of_a_foreign_request', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ id: 'e-2' }));
+    svc.getSolicitudById.mockResolvedValue(solicitud());
+
+    expect(await actions.getVistasPreviasDocumentosAction('s-1')).toEqual({});
+    expect(svc.getURLsVistaPrevia).not.toHaveBeenCalled();
+  });
+
+  it('should_return_previews_when_user_has_access', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    svc.getSolicitudById.mockResolvedValue(solicitud());
+
+    expect(await actions.getVistasPreviasDocumentosAction('s-1')).toEqual({ 'd-1': 'https://vista' });
+  });
+
   it('should_not_sign_download_of_foreign_document', async () => {
     getCurrentUserProfile.mockResolvedValue(perfil({ id: 'e-2' }));
     svc.getSolicitudIdDeDocumento.mockResolvedValue('s-1');
@@ -278,5 +295,26 @@ describe('getUsuarioDetalleAction (brecha 006)', () => {
     getCurrentUserProfile.mockResolvedValue(null);
     expect(await actions.getUsuarioDetalleAction('x-1')).toBeNull();
     expect(getUsuarioDetalleById).not.toHaveBeenCalled();
+  });
+});
+
+describe('getCooldownsInsistenciaAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_return_all_cooldowns_in_one_call_when_executive', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    expect(await actions.getCooldownsInsistenciaAction(['s-1', 's-2'])).toEqual({ 's-1': 5, 's-2': null });
+    expect(svc.getCooldownsInsistencia).toHaveBeenCalledTimes(1);
+    expect(svc.getCooldownsInsistencia).toHaveBeenCalledWith(['s-1', 's-2'], 'e-1');
+  });
+
+  it('should_return_empty_without_querying_when_not_executive_or_not_logged_in', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+    expect(await actions.getCooldownsInsistenciaAction(['s-1'])).toEqual({});
+    getCurrentUserProfile.mockResolvedValue(null);
+    expect(await actions.getCooldownsInsistenciaAction(['s-1'])).toEqual({});
+    expect(svc.getCooldownsInsistencia).not.toHaveBeenCalled();
   });
 });

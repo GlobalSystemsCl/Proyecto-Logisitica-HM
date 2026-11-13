@@ -38,6 +38,15 @@ describe('codigoTraslado', () => {
   it('should_return_whole_id_when_it_is_shorter_than_8_characters', () => {
     expect(codigoTraslado('ab12')).toBe('#AB12');
   });
+
+  it('should_return_T_and_number_when_traslado_has_numero', () => {
+    expect(codigoTraslado({ id: 'ffff0000-0000', numero: 15 })).toBe('T-15');
+  });
+
+  it('should_fall_back_to_short_uuid_when_numero_is_missing', () => {
+    expect(codigoTraslado({ id: 'ffff0000-0000', numero: null })).toBe('#FFFF0000');
+    expect(codigoTraslado({ id: 'ab12' })).toBe('#AB12');
+  });
 });
 
 describe('coincideCodigoSolicitud', () => {

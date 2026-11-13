@@ -94,7 +94,7 @@ export default function TablaSlots({
                   <dt className="text-neutral-400">Libres</dt>
                   <dd><span className={`font-bold ${color.texto}`}>{s.libres}</span> <span className="text-neutral-500">+ {s.extraLibres}</span></dd>
                 </div>
-                <div><dt className="text-neutral-400">Ocupados</dt><dd className="text-neutral-800">{s.slots_ocupados ?? 0}</dd></div>
+                <div><dt className="text-neutral-400">En la sucursal</dt><dd className="text-neutral-800">{s.enSucursal}</dd></div>
                 <div><dt className="text-neutral-400">Reservados</dt><dd className="text-neutral-800">{s.slots_reservados ?? 0}</dd></div>
               </dl>
             </li>
@@ -110,7 +110,7 @@ export default function TablaSlots({
             {conZona && <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">Zona</th>}
             <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">Capacidad real</th>
             <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">Extra ({porcentajeExtra}%)</th>
-            <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">Ocupados</th>
+            <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">En la sucursal</th>
             <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">Reservados</th>
             <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">Libres</th>
             <th className="px-5 py-3 text-xs font-semibold text-neutral-500 uppercase tracking-wider">Estado</th>
@@ -134,7 +134,7 @@ export default function TablaSlots({
                   {conZona && <td className="px-5 py-3 text-neutral-500">{s.zona_nombre ?? '—'}</td>}
                   <td className="px-5 py-3 text-neutral-700">{s.real}</td>
                   <td className="px-5 py-3 text-neutral-700">{s.extra}</td>
-                  <td className="px-5 py-3 text-neutral-700">{s.slots_ocupados ?? 0}</td>
+                  <td className="px-5 py-3 text-neutral-700">{s.enSucursal}</td>
                   <td className="px-5 py-3 text-neutral-700">{s.slots_reservados ?? 0}</td>
                   <td className="px-5 py-3">
                     <span className={`font-bold ${color.texto}`}>{s.libres}</span>

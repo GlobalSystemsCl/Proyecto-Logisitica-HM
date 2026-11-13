@@ -1,4 +1,5 @@
 'use server';
+import { ROLES_GESTION_VEHICULOS } from '@/lib/vehiculo';
 
 import { requireProfile, requireRole } from '@/lib/auth/guards';
 import { mensajeErrorUsuario } from '@/lib/errores';
@@ -11,11 +12,8 @@ import { revalidatePath } from 'next/cache';
 
 async function verifyVehiculoPermission() {
   const profile = await requireProfile();
-  requireRole(
-    profile,
-    ['administrador', 'jefe_local', 'logistica', 'operaciones'],
-    'No tienes permisos para gestionar vehículos.'
-  );
+  // QA #15: el jefe de local solo consulta el inventario.
+  requireRole(profile, [...ROLES_GESTION_VEHICULOS], 'Solo Logística y el administrador gestionan vehículos.');
   return profile;
 }
 

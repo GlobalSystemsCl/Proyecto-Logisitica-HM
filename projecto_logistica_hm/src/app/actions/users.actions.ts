@@ -92,6 +92,20 @@ export async function createUserAction(data: CreateUserData) {
   }
 }
 
+/**
+ * QA #25: solicitudes y traslados abiertos a cargo de un usuario de Logística,
+ * para pedir a quién traspasarlos antes de cambiarle el rol. Solo admin.
+ */
+export async function getTrabajoLogisticaAction(userId: string): Promise<{ solicitudes: number; traslados: number }> {
+  try {
+    await verifyAdminPermission();
+    if (!userId) return { solicitudes: 0, traslados: 0 };
+    return await UsersService.contarTrabajoLogistica(userId);
+  } catch {
+    return { solicitudes: 0, traslados: 0 };
+  }
+}
+
 export async function toggleUserStatusAction(userId: string, nuevoEstado: boolean) {
   try {
     const admin = await verifyAdminPermission();
@@ -230,13 +244,15 @@ export interface UpdateUserData {
   sucursal_id?: number | null;
   sucursales_ids?: number[];
   zonas_ids?: number[];
+  /** QA #25: usuario de Logística que recibe el trabajo abierto si deja de serlo. */
+  traspasarA?: string | null;
 }
 
 export async function updateUserAction(data: UpdateUserData) {
   try {
-    await verifyAdminPermission();
+    const actor = await verifyAdminPermission();
 
-    const { userId, nombre, apellido, rol, sucursal_id, sucursales_ids, zonas_ids } = data;
+    const { userId, nombre, apellido, rol, sucursal_id, sucursales_ids, zonas_ids, traspasarA } = data;
 
     if (!userId || !nombre?.trim() || !apellido?.trim() || !rol) {
       return {
@@ -252,7 +268,8 @@ export async function updateUserAction(data: UpdateUserData) {
       sucursal_id: sucursal_id ?? null,
       sucursales_ids: sucursales_ids || [],
       zonas_ids: rol === 'logistica' ? zonas_ids || [] : [],
-    });
+      traspasarA: traspasarA ?? null,
+    }, actor.id);
 
     if (!result.success) {
       return { success: false, error: result.error || 'Error al actualizar usuario.' };

@@ -83,17 +83,18 @@ export default async function DashboardPage() {
 
   // R17: Logística ve los mismos indicadores con que lo mide el administrador (últimos 30 días).
   let indicadores: { reporte: ReturnType<typeof calcularReporte>; propios: ReturnType<typeof indicadoresDeEncargado> } | null = null;
-  let pendientesLogistica: { solicitudes: SolicitudLista[]; traslados: TrasladoInterno[] } | null = null;
+  let pendientesLogistica: { solicitudes: SolicitudLista[]; traslados: TrasladoInterno[]; sinZonas: boolean } | null = null;
   // Logística necesita la vista global: los espacios de todas las sucursales.
   let slotsTodas: ReturnType<typeof slotsConZona>[] = [];
   if (rol === 'logistica') {
-    const [solicitudesZona, eventos, trasladosPropios, sucursales] = await Promise.all([
+    const [solicitudesZona, eventos, trasladosPropios, sucursales, sucursalesZona] = await Promise.all([
       SolicitudesService.getSolicitudesFiltradas(profile.id, 'logistica'),
       ReporteService.getEventosLogistica(),
       TrasladoService.getTrasladosByLogistica(profile.id),
       SucursalesService.getSucursales(),
+      OrganizacionService.getSucursalIdsDeZonasUsuario(profile.id),
     ]);
-    pendientesLogistica = { solicitudes: solicitudesZona, traslados: trasladosPropios };
+    pendientesLogistica = { solicitudes: solicitudesZona, traslados: trasladosPropios, sinZonas: sucursalesZona.length === 0 };
     slotsTodas = sucursales.map(slotsConZona);
     const hasta = hoyISO();
     const reporte = calcularReporte(
@@ -142,17 +143,22 @@ export default async function DashboardPage() {
               Bienvenido, {profile.nombre} {profile.apellido}
             </h1>
             <p className="text-sm text-neutral-500 max-w-lg leading-relaxed">
-              Desde acá entrás a todo lo que tenés disponible: {ROL_LABEL[rol]}.
+              Desde aquí entras a todo lo que tienes disponible: {ROL_LABEL[rol]}.
             </p>
           </div>
         </div>
 
-        {cuentas && (
+        {/* QA #54: desde R17 el registro deja la cuenta activa; el panel solo aparece si queda alguna pendiente. */}
+        {cuentas && cuentas[0].some((u) => u.aprobado === false) && (
           <PanelCuentasPendientes usuarios={cuentas[0]} sucursales={cuentas[1]} zonas={cuentas[2]} />
         )}
 
         {pendientesLogistica && (
-          <DashboardLogistica solicitudes={pendientesLogistica.solicitudes} traslados={pendientesLogistica.traslados} />
+          <DashboardLogistica
+            solicitudes={pendientesLogistica.solicitudes}
+            traslados={pendientesLogistica.traslados}
+            sinZonas={pendientesLogistica.sinZonas}
+          />
         )}
 
         {vePanel && (

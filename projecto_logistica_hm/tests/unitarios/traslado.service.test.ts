@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { createSupabaseMock, fila, filaConCount } from '../mocks/supabase';
-import { SolicitudesService } from '@/services/solicitudes.service';
+import { ESTADOS_BLOQUEAN_VEHICULO, SolicitudesService } from '@/services/solicitudes.service';
 
 const admin = createSupabaseMock();
 
@@ -360,6 +360,23 @@ describe('TrasladoService', () => {
       expect(res.error).toBe('Solo los vehículos disponibles pueden trasladarse.');
       expect(admin.callsTo('traslado_interno').filter((c) => c[0] === 'insert')).toHaveLength(0);
     });
+
+    it('should_check_reservations_including_received_requests_when_creating_a_transfer', async () => {
+      // Hallazgo #44: un vehículo recepcionado (falta entregarlo al cliente) no se traslada.
+      admin.results.camion = [fila({ conductor_nombre: 'Pedro', activo: true, transportista_id: 'tr-1', empresa: { activo: true } })];
+      admin.results.sucursal = [fila([{ id: 1 }, { id: 2 }])];
+      admin.results.usuario = [fila({ id: 'log-1', rol: 'logistica', activo: true })];
+      admin.results.traslado_interno_vehiculo = [fila([])];
+      admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'veh-2' }]), fila([])];
+
+      await TrasladoService.crearTraslado(
+        { origen_id: 1, destino_id: 2, transporte: { patente: 'ABCD12', conductorNombre: null } },
+        ['veh-2'],
+        'log-1'
+      );
+
+      expect(admin.callsTo('solicitud_vehiculo')).toContainEqual(['in', 'solicitud.estado', [...ESTADOS_BLOQUEAN_VEHICULO]]);
+    });
   });
 
   describe('crearTraslado: transporte obligatorio (R10)', () => {
@@ -572,5 +589,58 @@ describe('TrasladoService.crearTrasladosEnLote (R12)', () => {
       'El origen y el destino del traslado deben ser distintos.'
     );
     expect(crear).not.toHaveBeenCalled();
+  });
+});
+
+describe('documentos de traslado (QA #49)', () => {
+  const BUCKET = 'solicitud-documentos';
+
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_reject_uploads_when_transfer_is_cancelled', async () => {
+    admin.results.traslado_interno = [fila(filaTraslado({ estado: 'cancelado' }))];
+    const res = await TrasladoService.subirDocumentos('t-1', 'u-1', [
+      { nombre: 'a.png', tipo: 'image/png', tamano: 10, buffer: new ArrayBuffer(10) },
+    ]);
+    expect(res).toEqual({ success: false, error: 'El traslado está cancelado: ya no admite documentos.' });
+  });
+
+  it('should_reject_files_whose_content_does_not_match_the_type', async () => {
+    admin.results.traslado_interno = [fila(filaTraslado({ estado: 'recepcionado' }))];
+    const res = await TrasladoService.subirDocumentos('t-1', 'u-1', [
+      { nombre: 'a.png', tipo: 'image/png', tamano: 4, buffer: new TextEncoder().encode('hola').buffer as ArrayBuffer },
+    ]);
+    expect(res.success).toBe(false);
+    expect(admin.callsTo(BUCKET)).toEqual([]);
+  });
+
+  it('should_store_photo_under_traslados_prefix_and_insert_row', async () => {
+    admin.results.traslado_interno = [fila(filaTraslado({ estado: 'recepcionado' }))];
+    vi.spyOn(SolicitudesService, 'registrarAuditoria').mockResolvedValue(undefined);
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]).buffer;
+
+    const res = await TrasladoService.subirDocumentos('t-1', 'u-1', [{ nombre: 'foto.png', tipo: 'image/png', tamano: 10, buffer: png }]);
+
+    expect(res).toEqual({ success: true, subidos: 1 });
+    const subida = admin.callsTo(BUCKET).find((c) => c[0] === 'upload');
+    expect(String(subida?.[1])).toMatch(/^traslados\/t-1\/.+-foto\.png$/);
+    const insert = admin.callsTo('traslado_documento').find((c) => c[0] === 'insert');
+    expect(insert?.[1]).toMatchObject({ traslado_id: 't-1', nombre_archivo: 'foto.png', subido_por: 'u-1' });
+  });
+
+  it('should_sign_previews_only_for_images_and_pdf', async () => {
+    admin.results.traslado_documento = [
+      fila([
+        { id: 'd-1', traslado_id: 't-1', nombre_archivo: 'f.png', tipo_mime: 'image/png', tamano_bytes: 1, ruta_storage: 'traslados/t-1/f.png', subido_por: null, created_at: '', usuario: null },
+        { id: 'd-2', traslado_id: 't-1', nombre_archivo: 'x.xls', tipo_mime: 'application/vnd.ms-excel', tamano_bytes: 1, ruta_storage: 'traslados/t-1/x.xls', subido_por: null, created_at: '', usuario: null },
+      ]),
+    ];
+    admin.results[BUCKET] = [fila([{ path: 'traslados/t-1/f.png', signedUrl: 'https://cdn/f', error: null }])];
+
+    expect(await TrasladoService.getURLsVistaPrevia('t-1')).toEqual({ 'd-1': 'https://cdn/f' });
+    expect(admin.callsTo(BUCKET)).toContainEqual(['createSignedUrls', ['traslados/t-1/f.png'], 600]);
   });
 });

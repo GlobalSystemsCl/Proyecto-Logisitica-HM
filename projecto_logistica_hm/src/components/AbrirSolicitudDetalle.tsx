@@ -42,6 +42,7 @@ export default function AbrirSolicitudDetalle({ solicitudId, children, className
     <>
       <button
         type="button"
+        data-abrir-detalle
         onClick={abrir}
         onPointerDown={(e) => e.stopPropagation()}
         onKeyDown={(e) => e.stopPropagation()}

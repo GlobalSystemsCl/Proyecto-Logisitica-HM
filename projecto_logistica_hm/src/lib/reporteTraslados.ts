@@ -5,6 +5,7 @@ import { esFechaValida, sumarDias } from '@/lib/calendario';
 import { formatearRut } from '@/lib/rut';
 import { formatearPatente, normalizarPatente } from '@/lib/patente';
 import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
+import { origenSolicitud, origenVehiculo } from '@/lib/origenSolicitud';
 
 /**
  * Exportes de Logística (pedido del cliente, 2026-10-19). Funciones puras:
@@ -66,14 +67,14 @@ export function validarRangoExporte(desde: string, hasta: string): string | null
 export function filasExcelCalendarizacion(solicitudes: SolicitudLista[]): Array<Record<string, string>> {
   const ordenadas = [...solicitudes].sort((a, b) =>
     (a.fecha_tentativa_despacho ?? '').localeCompare(b.fecha_tentativa_despacho ?? '') ||
-    (a.sucursal_nombre ?? '').localeCompare(b.sucursal_nombre ?? '')
+    origenSolicitud(a).localeCompare(origenSolicitud(b))
   );
   return ordenadas.flatMap((s) => {
     const vehiculos = s.vehiculos.length > 0 ? s.vehiculos : [null];
     return vehiculos.map((v) => ({
       Solicitud: codigoSolicitud(s),
       'Fecha programada': formatFecha(s.fecha_tentativa_despacho),
-      Origen: s.sucursal_nombre ?? '',
+      Origen: origenVehiculo(s, v),
       Destino: s.sucursal_destino_nombre ?? s.titulo_evento ?? '',
       Chasis: v?.chasis ?? '',
       Patente: v?.patente ?? '',
@@ -144,7 +145,7 @@ export function movimientosDesdeSolicitudes(solicitudes: SolicitudLista[]): Movi
       despachoISO: s.fecha_despacho,
       recepcionISO: s.fecha_recepcion ?? null,
       fechaLimite: diaChile(s.fecha_limite),
-      origen: s.sucursal_nombre ?? '',
+      origen: origenVehiculo(s, v),
       destino: s.sucursal_destino_nombre ?? s.titulo_evento ?? '',
       chasis: v.chasis,
       patente: v.patente,
@@ -170,7 +171,7 @@ export function movimientosDesdeTraslados(traslados: TrasladoInterno[]): Movimie
     return t.vehiculos.map((v) => ({
       clave: `${t.id}:${v.traslado_vehiculo_id}`,
       tipo: 'interno' as const,
-      codigo: codigoTraslado(t.id),
+      codigo: codigoTraslado(t),
       fechaDespacho,
       fechaRecepcion: diaChile(t.fecha_recepcion),
       despachoISO: t.fecha_despacho,

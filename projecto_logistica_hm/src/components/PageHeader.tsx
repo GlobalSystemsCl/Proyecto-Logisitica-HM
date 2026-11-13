@@ -6,6 +6,7 @@ import { ROL_LABEL, UserRole } from '@/types/auth.types';
 import SlotsResumen from '@/components/SlotsResumen';
 import CampanaNotificaciones from '@/components/CampanaNotificaciones';
 import BotonAyuda from '@/components/BotonAyuda';
+import VigilanteSesion from '@/components/VigilanteSesion';
 import type { SlotSucursalResumen } from '@/lib/slots';
 
 interface PageHeaderProps {
@@ -85,6 +86,7 @@ export default function PageHeader({
           </div>
 
           {autenticado && <BotonAyuda />}
+          {autenticado && <VigilanteSesion />}
 
           {autenticado && (
             <div className="flex items-center gap-2 sm:gap-3">

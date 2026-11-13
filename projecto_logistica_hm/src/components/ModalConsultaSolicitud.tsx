@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { UserRole } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
+import { useConfirmacion } from '@/components/Confirmacion';
 
 export interface SolicitudConsultada {
   solicitud: SolicitudLista;
@@ -21,6 +22,8 @@ interface Props {
  * (enlace de una notificación). Las acciones siguen en la vista de cada una.
  */
 export default function ModalConsultaSolicitud({ abierta, onClose }: Props) {
+  // QA #46: los errores se muestran encima del detalle, no con alert().
+  const { avisar, dialogoConfirmacion } = useConfirmacion();
   return createPortal(
     // El portal saca el modal de enlaces, tarjetas y otros modales en el DOM.
     // React igual propaga sus eventos a la fila o tarjeta que contiene el
@@ -30,13 +33,14 @@ export default function ModalConsultaSolicitud({ abierta, onClose }: Props) {
         solicitud={abierta.solicitud}
         vehiculosInventario={[]}
         onClose={onClose}
-        onMensaje={(tipo, mensaje) => { if (tipo === 'error') alert(mensaje); }}
+        onMensaje={(tipo, mensaje) => { if (tipo === 'error') void avisar(mensaje, 'No se pudo completar'); }}
         onCancelar={() => {}}
         puedeCancelar={false}
         puedeGestionarVehiculos={false}
         currentUserId={abierta.usuario.id}
         currentUserRol={abierta.usuario.rol}
       />
+      {dialogoConfirmacion}
     </div>,
     document.body
   );

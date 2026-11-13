@@ -74,3 +74,19 @@ export function mensajeVehiculosSinUbicacion(chasis: string[]): string {
   const sujeto = chasis.length === 1 ? `El vehículo ${lista} no tiene` : `Los vehículos ${lista} no tienen`;
   return `${sujeto} sucursal de origen (en tránsito o en container). Asígnale una sucursal en el inventario antes de pedirlo.`;
 }
+
+/**
+ * QA #15 (2026-11-12): solo Logística y el administrador importan, registran,
+ * editan y cambian la ubicación de vehículos. Los demás roles con acceso al
+ * inventario (jefe de local, operaciones) solo lo consultan.
+ */
+export const ROLES_GESTION_VEHICULOS = ['administrador', 'logistica'] as const;
+
+export function puedeGestionarVehiculos(rol: string | null | undefined): boolean {
+  return (ROLES_GESTION_VEHICULOS as readonly string[]).includes(rol ?? '');
+}
+
+/** QA #20/#48: "TOYOTA Yaris · JTMW1RF79KD123456", una línea por vehículo. */
+export function lineasVehiculos(vs: Array<{ marca: string; modelo: string; chasis: string }>): string[] {
+  return vs.map((v) => `${`${v.marca} ${v.modelo}`.trim()} · ${v.chasis}`);
+}

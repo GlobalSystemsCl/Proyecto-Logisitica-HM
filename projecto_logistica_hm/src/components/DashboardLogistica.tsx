@@ -5,17 +5,22 @@ import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import BadgeEvento from '@/components/BadgeEvento';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import FilaAbreDetalle from '@/components/FilaAbreDetalle';
 import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
 import { recortar, LIMITE_PANEL_LOGISTICA } from '@/lib/panel';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { rutaSolicitud } from '@/lib/origenSolicitud';
+import { ordenarPorPrioridad } from '@/lib/prioridades';
 
 interface Props {
   /** Solicitudes de la zona del usuario de Logística. */
   solicitudes: SolicitudLista[];
   /** Traslados internos de los que es encargado. */
   traslados: TrasladoInterno[];
+  /** QA #27: sin zonas no tiene alcance y todo sale en 0; se le avisa. */
+  sinZonas?: boolean;
 }
 
 const CALENDARIO = '/logistica/calendarizaciones';
@@ -23,7 +28,7 @@ const BOTON_VER =
   'px-3 py-1.5 text-xs font-semibold text-white bg-neutral-900 hover:bg-neutral-700 rounded-lg shrink-0';
 
 function ruta(s: SolicitudLista): string {
-  return `${s.sucursal_nombre ?? `Sucursal ${s.sucursal}`} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento'}`;
+  return rutaSolicitud(s);
 }
 
 function vehiculos(s: SolicitudLista): string {
@@ -47,7 +52,7 @@ function tiempo(fecha: string | null | undefined): number {
 
 function FilaSolicitud({ s, detalle }: { s: SolicitudLista; detalle: string }) {
   return (
-    <li className="px-5 py-3 flex items-center gap-3">
+    <FilaAbreDetalle className="px-5 py-3 flex items-center gap-3">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
@@ -64,7 +69,7 @@ function FilaSolicitud({ s, detalle }: { s: SolicitudLista; detalle: string }) {
       <Link href={hrefCalendario(s)} className={BOTON_VER}>
         Ver
       </Link>
-    </li>
+    </FilaAbreDetalle>
   );
 }
 
@@ -72,11 +77,9 @@ function FilaSolicitud({ s, detalle }: { s: SolicitudLista; detalle: string }) {
  * Pendientes de Logística en el dashboard: solo visualización. Cada fila
  * lleva a la vista donde se hace la acción.
  */
-export default function DashboardLogistica({ solicitudes, traslados }: Props) {
+export default function DashboardLogistica({ solicitudes, traslados, sinZonas = false }: Props) {
   const porProgramar = recortar(
-    solicitudes
-      .filter((s) => s.estado === 'priorizada' || s.estado === 'asignada')
-      .sort((a, b) => (a.posicion_prioridad ?? Infinity) - (b.posicion_prioridad ?? Infinity) || tiempo(a.fecha_limite) - tiempo(b.fecha_limite)),
+    ordenarPorPrioridad(solicitudes.filter((s) => s.estado === 'priorizada' || s.estado === 'asignada')),
     LIMITE_PANEL_LOGISTICA
   );
   const porDespachar = recortar(
@@ -92,6 +95,11 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
 
   return (
     <div className="space-y-4">
+      {sinZonas && (
+        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+          No tienes zonas asignadas, así que no ves solicitudes ni traslados. Pide al administrador que te asigne una zona.
+        </p>
+      )}
       <div>
         <h2 className="text-lg font-bold text-[#1a2b4b] tracking-tight">Tus pendientes</h2>
         <p className="text-sm text-neutral-500">Lo que tienes por gestionar. Haz clic en el número para ver el detalle, o en “Ver” para ir a la vista de cada acción.</p>
@@ -149,7 +157,7 @@ export default function DashboardLogistica({ solicitudes, traslados }: Props) {
           {trasladosPendientes.items.map((t) => (
             <li key={t.id} className="px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
-                <span className="font-mono text-[11px] font-bold text-neutral-900">{codigoTraslado(t.id)}</span>
+                <span className="font-mono text-[11px] font-bold text-neutral-900">{codigoTraslado(t)}</span>
                 <p className="text-sm font-semibold text-neutral-900 truncate">
                   {t.origen_nombre ?? `Sucursal ${t.origen_id}`} → {t.destino_nombre ?? `Sucursal ${t.destino_id}`}
                 </p>

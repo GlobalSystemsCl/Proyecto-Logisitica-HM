@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decidirAcceso, esRutaAuth, motivoCuentaBloqueada, type EstadoCuenta } from '@/lib/auth/acceso';
+import { decidirAcceso, redirigeEnMiddleware, esRutaAuth, motivoCuentaBloqueada, type EstadoCuenta } from '@/lib/auth/acceso';
 
 const cuentaOk: EstadoCuenta = { activo: true, aprobado: true, requiere_cambio_clave: false };
 
@@ -114,5 +114,19 @@ describe('decidirAcceso', () => {
     it('should_still_require_login_when_read_fails_without_session', () => {
       expect(decidirAcceso('/dashboard', false, null, true)).toEqual({ accion: 'redirigir', destino: '/login' });
     });
+  });
+});
+
+describe('redirigeEnMiddleware (QA #4)', () => {
+  it('should_redirect_page_requests_when_decision_is_redirigir', () => {
+    expect(redirigeEnMiddleware({ accion: 'redirigir', destino: '/login' }, false)).toBe(true);
+  });
+
+  it('should_let_server_actions_through_when_session_expired', () => {
+    expect(redirigeEnMiddleware({ accion: 'redirigir', destino: '/login' }, true)).toBe(false);
+  });
+
+  it('should_not_redirect_when_decision_is_continuar', () => {
+    expect(redirigeEnMiddleware({ accion: 'continuar' }, false)).toBe(false);
   });
 });

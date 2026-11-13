@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { colaDeSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
+import { colaDeSucursal, moverEnColaSucursal, ordenarPorPrioridad, posicionEnColaSucursal, resumenPrioridadPorSucursal, sucursalInicial } from '@/lib/prioridades';
 import type { SolicitudLista } from '@/types/solicitud.types';
 
 function sol(overrides: Partial<SolicitudLista>): SolicitudLista {
@@ -112,5 +112,66 @@ describe('sucursalInicial', () => {
 
   it('should_return_null_when_there_are_no_branches', () => {
     expect(sucursalInicial([])).toBeNull();
+  });
+});
+
+describe('posicionEnColaSucursal', () => {
+  const sucursales: Record<string, number> = { a: 135, b: 135, c: 101, nueva: 135, d: 135 };
+  const de = (id: string) => sucursales[id];
+
+  it('should_return_1_when_card_is_dropped_first', () => {
+    expect(posicionEnColaSucursal(['nueva', 'a', 'b'], 'nueva', de)).toBe(1);
+  });
+
+  it('should_return_drop_position_without_counting_itself_when_dropped_in_the_middle', () => {
+    // Soltada delante de "b": queda 2.ª, no 3.ª.
+    expect(posicionEnColaSucursal(['a', 'nueva', 'b'], 'nueva', de)).toBe(2);
+  });
+
+  it('should_ignore_other_branches_when_queue_is_mixed', () => {
+    expect(posicionEnColaSucursal(['c', 'a', 'c', 'nueva', 'd'], 'nueva', de)).toBe(2);
+  });
+
+  it('should_return_null_when_id_is_not_in_queue', () => {
+    expect(posicionEnColaSucursal(['a'], 'nueva', de)).toBeNull();
+  });
+});
+
+describe('ordenarPorPrioridad', () => {
+  it('should_sort_by_queue_position_then_by_deadline', () => {
+    const lista = [
+      { id: 'c', posicion_prioridad: 2, fecha_limite: '2026-11-20' },
+      { id: 'a', posicion_prioridad: 1, fecha_limite: '2026-12-01' },
+      { id: 'b', posicion_prioridad: 1, fecha_limite: '2026-11-15' },
+    ];
+    expect(ordenarPorPrioridad(lista).map((s) => s.id)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('should_put_items_without_position_or_deadline_last_and_not_mutate_input', () => {
+    const lista = [
+      { id: 'x', posicion_prioridad: null, fecha_limite: null },
+      { id: 'y', posicion_prioridad: 3, fecha_limite: null },
+    ];
+    expect(ordenarPorPrioridad(lista).map((s) => s.id)).toEqual(['y', 'x']);
+    expect(lista[0].id).toBe('x');
+  });
+});
+
+describe('moverEnColaSucursal', () => {
+  const suc: Record<string, number> = { a: 135, b: 135, x: 101, c: 135 };
+  const de = (id: string) => suc[id];
+
+  it('should_swap_with_previous_item_of_same_branch_when_moving_up', () => {
+    expect(moverEnColaSucursal(['a', 'x', 'b', 'c'], 'b', -1, de)).toEqual(['b', 'x', 'a', 'c']);
+  });
+
+  it('should_swap_with_next_item_when_moving_down', () => {
+    expect(moverEnColaSucursal(['a', 'b', 'c'], 'a', 1, de)).toEqual(['b', 'a', 'c']);
+  });
+
+  it('should_return_null_at_the_edges_or_when_missing', () => {
+    expect(moverEnColaSucursal(['a', 'b'], 'a', -1, de)).toBeNull();
+    expect(moverEnColaSucursal(['a', 'b'], 'b', 1, de)).toBeNull();
+    expect(moverEnColaSucursal(['a'], 'z', 1, de)).toBeNull();
   });
 });

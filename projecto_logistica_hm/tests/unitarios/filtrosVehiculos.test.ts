@@ -221,7 +221,7 @@ describe('filtrarVehiculos', () => {
 
 describe('contarPorDisponibilidad', () => {
   it('should_return_zeros_for_an_empty_list', () => {
-    expect(contarPorDisponibilidad([])).toEqual({ total: 0, reservados: 0, vendidos: 0, disponibles: 0 });
+    expect(contarPorDisponibilidad([])).toEqual({ total: 0, reservados: 0, vendidos: 0, disponibles: 0, disponiblesSinUbicacion: 0 });
   });
 
   it('should_split_vehicles_by_state', () => {
@@ -236,7 +236,17 @@ describe('contarPorDisponibilidad', () => {
       reservados: 2,
       vendidos: 1,
       disponibles: 1,
+      disponiblesSinUbicacion: 0,
     });
+  });
+
+  it('should_count_available_vehicles_without_location_separately', () => {
+    const lista = [
+      vehiculo({ id: 'a', estado_disponibilidad: 'liberado', ubicacion: null }),
+      vehiculo({ id: 'b', estado_disponibilidad: 'liberado', ubicacion: 101 }),
+      vehiculo({ id: 'c', estado_disponibilidad: 'vendido', ubicacion: null }),
+    ];
+    expect(contarPorDisponibilidad(lista)).toMatchObject({ disponibles: 2, disponiblesSinUbicacion: 1 });
   });
 });
 

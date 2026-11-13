@@ -137,7 +137,7 @@ export default function SlotsResumen({ sucursales }: SlotsResumenProps) {
           })}
         </ul>
         <p className="mt-2 border-t border-neutral-100 px-2 pt-2 text-[11px] text-neutral-500">
-          En uso = ocupados + reservados. Cada sucursal admite un 20% extra fuera de los slots oficiales.
+          En uso = vehículos en la sucursal + reservados. Cada sucursal admite un 20% extra fuera de los slots oficiales.
         </p>
       </div>
     </div>

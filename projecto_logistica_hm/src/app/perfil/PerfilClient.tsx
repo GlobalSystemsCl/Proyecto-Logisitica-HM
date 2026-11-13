@@ -95,26 +95,7 @@ export default function PerfilClient({ profile }: PerfilClientProps) {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 border-t border-neutral-100 divide-x divide-y sm:divide-y-0 divide-neutral-100">
-          <div className="px-6 py-4">
-            <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-0.5">Sucursal</p>
-            <p className="text-sm font-semibold text-neutral-900 truncate">
-              {profile.sucursal_nombre || (profile.sucursal_id ? `#${profile.sucursal_id}` : '—')}
-            </p>
-          </div>
-          <div className="px-6 py-4">
-            <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-0.5">Teléfono</p>
-            <p className="text-sm font-semibold text-neutral-900 truncate">{profile.telefono || 'Sin registrar'}</p>
-          </div>
-          <div className="px-6 py-4">
-            <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-0.5">Rol</p>
-            <p className="text-sm font-semibold text-neutral-900 truncate">{ROL_LABEL[profile.rol]}</p>
-          </div>
-          <div className="px-6 py-4">
-            <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider mb-0.5">Miembro desde</p>
-            <p className="text-sm font-semibold text-neutral-900 truncate">{formatFechaLarga(profile.created_at)}</p>
-          </div>
-        </div>
+        {/* QA #43: la franja repetía "Datos de la cuenta" y cortaba la fecha; se quitó. */}
       </div>
 
       {/* Datos de la cuenta (solo lectura) */}

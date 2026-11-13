@@ -38,3 +38,29 @@ export function textoConfirmacionDeshacer(accion: AccionDeshacerTraslado, codigo
 
 ${ayuda}`;
 }
+
+/**
+ * QA #5 / #11: nombre único de cada tipo de solicitud en toda la app. Una
+ * "venta" no es un traslado entre locales: lleva el vehículo a la sala de
+ * venta de la sucursal que lo pide.
+ */
+export const ETIQUETA_TIPO_SOLICITUD: Record<'evento' | 'venta', string> = {
+  venta: 'Sala de venta',
+  evento: 'Evento',
+};
+
+/** Etiqueta del tipo; si llega un valor desconocido, lo muestra tal cual. */
+export function etiquetaTipoSolicitud(tipo: string | null | undefined): string {
+  if (!tipo) return '';
+  return ETIQUETA_TIPO_SOLICITUD[tipo as 'evento' | 'venta'] ?? tipo;
+}
+
+/** QA #42: confirmación de "Entregar a cliente" (es irreversible), igual en la lista y en el panel. */
+export function confirmacionEntregaCliente(codigo: string) {
+  return {
+    titulo: 'Entregar al cliente',
+    mensaje: `¿Confirmas la entrega al cliente de la solicitud ${codigo}? El vehículo sale del inventario y no se puede deshacer.`,
+    textoConfirmar: 'Sí, entregar',
+    peligro: true,
+  };
+}

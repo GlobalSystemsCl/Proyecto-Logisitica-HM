@@ -11,7 +11,6 @@ import {
   Filter,
   ArrowRight,
   CheckCircle2,
-  Car,
   AlertCircle,
   Download,
 } from 'lucide-react';
@@ -252,7 +251,8 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* QA #31: "Vehículos reservados" era un estado actual, no historial; se quitó. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Solicitudes Finalizadas</p>
@@ -260,16 +260,6 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
           </div>
           <div className="w-11 h-11 rounded-xl border border-neutral-300 flex items-center justify-center text-neutral-900">
             <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-neutral-900 border border-neutral-900 rounded-2xl p-5 flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Vehículos Reservados</p>
-            <p className="text-3xl font-bold text-white mt-1">{metricas.vehiculosReservados}</p>
-          </div>
-          <div className="w-11 h-11 rounded-xl bg-white/10 flex items-center justify-center text-white">
-            <Car className="w-5 h-5" />
           </div>
         </div>
 

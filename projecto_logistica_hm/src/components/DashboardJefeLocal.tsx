@@ -8,15 +8,16 @@ import type { TrasladoInterno } from '@/types/traslado.types';
 import PanelAcciones from '@/components/PanelAcciones';
 import BadgeEvento from '@/components/BadgeEvento';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { RecepcionModal } from '@/components/ModalesTraslado';
-import { recibirTrasladoAction } from '@/app/actions/traslados.actions';
-import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
+import { recibirSolicitudConFotos, recibirTrasladoConFotos } from '@/lib/recepcionCliente';
 import { itemsRecepcion, recortar, LIMITE_PANEL_JEFE_LOCAL, type ItemRecepcion } from '@/lib/panel';
 import type { DatosRecepcion } from '@/lib/recepcion';
 import { formatFecha } from '@/lib/fechas';
 import { etiquetaVehiculo } from '@/lib/vehiculo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { rutaSolicitud } from '@/lib/origenSolicitud';
 
 interface Props {
   pendientesAprobar: SolicitudLista[];
@@ -26,7 +27,7 @@ interface Props {
 }
 
 function ruta(s: SolicitudLista): string {
-  return `${s.sucursal_nombre ?? `Sucursal ${s.sucursal}`} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento'}`;
+  return rutaSolicitud(s);
 }
 
 function vehiculos(s: SolicitudLista): string {
@@ -57,9 +58,9 @@ export default function DashboardJefeLocal({
       if (error) return error;
       setFeedback({ tipo: aviso ? 'error' : 'success', mensaje: aviso ?? 'Recepción registrada.' });
     } else {
-      const res = await recibirTrasladoAction(recibir.id, datos);
-      if (!res.success) return res.error ?? 'No se pudo registrar la recepción.';
-      setFeedback({ tipo: 'success', mensaje: res.message ?? 'Recepción registrada.' });
+      const { error, aviso } = await recibirTrasladoConFotos(recibir.id, datos, fotos);
+      if (error) return error;
+      setFeedback({ tipo: aviso ? 'error' : 'success', mensaje: aviso ?? 'Recepción registrada.' });
     }
     setRecibir(null);
     return null;
@@ -97,7 +98,7 @@ export default function DashboardJefeLocal({
           tono="azul"
         >
           {aprobar.items.map((s) => (
-            <li key={s.id} className="px-5 py-3 flex items-center gap-3">
+            <li key={s.id} onClick={abrirDetalleDeFila} className="cursor-pointer hover:bg-neutral-50 transition-colors px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                   <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
@@ -113,7 +114,7 @@ export default function DashboardJefeLocal({
                 </p>
               </div>
               <Link
-                href="/solicitudes/aprobaciones"
+                href={`/solicitudes/aprobaciones?solicitud=${s.id}`}
                 className="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shrink-0"
               >
                 Revisar
@@ -174,7 +175,7 @@ export default function DashboardJefeLocal({
           tono="ambar"
         >
           {priorizar.items.map((s) => (
-            <li key={s.id} className="px-5 py-3 flex items-center gap-3">
+            <li key={s.id} onClick={abrirDetalleDeFila} className="cursor-pointer hover:bg-neutral-50 transition-colors px-5 py-3 flex items-center gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                   <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-[11px] font-bold text-neutral-900">
@@ -202,9 +203,10 @@ export default function DashboardJefeLocal({
 
       {recibir && (
         <RecepcionModal
-          titulo={recibir.tipo === 'solicitud' ? 'Recibir solicitud' : 'Recibir traslado interno'}
+          titulo={`${recibir.tipo === 'solicitud' ? 'Recibir solicitud' : 'Recibir traslado interno'} ${recibir.codigo}`}
+          vehiculos={[recibir.vehiculos]}
           subtitulo={recibir.ruta}
-          permitirFotos={recibir.tipo === 'solicitud'}
+          permitirFotos
           onCerrar={() => setRecibir(null)}
           onConfirmar={confirmarRecepcion}
         />

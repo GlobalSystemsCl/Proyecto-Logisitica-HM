@@ -44,7 +44,13 @@ const getCurrentUserProfileCached = cache(async (): Promise<UserProfile | null> 
 
     const { data: profile, error: profileError } = await supabase
       .from('usuario')
-      .select('*, sucursal:sucursal_id(nombre)')
+      // QA #56: sucursales a cargo y zonas en la misma consulta (antes eran 2
+      // consultas más después de esta; cada server action esperaba ambas).
+      .select(
+        '*, sucursal:sucursal_id(nombre), ' +
+          'encabezadas:sucursal!sucursal_usuario_id_fkey(id, nombre), ' +
+          'zonas_usuario:usuario_zona!usuario_zona_usuario_id_fkey(zona_id, zona:zona_id(id, nombre))'
+      )
       .eq('id', user.id)
       .single();
 
@@ -73,27 +79,24 @@ const getCurrentUserProfileCached = cache(async (): Promise<UserProfile | null> 
       return null;
     }
 
-    const sucursal = profile.sucursal as
+    const sucursal = (profile as unknown as { sucursal: unknown }).sucursal as
       | { nombre: string | null }
       | Array<{ nombre: string | null }>
       | null;
 
-    const [sucursalesRes, zonasRes] = await Promise.all([
-      supabase
-        .from('sucursal')
-        .select('id, nombre')
-        .eq('usuario_id', user.id),
-      supabase
-        .from('usuario_zona')
-        .select('zona_id, zona:zona_id(id, nombre)')
-        .eq('usuario_id', user.id),
-    ]);
+    const { encabezadas, zonas_usuario, ...fila } = profile as unknown as Record<string, unknown> & {
+      encabezadas?: Array<{ id: number; nombre: string | null }> | null;
+      zonas_usuario?: Array<{
+        zona_id: number;
+        zona: Array<{ id: number; nombre: string }> | { id: number; nombre: string } | null;
+      }> | null;
+    };
 
-    const sucursales = (sucursalesRes.data || []).map((row: { id: number; nombre: string | null }) => ({
+    const sucursales = (encabezadas || []).map((row: { id: number; nombre: string | null }) => ({
       id: row.id,
       nombre: row.nombre,
     }));
-    const zonas = (zonasRes.data || []).map(
+    const zonas = (zonas_usuario || []).map(
       (row: {
         zona_id: number;
         zona: Array<{ id: number; nombre: string }> | { id: number; nombre: string } | null;
@@ -107,7 +110,7 @@ const getCurrentUserProfileCached = cache(async (): Promise<UserProfile | null> 
     );
 
     return {
-      ...profile,
+      ...fila,
       sucursal_nombre: Array.isArray(sucursal) ? sucursal[0]?.nombre ?? null : sucursal?.nombre ?? null,
       sucursales,
       zonas,

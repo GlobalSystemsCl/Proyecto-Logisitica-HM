@@ -19,7 +19,6 @@ import {
   cancelarTrasladoAction,
   crearTrasladosAction,
   despacharTrasladoAction,
-  recibirTrasladoAction,
   getVehiculosParaTrasladoAction,
 } from '@/app/actions/traslados.actions';
 import {
@@ -35,6 +34,9 @@ import type { DatosRecepcion } from '@/lib/recepcion';
 import SelectorCamion from '@/components/SelectorCamion';
 import { MAX_TRASLADOS_POR_LOTE, mensajeResultadoLote } from '@/lib/trasladosLote';
 import { codigoTraslado } from '@/lib/codigoSolicitud';
+import { lineasVehiculos } from '@/lib/vehiculo';
+import { recibirTrasladoConFotos } from '@/lib/recepcionCliente';
+import DocumentosTraslado from '@/components/DocumentosTraslado';
 import type { AsignacionTransporte, EmpresaTransporte } from '@/types/transportista.types';
 import { errorAsignacionTransporte, textoTransporte } from '@/lib/transporte';
 import ModalGuiaDespacho from '@/components/ModalGuiaDespacho';
@@ -243,11 +245,12 @@ export default function TrasladosClient({
     }
   };
 
-  const confirmarRecepcion = async (t: TrasladoInterno, datos: DatosRecepcion): Promise<string | null> => {
-    const result = await recibirTrasladoAction(t.id, datos);
-    if (!result.success) return result.error ?? 'Error al recepcionar.';
+  const confirmarRecepcion = async (t: TrasladoInterno, datos: DatosRecepcion, fotos: File[]): Promise<string | null> => {
+    // QA #49: fotos opcionales al recibir, en traslado_documento.
+    const { error, aviso } = await recibirTrasladoConFotos(t.id, datos, fotos);
+    if (error) return error;
     setRecibirTarget(null);
-    setFeedback({ tipo: 'success', mensaje: result.message ?? 'Traslado recepcionado.' });
+    setFeedback({ tipo: aviso ? 'error' : 'success', mensaje: aviso ?? 'Traslado recepcionado.' });
     return null;
   };
 
@@ -274,7 +277,7 @@ export default function TrasladosClient({
           </h1>
           <p className="text-sm text-neutral-500 mt-1">
             {esOperador
-              ? 'Mueve vehículos entre sucursales. El JL destino solo puede recepcionar.'
+              ? 'Mueve vehículos entre sucursales. El jefe de local de destino los recepciona.'
               : 'Traslados que llegan a tus sucursales.'}
           </p>
         </div>
@@ -562,7 +565,7 @@ export default function TrasladosClient({
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs text-neutral-400">{codigoTraslado(t.id)}</span>
+                      <span className="font-mono text-xs text-neutral-400">{codigoTraslado(t)}</span>
                       <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${estado.color}`}>
                         {estado.label}
                       </span>
@@ -573,6 +576,12 @@ export default function TrasladosClient({
                       <span className="text-neutral-400">→</span>
                       <span className="sm:truncate">{t.destino_nombre}</span>
                     </div>
+                    {/* QA #48: la tarjeta dice qué vehículo lleva. */}
+                    {t.vehiculos.length > 0 && (
+                      <p className="mt-1 text-xs text-neutral-700">
+                        {lineasVehiculos(t.vehiculos).join(' — ')}
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-neutral-500">
                       Logística: {t.logistica_nombre ?? t.logistica_id} · Creado: {formatFecha(t.created_at)}
                       {t.transportista && <> · Transporte: {textoTransporte(t)}</>}
@@ -670,7 +679,7 @@ export default function TrasladosClient({
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs text-neutral-400">{codigoTraslado(detalle.id)}</span>
+                  <span className="font-mono text-xs text-neutral-400">{codigoTraslado(detalle)}</span>
                   <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${estadoConfig[detalle.estado].color}`}>
                     {estadoConfig[detalle.estado].label}
                   </span>
@@ -750,12 +759,18 @@ export default function TrasladosClient({
                 </div>
               )}
             </div>
+
+            {/* QA #49: fotos y documentos adjuntos al recibir. */}
+            <div className="mt-4 border-t border-neutral-100 pt-3">
+              <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mb-2">Fotos y documentos</p>
+              <DocumentosTraslado key={detalle.id} trasladoId={detalle.id} />
+            </div>
           </div>
         </div>
       )}
       {despacharTarget && (
         <ModalGuiaDespacho
-          titulo={`Despachar traslado ${codigoTraslado(despacharTarget.id)}`}
+          titulo={`Despachar traslado ${codigoTraslado(despacharTarget)}`}
           vehiculos={despacharTarget.vehiculos.map((v) => ({
             id: v.traslado_vehiculo_id,
             etiqueta: `${v.chasis} · ${v.marca} ${v.modelo}`,
@@ -771,10 +786,12 @@ export default function TrasladosClient({
 
       {recibirTarget && (
         <RecepcionModal
-          titulo="Recepcionar traslado"
+          titulo={`Recepcionar traslado ${codigoTraslado(recibirTarget)}`}
+          vehiculos={lineasVehiculos(recibirTarget.vehiculos)}
           subtitulo={`${recibirTarget.origen_nombre ?? ''} → ${recibirTarget.destino_nombre ?? ''}`}
           onCerrar={() => setRecibirTarget(null)}
-          onConfirmar={(datos) => confirmarRecepcion(recibirTarget, datos)}
+          permitirFotos
+          onConfirmar={(datos, fotos) => confirmarRecepcion(recibirTarget, datos, fotos)}
         />
       )}
 

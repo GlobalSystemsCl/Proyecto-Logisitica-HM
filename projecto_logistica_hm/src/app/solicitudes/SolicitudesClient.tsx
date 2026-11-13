@@ -28,6 +28,7 @@ import {
   finalizarSolicitudAction,
   insistirSolicitudAction,
   getCooldownInsistenciaAction,
+  getCooldownsInsistenciaAction,
   asignarEncargadoAction,
   subirDocumentosSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
@@ -53,11 +54,14 @@ import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import BadgeEvento from '@/components/BadgeEvento';
 import PanelEjecutivo from '@/components/PanelEjecutivo';
-import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { confirmacionEntregaCliente, ETIQUETA_FECHA_LIMITE, ETIQUETA_TIPO_SOLICITUD } from '@/lib/textos';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { tieneUbicacion } from '@/lib/vehiculo';
 import { MENSAJE_MEZCLA_SUCURSAL, clasificarVenta } from '@/lib/ventaSucursal';
+import { ACEPTA_DOCUMENTOS, TEXTO_FORMATOS_DOCUMENTO, revisarArchivoElegido } from '@/lib/archivos';
+import { useConfirmacion } from '@/components/Confirmacion';
+import { esClicEnControl } from '@/components/FilaAbreDetalle';
 
 /**
  * Nomenclatura de negocio para los estados.
@@ -79,10 +83,7 @@ const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = 
 };
 
 /** Labels de UI del tipo de solicitud (el enum `tipo_solicitud` no cambia). */
-const tipoLabel: Record<TipoSolicitud, string> = {
-  evento: 'Evento',
-  venta: 'Sala de venta',
-};
+const tipoLabel = ETIQUETA_TIPO_SOLICITUD;
 
 const PRE_DESPACHO: EstadoSolicitud[] = [
   'pendiente_aprobacion',
@@ -174,6 +175,7 @@ export default function SolicitudesClient({
   solicitudInicialId = null,
 }: SolicitudesClientProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const { confirmar, avisar, dialogoConfirmacion } = useConfirmacion();
   const [filtroEstado, setFiltroEstado] = useState<string>('todos');
   const [grupoActivo, setGrupoActivo] = useState<GrupoFiltroSolicitud>(grupoInicial);
   const [feedback, setFeedback] = useState<FeedbackState | null>(null);
@@ -214,6 +216,7 @@ export default function SolicitudesClient({
   const [vehiculoError, setVehiculoError] = useState(false);
   const [obsCreacion, setObsCreacion] = useState('');
   const [archivosAdjuntos, setArchivosAdjuntos] = useState<File[]>([]);
+  const [errorArchivos, setErrorArchivos] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [motivo, setMotivo] = useState('');
@@ -462,11 +465,10 @@ export default function SolicitudesClient({
         (s) => s.ejecutivo_id === viewer.id && ESTADOS_INSISTIBLES.includes(s.estado)
       );
       if (candidatas.length === 0) return;
-      const entries = await Promise.all(
-        candidatas.map(async (s) => [s.id, (await getCooldownInsistenciaAction(s.id)).horas_restantes] as const)
-      );
+      // QA #2: una sola llamada para todas (antes, una por solicitud y en serie).
+      const mapa = await getCooldownsInsistenciaAction(candidatas.map((s) => s.id));
       if (cancelled) return;
-      setCooldowns(Object.fromEntries(entries));
+      setCooldowns(mapa);
     }
     load();
     return () => { cancelled = true; };
@@ -484,6 +486,7 @@ export default function SolicitudesClient({
     setCreateError(null);
     setObsCreacion('');
     setArchivosAdjuntos([]);
+    setErrorArchivos(null);
     setDireccionEvento('');
     setTituloEvento('');
     setEjecutivoSel('');
@@ -573,13 +576,15 @@ export default function SolicitudesClient({
   }
 
   async function handleFinalizar(sol: SolicitudLista) {
+    // QA #42: entregar es irreversible; antes no pedía confirmación en la lista.
+    if (!(await confirmar(confirmacionEntregaCliente(codigoSolicitud(sol))))) return;
     setIsSubmitting(true);
     try {
       const result = await finalizarSolicitudAction(sol.id);
       if (!result.success) {
         setFeedback({ type: 'error', message: result.error || 'Error al finalizar.' });
       } else {
-        setFeedback({ type: 'success', message: result.message || 'Solicitud finalizada.' });
+        setFeedback({ type: 'success', message: result.message || 'Entrega al cliente registrada.' });
       }
     } finally {
       setIsSubmitting(false);
@@ -645,6 +650,12 @@ export default function SolicitudesClient({
         {chip && (
           <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-[10px] font-bold border ${chip.clase}`}>
             {chip.texto}
+          </span>
+        )}
+        {/* QA #12: el motivo de rechazo o cancelación se ve sin abrir el detalle. */}
+        {(sol.estado === 'rechazada' || sol.estado === 'cancelada') && sol.motivo_cancelacion && (
+          <span className="basis-full text-[11px] text-red-700 line-clamp-2" title={sol.motivo_cancelacion}>
+            {sol.motivo_cancelacion}
           </span>
         )}
       </div>
@@ -942,7 +953,11 @@ export default function SolicitudesClient({
         ) : (
           <ul className="divide-y divide-neutral-200">
             {filtradas.map((sol) => (
-              <li key={sol.id} className={`p-4 space-y-3 ${BORDE_ATRASO[getEstadoAtraso(sol)]}`}>
+              <li
+                key={sol.id}
+                onClick={(e) => !esClicEnControl(e) && setDetailTarget(sol)}
+                className={`p-4 space-y-3 cursor-pointer ${BORDE_ATRASO[getEstadoAtraso(sol)]}`}
+              >
                 <div className="flex items-start justify-between gap-3">
                   <button
                     type="button"
@@ -1032,7 +1047,12 @@ export default function SolicitudesClient({
                   const destino = destinoDeSolicitud(sol);
                   const atraso = getEstadoAtraso(sol);
                   return (
-                    <tr key={sol.id} className={`hover:bg-neutral-50 transition-colors ${BORDE_ATRASO[atraso]}`}>
+                    <tr
+                      key={sol.id}
+                      // QA #8: clic en cualquier parte de la fila abre el detalle.
+                      onClick={(e) => !esClicEnControl(e) && setDetailTarget(sol)}
+                      className={`cursor-pointer hover:bg-neutral-50 transition-colors ${BORDE_ATRASO[atraso]}`}
+                    >
                       <td className="py-3.5 px-4">
                         <p className="font-mono text-xs font-bold text-neutral-900 uppercase">
                           {codigoSolicitud(sol)}
@@ -1107,7 +1127,9 @@ export default function SolicitudesClient({
                   <FileText className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-neutral-900">Nueva Solicitud de Traslado</h2>
+                  <h2 className="text-lg font-bold text-neutral-900">
+                    {tipoSel === 'evento' ? 'Nueva solicitud de evento' : 'Nueva solicitud de sala de venta'}
+                  </h2>
                   <p className="text-xs text-neutral-500">
                     {esJefeLocal
                       ? 'Se creará como Aprobada directamente'
@@ -1310,16 +1332,6 @@ export default function SolicitudesClient({
                   </select>
                 </div>
 
-                {claseVentaForm === 'sin_traslado' && (
-                  <p className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-                    Los vehículos elegidos ya están en la sucursal de destino: no requieren traslado. Al aprobarse, la solicitud
-                    quedará lista para entregar al cliente, sin pasar por Logística.
-                  </p>
-                )}
-                {claseVentaForm === 'mixta' && (
-                  <p className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{MENSAJE_MEZCLA_SUCURSAL}</p>
-                )}
-
                 {sinUbicacion > 0 && (
                   <p className="text-[11px] text-neutral-500">
                     {sinUbicacion} vehículo(s) sin sucursal de origen (en tránsito o container) no aparecen: no se pueden pedir hasta que Logística les asigne una sucursal.
@@ -1369,6 +1381,17 @@ export default function SolicitudesClient({
                   )}
                 </div>
 
+                {/* QA #9: los avisos van bajo la lista; arriba la desplazaban y el siguiente clic caía en otro vehículo. */}
+                {claseVentaForm === 'sin_traslado' && (
+                  <p className="text-xs text-green-800 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                    Los vehículos elegidos ya están en la sucursal de destino: no requieren traslado. Al aprobarse, la solicitud
+                    quedará lista para entregar al cliente, sin pasar por Logística.
+                  </p>
+                )}
+                {claseVentaForm === 'mixta' && (
+                  <p className="text-xs text-red-800 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{MENSAJE_MEZCLA_SUCURSAL}</p>
+                )}
+
                 {vehiculoError && selectedVehiculos.size === 0 && (
                   <p className="text-xs text-red-600 font-medium flex items-center gap-1.5">
                     <AlertCircle className="w-3.5 h-3.5" /> Selecciona al menos un vehículo para poder crear la solicitud.
@@ -1397,11 +1420,15 @@ export default function SolicitudesClient({
                   <input
                     type="file"
                     multiple
-                    accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.xlsx,.pptx,.txt,.csv,.zip"
+                    accept={ACEPTA_DOCUMENTOS}
                     className="hidden"
                     onChange={(e) => {
+                      // QA #3: se descartan al tiro los archivos no permitidos, antes de crear la solicitud.
                       const files = e.target.files ? Array.from(e.target.files) : [];
-                      setArchivosAdjuntos((prev) => [...prev, ...files]);
+                      const errores = files.map((f) => revisarArchivoElegido(f.name, f.size)).filter((m): m is string => m !== null);
+                      const validos = files.filter((f) => revisarArchivoElegido(f.name, f.size) === null);
+                      setArchivosAdjuntos((prev) => [...prev, ...validos]);
+                      setErrorArchivos(errores.length > 0 ? errores.join(' ') : null);
                       e.target.value = '';
                     }}
                   />
@@ -1425,9 +1452,12 @@ export default function SolicitudesClient({
                     ))}
                   </ul>
                 )}
-                <p className="text-[11px] text-neutral-400">
-                  Máximo 10 MB por archivo. Formatos: PDF, PNG, JPG, WebP, Word, Excel, PowerPoint, TXT, CSV o ZIP.
-                </p>
+                {errorArchivos && (
+                  <p role="alert" className="text-xs text-red-600">
+                    {errorArchivos}
+                  </p>
+                )}
+                <p className="text-[11px] text-neutral-400">{TEXTO_FORMATOS_DOCUMENTO}</p>
               </div>
 
               <div className={`p-3 border rounded-xl flex items-start gap-2.5 text-xs ${esJefeLocal ? 'bg-green-50 border-green-200 text-green-700' : 'bg-neutral-50 border-neutral-200 text-neutral-600'}`}>
@@ -1473,7 +1503,10 @@ export default function SolicitudesClient({
           solicitud={detailTarget}
           vehiculosInventario={vehiculos}
           onClose={() => setDetailTarget(null)}
-          onMensaje={(tipo, mensaje) => setFeedback({ type: tipo, message: mensaje })}
+          onMensaje={(tipo, mensaje) =>
+            // QA #46: con el detalle abierto, el error se muestra encima, no en la página.
+            tipo === 'error' ? void avisar(mensaje, 'No se pudo completar') : setFeedback({ type: tipo, message: mensaje })
+          }
           onCancelar={(sol) => {
             setMotivo('');
             setDetailTarget(null);
@@ -1547,6 +1580,7 @@ export default function SolicitudesClient({
           </div>
         </div>
       )}
+      {dialogoConfirmacion}
     </div>
   );
 }

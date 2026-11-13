@@ -471,9 +471,7 @@ describe('AuthService', () => {
 
     it('should_return_profile_with_branch_name', async () => {
       server.auth.getUser.mockResolvedValue({ data: { user: authUser() }, error: null });
-      server.results.usuario = [fila({ ...perfil(), sucursal: { nombre: 'Centro' } })];
-      server.results.sucursal = [{ data: [], error: null }];
-      server.results.usuario_zona = [{ data: [], error: null }];
+      server.results.usuario = [fila({ ...perfil(), sucursal: { nombre: 'Centro' }, encabezadas: [], zonas_usuario: [] })];
       const res = await AuthService.getCurrentUserProfile();
       expect(res?.sucursal_nombre).toBe('Centro');
       expect(res?.sucursales).toEqual([]);
@@ -482,14 +480,21 @@ describe('AuthService', () => {
 
     it('should_map_assigned_branches_and_zones', async () => {
       server.auth.getUser.mockResolvedValue({ data: { user: authUser() }, error: null });
-      server.results.usuario = [fila(perfil())];
-      server.results.sucursal = [{ data: [{ id: 1, nombre: 'Centro' }], error: null }];
-      server.results.usuario_zona = [
-        { data: [{ zona_id: 2, zona: [{ id: 2, nombre: 'Zona Norte' }] }], error: null },
+      server.results.usuario = [
+        fila({
+          ...perfil(),
+          encabezadas: [{ id: 1, nombre: 'Centro' }],
+          zonas_usuario: [{ zona_id: 2, zona: [{ id: 2, nombre: 'Zona Norte' }] }],
+        }),
       ];
       const res = await AuthService.getCurrentUserProfile();
       expect(res?.sucursales).toEqual([{ id: 1, nombre: 'Centro' }]);
       expect(res?.zonas).toEqual([{ id: 2, nombre: 'Zona Norte' }]);
+      // QA #56: una sola consulta; sin claves auxiliares en el perfil.
+      expect(server.callsTo('sucursal')).toEqual([]);
+      expect(server.callsTo('usuario_zona')).toEqual([]);
+      expect(res).not.toHaveProperty('encabezadas');
+      expect(res).not.toHaveProperty('zonas_usuario');
     });
 
     it('should_register_missing_profile_as_pending_and_return_null', async () => {

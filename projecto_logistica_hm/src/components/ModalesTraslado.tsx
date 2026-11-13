@@ -93,14 +93,16 @@ function Botones({
 interface RecepcionModalProps {
   titulo: string;
   subtitulo?: string;
-  /** Las fotos solo se admiten en solicitudes (se guardan como documentos). */
+  /** QA #20: qué vehículos se reciben (una línea por vehículo). */
+  vehiculos?: string[];
+  /** Fotos opcionales: quedan como documentos de la solicitud o del traslado (QA #49). */
   permitirFotos?: boolean;
   onCerrar: () => void;
   /** Devuelve un mensaje de error para mostrar, o `null` si todo salió bien. */
   onConfirmar: (datos: DatosRecepcion, fotos: File[]) => Promise<string | null>;
 }
 
-export function RecepcionModal({ titulo, subtitulo, permitirFotos, onCerrar, onConfirmar }: RecepcionModalProps) {
+export function RecepcionModal({ titulo, subtitulo, vehiculos, permitirFotos, onCerrar, onConfirmar }: RecepcionModalProps) {
   const [conNovedades, setConNovedades] = useState(false);
   const [observacion, setObservacion] = useState('');
   const [fotos, setFotos] = useState<File[]>([]);
@@ -127,6 +129,13 @@ export function RecepcionModal({ titulo, subtitulo, permitirFotos, onCerrar, onC
   return (
     <Marco titulo={titulo} subtitulo={subtitulo} icono={<PackageCheck className="w-5 h-5 text-green-700" />} onCerrar={onCerrar}>
       <form onSubmit={enviar} className="space-y-4">
+        {vehiculos && vehiculos.length > 0 && (
+          <ul className="p-3 rounded-xl bg-neutral-50 border border-neutral-200 text-xs text-neutral-700 space-y-0.5">
+            {vehiculos.map((v) => (
+              <li key={v} className="font-mono break-all">{v}</li>
+            ))}
+          </ul>
+        )}
         <fieldset className="space-y-2">
           <legend className="text-xs font-semibold text-neutral-600 uppercase tracking-wider mb-1">Estado del vehículo</legend>
           <label className="flex items-center gap-2 text-sm text-neutral-800 cursor-pointer">

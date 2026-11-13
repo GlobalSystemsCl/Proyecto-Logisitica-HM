@@ -134,3 +134,18 @@ export function validarAsignacionesFormulario(
     (id) => sucursales.find((s) => s.id === id)?.nombre ?? `Sucursal #${id}`
   );
 }
+
+/**
+ * QA #29: "zona 3 · 3 ORIENTE BAIC, 3 ORIENTE JAC". Las zonas se llaman
+ * "zona 1/2/3" y sin sus sucursales no se sabe qué cubre cada una. Muestra
+ * hasta 3 nombres y cuántas más hay.
+ */
+export function etiquetaZonaConSucursales(
+  zona: { id: number; nombre: string },
+  sucursales: Array<{ nombre: string | null; zona_id?: number | null }>,
+): string {
+  const nombres = sucursales.filter((s) => s.zona_id === zona.id).map((s) => s.nombre ?? '').filter(Boolean);
+  if (nombres.length === 0) return `${zona.nombre} · sin sucursales`;
+  const resto = nombres.length > 3 ? ` y ${nombres.length - 3} más` : '';
+  return `${zona.nombre} · ${nombres.slice(0, 3).join(', ')}${resto}`;
+}

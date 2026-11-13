@@ -17,6 +17,8 @@ import {
   Ban,
   Trash2,
   Download,
+  Eye,
+  X as IconoCerrar,
   UploadCloud,
   UserCheck,
   XCircle,
@@ -29,6 +31,7 @@ import {
   getAuditoriaAction,
   getUsuarioDetalleAction,
   getDocumentosSolicitudAction,
+  getVistasPreviasDocumentosAction,
   subirDocumentosSolicitudAction,
   eliminarDocumentoSolicitudAction,
   descargarDocumentoSolicitudAction,
@@ -47,14 +50,16 @@ import { formatFecha } from '@/lib/fechas';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
 import { extraerMotivoRechazo } from '@/lib/motivoRechazo';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
-import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { ETIQUETA_FECHA_LIMITE, etiquetaTipoSolicitud } from '@/lib/textos';
+import { origenSolicitud } from '@/lib/origenSolicitud';
 import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD, tieneUbicacion } from '@/lib/vehiculo';
-import { ACEPTA_DOCUMENTOS, TEXTO_FORMATOS_DOCUMENTO } from '@/lib/archivos';
+import { ACEPTA_DOCUMENTOS, admiteVistaPrevia, esImagen, TEXTO_FORMATOS_DOCUMENTO } from '@/lib/archivos';
 import { admiteInteraccion, MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
 import { iniciadorId, iniciadorNombre } from '@/lib/iniciador';
 import { formatearRut } from '@/lib/rut';
 import { formatearPatente } from '@/lib/patente';
 import BadgeEvento from '@/components/BadgeEvento';
+import { useConfirmacion } from '@/components/Confirmacion';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente de aprobación', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -303,10 +308,36 @@ export default function SolicitudDetalleModal({
   onCrearNueva,
 }: SolicitudDetalleModalProps) {
   const [detailTab, setDetailTab] = useState<'info' | 'historial' | 'obs' | 'docs'>('info');
+  const { confirmar, dialogoConfirmacion } = useConfirmacion();
   const [observaciones, setObservaciones] = useState<ObservacionEntry[]>([]);
   const [auditoria, setAuditoria] = useState<AuditoriaEntry[]>([]);
   const [responsableDetalle, setResponsableDetalle] = useState<UsuarioDetalle | null>(null);
   const [documentos, setDocumentos] = useState<DocumentoSolicitud[]>([]);
+  // QA #52: miniaturas de imágenes y vista de PDF (enlaces firmados, sin descarga).
+  const [vistas, setVistas] = useState<Record<string, string>>({});
+  const [imagenAmpliada, setImagenAmpliada] = useState<DocumentoSolicitud | null>(null);
+  const clavePrevias = documentos.filter((d) => admiteVistaPrevia(d.tipo_mime)).map((d) => d.id).join(',');
+  useEffect(() => {
+    if (detailTab !== 'docs' || !clavePrevias) return;
+    let cancelado = false;
+    getVistasPreviasDocumentosAction(solicitud.id).then((urls) => {
+      if (!cancelado) setVistas(urls);
+    });
+    return () => {
+      cancelado = true;
+    };
+  }, [detailTab, clavePrevias, solicitud.id]);
+  useEffect(() => {
+    if (!imagenAmpliada) return;
+    function alPresionar(e: KeyboardEvent) {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      setImagenAmpliada(null);
+    }
+    document.addEventListener('keydown', alPresionar, true);
+    return () => document.removeEventListener('keydown', alPresionar, true);
+  }, [imagenAmpliada]);
   const [obsText, setObsText] = useState('');
   const [nuevoVehiculoId, setNuevoVehiculoId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -325,6 +356,19 @@ export default function SolicitudDetalleModal({
     setNuevoVehiculoId('');
     setDocumentos([]);
   }
+
+  // QA #6: Escape cierra el detalle, salvo que haya otro modal abierto encima.
+  const overlayRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function alPresionar(e: KeyboardEvent) {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const capas = document.querySelectorAll('div.fixed.inset-0');
+      if (capas[capas.length - 1] !== overlayRef.current) return;
+      onClose();
+    }
+    document.addEventListener('keydown', alPresionar);
+    return () => document.removeEventListener('keydown', alPresionar);
+  }, [onClose]);
 
   /** La cola de prioridad es interna: el Ejecutivo no debe verla (#14). */
   const puedeVerPrioridad = currentUserRol !== 'ejecutivo';
@@ -466,7 +510,7 @@ export default function SolicitudDetalleModal({
 
   async function handleEliminarDoc(doc: DocumentoSolicitud) {
     if (isSubmitting) return;
-    if (!window.confirm(`¿Eliminar el documento "${doc.nombre_archivo}"? Esta acción no se puede deshacer.`)) return;
+    if (!(await confirmar({ titulo: 'Eliminar documento', mensaje: `¿Eliminar el documento "${doc.nombre_archivo}"? Esta acción no se puede deshacer.`, textoConfirmar: 'Eliminar', peligro: true }))) return;
     setIsSubmitting(true);
     try {
       const result = await eliminarDocumentoSolicitudAction(doc.id);
@@ -496,7 +540,7 @@ export default function SolicitudDetalleModal({
   const rechazo = esRechazada ? extraerMotivoRechazo(observaciones) : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+    <div ref={overlayRef} role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
       {/* En móvil todo el modal desplaza junto: cabecera, franja y pestañas no se comen el alto. */}
       <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-5xl shadow-2xl overflow-y-auto sm:overflow-hidden max-h-[94vh] sm:max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
 
@@ -536,7 +580,7 @@ export default function SolicitudDetalleModal({
             {solicitud.tipo_solicitud === 'evento' && <BadgeEvento tamano="lg" />}
           </div>
           <p className="text-sm text-neutral-500">
-            {solicitud.tipo_solicitud === 'evento' ? 'Evento' : 'Traslado entre locales'} · Creada el {formatFecha(solicitud.fecha_creacion)}
+            {etiquetaTipoSolicitud(solicitud.tipo_solicitud)} · Creada el {formatFecha(solicitud.fecha_creacion)}
             {solicitud.ejecutivo_nombre && (
               <>
                 {' por '}
@@ -607,8 +651,9 @@ export default function SolicitudDetalleModal({
         )}
 
         {/* Info Cards Strip */}
-        <div className="px-5 sm:px-8 py-5 border-b border-neutral-200 shrink-0 lg:overflow-x-auto">
-          <div className="grid grid-cols-2 gap-x-4 gap-y-4 lg:flex lg:gap-6 lg:min-w-max">
+        {/* QA #13: la franja se ajusta en varias líneas en vez de mostrar una barra horizontal. */}
+        <div className="px-5 sm:px-8 py-5 border-b border-neutral-200 shrink-0">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4 lg:flex lg:flex-wrap lg:gap-6">
             {/* Vehicle */}
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-full bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0">
@@ -633,10 +678,12 @@ export default function SolicitudDetalleModal({
                 <MapPin className="w-5 h-5 text-amber-600" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] text-neutral-400 font-medium">Origen de solicitud</p>
-                <p className="text-sm font-bold text-neutral-900">
-                  {solicitud.sucursal_nombre || `#${solicitud.sucursal}`}
-                </p>
+                {/* QA #38: el origen es de donde sale el vehículo; la sucursal que pide se muestra aparte si difiere. */}
+                <p className="text-[11px] text-neutral-400 font-medium">Sale de</p>
+                <p className="text-sm font-bold text-neutral-900">{origenSolicitud(solicitud)}</p>
+                {origenSolicitud(solicitud) !== (solicitud.sucursal_nombre || `Sucursal ${solicitud.sucursal}`) && (
+                  <p className="text-[11px] text-neutral-500">Pedida por {solicitud.sucursal_nombre || `#${solicitud.sucursal}`}</p>
+                )}
               </div>
             </div>
             <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
@@ -785,8 +832,8 @@ export default function SolicitudDetalleModal({
                     { label: 'Fecha de despacho', value: solicitud.fecha_despacho },
                     { label: 'Inicio de tránsito', value: solicitud.fecha_inicio_transito },
                     { label: 'Fecha de recepción', value: solicitud.fecha_recepcion },
+                    // QA #13: "Fecha de entrega" (fecha_entrega) se guarda igual que la recepción; se quitó por duplicada.
                     { label: 'Entrega a cliente', value: solicitud.fecha_entrega_cliente },
-                    { label: 'Fecha de entrega', value: solicitud.fecha_entrega },
                   ].map((f) => (
                     <div key={f.label} className="bg-white px-4 py-3">
                       <p className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">{f.label}</p>
@@ -979,7 +1026,7 @@ export default function SolicitudDetalleModal({
                     <div>
                       <p className="text-[11px] text-neutral-400 font-medium">Tipo de traslado</p>
                       <p className="text-sm font-bold text-neutral-900">
-                        {solicitud.tipo_solicitud === 'evento' ? 'Evento' : 'Traslado entre locales'}
+                        {etiquetaTipoSolicitud(solicitud.tipo_solicitud)}
                       </p>
                     </div>
                     <div>
@@ -1157,9 +1204,21 @@ export default function SolicitudDetalleModal({
                 <ul className="space-y-2">
                   {documentos.map((doc) => (
                     <li key={doc.id} className="flex items-center gap-3 p-3 bg-neutral-50 border border-neutral-200 rounded-xl">
-                      <div className="w-10 h-10 rounded-lg bg-white border border-neutral-200 flex items-center justify-center shrink-0">
-                        <FileText className="w-5 h-5 text-neutral-500" />
-                      </div>
+                      {esImagen(doc.tipo_mime) && vistas[doc.id] ? (
+                        <button
+                          type="button"
+                          onClick={() => setImagenAmpliada(doc)}
+                          title="Ver imagen"
+                          className="w-12 h-12 rounded-lg overflow-hidden border border-neutral-200 bg-white shrink-0 cursor-zoom-in"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element -- enlace firmado de Storage, de vida corta */}
+                          <img src={vistas[doc.id]} alt={doc.nombre_archivo} className="w-full h-full object-cover" loading="lazy" />
+                        </button>
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-white border border-neutral-200 flex items-center justify-center shrink-0">
+                          <FileText className="w-5 h-5 text-neutral-500" />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-neutral-900 truncate">{doc.nombre_archivo}</p>
                         <p className="text-xs text-neutral-500 truncate">
@@ -1169,6 +1228,20 @@ export default function SolicitudDetalleModal({
                           {formatFecha(doc.created_at)}
                         </p>
                       </div>
+                      {vistas[doc.id] && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            esImagen(doc.tipo_mime)
+                              ? setImagenAmpliada(doc)
+                              : window.open(vistas[doc.id], '_blank', 'noopener,noreferrer')
+                          }
+                          title="Ver"
+                          className="p-2 text-neutral-600 hover:text-neutral-900 hover:bg-neutral-100 rounded-lg transition-colors cursor-pointer"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleDescargarDoc(doc)}
@@ -1197,6 +1270,44 @@ export default function SolicitudDetalleModal({
           )}
         </div>
       </div>
+      {imagenAmpliada && vistas[imagenAmpliada.id] && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label={imagenAmpliada.nombre_archivo}
+          onClick={() => setImagenAmpliada(null)}
+          className="fixed inset-0 z-[60] flex flex-col items-center justify-center gap-3 p-4 bg-black/80"
+        >
+          <div className="flex items-center gap-2 max-w-full" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm text-white truncate">{imagenAmpliada.nombre_archivo}</p>
+            <button
+              type="button"
+              onClick={() => handleDescargarDoc(imagenAmpliada)}
+              className="p-2 rounded-lg text-white hover:bg-white/10 cursor-pointer"
+              title="Descargar"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setImagenAmpliada(null)}
+              className="p-2 rounded-lg text-white hover:bg-white/10 cursor-pointer"
+              title="Cerrar"
+              aria-label="Cerrar"
+            >
+              <IconoCerrar className="w-4 h-4" />
+            </button>
+          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element -- enlace firmado de Storage, de vida corta */}
+          <img
+            src={vistas[imagenAmpliada.id]}
+            alt={imagenAmpliada.nombre_archivo}
+            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-[80vh] object-contain rounded-lg"
+          />
+        </div>
+      )}
+      {dialogoConfirmacion}
     </div>
   );
 }

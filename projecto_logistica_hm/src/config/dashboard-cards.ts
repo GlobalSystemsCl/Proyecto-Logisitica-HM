@@ -146,7 +146,7 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     nombre: 'Traslados',
     tituloAdmin: 'Traslados',
     tituloPorRol: {
-      jefe_local: 'Traslada aquí tus vehículos ya vendidos',
+      jefe_local: 'Recibe aquí los traslados internos hacia tus sucursales',
       logistica: 'Gestiona aquí los traslados entre sucursales',
     },
     descripcion:
@@ -261,9 +261,9 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     nombre: 'Vehículos',
     tituloAdmin: 'Gestión de Vehículos',
     tituloPorRol: {
-      jefe_local: 'Carga aquí tus vehículos al inventario',
+      jefe_local: 'Consulta aquí el inventario de vehículos',
       logistica: 'Ubica y controla aquí los vehículos',
-      operaciones: 'Carga aquí los vehículos al inventario',
+      operaciones: 'Consulta aquí el inventario de vehículos',
     },
     descripcion:
       'Alta de vehículos al inventario interno con sus datos completos y control de dónde están ubicados.',

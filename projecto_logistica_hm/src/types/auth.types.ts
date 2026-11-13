@@ -84,6 +84,11 @@ export interface UpdateUserInput {
   sucursales_ids?: number[];
   zonas_ids?: number[];
   telefono?: string | null;
+  /**
+   * QA #25: al quitarle el rol de Logística a alguien con solicitudes o
+   * traslados abiertos, usuario de Logística activo que los recibe.
+   */
+  traspasarA?: string | null;
 }
 
 export interface AuthState {

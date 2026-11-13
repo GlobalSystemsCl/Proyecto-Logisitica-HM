@@ -5,6 +5,8 @@ import { cuerpoFuncion, leerMigracion } from '../mocks/sql';
 import {
   SolicitudesService,
   ESTADOS_ACTIVOS_RESERVA,
+  ESTADOS_BLOQUEAN_VEHICULO,
+  horasRestantesInsistencia,
   type SolicitudMinima,
 } from '@/services/solicitudes.service';
 import { MENSAJE_SOLICITUD_CERRADA } from '@/lib/estadosSolicitud';
@@ -128,6 +130,23 @@ describe('ESTADOS_ACTIVOS_RESERVA', () => {
   });
 });
 
+describe('ESTADOS_BLOQUEAN_VEHICULO', () => {
+  it('should_add_received_requests_to_the_reservation_states', () => {
+    expect([...ESTADOS_BLOQUEAN_VEHICULO]).toEqual([...ESTADOS_ACTIVOS_RESERVA, 'entregada']);
+  });
+
+  it('should_match_every_database_check_of_vehicle_availability', () => {
+    // Hallazgos #1 y #44: la app y la BD deben bloquear los mismos estados.
+    const sql = leerMigracion('migrations', '20261112140000_reserva_incluye_recepcionada.sql');
+    for (const nombre of ['fn_validar_reserva_unica_vehiculo', 'fn_validar_vehiculo_trasladable', 'fn_vehiculos_disponibles_traslado']) {
+      const cuerpo = cuerpoFuncion(sql, nombre);
+      const lista = cuerpo.match(/s\.estado in \(([^)]*)\)/)?.[1] ?? '';
+      const enSql = [...lista.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+      expect(enSql, nombre).toEqual([...ESTADOS_BLOQUEAN_VEHICULO]);
+    }
+  });
+});
+
 describe('SolicitudesService.getUsuarioRolSucursal', () => {
   beforeEach(() => {
     admin.reset();
@@ -243,6 +262,8 @@ describe('SolicitudesService.getSolicitudes', () => {
       solicitud_vehiculo_id: 'sv-1',
       disponibilidad: 'reservado',
       numero_guia: null,
+      sucursal_origen: null,
+      sucursal_origen_nombre: null,
       patente: 'ABC123',
       chasis: 'WBA3A5C50FF123456',
       marca: 'Toyota',
@@ -329,6 +350,15 @@ describe('SolicitudesService.getVehiculosInventario', () => {
     expect(map.get('v1')?.reservado_en_activa).toBe(true);
     expect(map.get('v2')?.reservado_en_activa).toBe(false);
     expect(map.has('v3')).toBe(false);
+  });
+
+  it('should_treat_vehicles_of_received_requests_as_reserved_when_listing_inventory', async () => {
+    admin.results.vehiculo = [fila([])];
+    admin.results.solicitud_vehiculo = [fila([]), fila([])];
+
+    await SolicitudesService.getVehiculosInventario();
+
+    expect(admin.callsTo('solicitud_vehiculo')).toContainEqual(['in', 'solicitud.estado', [...ESTADOS_BLOQUEAN_VEHICULO]]);
   });
 
   it('should_include_vehicles_beyond_first_1000_when_inventory_is_large', async () => {
@@ -1090,6 +1120,19 @@ describe('SolicitudesService.aprobarSolicitud', () => {
     expect(res.error).toBe('Solo se pueden aprobar solicitudes pendientes de aprobación.');
   });
 
+  it('should_reject_approval_when_a_vehicle_has_no_origin_branch', async () => {
+    admin.results.solicitud = [fila(minimo({ estado: 'pendiente_aprobacion' }))];
+    admin.results.solicitud_vehiculo = [fila([{ vehiculo_id: 'v-1' }])];
+    admin.results.vehiculo = [fila([{ id: 'v-1', chasis: '151135ELIMINARVIT', ubicacion: null }])];
+
+    const res = await SolicitudesService.aprobarSolicitud('s-1', USUARIO_ID, '2099-01-01');
+
+    expect(res.success).toBe(false);
+    expect(res.error).toContain('151135ELIMINARVIT');
+    expect(res.error).toContain('rechaza la solicitud');
+    expect(admin.callsTo('solicitud').some((c) => c[0] === 'update')).toBe(false);
+  });
+
   it('should_aprobar_y_guardar_fechas', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.solicitud = [fila(minimo({ estado: 'pendiente_aprobacion' })), fila(null)];
@@ -1145,6 +1188,8 @@ describe('SolicitudesService.rechazarSolicitud', () => {
 
     const res = await SolicitudesService.rechazarSolicitud('s-1', ' no cumple requisitos ', USUARIO_ID);
     expect(res).toEqual({ success: true });
+    const update = admin.callsTo('solicitud').find((c) => c[0] === 'update');
+    expect(update?.[1]).toEqual({ estado: 'rechazada', motivo_cancelacion: 'no cumple requisitos' });
     const obs = admin.callsTo('observacion').find((c) => c[0] === 'insert');
     expect(obs?.[1]).toEqual({
       solicitud_id: 's-1',
@@ -1503,6 +1548,47 @@ describe('SolicitudesService.getURLDescarga', () => {
     const res = await SolicitudesService.getURLDescarga('d-1');
     expect(res.success).toBe(false);
     expect(res.error).toBe('No se pudo generar el enlace de descarga.');
+  });
+});
+
+describe('SolicitudesService.getURLsVistaPrevia (QA #52)', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  it('should_sign_only_images_and_pdf_inline_in_one_call', async () => {
+    admin.results.solicitud_documento = [
+      fila([
+        { id: 'd-img', ruta_storage: 's/1.png', tipo_mime: 'image/png' },
+        { id: 'd-pdf', ruta_storage: 's/2.pdf', tipo_mime: 'application/pdf' },
+        { id: 'd-xls', ruta_storage: 's/3.xlsx', tipo_mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+      ]),
+    ];
+    admin.results[BUCKET] = [
+      fila([
+        { path: 's/1.png', signedUrl: 'https://cdn/1', error: null },
+        { path: 's/2.pdf', signedUrl: 'https://cdn/2', error: null },
+      ]),
+    ];
+
+    const res = await SolicitudesService.getURLsVistaPrevia('s-1');
+
+    expect(res).toEqual({ 'd-img': 'https://cdn/1', 'd-pdf': 'https://cdn/2' });
+    expect(admin.callsTo(BUCKET)).toContainEqual(['createSignedUrls', ['s/1.png', 's/2.pdf'], 600]);
+  });
+
+  it('should_return_empty_without_signing_when_there_is_nothing_to_preview', async () => {
+    admin.results.solicitud_documento = [fila([{ id: 'd-xls', ruta_storage: 's/3.xls', tipo_mime: 'application/vnd.ms-excel' }])];
+    expect(await SolicitudesService.getURLsVistaPrevia('s-1')).toEqual({});
+    expect(admin.callsTo(BUCKET)).toEqual([]);
+  });
+
+  it('should_return_empty_when_signing_fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.solicitud_documento = [fila([{ id: 'd-img', ruta_storage: 's/1.png', tipo_mime: 'image/png' }])];
+    admin.results[BUCKET] = [errorResult('no firmado')];
+    expect(await SolicitudesService.getURLsVistaPrevia('s-1')).toEqual({});
   });
 });
 
@@ -2389,5 +2475,69 @@ describe('SolicitudesService: venta desde la sucursal (R1)', () => {
 
     expect(res.success).toBe(false);
     expect(res.error).toContain('no requiere traslado');
+  });
+});
+
+describe('horasRestantesInsistencia', () => {
+  const AHORA = Date.parse('2026-11-12T12:00:00Z');
+
+  it('should_round_up_the_remaining_hours_within_the_cooldown', () => {
+    expect(horasRestantesInsistencia('2026-11-12T10:30:00Z', AHORA)).toBe(23);
+  });
+
+  it('should_return_null_once_the_cooldown_has_passed', () => {
+    expect(horasRestantesInsistencia('2026-11-11T12:00:00Z', AHORA)).toBeNull();
+    expect(horasRestantesInsistencia('2026-11-01T00:00:00Z', AHORA)).toBeNull();
+  });
+});
+
+describe('SolicitudesService.getCooldownsInsistencia (QA #2)', () => {
+  const AHORA = Date.parse('2026-11-12T12:00:00Z');
+
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should_resolve_every_request_with_a_single_query_using_the_most_recent_insistence', async () => {
+    admin.results.insistencia = [
+      fila([
+        { solicitud_id: 's-1', created_at: '2026-11-12T10:00:00Z' },
+        { solicitud_id: 's-1', created_at: '2026-11-11T20:00:00Z' },
+      ]),
+    ];
+
+    const res = await SolicitudesService.getCooldownsInsistencia(['s-1', 's-2', 's-1'], 'e-1', AHORA);
+
+    expect(res).toEqual({ 's-1': 22, 's-2': null });
+    const llamadas = admin.callsTo('insistencia');
+    expect(llamadas.filter((c) => c[0] === 'select')).toHaveLength(1);
+    expect(llamadas).toContainEqual(['in', 'solicitud_id', ['s-1', 's-2']]);
+    expect(llamadas).toContainEqual(['eq', 'usuario_id', 'e-1']);
+    expect(llamadas).toContainEqual(['gte', 'created_at', '2026-11-11T12:00:00.000Z']);
+  });
+
+  it('should_split_large_lists_in_batches_of_100_ids', async () => {
+    const ids = Array.from({ length: 150 }, (_, i) => `s-${i}`);
+    admin.results.insistencia = [fila([]), fila([])];
+
+    const res = await SolicitudesService.getCooldownsInsistencia(ids, 'e-1', AHORA);
+
+    expect(Object.keys(res)).toHaveLength(150);
+    const ins = admin.callsTo('insistencia').filter((c) => c[0] === 'in');
+    expect(ins.map((c) => (c[2] as string[]).length)).toEqual([100, 50]);
+  });
+
+  it('should_not_query_when_there_are_no_ids_and_keep_going_after_an_error', async () => {
+    expect(await SolicitudesService.getCooldownsInsistencia([], 'e-1', AHORA)).toEqual({});
+    expect(admin.callsTo('insistencia')).toHaveLength(0);
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    admin.results.insistencia = [{ data: null, error: { message: 'boom' } }];
+    expect(await SolicitudesService.getCooldownsInsistencia(['s-1'], 'e-1', AHORA)).toEqual({ 's-1': null });
   });
 });

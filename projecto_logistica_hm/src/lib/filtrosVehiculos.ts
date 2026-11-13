@@ -33,6 +33,8 @@ export interface MetricasVehiculos {
   reservados: number;
   vendidos: number;
   disponibles: number;
+  /** QA #24: disponibles sin sucursal de origen (en viaje): no se pueden pedir. */
+  disponiblesSinUbicacion: number;
 }
 
 /**
@@ -151,7 +153,10 @@ export function contarPorDisponibilidad(vehiculos: VehiculoConDisponibilidad[]):
   const total = vehiculos.length;
   const reservados = vehiculos.filter((v) => v.estado_disponibilidad === 'reservado').length;
   const vendidos = vehiculos.filter((v) => v.estado_disponibilidad === 'vendido').length;
-  return { total, reservados, vendidos, disponibles: total - reservados - vendidos };
+  const disponiblesSinUbicacion = vehiculos.filter(
+    (v) => v.estado_disponibilidad !== 'reservado' && v.estado_disponibilidad !== 'vendido' && v.ubicacion === null
+  ).length;
+  return { total, reservados, vendidos, disponibles: total - reservados - vendidos, disponiblesSinUbicacion };
 }
 
 /** Indica si hay al menos un filtro distinto del estado inicial, para mostrar "Limpiar filtros". */

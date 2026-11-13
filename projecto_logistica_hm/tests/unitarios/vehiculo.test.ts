@@ -7,6 +7,8 @@ import {
   etiquetaDisponibilidad,
   mensajeVehiculosSinUbicacion,
   tieneUbicacion,
+  puedeGestionarVehiculos,
+  lineasVehiculos,
 } from '@/lib/vehiculo';
 import type { VehiculoAsociado } from '@/types/solicitud.types';
 
@@ -114,5 +116,30 @@ describe('mensajeVehiculosSinUbicacion', () => {
   it('should_list_up_to_five_chassis_and_count_the_rest', () => {
     const msg = mensajeVehiculosSinUbicacion(['A', 'B', 'C', 'D', 'E', 'F', 'G']);
     expect(msg.startsWith('Los vehículos A, B, C, D, E y 2 más no tienen sucursal de origen')).toBe(true);
+  });
+});
+
+describe('puedeGestionarVehiculos', () => {
+  it('should_return_true_when_role_is_logistica_or_administrador', () => {
+    expect(puedeGestionarVehiculos('logistica')).toBe(true);
+    expect(puedeGestionarVehiculos('administrador')).toBe(true);
+  });
+
+  it('should_return_false_when_role_only_consults_inventory', () => {
+    expect(puedeGestionarVehiculos('jefe_local')).toBe(false);
+    expect(puedeGestionarVehiculos('operaciones')).toBe(false);
+    expect(puedeGestionarVehiculos(null)).toBe(false);
+  });
+});
+
+describe('lineasVehiculos', () => {
+  it('should_return_one_line_with_model_and_chassis_per_vehicle', () => {
+    expect(lineasVehiculos([{ marca: 'TOYOTA', modelo: 'Yaris', chasis: 'JTMW1RF79KD123456' }])).toEqual([
+      'TOYOTA Yaris · JTMW1RF79KD123456',
+    ]);
+  });
+
+  it('should_return_empty_list_when_there_are_no_vehicles', () => {
+    expect(lineasVehiculos([])).toEqual([]);
   });
 });

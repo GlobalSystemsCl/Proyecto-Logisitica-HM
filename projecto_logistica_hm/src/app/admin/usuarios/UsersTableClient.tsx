@@ -6,13 +6,14 @@ import {
   validarAsignacionesFormulario,
 } from '@/lib/asignaciones';
 import AsignacionesFields from '@/components/AsignacionesUsuarioFields';
+import { debeTraspasarTrabajo, textoTrabajoAbierto } from '@/lib/trabajoLogistica';
 import ActivacionMasivaModal from '@/components/ActivacionMasivaModal';
 import CargaMasivaUsuarios from '@/components/CargaMasivaUsuarios';
 import { contarUsuarios, cumpleEstado, esPendiente, estadoDesdeParam, type EstadoUsuarioFiltro } from '@/lib/usuariosAdmin';
 import { UserProfile, UserRole } from '@/types/auth.types';
 import { Sucursal, Zona } from '@/types/sucursal.types';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
-import { createUserAction, updateUserAction, toggleUserStatusAction, resetUserPasswordAction, approveUserAction } from '@/app/actions/users.actions';
+import { createUserAction, updateUserAction, toggleUserStatusAction, resetUserPasswordAction, approveUserAction, getTrabajoLogisticaAction } from '@/app/actions/users.actions';
 import {
   Users,
   UserPlus,
@@ -32,6 +33,7 @@ import {
   Pencil,
   FileSpreadsheet,
 } from 'lucide-react';
+import { useConfirmacion } from '@/components/Confirmacion';
 
 interface Props {
   users: UserProfile[];
@@ -75,6 +77,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   const esAdminPrincipal = (email: string) =>
     adminPrincipalEmail !== null && email.toLowerCase() === adminPrincipalEmail;
   const [isHydrated, setIsHydrated] = useState(false);
+  const { confirmar, avisar, dialogoConfirmacion } = useConfirmacion();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<string>('todos');
   const [estado, setEstado] = useState<EstadoUsuarioFiltro>('todos');
@@ -112,6 +115,10 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   const [editSucursalId, setEditSucursalId] = useState<number | null>(null);
   const [editSucursalesIds, setEditSucursalesIds] = useState<number[]>([]);
   const [editZonasIds, setEditZonasIds] = useState<number[]>([]);
+  // QA #25: si deja de ser Logística con trabajo abierto, quién lo recibe.
+  const [editRolOriginal, setEditRolOriginal] = useState<UserRole>('ejecutivo');
+  const [trabajoAbierto, setTrabajoAbierto] = useState<{ solicitudes: number; traslados: number } | null>(null);
+  const [editTraspasarA, setEditTraspasarA] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
 
@@ -122,6 +129,11 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   );
   const ocupadasCrear = useMemo(() => sucursalesOcupadasPorJefes(jefes), [jefes]);
   const ocupadasEditar = useMemo(() => sucursalesOcupadasPorJefes(jefes, editUserId), [jefes, editUserId]);
+  const debeTraspasar = debeTraspasarTrabajo(editRolOriginal, editRol, trabajoAbierto);
+  const receptoresLogistica = useMemo(
+    () => users.filter((u) => u.rol === 'logistica' && u.activo && u.id !== editUserId),
+    [users, editUserId]
+  );
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -224,18 +236,18 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     });
   };
 
-  const handleToggleStatus = (userId: string, currentStatus: boolean, email: string) => {
+  const handleToggleStatus = async (userId: string, currentStatus: boolean, email: string) => {
     if (esAdminPrincipal(email) && currentStatus) {
-      alert('La cuenta del Administrador Principal no puede ser desactivada.');
+      void avisar('La cuenta del Administrador Principal no puede ser desactivada.');
       return;
     }
     if (userId === currentAdminId && currentStatus) {
-      alert('No puedes desactivar tu propia cuenta de administrador.');
+      void avisar('No puedes desactivar tu propia cuenta de administrador.');
       return;
     }
 
     const actionText = currentStatus ? 'desactivar' : 'activar';
-    if (!confirm(`¿Estás seguro de que deseas ${actionText} a ${email}?`)) {
+    if (!(await confirmar({ titulo: currentStatus ? 'Desactivar usuario' : 'Activar usuario', mensaje: `¿Estás seguro de que deseas ${actionText} a ${email}?`, textoConfirmar: currentStatus ? 'Desactivar' : 'Activar', peligro: currentStatus }))) {
       return;
     }
 
@@ -255,8 +267,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     });
   };
 
-  const handleAutorizar = (userId: string, email: string) => {
-    if (!confirm(`¿Autorizar el acceso de ${email} al sistema?`)) {
+  const handleAutorizar = async (userId: string, email: string) => {
+    if (!(await confirmar({ titulo: 'Autorizar acceso', mensaje: `¿Autorizar el acceso de ${email} al sistema?`, textoConfirmar: 'Autorizar' }))) {
       return;
     }
 
@@ -276,8 +288,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     });
   };
 
-  const handleResetPassword = (userId: string, email: string) => {
-    if (!confirm(`¿Deseas generar una nueva contraseña provisoria para ${email}?`)) {
+  const handleResetPassword = async (userId: string, email: string) => {
+    if (!(await confirmar({ titulo: 'Nueva contraseña provisoria', mensaje: `¿Deseas generar una nueva contraseña provisoria para ${email}? La actual deja de servir.`, textoConfirmar: 'Generar' }))) {
       return;
     }
 
@@ -312,6 +324,12 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     setEditNombre(user.nombre);
     setEditApellido(user.apellido);
     setEditRol(user.rol);
+    setEditRolOriginal(user.rol);
+    setTrabajoAbierto(null);
+    setEditTraspasarA('');
+    if (user.rol === 'logistica') {
+      getTrabajoLogisticaAction(user.id).then(setTrabajoAbierto);
+    }
     setEditSucursalId(user.sucursal_id ?? null);
     setEditSucursalesIds((user.sucursales ?? []).map((s) => s.id).filter((id) => id !== user.sucursal_id));
     setEditZonasIds((user.zonas ?? []).map((z) => z.id));
@@ -327,6 +345,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     setEditSucursalesIds([]);
     setEditZonasIds([]);
     setEditError(null);
+    setTrabajoAbierto(null);
+    setEditTraspasarA('');
   };
 
   const handleEditUser = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -340,6 +360,10 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
     );
     setEditError(errorAsignacion);
     if (errorAsignacion) return;
+    if (debeTraspasar && !editTraspasarA) {
+      setEditError('Elige a qué usuario de Logística traspasar su trabajo abierto.');
+      return;
+    }
 
     startTransition(async () => {
       const res = await updateUserAction({
@@ -350,6 +374,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
         sucursal_id: editSucursalId,
         sucursales_ids: editRol === 'jefe_local' ? editSucursalesIds : [],
         zonas_ids: editRol === 'logistica' ? editZonasIds : [],
+        traspasarA: debeTraspasar ? editTraspasarA : null,
       });
 
       if (res.success) {
@@ -511,7 +536,8 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
       </div>
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* QA #28: la tarjeta y el filtro de pendientes solo aparecen si queda alguna (desde R17 el registro deja la cuenta activa). */}
+      <div className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${pendingUsers > 0 ? 'lg:grid-cols-4' : 'lg:grid-cols-3'}`}>
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Total Usuarios</p>
@@ -532,6 +558,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           </div>
         </div>
 
+        {pendingUsers > 0 && (
         <button
           type="button"
           onClick={() => setEstado(estado === 'pendientes' ? 'todos' : 'pendientes')}
@@ -549,6 +576,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
             <ShieldCheck className="w-5 h-5" />
           </div>
         </button>
+        )}
 
         <div className="bg-white border border-neutral-200 rounded-2xl p-5 flex items-center justify-between">
           <div>
@@ -669,7 +697,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
             className="w-full sm:w-auto bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
           >
             <option value="todos">Todos</option>
-            <option value="pendientes">Pendientes</option>
+            {(pendingUsers > 0 || estado === 'pendientes') && <option value="pendientes">Pendientes</option>}
             <option value="activos">Activos</option>
             <option value="inactivos">Inactivos</option>
           </select>
@@ -1125,6 +1153,34 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                 </select>
               </div>
 
+              {debeTraspasar && trabajoAbierto && (
+                <div className="space-y-1.5 p-3 rounded-xl border border-amber-200 bg-amber-50">
+                  <p className="text-xs text-amber-900">
+                    {textoTrabajoAbierto(trabajoAbierto)} Al dejar de ser Logística, pasan al usuario que elijas.
+                  </p>
+                  <select
+                    value={editTraspasarA}
+                    onChange={(e) => {
+                      setEditTraspasarA(e.target.value);
+                      setEditError(null);
+                    }}
+                    className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                  >
+                    <option value="">Traspasar a…</option>
+                    {receptoresLogistica.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.nombre} {u.apellido}
+                      </option>
+                    ))}
+                  </select>
+                  {receptoresLogistica.length === 0 && (
+                    <p className="text-xs text-red-600">
+                      No hay otro usuario de Logística activo. Crea o asigna uno antes de cambiar este rol.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <AsignacionesFields
                 rol={editRol}
                 sucursales={sucursales}
@@ -1180,6 +1236,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
           onCerrar={() => setCargaMasiva(false)}
         />
       )}
+      {dialogoConfirmacion}
     </div>
   );
 }

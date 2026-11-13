@@ -80,3 +80,15 @@ export function decidirAcceso(
 
   return { accion: 'continuar' };
 }
+
+/**
+ * QA #4 (2026-11-12): una Server Action (header `Next-Action`) no se puede
+ * redirigir desde el middleware: el navegador repite el POST contra /login,
+ * recibe HTML y Next muestra "An unexpected response was received from the
+ * server" (una vez por cada acción en cola). Se deja pasar: la acción valida
+ * la sesión con `requireProfile` y devuelve un mensaje legible. El cierre de
+ * sesión (`cerrarSesion`) se aplica igual.
+ */
+export function redirigeEnMiddleware(decision: DecisionAcceso, esAccionServidor: boolean): boolean {
+  return decision.accion === 'redirigir' && !esAccionServidor;
+}

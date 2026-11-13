@@ -7,6 +7,7 @@ import { cancelarAusenciaAction, crearAusenciaAction } from '@/app/actions/ausen
 import { ETIQUETA_ESTADO_AUSENCIA, validarAusencia } from '@/lib/ausencias';
 import { formatFecha } from '@/lib/fechas';
 import type { Ausencia } from '@/services/ausencia.service';
+import { useConfirmacion } from '@/components/Confirmacion';
 
 interface Props {
   ausencias: Ausencia[];
@@ -33,6 +34,7 @@ const CHIP: Record<Ausencia['estado'], string> = {
 export default function AusenciasClient({ ausencias, usuarios, hoy, erroresProceso }: Props) {
   const router = useRouter();
   const [form, setForm] = useState({ titularId: '', sustitutoId: '', desde: hoy, hasta: hoy, motivo: '' });
+  const { confirmar, dialogoConfirmacion } = useConfirmacion();
   const [guardando, setGuardando] = useState(false);
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(
@@ -72,7 +74,7 @@ export default function AusenciasClient({ ausencias, usuarios, hoy, erroresProce
       a.estado === 'activa'
         ? `¿Terminar ahora la ausencia de ${a.titular_nombre}? Se reactiva su cuenta y vuelve lo traspasado que siga abierto.`
         : `¿Cancelar la ausencia programada de ${a.titular_nombre}?`;
-    if (!window.confirm(texto)) return;
+    if (!(await confirmar({ mensaje: texto, titulo: a.estado === 'activa' ? 'Terminar ausencia' : 'Cancelar ausencia', textoConfirmar: a.estado === 'activa' ? 'Terminar ahora' : 'Cancelar ausencia', textoCancelar: 'Volver' }))) return;
     setOcupado(a.id);
     try {
       const res = await cancelarAusenciaAction(a.id);
@@ -135,6 +137,14 @@ export default function AusenciasClient({ ausencias, usuarios, hoy, erroresProce
               </option>
             ))}
           </select>
+          {/* QA #50: explica el selector vacío. */}
+          {sustitutos.length === 0 && (
+            <span className="block text-xs text-amber-700">
+              {form.titularId
+                ? 'No hay otro usuario de Logística activo que pueda cubrirlo. Crea o activa uno en Usuarios.'
+                : 'Elige primero al titular.'}
+            </span>
+          )}
         </label>
         <label className="space-y-1">
           <span className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Desde *</span>
@@ -193,6 +203,7 @@ export default function AusenciasClient({ ausencias, usuarios, hoy, erroresProce
           </ul>
         )}
       </div>
+      {dialogoConfirmacion}
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { recibirTrasladoAction, subirDocumentosTrasladoAction } from '@/app/actions/traslados.actions';
 import { recibirSolicitudAction, subirDocumentosSolicitudAction } from '@/app/actions/solicitudes.actions';
 import type { DatosRecepcion } from '@/lib/recepcion';
 
@@ -22,6 +23,32 @@ export async function recibirSolicitudConFotos(
   const fd = new FormData();
   fotos.forEach((f) => fd.append('archivos', f));
   const subida = await subirDocumentosSolicitudAction(solicitudId, fd);
+  if (!subida.success) {
+    return {
+      error: null,
+      aviso: `La recepción quedó registrada, pero no se pudieron adjuntar las fotos: ${subida.error ?? 'error desconocido'}`,
+    };
+  }
+  return { error: null, aviso: null };
+}
+
+/**
+ * QA #49: igual que `recibirSolicitudConFotos`, para un traslado interno. Las
+ * fotos quedan en `traslado_documento`.
+ */
+export async function recibirTrasladoConFotos(
+  trasladoId: string,
+  datos: DatosRecepcion,
+  fotos: File[]
+): Promise<{ error: string | null; aviso: string | null }> {
+  const resultado = await recibirTrasladoAction(trasladoId, datos);
+  if (!resultado.success) return { error: resultado.error ?? 'No se pudo registrar la recepción.', aviso: null };
+
+  if (fotos.length === 0) return { error: null, aviso: null };
+
+  const fd = new FormData();
+  fotos.forEach((f) => fd.append('archivos', f));
+  const subida = await subirDocumentosTrasladoAction(trasladoId, fd);
   if (!subida.success) {
     return {
       error: null,

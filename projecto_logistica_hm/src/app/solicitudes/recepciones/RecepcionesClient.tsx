@@ -4,17 +4,18 @@ import { useState } from 'react';
 import { CheckCircle2, Inbox, MapPin, PackageCheck, Truck, X } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
-import { recibirTrasladoAction } from '@/app/actions/traslados.actions';
 import { RecepcionModal } from '@/components/ModalesTraslado';
-import { recibirSolicitudConFotos } from '@/lib/recepcionCliente';
+import { recibirSolicitudConFotos, recibirTrasladoConFotos } from '@/lib/recepcionCliente';
 import type { DatosRecepcion } from '@/lib/recepcion';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
 import { codigoSolicitud, codigoTraslado } from '@/lib/codigoSolicitud';
 import { formatFecha } from '@/lib/fechas';
-import { etiquetaVehiculo } from '@/lib/vehiculo';
+import { etiquetaVehiculo, lineasVehiculos } from '@/lib/vehiculo';
 import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
 import { CHIP_ATRASO, getEstadoAtraso } from '../SolicitudesClient';
 import { guiasTexto } from '@/lib/guiaDespacho';
+import { rutaSolicitud } from '@/lib/origenSolicitud';
+import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
 
 interface Props {
   solicitudes: SolicitudLista[];
@@ -34,9 +35,10 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
       if (error) return error;
       setFeedback({ tipo: aviso ? 'error' : 'success', mensaje: aviso ?? 'Recepción registrada.' });
     } else {
-      const result = await recibirTrasladoAction(objetivo.item.id, datos);
-      if (!result.success) return result.error ?? 'No se pudo registrar la recepción.';
-      setFeedback({ tipo: 'success', mensaje: result.message ?? 'Recepción registrada.' });
+      // QA #49: los traslados también admiten fotos al recibir.
+      const { error, aviso } = await recibirTrasladoConFotos(objetivo.item.id, datos, fotos);
+      if (error) return error;
+      setFeedback({ tipo: aviso ? 'error' : 'success', mensaje: aviso ?? 'Recepción registrada.' });
     }
     setObjetivo(null);
     return null;
@@ -87,7 +89,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                 {solicitudes.map((s) => {
                   const chip = CHIP_ATRASO[getEstadoAtraso(s)];
                   return (
-                    <li key={s.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <li key={s.id} onClick={abrirDetalleDeFila} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 cursor-pointer hover:bg-neutral-50">
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <AbrirSolicitudDetalle solicitudId={s.id} className="font-mono text-xs text-neutral-500">
@@ -99,7 +101,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                         </div>
                         <p className="text-sm font-semibold text-neutral-900 flex items-center gap-1.5">
                           <MapPin className="w-4 h-4 text-neutral-400" />
-                          {s.sucursal_nombre} → {s.sucursal_destino_nombre ?? s.titulo_evento ?? '—'}
+                          {rutaSolicitud(s)}
                         </p>
                         <p className="text-xs text-neutral-500 truncate">
                           {s.vehiculos.map((v) => etiquetaVehiculo(v)).filter(Boolean).join(' · ') || 'Sin vehículos'}
@@ -133,7 +135,7 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
                 {traslados.map((t) => (
                   <li key={t.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1 min-w-0 space-y-1">
-                      <span className="font-mono text-xs text-neutral-500">{codigoTraslado(t.id)}</span>
+                      <span className="font-mono text-xs text-neutral-500">{codigoTraslado(t)}</span>
                       <p className="text-sm font-semibold text-neutral-900 flex items-center gap-1.5">
                         <Truck className="w-4 h-4 text-neutral-400" />
                         {t.origen_nombre} → {t.destino_nombre}
@@ -162,13 +164,18 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
 
       {objetivo && (
         <RecepcionModal
-          titulo={objetivo.tipo === 'solicitud' ? 'Recibir solicitud' : 'Recibir traslado interno'}
+          titulo={
+            objetivo.tipo === 'solicitud'
+              ? `Recibir solicitud ${codigoSolicitud(objetivo.item)}`
+              : `Recibir traslado interno ${codigoTraslado(objetivo.item)}`
+          }
+          vehiculos={lineasVehiculos(objetivo.item.vehiculos)}
           subtitulo={
             objetivo.tipo === 'solicitud'
-              ? `${objetivo.item.sucursal_nombre ?? ''} → ${objetivo.item.sucursal_destino_nombre ?? objetivo.item.titulo_evento ?? ''}`
+              ? rutaSolicitud(objetivo.item)
               : `${objetivo.item.origen_nombre ?? ''} → ${objetivo.item.destino_nombre ?? ''}`
           }
-          permitirFotos={objetivo.tipo === 'solicitud'}
+          permitirFotos
           onCerrar={() => setObjetivo(null)}
           onConfirmar={confirmar}
         />

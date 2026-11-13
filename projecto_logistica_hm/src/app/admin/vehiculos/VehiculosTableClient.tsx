@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useTransition } from 'react';
 import { VehiculoConDisponibilidad } from '@/types/vehiculo.types';
-import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehiculo';
+import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD, puedeGestionarVehiculos } from '@/lib/vehiculo';
 import {
   FILTRO_EN_VIAJE,
   contarSinUbicacion,
@@ -38,6 +38,7 @@ import {
   ChevronRight,
   MapPin,
 } from 'lucide-react';
+import { useConfirmacion } from '@/components/Confirmacion';
 
 interface Props {
   vehiculos: VehiculoConDisponibilidad[];
@@ -47,7 +48,10 @@ interface Props {
 }
 
 export default function VehiculosTableClient({ vehiculos, marcas, sucursales, userRole }: Props) {
+  // QA #15: el jefe de local consulta el inventario, pero no lo modifica.
+  const puedeGestionar = puedeGestionarVehiculos(userRole);
   const [isHydrated, setIsHydrated] = useState(false);
+  const { confirmar, dialogoConfirmacion } = useConfirmacion();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMarca, setSelectedMarca] = useState<string>(FILTRO_TODAS);
   const [selectedDisponibilidad, setSelectedDisponibilidad] = useState<string>(FILTRO_TODAS);
@@ -254,7 +258,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     fechaHasta,
   });
 
-  const { total: totalVehiculos, reservados, vendidos, disponibles } = useMemo(
+  const { total: totalVehiculos, reservados, vendidos, disponibles, disponiblesSinUbicacion } = useMemo(
     () => contarPorDisponibilidad(filteredVehiculos),
     [filteredVehiculos],
   );
@@ -264,9 +268,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
   const pageStart = (currentPageClamped - 1) * PAGE_SIZE;
   const pageVehiculos = filteredVehiculos.slice(pageStart, pageStart + PAGE_SIZE);
 
-  const seleccionablesFiltrados = filteredVehiculos.filter(esSeleccionableParaMover);
+  const seleccionablesFiltrados = puedeGestionar ? filteredVehiculos.filter(esSeleccionableParaMover) : [];
   const totalSinUbicacion = useMemo(() => contarSinUbicacion(vehiculos), [vehiculos]);
-  const seleccionablesPagina = pageVehiculos.filter(esSeleccionableParaMover);
+  const seleccionablesPagina = puedeGestionar ? pageVehiculos.filter(esSeleccionableParaMover) : [];
   const paginaSeleccionada =
     seleccionablesPagina.length > 0 && seleccionablesPagina.every((v) => seleccion.has(v.id));
 
@@ -291,7 +295,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     const sucursalId = Number(destinoMasivo);
     const nombre = sucursales.find((s) => s.id === sucursalId)?.nombre ?? 'la sucursal elegida';
     if (!sucursalId || seleccion.size === 0) return;
-    if (!window.confirm(`¿Mover ${seleccion.size} vehículo(s) a ${nombre}?`)) return;
+    if (!(await confirmar({ titulo: 'Cambiar ubicación', mensaje: `¿Mover ${seleccion.size} vehículo(s) a ${nombre}?`, textoConfirmar: 'Mover' }))) return;
     setMoviendo(true);
     try {
       const res = await cambiarUbicacionMasivaAction([...seleccion], sucursalId);
@@ -616,7 +620,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     const isSold = vehiculo.estado_disponibilidad === 'vendido';
     return (
       <>
-        {isReserved || isSold ? (
+        {!puedeGestionar ? null : isReserved || isSold ? (
           <span
             title={isReserved ? 'No disponible: vehículo reservado en una solicitud' : 'No disponible: vehículo ya entregado al cliente'}
             className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-neutral-400 bg-neutral-50 cursor-not-allowed"
@@ -662,6 +666,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
           </p>
         </div>
 
+        {puedeGestionar && (
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
@@ -684,6 +689,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             <span>Registrar Vehículo</span>
           </button>
         </div>
+        )}
       </div>
 
       {/* Metric Cards */}
@@ -705,6 +711,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
           <div>
             <p className="text-xs font-medium text-neutral-500 uppercase tracking-wider">Disponibles</p>
             <p className="text-3xl font-bold text-neutral-900 mt-1">{disponibles}</p>
+            {disponiblesSinUbicacion > 0 && (
+              <p className="text-xs text-amber-700 mt-0.5">{disponiblesSinUbicacion} sin sucursal: no se pueden pedir</p>
+            )}
           </div>
           <div className="w-11 h-11 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-500">
             <Unlock className="w-5 h-5" />
@@ -892,8 +901,9 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
         <div className="flex flex-wrap items-center justify-between gap-2 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
           <span>
             <strong>{totalSinUbicacion}</strong> vehículo(s) sin sucursal de origen (en viaje / container): no se pueden pedir en
-            una solicitud hasta que les asignes una sucursal.
+            una solicitud hasta que {puedeGestionar ? 'les asignes' : 'Logística les asigne'} una sucursal.
           </span>
+          {puedeGestionar && (
           <button
             type="button"
             onClick={() => handleUbicacionChange(FILTRO_EN_VIAJE)}
@@ -901,6 +911,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
           >
             Ver y asignar ubicación
           </button>
+          )}
         </div>
       )}
 
@@ -963,7 +974,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             {pageVehiculos.map((vehiculo) => (
               <li key={vehiculo.id} className="p-4 space-y-3">
                 <div className="flex items-start gap-3">
-                  {esSeleccionableParaMover(vehiculo) && (
+                  {puedeGestionar && esSeleccionableParaMover(vehiculo) && (
                     <input
                       type="checkbox"
                       checked={seleccion.has(vehiculo.id)}
@@ -1055,7 +1066,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                       className="hover:bg-neutral-50 transition-colors"
                     >
                       <td className="py-3.5 pl-4 w-8">
-                        {esSeleccionableParaMover(vehiculo) && (
+                        {puedeGestionar && esSeleccionableParaMover(vehiculo) && (
                           <input
                             type="checkbox"
                             checked={seleccion.has(vehiculo.id)}
@@ -2013,6 +2024,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
           </div>
         </div>
       )}
+      {dialogoConfirmacion}
     </div>
   );
 }

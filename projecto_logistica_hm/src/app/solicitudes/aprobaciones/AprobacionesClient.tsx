@@ -16,16 +16,18 @@ import {
   aprobarSolicitudAction,
   rechazarSolicitudAction,
 } from '@/app/actions/solicitudes.actions';
-import { SolicitudLista, EstadoSolicitud, TipoSolicitud, VehiculoInventario } from '@/types/solicitud.types';
+import { SolicitudLista, EstadoSolicitud, VehiculoInventario } from '@/types/solicitud.types';
 import { UsuarioSucursalAsignada } from '@/types/auth.types';
 import SolicitudDetalleModal from '@/components/SolicitudDetalleModal';
 import BadgeEvento from '@/components/BadgeEvento';
 import { formatFecha, hoyISO } from '@/lib/fechas';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
-import { ETIQUETA_FECHA_LIMITE } from '@/lib/textos';
+import { ETIQUETA_FECHA_LIMITE, ETIQUETA_TIPO_SOLICITUD } from '@/lib/textos';
 import { iniciadorNombre } from '@/lib/iniciador';
 import { urlSinParametro } from '@/lib/enlaceNotificacion';
 import AbrirSolicitudDesdeUrl from '@/components/AbrirSolicitudDesdeUrl';
+import { useConfirmacion } from '@/components/Confirmacion';
+import { esClicEnControl } from '@/components/FilaAbreDetalle';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -67,10 +69,7 @@ function fechaInputValue(iso: string | null): string {
   return `${anio}-${mes}-${dia}`;
 }
 
-const tipoLabel: Record<TipoSolicitud, string> = {
-  venta: 'Sala de venta',
-  evento: 'Evento',
-};
+const tipoLabel = ETIQUETA_TIPO_SOLICITUD;
 
 export default function AprobacionesClient({
   solicitudes,
@@ -86,6 +85,9 @@ export default function AprobacionesClient({
   const [approveTarget, setApproveTarget] = useState<SolicitudLista | null>(null);
   const [aprobacionFecha, setAprobacionFecha] = useState('');
   const [editarFecha, setEditarFecha] = useState(false);
+  const { avisar, dialogoConfirmacion } = useConfirmacion();
+  // QA #16: fecha propuesta que ya pasó; el servidor la rechazaría.
+  const [fechaVencida, setFechaVencida] = useState<string | null>(null);
   const solicitudInicial = solicitudInicialId ? solicitudes.find((s) => s.id === solicitudInicialId) ?? null : null;
   const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(solicitudInicial);
 
@@ -115,8 +117,10 @@ export default function AprobacionesClient({
 
   function abrirAprobacion(sol: SolicitudLista) {
     const fecha = fechaInputValue(sol.fecha_limite);
-    setAprobacionFecha(fecha);
-    setEditarFecha(!fecha);
+    const vencida = !!fecha && fecha < hoyISO();
+    setFechaVencida(vencida ? fecha : null);
+    setAprobacionFecha(vencida ? '' : fecha);
+    setEditarFecha(!fecha || vencida);
     setApproveTarget(sol);
   }
 
@@ -126,7 +130,8 @@ export default function AprobacionesClient({
     try {
       const result = await aprobarSolicitudAction(approveTarget.id, aprobacionFecha.trim());
       if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'Error al aprobar.' });
+        // QA #46: el error se muestra sobre el modal, no detrás.
+        void avisar(result.error || 'Error al aprobar.', 'No se pudo aprobar');
       } else {
         setFeedback({ type: 'success', message: result.message || 'Aprobada.' });
         setApproveTarget(null);
@@ -142,7 +147,7 @@ export default function AprobacionesClient({
     try {
       const result = await rechazarSolicitudAction(rejectTarget.id, rejectMotivo);
       if (!result.success) {
-        setFeedback({ type: 'error', message: result.error || 'Error al rechazar.' });
+        void avisar(result.error || 'Error al rechazar.', 'No se pudo rechazar');
       } else {
         setFeedback({ type: 'success', message: result.message || 'Rechazada.' });
         setRejectTarget(null);
@@ -190,7 +195,11 @@ export default function AprobacionesClient({
         ) : (
           <div className="divide-y divide-neutral-100">
             {pendientesAprobar.map((sol) => (
-              <div key={sol.id} className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+              <div
+                key={sol.id}
+                onClick={(e) => !esClicEnControl(e) && setDetailTarget(sol)}
+                className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 cursor-pointer hover:bg-neutral-50 transition-colors"
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono text-sm text-neutral-500">{codigoSolicitud(sol)}</span>
@@ -222,7 +231,9 @@ export default function AprobacionesClient({
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-50 border border-neutral-200 text-xs text-neutral-700"
                         >
                           <Car className="w-3 h-3" />
-                          {v.patente}
+                          {/* QA #19: modelo y chasis, no solo la patente (los importados no tienen). */}
+                          {v.marca} {v.modelo} · <span className="font-mono">{v.chasis}</span>
+                          {v.patente ? ` · ${v.patente}` : ''}
                         </span>
                       ))}
                     </div>
@@ -299,6 +310,11 @@ export default function AprobacionesClient({
                   : 'border-neutral-200 bg-neutral-100 text-neutral-600 cursor-not-allowed'
               }`}
             />
+            {fechaVencida && (
+              <p className="mt-1.5 text-xs text-amber-700">
+                La fecha propuesta ({formatFecha(fechaVencida)}) ya pasó: elige una nueva.
+              </p>
+            )}
             {!editarFecha && aprobacionFecha && (
               <p className="mt-1.5 text-xs text-neutral-500">
                 Fecha propuesta por el ejecutivo. Presiona «Modificar» para cambiarla.
@@ -388,7 +404,9 @@ export default function AprobacionesClient({
             setDetailTarget(null);
             window.history.replaceState(null, '', urlSinParametro(window.location.href, 'solicitud'));
           }}
-          onMensaje={(tipo, mensaje) => setFeedback({ type: tipo, message: mensaje })}
+          onMensaje={(tipo, mensaje) =>
+            tipo === 'error' ? void avisar(mensaje, 'No se pudo completar') : setFeedback({ type: tipo, message: mensaje })
+          }
           onCancelar={() => {}}
           puedeCancelar={false}
           puedeGestionarVehiculos={
@@ -398,6 +416,7 @@ export default function AprobacionesClient({
           currentUserRol={viewer.rol}
         />
       )}
+      {dialogoConfirmacion}
     </div>
   );
 }

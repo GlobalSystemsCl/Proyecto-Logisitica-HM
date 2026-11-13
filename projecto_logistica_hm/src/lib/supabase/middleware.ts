@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { decidirAcceso, type EstadoCuenta } from '@/lib/auth/acceso';
+import { decidirAcceso, redirigeEnMiddleware, type EstadoCuenta } from '@/lib/auth/acceso';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -69,7 +69,7 @@ export async function updateSession(request: NextRequest) {
     await supabase.auth.signOut({ scope: 'local' });
   }
 
-  if (decision.accion === 'continuar') {
+  if (!redirigeEnMiddleware(decision, request.headers.has('next-action')) || decision.accion !== 'redirigir') {
     return supabaseResponse;
   }
 

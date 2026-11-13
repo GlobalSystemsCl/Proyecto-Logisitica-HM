@@ -12,6 +12,8 @@ import {
   extraLibres,
   filaSlots,
   slotsConZona,
+  enSucursal,
+  usoSlots,
   type SlotSucursalResumen,
 } from '@/lib/slots';
 
@@ -25,13 +27,14 @@ function sucursal(overrides: Partial<SlotSucursalResumen> = {}): SlotSucursalRes
   };
 }
 
+// QA #32: `slots_ocupados` ya incluye los reservados (fn_recalcular_slots_sucursal).
 describe('slotsLibres', () => {
-  it('should_restar_ocupados_y_reservados_a_la_capacidad', () => {
-    expect(slotsLibres(sucursal({ slots: 10, slots_ocupados: 3, slots_reservados: 2 }))).toBe(5);
+  it('should_subtract_only_slots_in_use_because_they_already_include_reserved', () => {
+    expect(slotsLibres(sucursal({ slots: 10, slots_ocupados: 3, slots_reservados: 2 }))).toBe(7);
   });
 
   it('should_devolver_cero_cuando_no_hay_slots_libres', () => {
-    expect(slotsLibres(sucursal({ slots: 10, slots_ocupados: 7, slots_reservados: 3 }))).toBe(0);
+    expect(slotsLibres(sucursal({ slots: 10, slots_ocupados: 10, slots_reservados: 3 }))).toBe(0);
   });
 
   it('should_never_return_negative_values', () => {
@@ -43,6 +46,21 @@ describe('slotsLibres', () => {
     expect(slotsLibres(sucursal({ slots: undefined, slots_ocupados: 2 }))).toBe(0);
     expect(Number.isNaN(slotsLibres(sucursal({ slots: NaN, slots_ocupados: NaN })))).toBe(false);
     expect(Number.isNaN(slotsLibres(sucursal({ slots: Infinity, slots_ocupados: 0 })))).toBe(false);
+  });
+});
+
+describe('usoSlots y enSucursal', () => {
+  it('should_take_slots_in_use_as_is_and_split_physical_vehicles', () => {
+    // Caso real de la prueba QA: 3 ORIENTE BAIC con 1 auto y 11 reservados.
+    const s = sucursal({ slots: 20, slots_ocupados: 12, slots_reservados: 11 });
+    expect(usoSlots(s)).toBe(12);
+    expect(enSucursal(s)).toBe(1);
+    expect(slotsLibres(s)).toBe(8);
+  });
+
+  it('should_never_return_negative_physical_vehicles', () => {
+    expect(enSucursal(sucursal({ slots_ocupados: 1, slots_reservados: 3 }))).toBe(0);
+    expect(enSucursal(sucursal({ slots_ocupados: null, slots_reservados: null }))).toBe(0);
   });
 });
 
@@ -59,7 +77,7 @@ describe('nombreSucursal', () => {
 
 describe('textoSlots', () => {
   it('should_format_free_over_total', () => {
-    expect(textoSlots(sucursal({ slots: 12, slots_ocupados: 4, slots_reservados: 1 }))).toBe('7/12 (+3 extra)');
+    expect(textoSlots(sucursal({ slots: 12, slots_ocupados: 4, slots_reservados: 1 }))).toBe('8/12 (+3 extra)');
   });
 
   it('should_format_zero_when_capacity_is_null', () => {
@@ -73,16 +91,16 @@ describe('resumenSlots', () => {
       sucursal({ nombre: 'A', slots: 10, slots_ocupados: 3, slots_reservados: 1 }),
       sucursal({ nombre: 'B', slots: 5, slots_ocupados: 5, slots_reservados: 0 }),
     ]);
-    expect(res.libres).toBe(6);
+    expect(res.libres).toBe(7);
     expect(res.total).toBe(15);
-    expect(res.ocupados).toBe(9);
-    expect(res.porcentajeOcupacion).toBe(60);
+    expect(res.ocupados).toBe(8);
+    expect(res.porcentajeOcupacion).toBe(53);
   });
 
   it('should_be_critico_when_no_branch_has_free_slots', () => {
     const res = resumenSlots([
       sucursal({ nombre: 'A', slots: 4, slots_ocupados: 4 }),
-      sucursal({ nombre: 'B', slots: 2, slots_ocupados: 1, slots_reservados: 1 }),
+      sucursal({ nombre: 'B', slots: 2, slots_ocupados: 2, slots_reservados: 1 }),
     ]);
     expect(res.criticidad).toBe('critico');
     expect(res.libres).toBe(0);
@@ -90,7 +108,7 @@ describe('resumenSlots', () => {
   });
 
   it('should_be_atencion_when_free_ratio_is_below_threshold', () => {
-    const res = resumenSlots([sucursal({ slots: 100, slots_ocupados: 85, slots_reservados: 10 })]);
+    const res = resumenSlots([sucursal({ slots: 100, slots_ocupados: 95, slots_reservados: 10 })]);
     expect(res.criticidad).toBe('atencion');
     expect(res.libres).toBe(5);
   });
@@ -172,7 +190,7 @@ describe('extraLibres (R5)', () => {
   });
 
   it('should_discount_extra_in_use', () => {
-    expect(extraLibres(sucursal({ slots: 10, slots_ocupados: 9, slots_reservados: 2 }))).toBe(1);
+    expect(extraLibres(sucursal({ slots: 10, slots_ocupados: 11, slots_reservados: 2 }))).toBe(1);
   });
 
   it('should_never_be_negative', () => {
@@ -196,7 +214,8 @@ describe('estadoCapacidad (R5)', () => {
 
   it('should_handle_branches_without_declared_capacity', () => {
     expect(estadoCapacidad(sucursal({ slots: 0 }))).toBe('sin_capacidad');
-    expect(estadoCapacidad(sucursal({ slots: 0, slots_ocupados: 2 }))).toBe('excedido');
+    // QA #30: sin capacidad declarada no hay "exceso", aunque haya vehículos.
+    expect(estadoCapacidad(sucursal({ slots: 0, slots_ocupados: 2 }))).toBe('sin_capacidad');
   });
 });
 
@@ -220,11 +239,12 @@ describe('filaSlots', () => {
       nombre: 'Norte',
       real: 10,
       extra: 2,
-      uso: 6,
-      libres: 4,
+      uso: 4,
+      enSucursal: 2,
+      libres: 6,
       extraLibres: 2,
       estado: 'disponible',
-      porcentajeUso: 50,
+      porcentajeUso: 33,
     });
   });
 

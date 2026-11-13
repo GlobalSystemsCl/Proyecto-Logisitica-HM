@@ -1,4 +1,4 @@
-import { ROLES_CON_SUCURSAL_BASE } from '@/lib/asignaciones';
+import { etiquetaZonaConSucursales, ROLES_CON_SUCURSAL_BASE } from '@/lib/asignaciones';
 import type { UserRole } from '@/types/auth.types';
 import type { Sucursal, Zona } from '@/types/sucursal.types';
 
@@ -153,7 +153,7 @@ export default function AsignacionesFields({
         <MultiCheckSelector
           title="Zonas de logística *"
           ayuda="Puede atender una o varias zonas: verá y gestionará las sucursales de todas ellas."
-          options={zonas.map((z) => ({ id: z.id, label: z.nombre }))}
+          options={zonas.map((z) => ({ id: z.id, label: etiquetaZonaConSucursales(z, sucursales) }))}
           selected={zonasIds}
           onToggle={(id) => onZonasIds(toggleId(zonasIds, id))}
         />

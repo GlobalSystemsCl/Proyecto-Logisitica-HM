@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { registerAction } from '@/app/actions/auth.actions';
 import { Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, MapPin } from 'lucide-react';
 import { textoDominios } from '@/lib/dominios';
+import { filtrarSucursales } from '@/lib/busqueda';
 
 interface Props {
   sucursales: { id: number; nombre: string | null }[];
@@ -34,6 +35,10 @@ function FormularioRegistro({ sucursales, dominios, onRegistrarOtra }: Props & {
   const [state, formAction, isPending] = useActionState(registerAction, null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  // QA #14: buscador para la lista de sucursales (son 42).
+  const [buscarSucursal, setBuscarSucursal] = useState('');
+  const [sucursalElegida, setSucursalElegida] = useState('');
+  const sucursalesVisibles = filtrarSucursales(sucursales, buscarSucursal, sucursalElegida ? Number(sucursalElegida) : null);
 
   return (
     <div className="min-h-screen flex flex-col justify-center items-center bg-neutral-100 px-4 py-12 sm:px-6 lg:px-8 text-neutral-900">
@@ -65,7 +70,7 @@ function FormularioRegistro({ sucursales, dominios, onRegistrarOtra }: Props & {
               Crear Cuenta
             </h2>
             <p className="text-xs text-neutral-500 mt-0.5">
-              Completa tus datos para solicitar acceso al sistema
+              Completa tus datos para crear tu cuenta
             </p>
           </div>
 
@@ -159,6 +164,16 @@ function FormularioRegistro({ sucursales, dominios, onRegistrarOtra }: Props & {
               <label className="block text-xs font-semibold text-neutral-700 uppercase tracking-wider">
                 Sucursal (lugar de trabajo) *
               </label>
+              {sucursales.length > 8 && (
+                <input
+                  type="search"
+                  value={buscarSucursal}
+                  onChange={(e) => setBuscarSucursal(e.target.value)}
+                  placeholder="Buscar por nombre o código (ej. 101)"
+                  aria-label="Buscar sucursal"
+                  className="block w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+                />
+              )}
               <div className="relative rounded-xl shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-400">
                   <MapPin className="h-4 w-4" />
@@ -166,13 +181,14 @@ function FormularioRegistro({ sucursales, dominios, onRegistrarOtra }: Props & {
                 <select
                   name="sucursal"
                   required
-                  defaultValue=""
+                  value={sucursalElegida}
+                  onChange={(e) => setSucursalElegida(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all appearance-none cursor-pointer"
                 >
                   <option value="" disabled>
                     Seleccionar sucursal...
                   </option>
-                  {sucursales.map((s) => (
+                  {sucursalesVisibles.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.nombre}
                     </option>

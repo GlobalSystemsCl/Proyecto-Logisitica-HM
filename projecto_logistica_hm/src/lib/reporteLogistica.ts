@@ -1,6 +1,7 @@
 import type { SolicitudLista } from '@/types/solicitud.types';
 import { estadoPlazo } from '@/lib/calendario';
 import { codigoSolicitud } from '@/lib/codigoSolicitud';
+import { rutaSolicitud } from '@/lib/origenSolicitud';
 
 /**
  * Reportería de Logística (R17): mide a cada encargado por su tiempo de
@@ -201,7 +202,7 @@ export function calcularReporte(
       pendientesMasAntiguos.push({
         id: s.id,
         codigo: codigoSolicitud(s),
-        ruta: `${s.sucursal_nombre ?? s.sucursal} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento'}`,
+        ruta: rutaSolicitud(s),
         encargado: f.nombre,
         zonaId: s.sucursal_zona_id,
         antiguedadHoras: antiguedad ?? 0,

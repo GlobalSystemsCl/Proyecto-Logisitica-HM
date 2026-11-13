@@ -161,7 +161,7 @@ export function textoNotificacion(evento: EventoApp, d: DatosNotificacionApp): T
       titulo: 'Lista para entregar',
       mensaje: `La solicitud ${ref} fue aprobada y el vehículo ya está en la sucursal: no requiere traslado. Puedes entregarlo al cliente.`,
     },
-    solicitud_finalizada: { titulo: 'Solicitud finalizada', mensaje: `La solicitud ${ref} se entregó al cliente y quedó finalizada.` },
+    solicitud_finalizada: { titulo: 'Entregada al cliente', mensaje: `La solicitud ${ref} se entregó al cliente.` },
     solicitud_cancelada: { titulo: 'Solicitud cancelada', mensaje: `La solicitud ${ref} fue cancelada.${motivo}` },
     solicitud_cancelada_transito: { titulo: 'Traslado cancelado en tránsito', mensaje: `El traslado de la solicitud ${ref} se canceló en tránsito.${motivo}` },
     traslado_interno_cancelado: {

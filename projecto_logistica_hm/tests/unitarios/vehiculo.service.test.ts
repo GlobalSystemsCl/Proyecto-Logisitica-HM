@@ -655,6 +655,18 @@ describe('VehiculoService', () => {
       expect(res.importados).toBe(0);
     });
 
+    it('should_import_chassis_containing_ELIMINAR_as_regular_vehicles', async () => {
+      // Decisión 2026-11-13 (QA #45): esos chasis son vehículos válidos; no se omiten.
+      admin.results.sucursal = [{ data: [], error: null }];
+      admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: null }];
+      const csv = ['Marca,Modelo,Chasis', 'BAI,X30,158425ELIMINARVIT'].join('\n');
+
+      const res = await VehiculoService.importVehiculosCSV(csv);
+
+      expect(res.importados).toBe(1);
+      expect(res.errores).toBe(0);
+    });
+
     it('should_import_stock_excel_columns_when_file_uses_current_format', async () => {
       admin.results.sucursal = [{ data: [{ id: 101, nombre: '15 NORTE' }], error: null }];
       admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: null }];

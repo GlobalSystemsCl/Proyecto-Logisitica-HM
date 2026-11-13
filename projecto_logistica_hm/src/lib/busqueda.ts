@@ -20,3 +20,24 @@ export function sanitizarTerminoBusqueda(texto: string | null | undefined, max =
 export function escaparPatronLike(texto: string): string {
   return texto.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
+
+/** Minúsculas y sin tildes, para comparar textos que escribe el usuario. */
+function plano(texto: string): string {
+  return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
+/**
+ * QA #14: filtra sucursales por código o nombre (sin importar tildes ni
+ * mayúsculas). Conserva siempre la elegida, para que el selector no la pierda.
+ */
+export function filtrarSucursales<T extends { id: number; nombre: string | null }>(
+  sucursales: T[],
+  termino: string,
+  elegidaId?: number | null,
+): T[] {
+  const t = plano(termino);
+  if (!t) return sucursales;
+  return sucursales.filter(
+    (s) => s.id === elegidaId || String(s.id).startsWith(t) || plano(s.nombre ?? '').includes(t),
+  );
+}

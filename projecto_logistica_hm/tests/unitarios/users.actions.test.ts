@@ -5,6 +5,8 @@ const getCurrentUserProfile = vi.fn();
 const activarCuentasMasivo = vi.fn();
 const getUsers = vi.fn();
 const createUser = vi.fn();
+const updateUser = vi.fn();
+const contarTrabajoLogistica = vi.fn();
 const getSucursales = vi.fn();
 const getZonas = vi.fn();
 const revalidatePath = vi.fn();
@@ -17,6 +19,8 @@ vi.mock('@/services/users.service', () => ({
     activarCuentasMasivo: (...a: unknown[]) => activarCuentasMasivo(...a),
     getUsers: () => getUsers(),
     createUser: (...a: unknown[]) => createUser(...a),
+    updateUser: (...a: unknown[]) => updateUser(...a),
+    contarTrabajoLogistica: (...a: unknown[]) => contarTrabajoLogistica(...a),
   },
 }));
 vi.mock('@/services/sucursales.service', () => ({
@@ -27,7 +31,7 @@ vi.mock('@/services/organizacion.service', () => ({
 }));
 vi.mock('next/cache', () => ({ revalidatePath: (p: string) => revalidatePath(p) }));
 
-const { approveUsersBulkAction, importUsuariosAction } = await import('@/app/actions/users.actions');
+const { approveUsersBulkAction, importUsuariosAction, updateUserAction, getTrabajoLogisticaAction } = await import('@/app/actions/users.actions');
 
 function perfil(rol: UserProfile['rol']): UserProfile {
   return {
@@ -139,5 +143,44 @@ describe('importUsuariosAction', () => {
 
     expect(res.success).toBe(false);
     expect(getUsers).not.toHaveBeenCalled();
+  });
+});
+
+describe('updateUserAction (QA #25)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_pass_the_receiver_and_the_admin_as_actor', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    updateUser.mockResolvedValue({ success: true });
+
+    const res = await updateUserAction({ userId: 'l-1', nombre: 'Lu', apellido: 'Gi', rol: 'ejecutivo', traspasarA: 'l-2' });
+
+    expect(res.success).toBe(true);
+    expect(updateUser).toHaveBeenCalledWith('l-1', expect.objectContaining({ rol: 'ejecutivo', traspasarA: 'l-2' }), 'adm-1');
+  });
+
+  it('should_return_the_service_error_when_a_receiver_is_missing', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    updateUser.mockResolvedValue({ success: false, error: 'Elige a quién.' });
+
+    expect(await updateUserAction({ userId: 'l-1', nombre: 'Lu', apellido: 'Gi', rol: 'ejecutivo' })).toEqual({ success: false, error: 'Elige a quién.' });
+  });
+});
+
+describe('getTrabajoLogisticaAction (QA #25)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_return_the_open_work_for_admins_only', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    contarTrabajoLogistica.mockResolvedValue({ solicitudes: 2, traslados: 1 });
+    expect(await getTrabajoLogisticaAction('l-1')).toEqual({ solicitudes: 2, traslados: 1 });
+
+    getCurrentUserProfile.mockResolvedValue(perfil('logistica'));
+    expect(await getTrabajoLogisticaAction('l-1')).toEqual({ solicitudes: 0, traslados: 0 });
+    expect(contarTrabajoLogistica).toHaveBeenCalledTimes(1);
   });
 });

@@ -64,6 +64,8 @@ const GESTION: readonly UserRole[] = ['administrador', 'jefe_local'];
 const CREAN: readonly UserRole[] = ['administrador', 'jefe_local', 'ejecutivo'];
 const CALENDARIO: readonly UserRole[] = ['administrador', 'jefe_local', 'logistica'];
 const INVENTARIO: readonly UserRole[] = ['administrador', 'jefe_local', 'logistica', 'operaciones'];
+// QA #15: importar, registrar, editar y mover vehículos es solo de Logística y el administrador.
+const GESTION_INVENTARIO: readonly UserRole[] = ['administrador', 'logistica'];
 const OPERAN_TRASLADOS: readonly UserRole[] = ['administrador', 'logistica'];
 const SOLO_ADMIN: readonly UserRole[] = ['administrador'];
 
@@ -200,7 +202,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'solicitudes',
     pregunta: '¿Puedo adjuntar documentos u observaciones?',
     respuesta:
-      'Sí, en las pestañas Observaciones y Documentos del detalle. Se aceptan PDF, Excel (.xlsx o .xls) e imágenes (PNG, JPG o WEBP), de hasta 10 MB cada uno. Las solicitudes rechazadas o canceladas ya no aceptan observaciones ni documentos.',
+      'Sí, en las pestañas Observaciones y Documentos del detalle. Se aceptan PDF, Excel (.xlsx o .xls) e imágenes (PNG, JPG o WEBP), de hasta 10 MB cada uno. Las imágenes se ven en miniatura (clic para ampliarlas) y los PDF se abren con el ojo, sin descargarlos. Las solicitudes rechazadas o canceladas ya no aceptan observaciones ni documentos.',
   },
 
   // ---------- Aprobaciones ----------
@@ -225,7 +227,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: GESTION,
     pregunta: '¿Cómo funciona la cola de prioridades?',
     respuesta:
-      'Cada sucursal de origen tiene su propia cola. Arrastra las solicitudes aprobadas desde "Por Priorizar" a la cola y ordénalas arrastrando: la posición 1 es la que Logística debe programar primero. Reordenar no envía avisos; entrar a la cola sí avisa al ejecutivo. En el celular, mantén presionada la tarjeta un momento antes de arrastrarla.',
+      'Cada sucursal de origen tiene su propia cola. Arrastra las solicitudes aprobadas desde "Por Priorizar" a la cola y ordénalas arrastrando: la posición 1 es la que Logística debe programar primero. Reordenar no envía avisos; entrar a la cola sí avisa al ejecutivo. En el celular, mantén presionada la tarjeta un momento antes de arrastrarla, o usa el botón "Priorizar" (la agrega al final) y las flechas para subirla o bajarla un puesto.',
   },
   {
     vista: 'prioridades',
@@ -247,7 +249,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: GESTION,
     pregunta: '¿También recibo los traslados internos aquí?',
     respuesta:
-      'Sí. Los traslados internos en camino a tus sucursales aparecen en su propia sección y se reciben igual. No se pueden rechazar: si llegó con problemas, regístralo en las novedades.',
+      'Sí. Los traslados internos en camino a tus sucursales aparecen en su propia sección y se reciben igual. No se pueden rechazar: si llegó con problemas, regístralo en las novedades. Puedes adjuntar fotos al recibir; quedan en el detalle del traslado. Los traslados se identifican como T-15.',
   },
 
   // ---------- Calendario ----------
@@ -321,7 +323,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: OPERAN_TRASLADOS,
     pregunta: '¿Puedo cancelar un traslado interno?',
     respuesta:
-      'Solo cuando está en tránsito, y solo Logística: con un motivo e indicando dónde queda el vehículo. Se avisa a todos los involucrados.',
+      'Solo cuando está en tránsito, y solo Logística (la asignada o la de la zona): con un motivo e indicando dónde queda el vehículo. Se avisa a todos los involucrados.',
   },
 
   // ---------- Movimientos ----------
@@ -403,7 +405,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   },
   {
     vista: 'inventario',
-    roles: INVENTARIO,
+    roles: GESTION_INVENTARIO,
     pregunta: '¿Cómo cambio la ubicación de varios vehículos a la vez?',
     respuesta:
       'Marca las casillas de los vehículos (o usa "Seleccionar los N disponibles del filtro"), elige la sucursal de destino y usa "Mover". Se omiten, con el motivo, los reservados, los entregados al cliente, los que están en un traslado interno y los que ya están en esa sucursal. Cada cambio queda en el historial. Para asignar sucursal a los importados sin ubicación, usa "Ver y asignar ubicación" (o el filtro "Sin ubicación"). Para mover una lista de autos puntual, pega sus chasis o IDV en el buscador, separados por espacios o comas.',
@@ -413,11 +415,11 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: INVENTARIO,
     pregunta: '¿Por qué no puedo editar un vehículo?',
     respuesta:
-      'Los vehículos reservados en una solicitud activa o entregados al cliente quedan bloqueados. Solo el administrador puede eliminar vehículos.',
+      'Solo Logística y el administrador registran, editan, importan y mueven vehículos; el jefe de local y Operaciones consultan el inventario. Además, los reservados en una solicitud activa o entregados al cliente quedan bloqueados, y solo el administrador puede eliminar vehículos.',
   },
   {
     vista: 'inventario',
-    roles: INVENTARIO,
+    roles: GESTION_INVENTARIO,
     pregunta: '¿Cómo cargo el stock desde Excel?',
     respuesta:
       'Usa "Importar Stock" y elige el Excel de stock o de compras tal como viene, con las columnas Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación y Patente. Los chasis repetidos se informan y no se duplican, y los que no tienen 17 caracteres se informan como error. Los vehículos sin ubicación quedan "En viaje / Container" y no se pueden pedir en una solicitud hasta que les asignes una sucursal.',
@@ -450,14 +452,14 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: SOLO_ADMIN,
     pregunta: '¿Cómo cambio el rol de una cuenta recién registrada?',
     respuesta:
-      'Busca la cuenta (el aviso de la campana ya la deja filtrada) y usa "Editar usuario" para cambiar el rol y sus sucursales o zonas (un usuario de Logística puede tener varias). Si quedara alguna cuenta pendiente de una etapa anterior, filtra por "Pendientes", márcalas y usa "Activar seleccionadas".',
+      'Busca la cuenta (el aviso de la campana ya la deja filtrada) y usa "Editar usuario" para cambiar el rol y sus sucursales o zonas (un usuario de Logística puede tener varias). Si le quitas el rol de Logística a alguien con solicitudes o traslados sin cerrar, el formulario te pide a qué otro usuario de Logística pasárselos. Si quedara alguna cuenta pendiente de una etapa anterior, filtra por "Pendientes", márcalas y usa "Activar seleccionadas".',
   },
   {
     vista: 'usuarios',
     roles: SOLO_ADMIN,
     pregunta: '¿Qué pasa si desactivo a un usuario?',
     respuesta:
-      'Pierde el acceso de inmediato y ve un mensaje con el correo de soporte. Puedes reactivarlo cuando quieras. La cuenta del administrador principal no se puede desactivar.',
+      'Pierde el acceso de inmediato y ve un mensaje con el correo de soporte. Puedes reactivarlo cuando quieras. La cuenta del administrador principal no se puede desactivar. Un usuario de Logística con solicitudes o traslados sin cerrar no se puede desactivar: primero pasa su trabajo a otro usuario de Logística (cambiándole el rol en "Editar usuario") o registra una ausencia con sustituto.',
   },
 
   // ---------- Sucursales ----------
@@ -466,7 +468,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: SOLO_ADMIN,
     pregunta: '¿Qué puedo administrar en Sucursales?',
     respuesta:
-      'Crear y editar sucursales: código, nombre, dirección, espacios totales (slots) y zona. El código es el de la planilla de concesionarios (101, 102...), numera las solicitudes de la sucursal (101-1, 101-2...) y no se puede cambiar después de crearla. El jefe de local a cargo se asigna desde Usuarios, y cada sucursal tiene uno solo. Al abrir una sucursal ves sus vehículos y sus solicitudes; el número abre el detalle.',
+      'Crear y editar sucursales: código, nombre, dirección, espacios totales (slots) y zona. El código es el de la planilla de concesionarios (101, 102...), numera las solicitudes de la sucursal (101-1, 101-2...) y no se puede cambiar después de crearla. El jefe de local a cargo se asigna desde Usuarios, y cada sucursal tiene uno solo. Al abrir una sucursal ves sus vehículos y sus solicitudes; el número abre el detalle. Una sucursal sin zona no la ve ningún usuario de Logística: el aviso amarillo indica cuántas hay y el filtro "Sin zona" las lista para asignarles una.',
   },
 
   // ---------- Historial ----------

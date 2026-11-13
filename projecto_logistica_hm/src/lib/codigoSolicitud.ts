@@ -19,15 +19,22 @@ export interface DatosCodigoSolicitud {
 export function codigoSolicitud(s: DatosCodigoSolicitud): string {
   if (s.sucursal != null && s.numero != null) return `${s.sucursal}-${s.numero}`;
   // Sin número (sin sucursal de origen): el uuid corto que se usaba antes.
-  return codigoTraslado(s.id);
+  return codigoUuid(s.id);
+}
+
+/** Los 8 primeros caracteres del uuid, en mayúsculas: "#529ACF6B". */
+function codigoUuid(id: string): string {
+  return `#${id.slice(0, 8).toUpperCase()}`;
 }
 
 /**
- * N° visible de un traslado interno: los 8 primeros caracteres del id, en
- * mayúsculas. Los traslados no tienen correlativo por sucursal.
+ * N° visible de un traslado interno: "T-15" (QA #48, migración 20261113110000;
+ * correlativo global que asigna la BD). Sin número, o si solo se recibe el id,
+ * el uuid corto que se usaba antes.
  */
-export function codigoTraslado(id: string): string {
-  return `#${id.slice(0, 8).toUpperCase()}`;
+export function codigoTraslado(t: string | { id: string; numero?: number | null }): string {
+  if (typeof t === 'string') return codigoUuid(t);
+  return t.numero != null ? `T-${t.numero}` : codigoUuid(t.id);
 }
 
 /**

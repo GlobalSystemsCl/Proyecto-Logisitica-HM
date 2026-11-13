@@ -67,10 +67,10 @@ describe('fechas', () => {
 
   describe('formatFecha', () => {
     it('should_format_iso_date_as_dd_mm_yyyy', () => {
-      expect(formatFecha('2026-03-07T00:00:00Z')).toBe('7/03/2026');
+      expect(formatFecha('2026-03-07T00:00:00Z')).toBe('07/03/2026');
     });
 
-    it('should_pad_month_but_not_day', () => {
+    it('should_pad_day_and_month_to_two_digits', () => {
       expect(formatFecha('2026-11-25T00:00:00Z')).toBe('25/11/2026');
     });
 

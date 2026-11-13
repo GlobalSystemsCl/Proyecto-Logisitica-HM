@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  etiquetaZonaConSucursales,
   conflictoJefeLocal,
   normalizarAsignaciones,
   sucursalesOcupadasPorJefes,
@@ -136,5 +137,27 @@ describe('validarAsignacionesFormulario', () => {
   it('should_fallback_to_branch_id_when_name_is_unknown', () => {
     const msg = validarAsignacionesFormulario({ rol: 'jefe_local', sucursal_id: 99 }, new Map([[99, 'Ana']]), []);
     expect(msg).toContain('Sucursal #99 (a cargo de Ana)');
+  });
+});
+
+describe('etiquetaZonaConSucursales', () => {
+  const zona = { id: 3, nombre: 'zona 3' };
+
+  it('should_list_branch_names_of_the_zone', () => {
+    const sucursales = [
+      { nombre: '3 ORIENTE BAIC', zona_id: 3 },
+      { nombre: '15 NORTE', zona_id: null },
+      { nombre: '3 ORIENTE JAC', zona_id: 3 },
+    ];
+    expect(etiquetaZonaConSucursales(zona, sucursales)).toBe('zona 3 · 3 ORIENTE BAIC, 3 ORIENTE JAC');
+  });
+
+  it('should_say_sin_sucursales_when_zone_is_empty', () => {
+    expect(etiquetaZonaConSucursales(zona, [])).toBe('zona 3 · sin sucursales');
+  });
+
+  it('should_summarize_when_zone_has_more_than_three_branches', () => {
+    const sucursales = ['A', 'B', 'C', 'D', 'E'].map((nombre) => ({ nombre, zona_id: 3 }));
+    expect(etiquetaZonaConSucursales(zona, sucursales)).toBe('zona 3 · A, B, C y 2 más');
   });
 });

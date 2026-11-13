@@ -8,6 +8,7 @@ import { formatFecha, hoyISO } from '@/lib/fechas';
 import { formatearPatente } from '@/lib/patente';
 import { coincideFilaTransito, filasExcelTransito, type FilaTransito } from '@/lib/transito';
 import AbrirSolicitudDetalle from '@/components/AbrirSolicitudDetalle';
+import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
 
 interface Props {
   filas: FilaTransito[];
@@ -112,7 +113,11 @@ export default function TransitoClient({ filas, sinZonas }: Props) {
         ) : (
           <ul className="divide-y divide-neutral-100">
             {visibles.map((f) => (
-              <li key={f.clave} className="px-5 py-3 flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+              <li
+                key={f.clave}
+                onClick={abrirDetalleDeFila}
+                className={`px-5 py-3 flex flex-col md:flex-row md:items-center gap-2 md:gap-4 ${f.tipo === 'solicitud' ? 'cursor-pointer hover:bg-neutral-50' : ''}`}
+              >
                 <div className="md:w-40 shrink-0">
                   {f.tipo === 'solicitud' ? (
                     <AbrirSolicitudDetalle solicitudId={f.entidadId} className="font-mono text-sm font-semibold">

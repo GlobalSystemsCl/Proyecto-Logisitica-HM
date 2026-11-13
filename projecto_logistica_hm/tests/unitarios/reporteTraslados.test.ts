@@ -291,13 +291,13 @@ describe('filasExcelMovimientos', () => {
   it('should_use_readable_labels_and_formatted_dates', () => {
     const movs = unirMovimientos([], [traslado({ estado: 'recepcionado', fecha_recepcion: '2026-10-06T15:00:00Z' })], '2026-10-01', '2026-10-31');
     expect(filasExcelMovimientos(movs)[0]).toMatchObject({
-      'Fecha despacho': '5/10/2026',
+      'Fecha despacho': '05/10/2026',
       Tipo: 'Traslado interno',
       Estado: 'Recepcionado',
       'Patente camión': '',
       Transportista: '',
       'Empresa de transporte': '',
-      'Fecha recepción': '6/10/2026',
+      'Fecha recepción': '06/10/2026',
     });
   });
 });

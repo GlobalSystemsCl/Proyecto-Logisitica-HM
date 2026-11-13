@@ -46,6 +46,9 @@ export const ACEPTA_DOCUMENTOS = [
   ...Object.values(TIPOS_DOCUMENTO).flatMap((t) => t.extensiones.map((e) => `.${e}`)),
 ].join(',');
 
+/** Tamaño máximo de cada documento (10 MB); el servidor aplica el mismo límite. */
+export const TAMANO_MAXIMO_DOCUMENTO = 10 * 1024 * 1024;
+
 /** Texto para el usuario junto al botón de subir. */
 export const TEXTO_FORMATOS_DOCUMENTO = 'PDF, Excel (.xlsx o .xls) o imagen (PNG, JPG o WEBP), hasta 10 MB cada uno.';
 
@@ -53,6 +56,19 @@ export function extensionDe(nombre: string): string {
   const punto = nombre.lastIndexOf('.');
   if (punto <= 0 || punto === nombre.length - 1) return '';
   return nombre.slice(punto + 1).toLowerCase();
+}
+
+/**
+ * QA #3: revisión rápida al elegir un archivo, antes de subirlo (solo nombre y
+ * tamaño; el contenido lo valida el servidor con `validarContenidoArchivo`).
+ * Devuelve el mensaje para el usuario, o `null` si se puede adjuntar.
+ */
+export function revisarArchivoElegido(nombre: string, tamano: number): string | null {
+  const extension = extensionDe(nombre);
+  const permitido = Object.values(TIPOS_DOCUMENTO).some((t) => t.extensiones.includes(extension));
+  if (!permitido) return `"${nombre}" no es un formato permitido.`;
+  if (tamano > TAMANO_MAXIMO_DOCUMENTO) return `"${nombre}" pesa más de 10 MB.`;
+  return null;
 }
 
 /**
@@ -77,4 +93,20 @@ export function validarContenidoArchivo(
   }
 
   return null;
+}
+
+/**
+ * QA #52: tipos que se pueden ver en el navegador sin descargarlos. Las
+ * imágenes se muestran como miniatura y el PDF se abre en otra pestaña. Solo
+ * tipos cuyo contenido se valida por firma al subir (`validarContenidoArchivo`):
+ * nunca HTML ni SVG, que podrían ejecutar código si se abren en línea.
+ */
+export const TIPOS_VISTA_PREVIA = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'] as const;
+
+export function admiteVistaPrevia(tipoMime: string | null | undefined): boolean {
+  return (TIPOS_VISTA_PREVIA as readonly string[]).includes(tipoMime ?? '');
+}
+
+export function esImagen(tipoMime: string | null | undefined): boolean {
+  return admiteVistaPrevia(tipoMime) && (tipoMime ?? '').startsWith('image/');
 }

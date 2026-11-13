@@ -107,7 +107,7 @@ function LoginForm() {
                   type="email"
                   autoComplete="email"
                   required
-                  placeholder="usuario@hmotores.cl o gmail.com"
+                  placeholder="usuario@hmotores.cl"
                   className="block w-full pl-10 pr-3 py-2.5 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-transparent transition-all"
                 />
               </div>
