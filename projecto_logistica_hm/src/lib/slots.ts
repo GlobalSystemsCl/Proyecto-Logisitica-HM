@@ -187,6 +187,21 @@ export function ordenarPorDisponibilidad(
   return [...sucursales].sort((a, b) => slotsLibres(a) - slotsLibres(b));
 }
 
+/**
+ * Ordena las sucursales de la más ocupada a la menos: por `slots_ocupados`
+ * (la columna "Ocupados", que ya incluye los reservados: QA #32), luego por
+ * reservados y por nombre. Es el orden del resumen de slots del dashboard de
+ * Logística.
+ */
+export function ordenarPorOcupacion<T extends SlotSucursalResumen>(sucursales: T[]): T[] {
+  return [...sucursales].sort(
+    (a, b) =>
+      aNumero(b.slots_ocupados) - aNumero(a.slots_ocupados) ||
+      aNumero(b.slots_reservados) - aNumero(a.slots_reservados) ||
+      nombreSucursal(a).localeCompare(nombreSucursal(b), 'es')
+  );
+}
+
 /** Fila de la tabla de slots: la sucursal con todos sus valores ya calculados. */
 export type FilaSlots<T extends SlotSucursalResumen> = T & {
   real: number;

@@ -54,6 +54,7 @@ values
   ('20261112120000', 'logistica_varias_zonas'),
   ('20261112130000', 'ausencias_logistica'),
   ('20261112140000', 'reserva_incluye_recepcionada'),
+  ('20261112150000', 'notificaciones_completas'),
   ('20261113100000', 'origen_vehiculo_solicitud'),
   ('20261113110000', 'traslado_numero_documentos')
 on conflict (version) do nothing;
@@ -61,6 +62,6 @@ on conflict (version) do nothing;
 commit;
 
 -- -----------------------------------------------------------------------------
--- Verificación (ejecutar por separado): una fila por archivo de migrations/ (33 al 2026-11-13)
+-- Verificación (ejecutar por separado): una fila por archivo de migrations/ (34 al 2026-11-16)
 -- -----------------------------------------------------------------------------
 -- select version, name from supabase_migrations.schema_migrations order by version;

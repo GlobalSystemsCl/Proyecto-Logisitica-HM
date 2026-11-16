@@ -1,5 +1,5 @@
-import { escapeHtml } from '@/lib/html';
 import { getAppUrl } from '@/lib/env';
+import { renderLayoutCorreo, renderTextoPlano, type LayoutCorreo } from '@/lib/plantillaCorreo';
 
 export interface SendCredentialsParams {
   toEmail: string;
@@ -7,6 +7,8 @@ export interface SendCredentialsParams {
   tempPassword: string;
   role: string;
   loginUrl?: string;
+  /** `nueva`: cuenta recién creada (por defecto). `restablecida`: el administrador generó otra clave. */
+  motivo?: 'nueva' | 'restablecida';
 }
 
 export interface EnviarCorreoParams {
@@ -14,12 +16,60 @@ export interface EnviarCorreoParams {
   toName: string;
   asunto: string;
   html: string;
+  /** Versión de texto plano (mejora la entrega). */
+  texto?: string;
 }
 
 export interface ResultadoEnvio {
   success: boolean;
   error?: string;
   messageId?: string;
+}
+
+const ETIQUETA_ROL: Record<string, string> = {
+  administrador: 'Administrador',
+  jefe_local: 'Jefe de Local',
+  ejecutivo: 'Ejecutivo',
+  logistica: 'Logística',
+};
+
+export const ASUNTO_CREDENCIALES = '[H.Motores] Tus credenciales de acceso';
+export const ASUNTO_CLAVE_RESTABLECIDA = '[H.Motores] Tu nueva contraseña provisoria';
+
+/**
+ * Correo con la contraseña provisoria (cuenta nueva o clave restablecida por
+ * el administrador). Función pura: el escape lo hace la plantilla.
+ */
+export function layoutCredenciales(params: SendCredentialsParams, appUrl: string): LayoutCorreo {
+  const nueva = (params.motivo ?? 'nueva') === 'nueva';
+  const loginUrl = params.loginUrl || `${appUrl.replace(/\/+$/, '')}/login`;
+  return {
+    asunto: nueva ? ASUNTO_CREDENCIALES : ASUNTO_CLAVE_RESTABLECIDA,
+    vistaPrevia: nueva
+      ? 'Tu cuenta en el Sistema de Logística HMotores está lista.'
+      : 'El administrador generó una nueva contraseña provisoria para tu cuenta.',
+    etiqueta: { texto: nueva ? 'Cuenta creada' : 'Contraseña restablecida', tono: 'info' },
+    titulo: nueva ? 'Tu cuenta está lista' : 'Nueva contraseña provisoria',
+    nombre: params.recipientName,
+    parrafos: [
+      nueva
+        ? 'Se creó tu cuenta corporativa para entrar a la plataforma de gestión y traslado de vehículos de HMotores.'
+        : 'El administrador generó una nueva contraseña provisoria para tu cuenta. La anterior ya no funciona.',
+    ],
+    detalles: [
+      ['Correo', params.toEmail],
+      ['Rol', ETIQUETA_ROL[params.role] || params.role],
+      ['Contraseña provisoria', params.tempPassword],
+    ],
+    detallesMonoespaciados: ['Correo', 'Contraseña provisoria'],
+    aviso: {
+      texto: 'Al entrar con esta contraseña provisoria, el sistema te pedirá que elijas tu contraseña personal.',
+      tono: 'aviso',
+    },
+    boton: { texto: 'Ingresar a la plataforma', url: loginUrl },
+    notas: ['Por seguridad, no compartas tus credenciales con nadie.'],
+    appUrl,
+  };
 }
 
 export class EmailService {
@@ -53,6 +103,7 @@ export class EmailService {
           to: [{ email: params.toEmail, name: params.toName }],
           subject: params.asunto,
           htmlContent: params.html,
+          ...(params.texto ? { textContent: params.texto } : {}),
         }),
       });
 
@@ -74,7 +125,7 @@ export class EmailService {
   }
 
   /**
-   * Envía correo con las credenciales de acceso iniciales utilizando la API de Brevo
+   * Envía la contraseña provisoria (cuenta nueva o restablecida) con Brevo.
    */
   static async sendUserCredentialsEmail(params: SendCredentialsParams): Promise<{
     success: boolean;
@@ -82,123 +133,14 @@ export class EmailService {
     messageId?: string;
   }> {
     try {
-      const appUrl = escapeHtml(params.loginUrl || `${getAppUrl()}/login`);
-
-      const roleLabels: Record<string, string> = {
-        administrador: 'Administrador',
-        jefe_local: 'Jefe de Local',
-        ejecutivo: 'Ejecutivo',
-        logistica: 'Logística',
-      };
-
-      // Brecha 022: todo dato interpolado en el HTML se escapa.
-      const rolFormat = escapeHtml(roleLabels[params.role] || params.role);
-      const nombre = escapeHtml(params.recipientName);
-      const correo = escapeHtml(params.toEmail);
-      const clave = escapeHtml(params.tempPassword);
-
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html lang="es">
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Credenciales de Acceso - H.Motores</title>
-        </head>
-        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f5; margin: 0; padding: 30px 15px; color: #171717;">
-          <table align="center" border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 600px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e5e5e5; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
-            <!-- Header con banner corporativo -->
-            <tr>
-              <td style="background: linear-gradient(135deg, #171717 0%, #404040 100%); padding: 35px 30px; text-align: center;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.5px;">H.Motores</h1>
-                <p style="color: #a3a3a3; margin: 6px 0 0 0; font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px;">Sistema de Gestión y Logística de Vehículos</p>
-              </td>
-            </tr>
-
-            <!-- Contenido principal -->
-            <tr>
-              <td style="padding: 35px 30px;">
-                <h2 style="color: #171717; font-size: 20px; font-weight: 700; margin: 0 0 12px 0;">¡Hola, ${nombre}!</h2>
-                <p style="color: #525252; font-size: 14px; line-height: 1.6; margin: 0 0 25px 0;">
-                  Se ha creado tu cuenta corporativa para acceder a la plataforma interna de gestión y traslado de vehículos de H.Motores.
-                </p>
-
-                <!-- Tarjeta de Credenciales -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fafafa; border-radius: 12px; border: 1px solid #e5e5e5; margin-bottom: 25px;">
-                  <tr>
-                    <td style="padding: 20px;">
-                      <table width="100%" cellpadding="0" cellspacing="0">
-                        <tr>
-                          <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Correo Electrónico:</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 0 0 14px 0; color: #2563eb; font-size: 15px; font-weight: 700; font-family: monospace;">${correo}</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Rol Asignado:</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 0 0 14px 0; color: #7c3aed; font-size: 14px; font-weight: 600;">${rolFormat}</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 6px 0; color: #737373; font-size: 12px; text-transform: uppercase; font-weight: 600;">Contraseña Provisoria de Acceso:</td>
-                        </tr>
-                        <tr>
-                          <td style="padding: 0 0 4px 0; color: #d97706; font-size: 20px; font-weight: 800; letter-spacing: 2px; font-family: monospace;">${clave}</td>
-                        </tr>
-                      </table>
-                    </td>
-                  </tr>
-                </table>
-
-                <!-- Nota de seguridad importante -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #fefce8; border-radius: 10px; border: 1px solid #fde68a; margin-bottom: 30px;">
-                  <tr>
-                    <td style="padding: 14px 16px;">
-                      <p style="margin: 0; color: #92400e; font-size: 12px; line-height: 1.5;">
-                        <strong>Primer Ingreso Obligatorio:</strong> Al ingresar con esta contraseña provisoria, el sistema te solicitará inmediatamente que definas tu propia <strong>contraseña personal definitiva</strong> para mayor seguridad.
-                      </p>
-                    </td>
-                  </tr>
-                </table>
-
-                <!-- Botón de Ingreso -->
-                <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 25px;">
-                  <tr>
-                    <td align="center">
-                      <a href="${appUrl}" target="_blank" style="display: inline-block; background-color: #171717; color: #ffffff; text-decoration: none; font-size: 14px; font-weight: 700; padding: 14px 32px; border-radius: 10px; box-shadow: 0 4px 12px rgba(23, 23, 23, 0.3);">
-                        Ingresar a la Plataforma &rarr;
-                      </a>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="color: #737373; font-size: 12px; line-height: 1.5; text-align: center; margin: 0;">
-                  Si el botón no funciona, puedes copiar y pegar el siguiente enlace en tu navegador:<br>
-                  <a href="${appUrl}" style="color: #2563eb; word-break: break-all;">${appUrl}</a>
-                </p>
-              </td>
-            </tr>
-
-            <!-- Footer -->
-            <tr>
-              <td style="background-color: #fafafa; padding: 20px 30px; border-top: 1px solid #e5e5e5; text-align: center;">
-                <p style="color: #737373; font-size: 11px; margin: 0;">
-                  Este es un correo automático enviado por el Sistema de Logística H.Motores.<br>
-                  Por seguridad, no compartas tus credenciales con terceros.
-                </p>
-              </td>
-            </tr>
-          </table>
-        </body>
-        </html>
-      `;
+      const layout = layoutCredenciales(params, getAppUrl());
 
       const resultado = await this.enviarCorreo({
         toEmail: params.toEmail,
         toName: params.recipientName,
-        asunto: 'Tus credenciales de acceso - Sistema de Gestión de Vehículos H.Motores',
-        html: htmlContent,
+        asunto: layout.asunto,
+        html: renderLayoutCorreo(layout),
+        texto: renderTextoPlano(layout),
       });
       if (resultado.success) console.log('✅ Correo enviado con éxito vía Brevo. ID:', resultado.messageId);
       return resultado;

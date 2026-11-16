@@ -87,7 +87,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'general',
     pregunta: '¿Cómo me entero de los cambios en mis solicitudes?',
     respuesta:
-      'La campana del encabezado muestra los cambios de estado de las solicitudes y traslados en que participas, en el momento. Los hitos importantes (creada, aprobada, rechazada, programada, reprogramada, despachada, recibida y cancelación en tránsito) también llegan por correo. Nunca se te avisa de una acción que hiciste tú. Al abrir un aviso vas directo a la pantalla donde te toca actuar (por ejemplo, Aprobaciones o Recepciones) con el detalle de esa solicitud abierto.',
+      'La campana del encabezado muestra al momento los cambios de las solicitudes y traslados en que participas, incluidas las observaciones nuevas. Por correo llega solo lo que te pide actuar o cambia lo que tenías previsto: solicitud por aprobar, aprobada o rechazada, traslado programado, reprogramado o sin fecha, en camino (con la hora de salida y el transportista), despacho revertido, recibida, finalizada, cancelada, insistencias del ejecutivo y traslados internos. Si un vehículo sale de tu sucursal, también te avisamos cuándo se programa su retiro. Nunca se te avisa de una acción que hiciste tú. Al abrir un aviso vas directo a la pantalla donde te toca actuar (por ejemplo, Aprobaciones o Recepciones) con el detalle abierto.',
   },
   {
     vista: 'general',
@@ -128,6 +128,13 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     pregunta: '¿Qué muestra "Tus pendientes"?',
     respuesta:
       'Las solicitudes por programar, las programadas que aún no se despachan y los traslados internos a tu cargo pendientes de despacho. El número abre el detalle; "Ver" te lleva al calendario con la solicitud ya buscada.',
+  },
+  {
+    vista: 'dashboard',
+    roles: ['logistica'],
+    pregunta: '¿Por qué en "Espacios disponibles" no aparecen todas las sucursales?',
+    respuesta:
+      'El inicio muestra solo las 5 sucursales con más slots ocupados, para ver de un vistazo dónde falta espacio. Los totales de libres y de sucursales en alerta sí cuentan todas. "Ver todas" abre Slots de estacionamiento con la lista completa.',
   },
   {
     vista: 'dashboard',
@@ -177,7 +184,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: ['ejecutivo'],
     pregunta: '¿Para qué sirve "Insistir"?',
     respuesta:
-      'Para avisar que tu solicitud lleva demasiado tiempo sin avanzar. Solo en solicitudes propias y una vez cada 24 horas por solicitud.',
+      'Para avisar que tu solicitud lleva demasiado tiempo sin avanzar. Le llega un correo a quien la tiene detenida: al Jefe de Local si falta aprobarla o priorizarla, y a Logística si falta programarla. Solo en solicitudes propias y una vez cada 24 horas por solicitud.',
   },
   {
     vista: 'solicitudes',
@@ -249,7 +256,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: GESTION,
     pregunta: '¿También recibo los traslados internos aquí?',
     respuesta:
-      'Sí. Los traslados internos en camino a tus sucursales aparecen en su propia sección y se reciben igual. No se pueden rechazar: si llegó con problemas, regístralo en las novedades. Puedes adjuntar fotos al recibir; quedan en el detalle del traslado. Los traslados se identifican como T-15.',
+      'Sí. Los traslados internos en camino a tus sucursales aparecen en su propia sección y se reciben igual. No se pueden rechazar: si llegó con problemas, regístralo en las novedades. En la sección Traslados también ves los que salen de tus sucursales, para preparar los vehículos. Puedes adjuntar fotos al recibir; quedan en el detalle del traslado. Los traslados se identifican como T-15.',
   },
 
   // ---------- Calendario ----------

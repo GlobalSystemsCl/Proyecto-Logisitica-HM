@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { EmailService } from '@/services/email.service';
+import { ASUNTO_CLAVE_RESTABLECIDA, ASUNTO_CREDENCIALES, EmailService, layoutCredenciales } from '@/services/email.service';
 
 const fetchMock = vi.fn();
 
@@ -133,3 +133,80 @@ describe('EmailService.enviarCorreo', () => {
   });
 });
 
+
+describe('EmailService.enviarCorreo (texto plano)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ messageId: 'm-2' }) });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('should_send_plain_text_version_when_given', async () => {
+    await EmailService.enviarCorreo({ toEmail: 'a@b.cl', toName: 'A', asunto: 'x', html: '<p>y</p>', texto: 'y' });
+    expect((cuerpoEnviado() as unknown as { textContent: string }).textContent).toBe('y');
+  });
+
+  it('should_omit_plain_text_when_not_given', async () => {
+    await EmailService.enviarCorreo({ toEmail: 'a@b.cl', toName: 'A', asunto: 'x', html: '<p>y</p>' });
+    expect(cuerpoEnviado()).not.toHaveProperty('textContent');
+  });
+});
+
+describe('EmailService.sendUserCredentialsEmail (plantilla)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ messageId: 'm-3' }) });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('should_send_logo_subject_and_plain_text', async () => {
+    await EmailService.sendUserCredentialsEmail({ toEmail: 'a@test.com', recipientName: 'Ana', tempPassword: 'Xy1', role: 'jefe_local' });
+    const body = cuerpoEnviado() as unknown as { subject: string; htmlContent: string; textContent: string };
+    expect(body.subject).toBe(ASUNTO_CREDENCIALES);
+    expect(body.htmlContent).toContain('/correo/logo-hmotores.png');
+    expect(body.textContent).toContain('- Contraseña provisoria: Xy1');
+    expect(body.textContent).toContain('- Rol: Jefe de Local');
+  });
+
+  it('should_use_reset_texts_when_password_was_reset', async () => {
+    await EmailService.sendUserCredentialsEmail({
+      toEmail: 'a@test.com',
+      recipientName: 'Ana',
+      tempPassword: 'Xy1',
+      role: 'ejecutivo',
+      motivo: 'restablecida',
+    });
+    const body = cuerpoEnviado() as unknown as { subject: string; htmlContent: string };
+    expect(body.subject).toBe(ASUNTO_CLAVE_RESTABLECIDA);
+    expect(body.htmlContent).toContain('La anterior ya no funciona.');
+  });
+});
+
+describe('layoutCredenciales', () => {
+  it('should_link_to_login_and_mark_password_as_monospace', () => {
+    const l = layoutCredenciales({ toEmail: 'a@x.cl', recipientName: 'Ana', tempPassword: 'p', role: 'logistica' }, 'https://app.test/');
+    expect(l.boton?.url).toBe('https://app.test/login');
+    expect(l.detalles).toContainEqual(['Rol', 'Logística']);
+    expect(l.detallesMonoespaciados).toContain('Contraseña provisoria');
+    expect(l.titulo).toBe('Tu cuenta está lista');
+  });
+
+  it('should_use_given_login_url_and_keep_unknown_roles', () => {
+    const l = layoutCredenciales(
+      { toEmail: 'a@x.cl', recipientName: 'Ana', tempPassword: 'p', role: 'otro', loginUrl: 'https://otra/login' },
+      'https://app.test'
+    );
+    expect(l.boton?.url).toBe('https://otra/login');
+    expect(l.detalles).toContainEqual(['Rol', 'otro']);
+  });
+});

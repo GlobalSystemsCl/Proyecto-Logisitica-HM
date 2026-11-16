@@ -92,6 +92,8 @@ export interface VehiculoAsociado {
   modelo: string;
   anio: number;
   color: string | null;
+  /** Sucursal donde está el vehículo (`vehiculo.ubicacion`): de ahí lo retira el transportista. */
+  ubicacion?: number | null;
 }
 
 export interface SucursalSolicitudItem {

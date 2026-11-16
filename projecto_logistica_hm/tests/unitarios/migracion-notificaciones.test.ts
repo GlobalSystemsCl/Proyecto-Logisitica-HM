@@ -1,3 +1,5 @@
+import { readdirSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { leerMigracion, normalizarSql } from '../mocks/sql';
 import { TIPO_NOTIFICACION_POR_EVENTO } from '@/lib/notificaciones-app';
@@ -30,10 +32,15 @@ describe('Migración notificaciones_en_app', () => {
   const sql = normalizarSql(migracion);
 
   it('should_define_every_tipo_used_by_the_app_when_applied', () => {
+    // Los tipos se agregan en esta migración y en las posteriores (nuevo usuario, avisos completos).
+    const todas = readdirSync(join(process.cwd(), 'supabase', 'migrations'))
+      .filter((f) => f.endsWith('.sql'))
+      .map((f) => normalizarSql(leerMigracion('migrations', f)))
+      .join(' ');
     for (const tipo of new Set(Object.values(TIPO_NOTIFICACION_POR_EVENTO))) {
       const existe =
         TIPOS_PREVIOS.includes(tipo) ||
-        sql.includes(`alter type public.tipo_notificacion add value if not exists '${tipo.toLowerCase()}';`);
+        todas.includes(`alter type public.tipo_notificacion add value if not exists '${tipo.toLowerCase()}';`);
       expect(existe, tipo).toBe(true);
     }
   });
