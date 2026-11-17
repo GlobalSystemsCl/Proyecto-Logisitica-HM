@@ -41,9 +41,9 @@ describe('normalizarAsignaciones', () => {
     expect(res).toEqual({ ok: true, asignaciones: { sucursal_id: 6, sucursales_a_cargo: [], zonas_ids: [1] } });
   });
 
-  it('should_allow_no_base_branch_when_role_is_administrador_or_operaciones', () => {
-    for (const rol of ['administrador', 'operaciones'] as const) {
-      const res = normalizarAsignaciones({ rol, sucursal_id: null, sucursales_ids: [7], zonas_ids: [1] });
+  it('should_allow_no_base_branch_when_role_is_administrador', () => {
+    {
+      const res = normalizarAsignaciones({ rol: 'administrador', sucursal_id: null, sucursales_ids: [7], zonas_ids: [1] });
       expect(res).toEqual({ ok: true, asignaciones: { sucursal_id: null, sucursales_a_cargo: [], zonas_ids: [] } });
     }
   });

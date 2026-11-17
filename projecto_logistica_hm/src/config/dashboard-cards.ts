@@ -263,7 +263,6 @@ export const DASHBOARD_CARDS: DashboardCard[] = [
     tituloPorRol: {
       jefe_local: 'Consulta aquí el inventario de vehículos',
       logistica: 'Ubica y controla aquí los vehículos',
-      operaciones: 'Consulta aquí el inventario de vehículos',
     },
     descripcion:
       'Alta de vehículos al inventario interno con sus datos completos y control de dónde están ubicados.',

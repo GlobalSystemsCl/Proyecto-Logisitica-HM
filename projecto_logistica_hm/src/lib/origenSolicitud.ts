@@ -37,9 +37,15 @@ export function origenSolicitud(s: SolicitudConOrigen): string {
   return s.sucursal_nombre ?? `Sucursal ${s.sucursal}`;
 }
 
-/** "3 ORIENTE BAIC → 15 NORTE" (o el título del evento como destino). */
+/**
+ * "3 ORIENTE BAIC → 15 NORTE" (o el título del evento como destino). Si el
+ * vehículo ya está en la sucursal de destino (venta desde la sucursal), la
+ * sucursal se muestra una sola vez: "3 ORIENTE BAIC".
+ */
 export function rutaSolicitud(s: SolicitudConOrigen): string {
-  return `${origenSolicitud(s)} → ${s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento'}`;
+  const origen = origenSolicitud(s);
+  const destino = s.sucursal_destino_nombre ?? s.titulo_evento ?? 'Evento';
+  return origen === destino ? origen : `${origen} → ${destino}`;
 }
 
 /** Origen de un vehículo puntual (filas por vehículo: tránsito, Excel, Movimientos). */

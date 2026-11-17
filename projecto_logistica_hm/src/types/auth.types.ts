@@ -1,4 +1,4 @@
-﻿export type UserRole = 'administrador' | 'ejecutivo' | 'jefe_local' | 'logistica' | 'operaciones';
+﻿export type UserRole = 'administrador' | 'ejecutivo' | 'jefe_local' | 'logistica';
 
 export interface UsuarioSucursalAsignada {
   id: number;
@@ -57,7 +57,6 @@ export const ROL_LABEL: Record<UserRole, string> = {
   ejecutivo: 'Ejecutivo',
   jefe_local: 'Jefe de Local',
   logistica: 'Logística',
-  operaciones: 'Operaciones',
 };
 
 export function nombreCompletoUsuario(u: { nombre: string; apellido: string } | null): string {

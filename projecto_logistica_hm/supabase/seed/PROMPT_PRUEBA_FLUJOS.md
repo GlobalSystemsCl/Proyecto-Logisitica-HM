@@ -42,7 +42,7 @@ URL de la app: `<URL>` (local: `http://localhost:3000`).
 | LG0 | flowcode soluciones / maickol logistic | Logística | **Sin zona** | `<correo>` | `<clave>` |
 | PEND | OSCAR PEREZ | Cuenta registrada pendiente de activar | — | `<correo>` | — |
 
-No hay usuarios de **Operaciones** ni de Logística de la **zona 2**: esos casos quedan fuera.
+No hay usuarios de Logística de la **zona 2**: esos casos quedan fuera.
 Anótalos como "no cubiertos".
 
 ## Datos cargados (al 2026-10-14)

@@ -18,7 +18,7 @@ export default async function AdminVehiculosPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const allowedRoles = ['administrador', 'jefe_local', 'logistica', 'operaciones'];
+  const allowedRoles = ['administrador', 'jefe_local', 'logistica'];
   if (!allowedRoles.includes(profile.rol)) {
     redirect('/dashboard?error=unauthorized');
   }

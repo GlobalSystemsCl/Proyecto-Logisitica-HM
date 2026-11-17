@@ -135,8 +135,9 @@ describe('puedeAccederSolicitud', () => {
     expect(puedeAccederSolicitud(perfil({ rol: 'administrador' }), solicitud(), null)).toBe(true);
   });
 
-  it('should_deny_operaciones_always', () => {
-    expect(puedeAccederSolicitud(perfil({ rol: 'operaciones', id: 'e-1' }), solicitud(), null)).toBe(false);
+  it('should_deny_unknown_role_when_user_is_not_a_participant', () => {
+    // "operaciones" ya no existe (2026-11-17); un rol desconocido no ve nada.
+    expect(puedeAccederSolicitud(perfil({ rol: 'operaciones' as never, id: 'e-1' }), solicitud(), null)).toBe(false);
   });
 
   it('should_allow_ejecutivo_only_on_own_solicitud', () => {

@@ -24,7 +24,6 @@ const ROLES: Array<{ valor: UserRole; descripcion: string }> = [
   { valor: 'ejecutivo', descripcion: 'Crea y sigue solicitudes de su sucursal' },
   { valor: 'jefe_local', descripcion: 'Aprueba, prioriza y recibe en sus sucursales' },
   { valor: 'logistica', descripcion: 'Programa y despacha los traslados de su zona' },
-  { valor: 'operaciones', descripcion: 'Carga y mantiene el inventario de vehículos' },
   { valor: 'administrador', descripcion: 'Control total del sistema' },
 ];
 

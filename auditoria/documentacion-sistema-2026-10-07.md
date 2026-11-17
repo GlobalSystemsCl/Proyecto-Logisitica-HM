@@ -164,7 +164,7 @@ El repositorio git está en la carpeta superior (`C:\Proyecto-Logisitica-HM`).
 | users.actions.ts | createUser, toggleUserStatus, approveUser, resetUserPassword, updateUser | `verifyAdminPermission()` |
 | organizacion.actions.ts | CRUD zonas y marcas | `verifyAdminPermission()` |
 | sucursales.actions.ts | CRUD sucursales | `verifyAdminPermission()` |
-| vehiculo.actions.ts | create/update/delete/import vehículos | roles administrador, jefe_local, logistica, operaciones; delete solo admin |
+| vehiculo.actions.ts | create/update/delete/import vehículos | administrador y logistica (QA #15); delete solo admin |
 | traslados.actions.ts | crear/despachar/recibir/listar traslados, vehículos y sucursales para traslado | Logística/Admin; recibir: + jefe_local (validado en service) |
 | auditoria.actions.ts | getAuditoria (historial global) | `verifyAdminPermission()` |
 | solicitudes.actions.ts | 32 actions (crear, aprobar, rechazar, priorizar, reordenar, cancelar, eliminar, vehículos, observaciones, auditoría, calendarizar, despachar, recibir, finalizar, asignar encargado, insistencias, documentos) | Mixto: **2 sin ningún guard** (`getObservacionesAction`, `getAuditoriaAction`); varias solo exigen "usuario activo" sin verificar pertenencia a la solicitud (brechas 004, 006, 008) |
@@ -234,7 +234,7 @@ Lógica duplicada o en conflicto:
 | notificacion | — | Notificaciones en la app (campana) | Desde 2026-10-14 la escribe `NotificacionService` en cada cambio de estado (sección 30) |
 
 ### Enums
-- `rol_usuario`: ejecutivo, jefe_local, logistica, administrador, operaciones
+- `rol_usuario`: ejecutivo, jefe_local, logistica, administrador (el enum aún tiene `operaciones`, que ya no se usa: la app no lo ofrece y ningún usuario lo tiene, 2026-11-17)
 - `estado_solicitud`: pendiente, priorizada, asignada, calendarizada, en_transito, entregada, cancelada, finalizada, pendiente_aprobacion, aprobada, rechazada, despachada (`pendiente` y `despachada` no se usan en el flujo actual del código)
 - `disponibilidad`: reservado, liberado, vendido
 - `tipo_solicitud`: evento, venta · `estado_traslado`: pendiente, en_transito, recepcionado, **cancelado** (R8) · `tipo_notificacion` (11 valores; 18 con la migración `20261014120000`)
@@ -341,26 +341,26 @@ Debilidades: actions sin guard (004), actions sin verificación de pertenencia (
 
 > Actualizado 2026-10-13: alcance por sucursal y zona aplicado en las actions (brecha 008) y acciones nuevas de los requisitos.
 
-| Capacidad | administrador | jefe_local | ejecutivo | logistica | operaciones |
-|---|---|---|---|---|---|
-| Usuarios, sucursales, zonas, marcas, historial | ✔ | — | — | — | — |
-| Crear solicitud | ✔ | ✔ (sus sucursales; queda aprobada) | ✔ (su sucursal; pendiente_aprobacion) | — | — |
-| Aprobar / rechazar / priorizar / reordenar cola | ✔ | ✔ (sus sucursales) | — | — | — |
-| Asignar encargado / despachar / cancelar despacho | ✔ | — | — | ✔ (sus zonas) | — |
-| Calendarizar / descalendarizar | ✔ | ✔ (alcance; no queda como encargado) | — | ✔ (sus zonas) | — |
-| Reprogramar una solicitud calendarizada (R16) | **—** (decisión de negocio 2026-10-13) | — | — | ✔ (sus zonas) | — |
-| Cancelar una solicitud o un traslado interno **en tránsito** (R8) | **—** (decisión de negocio 2026-10-13) | — | — | ✔ (encargado o sus zonas) | — |
-| Recibir en destino (con novedades, R13) | ✔ | ✔ (destino) | — | — | — |
-| Finalizar (entregar al cliente) | ✔ | ✔ (destino) | ✔ (propia) | — | — |
-| Cancelar (pre-despacho) | ✔ | ✔ (sucursal) | ✔ (propia) | ✔ (sus zonas) | — |
-| Eliminar solicitud (pre-despacho) | ✔ | ✔ (sucursal) | ✔ (propia) | — | — |
-| Agregar/quitar vehículos de solicitud | ✔ | ✔ (alcance) | — | ✔ (alcance) | — |
-| Insistir | — | — | ✔ (propia, cada 24 h) | — | — |
-| Vehículos (crear/editar/importar) | ✔ | ✔ | — | ✔ | ✔ |
-| Eliminar vehículo | ✔ | — | — | — | — |
-| Traslados internos (crear, despachar) | ✔ | recibir (destino) | — | ✔ | — |
-| Reportería de logística (`/logistica/reportes`, R17) | ✔ | — | — | — | — |
-| Ver solicitudes | todas | origen o destino en sus sucursales | propias | sucursal origen en sus zonas | ninguna |
+| Capacidad | administrador | jefe_local | ejecutivo | logistica |
+|---|---|---|---|---|
+| Usuarios, sucursales, zonas, marcas, historial | ✔ | — | — | — |
+| Crear solicitud | ✔ | ✔ (sus sucursales; queda aprobada) | ✔ (su sucursal; pendiente_aprobacion) | — |
+| Aprobar / rechazar / priorizar / reordenar cola | ✔ | ✔ (sus sucursales) | — | — |
+| Asignar encargado / despachar / cancelar despacho | ✔ | — | — | ✔ (sus zonas) |
+| Calendarizar / descalendarizar | ✔ | ✔ (alcance; no queda como encargado) | — | ✔ (sus zonas) |
+| Reprogramar una solicitud calendarizada (R16) | **—** (decisión de negocio 2026-10-13) | — | — | ✔ (sus zonas) |
+| Cancelar una solicitud o un traslado interno **en tránsito** (R8) | **—** (decisión de negocio 2026-10-13) | — | — | ✔ (encargado o sus zonas) |
+| Recibir en destino (con novedades, R13) | ✔ | ✔ (destino) | — | — |
+| Finalizar (entregar al cliente) | ✔ | ✔ (destino) | ✔ (propia) | — |
+| Cancelar (pre-despacho) | ✔ | ✔ (sucursal) | ✔ (propia) | ✔ (sus zonas) |
+| Eliminar solicitud (pre-despacho) | ✔ | ✔ (sucursal) | ✔ (propia) | — |
+| Agregar/quitar vehículos de solicitud | ✔ | ✔ (alcance) | — | ✔ (alcance) |
+| Insistir | — | — | ✔ (propia, cada 24 h) | — |
+| Vehículos (crear/editar/importar) | ✔ | ✔ | — | ✔ |
+| Eliminar vehículo | ✔ | — | — | — |
+| Traslados internos (crear, despachar) | ✔ | recibir (destino) | — | ✔ |
+| Reportería de logística (`/logistica/reportes`, R17) | ✔ | — | — | — |
+| Ver solicitudes | todas | origen o destino en sus sucursales | propias | sucursal origen en sus zonas |
 
 Excluir al administrador de reprogramar y de cancelar en tránsito es intencional: está documentado en el JSDoc de las actions y cubierto por tests (`notificaciones.actions.test.ts`, `traslados.actions.test.ts`).
 
@@ -371,7 +371,7 @@ Excluir al administrador de reprogramar y de cancelar en tránsito es intenciona
 | ejecutivo | Obligatoria (una sola) | — | — |
 | jefe_local | Obligatoria; queda a su cargo | Opcionales, varias | — |
 | logistica | Obligatoria | — | Exactamente una |
-| administrador / operaciones | Opcional | — | — |
+| administrador | Opcional | — | — |
 
 - Una sucursal tiene a lo sumo un jefe de local, contando tanto las sucursales base como las adicionales. No hay tabla N:M: las adicionales se guardan en `sucursal.usuario_id`.
 - "Sus sucursales" de un jefe de local = base + adicionales. Es el alcance de solicitudes, aprobaciones, priorizaciones, recepciones, traslados, calendario, slots, dashboard y correos (`OrganizacionService.getUserAssignedBranches`, RPC `usuario_tiene_sucursal`) y, desde la migración `20261013155000`, también de la RLS de lectura.
@@ -690,6 +690,8 @@ Correcciones posteriores (2026-10-13): la cancelación de un traslado interno de
 | 2026-11-13 | QA #8 y #55 completos: un clic en cualquier parte de la fila o tarjeta abre la solicitud en todas las listas (`FilaAbreDetalle`); el foco del teclado queda dentro del modal abierto en toda la app (`AtraparFocoModales`, layout raíz) | Claude (asistido) |
 | 2026-11-17 | Traslado interno: al elegir la sucursal de origen, la lista de abajo muestra solo sus vehículos (se quitó el segundo selector de sucursal, redundante); sin origen no se listan vehículos y la página ya no los precarga | Claude (asistido) |
 | 2026-11-17 | Gestión de vehículos: la acción masiva se llama "Asignar ubicación" (antes "Mover" a una "sucursal de destino"): solo registra en qué sucursal están los autos, no los traslada; para llevarlos a otra sucursal se usa un traslado interno. Solo cambian textos | Claude (asistido) |
+| 2026-11-17 | `rutaSolicitud`: cuando el vehículo ya está en la sucursal de destino (venta desde la sucursal), la ruta muestra la sucursal una sola vez ("3 ORIENTE BAIC" en vez de "3 ORIENTE BAIC → 3 ORIENTE BAIC") | Claude (asistido) |
+| 2026-11-17 | Se quita el rol Operaciones de la app (ya no existe): tipo `UserRole`, selectores y etiquetas de usuarios, activación y carga masiva, inventario, tarjetas del dashboard y preguntas frecuentes. Ningún usuario lo tenía. El valor sigue en el enum `rol_usuario` de la BD, sin uso | Claude (asistido) |
 | 2026-11-13 | Decisiones QA: se revierten #45 (la importación vuelve a aceptar los chasis "…ELIMINARVIT", que son vehículos válidos) y #47 (el administrador no cancela traslados internos, se confirma la decisión del 2026-10-13) | Claude (asistido) |
 | 2026-11-12 | Corrección QA #2: el cooldown de "Insistir" de toda la lista se pide en una sola llamada (`SolicitudesService.getCooldownsInsistencia`, lotes de 100 ids) en vez de una server action por solicitud | Claude (asistido) |
 | 2026-11-12 | Corrección QA #3: "Nueva solicitud" acepta solo PDF, Excel e imágenes (`ACEPTA_DOCUMENTOS`) y avisa al elegir un archivo no permitido o de más de 10 MB (`revisarArchivoElegido`), antes de crear la solicitud | Claude (asistido) |
@@ -947,7 +949,7 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
 
 ### 36.4 Activación masiva y contador de pendientes
 - **Dashboard (`PanelCuentasPendientes`)** y **`/admin/usuarios`**: casillas en las cuentas pendientes, "Seleccionar todas" (las visibles) y "Activar seleccionadas".
-- `ActivacionMasivaModal`: rol en común (Ejecutivo, Logística u Operaciones), sucursal en común o **"Mantener la que indicó cada uno al registrarse"** (por defecto) y zona si es Logística. Muestra cuántas se activaron y el motivo de cada una que falló.
+- `ActivacionMasivaModal`: rol en común (Ejecutivo o Logística), sucursal en común o **"Mantener la que indicó cada uno al registrarse"** (por defecto) y zona si es Logística. Muestra cuántas se activaron y el motivo de cada una que falló.
 - Jefe de Local y Administrador se activan de a uno: el jefe tiene sucursales a cargo propias y el administrador es un permiso que se da individualmente.
 - `approveUsersBulkAction` → `UsersService.activarCuentasMasivo`: hasta 100 cuentas; cada una pasa por `updateUser` y `approveUser` (mismas validaciones), omite las ya aprobadas y una falla no detiene a las demás. Reglas puras en `lib/activacionMasiva.ts`.
 - **Contador corregido:** "Pendientes de autorización" exigía `activo = true`, pero una cuenta registrada queda inactiva, así que siempre daba 0. Ahora cuenta `aprobado = false` (`lib/usuariosAdmin.ts`). Activos, pendientes e inactivos suman el total.
@@ -967,7 +969,7 @@ Pedido del cliente: al programar un traslado debe quedar el nombre y el RUT del 
 ## 37. Ubicaciones de stock (2026-10-21, fase G)
 
 ### 37.1 Cambio de ubicación masivo
-- En el inventario (`/admin/vehiculos`, roles administrador, jefe de local, Logística y operaciones) hay una casilla en cada vehículo **disponible que no va en camino** (`esSeleccionableParaMover`), una casilla para la página y "Seleccionar los N disponibles del filtro", que respeta los filtros (marca, ubicación, fecha, búsqueda).
+- En el inventario (`/admin/vehiculos`, roles administrador, jefe de local y Logística) hay una casilla en cada vehículo **disponible que no va en camino** (`esSeleccionableParaMover`), una casilla para la página y "Seleccionar los N disponibles del filtro", que respeta los filtros (marca, ubicación, fecha, búsqueda).
 - La barra "Cambiar ubicación" elige la sucursal de destino y pide confirmación. El resultado se muestra en el aviso de la página: cuántos se movieron y los primeros 5 omitidos con su motivo.
 - `cambiarUbicacionMasivaAction(ids, sucursalId)` → `VehiculoService.cambiarUbicacionMasiva`:
   - hasta 500 vehículos por vez;

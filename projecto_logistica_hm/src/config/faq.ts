@@ -63,7 +63,7 @@ export interface PreguntaFaq {
 const GESTION: readonly UserRole[] = ['administrador', 'jefe_local'];
 const CREAN: readonly UserRole[] = ['administrador', 'jefe_local', 'ejecutivo'];
 const CALENDARIO: readonly UserRole[] = ['administrador', 'jefe_local', 'logistica'];
-const INVENTARIO: readonly UserRole[] = ['administrador', 'jefe_local', 'logistica', 'operaciones'];
+const INVENTARIO: readonly UserRole[] = ['administrador', 'jefe_local', 'logistica'];
 // QA #15: importar, registrar, editar y mover vehículos es solo de Logística y el administrador.
 const GESTION_INVENTARIO: readonly UserRole[] = ['administrador', 'logistica'];
 const OPERAN_TRASLADOS: readonly UserRole[] = ['administrador', 'logistica'];
@@ -422,7 +422,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: INVENTARIO,
     pregunta: '¿Por qué no puedo editar un vehículo?',
     respuesta:
-      'Solo Logística y el administrador registran, editan, importan y mueven vehículos; el jefe de local y Operaciones consultan el inventario. Además, los reservados en una solicitud activa o entregados al cliente quedan bloqueados, y solo el administrador puede eliminar vehículos.',
+      'Solo Logística y el administrador registran, editan, importan y mueven vehículos; el jefe de local consulta el inventario. Además, los reservados en una solicitud activa o entregados al cliente quedan bloqueados, y solo el administrador puede eliminar vehículos.',
   },
   {
     vista: 'inventario',

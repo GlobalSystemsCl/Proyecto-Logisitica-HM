@@ -9,8 +9,7 @@ import type { UserRole } from '@/types/auth.types';
  *  - Jefe de local: una sucursal base y, opcionalmente, sucursales
  *    adicionales. Todas quedan a su cargo en `sucursal.usuario_id`, por eso
  *    una sucursal nunca tiene dos jefes de local.
- *  - Administrador y operaciones: sucursal base opcional, sin sucursales a
- *    cargo ni zonas.
+ *  - Administrador: sucursal base opcional, sin sucursales a cargo ni zonas.
  *
  * Funciones puras: las usan el modal de `/admin/usuarios` y `UsersService`.
  */

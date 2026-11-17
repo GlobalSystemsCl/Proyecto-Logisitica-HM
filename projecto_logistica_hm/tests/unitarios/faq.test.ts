@@ -11,7 +11,7 @@ import {
 } from '@/config/faq';
 import type { UserRole } from '@/types/auth.types';
 
-const ROLES: UserRole[] = ['administrador', 'jefe_local', 'ejecutivo', 'logistica', 'operaciones'];
+const ROLES: UserRole[] = ['administrador', 'jefe_local', 'ejecutivo', 'logistica'];
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -93,7 +93,7 @@ describe('hrefAyuda', () => {
 
 describe('preguntaVisiblePara', () => {
   it('should_show_questions_without_roles_to_everyone_and_restricted_ones_only_to_their_roles', () => {
-    expect(preguntaVisiblePara({ vista: 'general', pregunta: 'p', respuesta: 'r' }, 'operaciones')).toBe(true);
+    expect(preguntaVisiblePara({ vista: 'general', pregunta: 'p', respuesta: 'r' }, 'ejecutivo')).toBe(true);
     const soloAdmin = { vista: 'usuarios' as const, roles: ['administrador'] as const, pregunta: 'p', respuesta: 'r' };
     expect(preguntaVisiblePara(soloAdmin, 'administrador')).toBe(true);
     expect(preguntaVisiblePara(soloAdmin, 'ejecutivo')).toBe(false);
@@ -116,8 +116,8 @@ describe('gruposFaq', () => {
   });
 
   it('should_keep_default_order_when_current_view_has_no_questions_for_role', () => {
-    const grupos = gruposFaq('operaciones', 'usuarios');
+    const grupos = gruposFaq('ejecutivo', 'usuarios');
     expect(grupos[0].vista).toBe('general');
-    expect(grupos.map((g) => g.vista)).toContain('inventario');
+    expect(grupos.map((g) => g.vista)).not.toContain('usuarios');
   });
 });

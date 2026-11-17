@@ -214,7 +214,7 @@ La capa de negocio está correctamente separada en **Services** y **Server Actio
 |---|---|
 | `createSolicitudAction` — rol ejecutivo solo crea en su sucursal | Unit |
 | `createSolicitudAction` — jefe_local requiere sucursal asignada | Unit |
-| `createSolicitudAction` — rol operaciones/logistica no puede crear | Unit |
+| `createSolicitudAction` — rol logistica no puede crear | Unit |
 | `aprobarSolicitudAction` — solo jefe_local o admin puede aprobar | Unit |
 | `rechazarSolicitudAction` — solo jefe_local o admin puede rechazar | Unit |
 | `priorizarSolicitudAction` — solo jefe_local o admin puede priorizar | Unit |
@@ -624,7 +624,7 @@ coverage: {
 | T095 | Solicitudes | `eliminarDocumento` por autor → success | `solicitudes.service.test.ts` | `eliminarDocumento` | Unit | P1 | Dev1 | ⬜ |
 | T096 | Solicitudes | `eliminarDocumento` por ejecutivo no autor → error | `solicitudes.service.test.ts` | `eliminarDocumento` | Unit | P1 | Dev1 | ⬜ |
 | T097 | Actions | `createSolicitudAction` ejecutivo sucursal incorrecta → error | `solicitudes.actions.test.ts` | `createSolicitudAction` | Unit | P0 | Dev1 | ⬜ |
-| T098 | Actions | `createSolicitudAction` rol operaciones → error | `solicitudes.actions.test.ts` | `createSolicitudAction` | Unit | P0 | Dev1 | ⬜ |
+| T098 | Actions | `createSolicitudAction` rol logistica → error | `solicitudes.actions.test.ts` | `createSolicitudAction` | Unit | P0 | Dev1 | ⬜ |
 | T099 | Actions | `createSolicitudAction` tipo evento sin dirección → error | `solicitudes.actions.test.ts` | `createSolicitudAction` | Unit | P0 | Dev1 | ⬜ |
 | T100 | Actions | `createSolicitudAction` jefe_local → estado `aprobada` | `solicitudes.actions.test.ts` | `createSolicitudAction` | Unit | P0 | Dev1 | ⬜ |
 | T101 | Actions | `aprobarSolicitudAction` por ejecutivo → error | `solicitudes.actions.test.ts` | `aprobarSolicitudAction` | Unit | P0 | Dev1 | ⬜ |

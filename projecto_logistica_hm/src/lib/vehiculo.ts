@@ -78,7 +78,7 @@ export function mensajeVehiculosSinUbicacion(chasis: string[]): string {
 /**
  * QA #15 (2026-11-12): solo Logística y el administrador importan, registran,
  * editan y cambian la ubicación de vehículos. Los demás roles con acceso al
- * inventario (jefe de local, operaciones) solo lo consultan.
+ * inventario (jefe de local) solo lo consultan.
  */
 export const ROLES_GESTION_VEHICULOS = ['administrador', 'logistica'] as const;
 

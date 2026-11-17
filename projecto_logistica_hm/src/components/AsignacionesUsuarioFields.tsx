@@ -70,7 +70,6 @@ const ROTULO_SUCURSAL_BASE: Record<UserRole, string> = {
   jefe_local: 'Sucursal base *',
   logistica: 'Sucursal base *',
   administrador: 'Sucursal (opcional)',
-  operaciones: 'Sucursal (opcional)',
 };
 
 /**

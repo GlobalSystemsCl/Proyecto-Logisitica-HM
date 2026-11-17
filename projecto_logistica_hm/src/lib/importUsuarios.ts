@@ -16,7 +16,7 @@ export const MAX_FILAS_IMPORTACION = 200;
 export const TAMANO_LOTE_IMPORTACION = 20;
 
 /** Roles que se pueden cargar. El administrador se crea de a uno. */
-export const ROLES_IMPORTABLES: readonly UserRole[] = ['ejecutivo', 'jefe_local', 'logistica', 'operaciones'];
+export const ROLES_IMPORTABLES: readonly UserRole[] = ['ejecutivo', 'jefe_local', 'logistica'];
 
 /** Fila tal como viene del Excel, con su número de fila (la 2 es la primera de datos). */
 export interface FilaPlantilla {
@@ -99,7 +99,6 @@ const ALIAS_ROLES: Record<string, UserRole> = {
   'jefe de local': 'jefe_local',
   'jefe local': 'jefe_local',
   logistica: 'logistica',
-  operaciones: 'operaciones',
   administrador: 'administrador',
 };
 
@@ -150,7 +149,7 @@ export function validarFilasImportacion(filas: FilaPlantilla[], catalogo: Catalo
     if (!f.rol.trim()) {
       errores.push('Falta el rol.');
     } else if (!rol) {
-      errores.push(`Rol desconocido: "${f.rol}". Usa Ejecutivo, Jefe de Local, Logística u Operaciones.`);
+      errores.push(`Rol desconocido: "${f.rol}". Usa Ejecutivo, Jefe de Local o Logística.`);
     } else if (!ROLES_IMPORTABLES.includes(rol)) {
       errores.push('Los administradores se crean de a uno desde "Registrar Nuevo Usuario".');
       rol = null;

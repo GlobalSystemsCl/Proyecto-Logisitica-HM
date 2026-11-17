@@ -66,10 +66,6 @@ const roleLabels: Record<UserRole, { label: string; color: string }> = {
     label: 'Logística',
     color: 'bg-neutral-100 text-neutral-500 border-neutral-300',
   },
-  operaciones: {
-    label: 'Operaciones',
-    color: 'bg-neutral-600 text-white border-neutral-600',
-  },
 };
 
 export default function UsersTableClient({ users, sucursales, zonas, currentAdminId, adminPrincipalEmail, dominiosCorreo }: Props) {
@@ -686,7 +682,6 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
             <option value="jefe_local">Jefe de Local</option>
             <option value="ejecutivo">Ejecutivo</option>
             <option value="logistica">Logística</option>
-            <option value="operaciones">Operaciones</option>
           </select>
           <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider sm:ml-2">
             Estado:
@@ -1014,7 +1009,6 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                   <option value="ejecutivo">Ejecutivo (Gestión de solicitudes/vehículos)</option>
                   <option value="jefe_local">Jefe de Local (Aprobación, priorización, entrega)</option>
                   <option value="logistica">Logística (Coordinación de traslados)</option>
-                  <option value="operaciones">Operaciones (Ingreso/mantenimiento de vehículos)</option>
                   <option value="administrador">Administrador (Control total del sistema)</option>
                 </select>
               </div>
@@ -1148,7 +1142,6 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
                   <option value="ejecutivo">Ejecutivo (Gestión de solicitudes/vehículos)</option>
                   <option value="jefe_local">Jefe de Local (Aprobación, priorización, entrega)</option>
                   <option value="logistica">Logística (Coordinación de traslados)</option>
-                  <option value="operaciones">Operaciones (Ingreso/mantenimiento de vehículos)</option>
                   <option value="administrador">Administrador (Control total del sistema)</option>
                 </select>
               </div>

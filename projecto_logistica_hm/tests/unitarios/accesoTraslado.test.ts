@@ -17,6 +17,5 @@ describe('puedeAccederTraslado', () => {
   it('should_deny_when_out_of_scope_or_role_has_no_access', () => {
     expect(puedeAccederTraslado('jefe_local', 'j-1', traslado, [999])).toBe(false);
     expect(puedeAccederTraslado('ejecutivo', 'e-1', traslado, [101])).toBe(false);
-    expect(puedeAccederTraslado('operaciones', 'o-1', traslado, [135])).toBe(false);
   });
 });

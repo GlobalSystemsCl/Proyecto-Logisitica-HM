@@ -148,7 +148,7 @@ interface ViewerInfo {
   id: string;
   nombre: string;
   apellido: string;
-  rol: 'administrador' | 'ejecutivo' | 'jefe_local' | 'logistica' | 'operaciones';
+  rol: 'administrador' | 'ejecutivo' | 'jefe_local' | 'logistica';
   sucursal_id: number | null;
 }
 

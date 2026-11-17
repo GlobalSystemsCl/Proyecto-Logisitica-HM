@@ -162,7 +162,7 @@ export default function ActivacionMasivaModal({ cuentas, sucursales, zonas, onCe
                   <option key={s.id} value={s.id}>{s.nombre ?? `Sucursal #${s.id}`}</option>
                 ))}
               </select>
-              {sinSucursal > 0 && rol !== 'operaciones' && (
+              {sinSucursal > 0 && (
                 <p className="text-[11px] text-amber-700">
                   {sinSucursal} cuenta{sinSucursal === 1 ? '' : 's'} no indicó sucursal y no se podrá{sinSucursal === 1 ? '' : 'n'} activar así.
                 </p>

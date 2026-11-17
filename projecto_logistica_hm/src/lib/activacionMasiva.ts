@@ -12,7 +12,7 @@ import type { UserRole } from '@/types/auth.types';
 
 export const MAX_ACTIVACION_MASIVA = 100;
 
-export const ROLES_ACTIVACION_MASIVA: readonly UserRole[] = ['ejecutivo', 'logistica', 'operaciones'];
+export const ROLES_ACTIVACION_MASIVA: readonly UserRole[] = ['ejecutivo', 'logistica'];
 
 /** `'registro'`: cada cuenta conserva la sucursal que declaró al registrarse. */
 export type SucursalMasiva = 'registro' | number;
@@ -31,7 +31,7 @@ export function validarAsignacionMasiva(a: AsignacionMasiva, cantidad: number): 
     return `Puedes activar hasta ${MAX_ACTIVACION_MASIVA} cuentas a la vez.`;
   }
   if (!ROLES_ACTIVACION_MASIVA.includes(a.rol)) {
-    return 'La activación masiva solo admite Ejecutivo, Logística u Operaciones. Activa las demás cuentas de a una.';
+    return 'La activación masiva solo admite Ejecutivo o Logística. Activa las demás cuentas de a una.';
   }
   if (a.sucursal !== 'registro' && !(Number.isInteger(a.sucursal) && a.sucursal > 0)) {
     return 'La sucursal elegida no es válida.';

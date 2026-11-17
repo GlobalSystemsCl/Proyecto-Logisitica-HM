@@ -53,7 +53,7 @@ describe('asignacionParaUsuario', () => {
   });
 
   it('should_use_null_when_user_did_not_declare_a_branch', () => {
-    expect(asignacionParaUsuario({ rol: 'operaciones', sucursal: 'registro' }, undefined).sucursal_id).toBeNull();
+    expect(asignacionParaUsuario({ rol: 'ejecutivo', sucursal: 'registro' }, undefined).sucursal_id).toBeNull();
   });
 
   it('should_use_common_branch_and_zone_for_logistica', () => {

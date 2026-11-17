@@ -127,7 +127,6 @@ describe('puedeGestionarVehiculos', () => {
 
   it('should_return_false_when_role_only_consults_inventory', () => {
     expect(puedeGestionarVehiculos('jefe_local')).toBe(false);
-    expect(puedeGestionarVehiculos('operaciones')).toBe(false);
     expect(puedeGestionarVehiculos(null)).toBe(false);
   });
 });

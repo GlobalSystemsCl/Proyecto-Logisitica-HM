@@ -65,7 +65,7 @@ export default function CargaMasivaUsuarios({ usuarios, sucursales, zonas, domin
       {
         nombre: 'Opciones',
         filas: [
-          ...['Ejecutivo', 'Jefe de Local', 'Logística', 'Operaciones'].map((r) => ({ Tipo: 'Rol', Valor: r })),
+          ...['Ejecutivo', 'Jefe de Local', 'Logística'].map((r) => ({ Tipo: 'Rol', Valor: r })),
           ...sucursales.map((s) => ({ Tipo: 'Sucursal', Valor: s.nombre ?? String(s.id) })),
           ...zonas.map((z) => ({ Tipo: 'Zona', Valor: z.nombre })),
         ],

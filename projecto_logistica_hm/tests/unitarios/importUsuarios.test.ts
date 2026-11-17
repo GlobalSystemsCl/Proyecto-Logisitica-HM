@@ -142,9 +142,9 @@ describe('validarFilasImportacion', () => {
     expect(res[1].errores).toEqual(['Un usuario de Logística debe tener al menos una zona asignada.']);
   });
 
-  it('should_allow_operaciones_without_branch', () => {
+  it('should_reject_operaciones_role_because_it_no_longer_exists', () => {
     const [res] = validarFilasImportacion([fila({ rol: 'Operaciones', sucursal: '' })], catalogo());
-    expect(res.errores).toEqual([]);
+    expect(res.errores[0]).toMatch(/Rol desconocido: "Operaciones"/);
   });
 
   it('should_reject_two_jefes_for_the_same_branch_in_file_or_existing', () => {

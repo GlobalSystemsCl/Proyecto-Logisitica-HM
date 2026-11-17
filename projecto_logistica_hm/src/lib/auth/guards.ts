@@ -48,7 +48,6 @@ export function sucursalesDelPerfil(profile: UserProfile): number[] {
  * Regla de visibilidad de una solicitud. Es la misma de
  * `SolicitudesService.getSolicitudesFiltradas`, más los participantes directos:
  *   - administrador: todas
- *   - operaciones: ninguna
  *   - participante (ejecutivo, jefe o logística asignados): la suya
  *   - jefe_local: sucursal origen o destino entre sus sucursales
  *   - logistica: sucursal origen dentro de sus zonas
@@ -61,7 +60,6 @@ export function puedeAccederSolicitud(
   zonaOrigenId: number | null
 ): boolean {
   if (profile.rol === 'administrador') return true;
-  if (profile.rol === 'operaciones') return false;
 
   if (profile.rol === 'ejecutivo') {
     return solicitud.ejecutivo_id === profile.id;

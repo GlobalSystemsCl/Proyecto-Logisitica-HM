@@ -187,7 +187,7 @@ describe('cambiarUbicacionMasivaAction (fase G)', () => {
 });
 
 describe('permisos de gestión de vehículos (QA #15)', () => {
-  it.each(['jefe_local', 'operaciones', 'ejecutivo'] as const)(
+  it.each(['jefe_local', 'ejecutivo'] as const)(
     'should_reject_import_and_move_when_role_is_%s',
     async (rol) => {
       getCurrentUserProfile.mockResolvedValue(perfil({ rol }));

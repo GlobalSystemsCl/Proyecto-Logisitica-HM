@@ -10,7 +10,7 @@ import {
 } from '@/config/dashboard-cards';
 import { UserRole } from '@/types/auth.types';
 
-const ROLES: UserRole[] = ['administrador', 'ejecutivo', 'jefe_local', 'logistica', 'operaciones'];
+const ROLES: UserRole[] = ['administrador', 'ejecutivo', 'jefe_local', 'logistica'];
 
 describe('config/dashboard-cards', () => {
   describe('integridad del catálogo', () => {
@@ -71,9 +71,9 @@ describe('config/dashboard-cards', () => {
       expect(tituloDeCard(historial, 'jefe_local')).toBe('Historial y Trazabilidad');
     });
 
-    it('debería_invitar_a_operaciones_solo_a_consultar_vehiculos', () => {
+    it('debería_invitar_al_jefe_de_local_solo_a_consultar_vehiculos', () => {
       const vehiculos = DASHBOARD_CARDS.find((c) => c.clave === 'vehiculos')!;
-      expect(tituloDeCard(vehiculos, 'operaciones')).toBe('Consulta aquí el inventario de vehículos');
+      expect(tituloDeCard(vehiculos, 'jefe_local')).toBe('Consulta aquí el inventario de vehículos');
       expect(tituloDeCard(vehiculos, 'administrador')).toBe('Gestión de Vehículos');
     });
 
@@ -151,10 +151,6 @@ describe('config/dashboard-cards', () => {
       }
     });
 
-    it('no_debería_operaciones_ver_el_flujo_de_solicitudes', () => {
-      expect(cardsPorRol('operaciones').map((c) => c.clave)).toEqual(['vehiculos']);
-    });
-
     it('debería_logistica_ver_solicitudes_traslados_calendarizacion_y_slots', () => {
       expect(cardsPorRol('logistica').map((c) => c.clave).sort()).toEqual([
         'logistica',
@@ -182,8 +178,9 @@ describe('config/dashboard-cards', () => {
 
   describe('seccionesPorRol', () => {
     it('debería_no_incluir_grupos_vacios', () => {
-      const grupos = seccionesPorRol('operaciones').map((s) => s.grupo);
-      expect(grupos).toEqual(['soporte']);
+      for (const rol of ROLES) {
+        expect(seccionesPorRol(rol).every((s) => s.cards.length > 0)).toBe(true);
+      }
     });
 
     it('debería_no_devolver_ninguna_sección_para_el_ejecutivo', () => {

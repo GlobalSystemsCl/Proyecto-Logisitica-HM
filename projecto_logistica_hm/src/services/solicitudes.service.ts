@@ -514,8 +514,6 @@ export class SolicitudesService {
    *                   (sucursal principal + las que encabeza como encargado)
    * - `logistica`   -> las sucursal origen cuya `zona_id` está en sus zonas
    * - `administrador` -> todas
-   *
-   * `operaciones` no gestiona solicitudes: cae en "sin alcance" (lista vacía).
    */
   static async getSolicitudesFiltradas(
     userId: string,
@@ -523,8 +521,6 @@ export class SolicitudesService {
     opciones: OpcionesListado = {}
   ): Promise<SolicitudLista[]> {
     try {
-      if (rol === 'operaciones') return [];
-
       if (rol === 'ejecutivo') {
         return await this.getSolicitudesPorEjecutivo(userId, opciones);
       }

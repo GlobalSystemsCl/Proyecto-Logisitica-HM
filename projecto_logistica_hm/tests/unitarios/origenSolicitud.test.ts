@@ -35,6 +35,15 @@ describe('rutaSolicitud', () => {
   it('should_use_event_title_when_there_is_no_destination_branch', () => {
     expect(rutaSolicitud({ ...base, sucursal_destino_nombre: null, titulo_evento: 'Feria' })).toBe('15 NORTE → Feria');
   });
+
+  it('should_show_branch_once_when_vehicle_is_already_at_destination', () => {
+    const s = {
+      ...base,
+      sucursal_destino_nombre: '3 ORIENTE BAIC',
+      vehiculos: [{ sucursal_origen: 135, sucursal_origen_nombre: '3 ORIENTE BAIC' }],
+    };
+    expect(rutaSolicitud(s)).toBe('3 ORIENTE BAIC');
+  });
 });
 
 describe('origenVehiculo', () => {
