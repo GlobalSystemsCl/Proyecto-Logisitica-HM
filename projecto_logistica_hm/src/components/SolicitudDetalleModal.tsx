@@ -529,6 +529,8 @@ export default function SolicitudDetalleModal({
     solicitud.tipo_solicitud === 'venta'
       ? solicitud.sucursal_destino_nombre || `#${solicitud.sucursal_destino}`
       : solicitud.titulo_evento || '—';
+  // Venta desde la sucursal: el vehículo ya está en el destino, la sucursal se muestra una vez.
+  const mismaSucursal = solicitud.tipo_solicitud === 'venta' && origenSolicitud(solicitud) === destino;
 
   /**
    * El motivo de rechazo vive en la observación con prefijo `[RECHAZO]` (no hay
@@ -679,13 +681,16 @@ export default function SolicitudDetalleModal({
               </div>
               <div className="min-w-0">
                 {/* QA #38: el origen es de donde sale el vehículo; la sucursal que pide se muestra aparte si difiere. */}
-                <p className="text-[11px] text-neutral-400 font-medium">Sale de</p>
+                <p className="text-[11px] text-neutral-400 font-medium">{mismaSucursal ? 'Sucursal' : 'Sale de'}</p>
                 <p className="text-sm font-bold text-neutral-900">{origenSolicitud(solicitud)}</p>
                 {origenSolicitud(solicitud) !== (solicitud.sucursal_nombre || `Sucursal ${solicitud.sucursal}`) && (
                   <p className="text-[11px] text-neutral-500">Pedida por {solicitud.sucursal_nombre || `#${solicitud.sucursal}`}</p>
                 )}
+                {mismaSucursal && <p className="text-[11px] text-neutral-500">El vehículo ya está en esta sucursal</p>}
               </div>
             </div>
+            {!mismaSucursal && (
+            <>
             <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
             {/* Destination */}
             <div className="flex items-center gap-3">
@@ -702,6 +707,8 @@ export default function SolicitudDetalleModal({
                 )}
               </div>
             </div>
+            </>
+            )}
             <div className="hidden lg:block w-px bg-neutral-200 self-stretch" />
             {/* Priority (oculta para el Ejecutivo) */}
             {puedeVerPrioridad && (

@@ -27,7 +27,7 @@ interface MarcoProps {
 function Marco({ titulo, subtitulo, icono, onCerrar, children }: MarcoProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCerrar}>
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3 p-5 border-b border-neutral-200">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-neutral-100 flex items-center justify-center shrink-0">{icono}</div>

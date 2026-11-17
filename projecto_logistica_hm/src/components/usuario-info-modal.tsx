@@ -18,6 +18,9 @@ import { getUsuarioDetalleAction } from '@/app/actions/solicitudes.actions';
 import { ROL_LABEL, UsuarioDetalle } from '@/types/auth.types';
 import { formatFechaLarga } from '@/lib/fechas';
 
+/** Sucursales a cargo que se muestran antes de "Ver todas". */
+const MAX_SUCURSALES_VISIBLES = 6;
+
 interface UsuarioInfoModalProps {
   usuarioId: string;
   nombreFallback: string | null | undefined;
@@ -54,15 +57,19 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
   const esEncargadoDeLocal = data?.rol === 'jefe_local' || data?.rol === 'administrador';
   const esLogistica = data?.rol === 'logistica';
   const sucursalesACargo = (data?.sucursales ?? []).filter((s) => s.id !== data?.sucursal_id);
+  const [verTodas, setVerTodas] = useState(false);
+  const sucursalesVisibles = verTodas ? sucursalesACargo : sucursalesACargo.slice(0, MAX_SUCURSALES_VISIBLES);
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in" onClick={onClose}>
       <div
-        className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+        role="dialog"
+        aria-modal="true"
+        className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 pt-6 pb-5 border-b border-neutral-200 flex items-center justify-between">
+        <div className="px-6 pt-6 pb-5 border-b border-neutral-200 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-full bg-neutral-200 flex items-center justify-center shrink-0">
               <UserRound className="w-6 h-6 text-neutral-500" />
@@ -86,7 +93,7 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 overflow-y-auto">
           <div>
             <p className="text-base font-bold text-neutral-900">{nombre}</p>
             {data && <p className="text-xs text-neutral-500">{data.email}</p>}
@@ -139,22 +146,35 @@ export function UsuarioInfoModal({ usuarioId, nombreFallback, onClose }: Usuario
                       <p className="text-[10px] font-semibold text-neutral-400 uppercase tracking-wider">
                         Sucursales a su cargo
                       </p>
-                      <p className="text-[11px] text-neutral-500">Encargado de local</p>
+                      <p className="text-[11px] text-neutral-500">
+                        Encargado de local{sucursalesACargo.length > 0 ? ` · ${sucursalesACargo.length} sucursal${sucursalesACargo.length === 1 ? '' : 'es'}` : ''}
+                      </p>
                     </div>
                   </div>
                   {sucursalesACargo.length === 0 ? (
                     <p className="text-xs text-neutral-400 italic">Sin sucursales adicionales a cargo.</p>
                   ) : (
-                    <div className="flex flex-wrap gap-1.5">
-                      {sucursalesACargo.map((s) => (
-                        <span
-                          key={s.id}
-                          className="px-2 py-1 rounded-lg bg-white border border-neutral-200 text-[11px] font-semibold text-neutral-700"
+                    <>
+                      <div className="flex flex-wrap gap-1.5 max-h-40 overflow-y-auto pr-1">
+                        {sucursalesVisibles.map((s) => (
+                          <span
+                            key={s.id}
+                            className="px-2 py-1 rounded-lg bg-white border border-neutral-200 text-[11px] font-semibold text-neutral-700"
+                          >
+                            {s.nombre || `Sucursal #${s.id}`}
+                          </span>
+                        ))}
+                      </div>
+                      {sucursalesACargo.length > MAX_SUCURSALES_VISIBLES && (
+                        <button
+                          type="button"
+                          onClick={() => setVerTodas((v) => !v)}
+                          className="mt-2 text-[11px] font-semibold text-neutral-700 hover:underline cursor-pointer"
                         >
-                          {s.nombre || `Sucursal #${s.id}`}
-                        </span>
-                      ))}
-                    </div>
+                          {verTodas ? 'Ver menos' : `Ver todas (${sucursalesACargo.length})`}
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               )}

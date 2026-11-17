@@ -62,7 +62,7 @@ export default function DescargarCalendarizacion() {
 
       {abierto && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setAbierto(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl max-h-[92vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 p-5 border-b border-neutral-200">
               <div>
                 <h3 className="font-bold text-neutral-900">Descargar calendarización</h3>
