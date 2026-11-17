@@ -186,10 +186,10 @@ export class AuthService {
   static getCurrentUserProfile = getCurrentUserProfileCached;
 
   /**
-   * Registro autogestionado (ruta /registro). Crea al usuario como 'ejecutivo'
-   * inactivo y no aprobado: no puede usar el sistema hasta que un
-   * administrador lo autorice (brecha 003). El rol nunca se toma del cliente
-   * (brecha 002).
+   * Registro autogestionado (ruta /registro). R17 (2026-11-03): crea al
+   * usuario como 'ejecutivo' activo, sin aprobación; el administrador solo
+   * cambia el rol o la sucursal si no corresponden. El rol nunca se toma del
+   * cliente (brecha 002).
    */
   static async register(data: {
     nombre: string;

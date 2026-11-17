@@ -14,7 +14,7 @@ export const TAMANO_GRUPO_IDS = 100;
 export const MOTIVO_RESERVADO = 'Reservado en una solicitud activa.';
 export const MOTIVO_ENTREGADO = 'Entregado al cliente.';
 export const MOTIVO_EN_TRASLADO = 'En un traslado interno pendiente o en tránsito.';
-export const MOTIVO_YA_EN_DESTINO = 'Ya está en esa sucursal.';
+export const MOTIVO_YA_EN_DESTINO = 'Ya tiene esa ubicación.';
 export const MOTIVO_NO_ENCONTRADO = 'Vehículo no encontrado.';
 
 export interface VehiculoUbicacion {
@@ -38,8 +38,8 @@ export interface ClasificacionUbicacion {
 /** Error de la solicitud de cambio, o `null` si es válida. */
 export function validarCambioUbicacion(ids: string[], sucursalId: number): string | null {
   if (ids.length === 0) return 'Selecciona al menos un vehículo.';
-  if (ids.length > MAX_CAMBIO_UBICACION) return `Puedes mover hasta ${MAX_CAMBIO_UBICACION} vehículos a la vez.`;
-  if (!Number.isInteger(sucursalId) || sucursalId <= 0) return 'Elige la sucursal de destino.';
+  if (ids.length > MAX_CAMBIO_UBICACION) return `Puedes asignar ubicación a hasta ${MAX_CAMBIO_UBICACION} vehículos a la vez.`;
+  if (!Number.isInteger(sucursalId) || sucursalId <= 0) return 'Elige la sucursal donde están los vehículos.';
   return null;
 }
 

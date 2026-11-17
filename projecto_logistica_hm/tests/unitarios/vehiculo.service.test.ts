@@ -224,7 +224,7 @@ describe('VehiculoService', () => {
       expect(res.omitidos.map((o) => [o.id, o.motivo])).toEqual([
         ['v2', 'Entregado al cliente.'],
         ['v3', 'En un traslado interno pendiente o en tránsito.'],
-        ['v4', 'Ya está en esa sucursal.'],
+        ['v4', 'Ya tiene esa ubicación.'],
       ]);
       const llamadas = admin.callsTo('vehiculo');
       expect(llamadas).toContainEqual(['update', { ubicacion: 5 }]);
@@ -236,7 +236,7 @@ describe('VehiculoService', () => {
     it('should_reject_when_destination_branch_does_not_exist', async () => {
       admin.results.sucursal = [fila(null)];
       const res = await VehiculoService.cambiarUbicacionMasiva(['v1'], 99);
-      expect(res).toEqual({ success: false, movidos: [], omitidos: [], error: 'La sucursal de destino no existe.' });
+      expect(res).toEqual({ success: false, movidos: [], omitidos: [], error: 'La sucursal elegida no existe.' });
       expect(admin.callsTo('vehiculo')).toHaveLength(0);
     });
 

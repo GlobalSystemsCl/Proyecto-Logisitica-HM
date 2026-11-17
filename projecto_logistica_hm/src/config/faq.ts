@@ -316,7 +316,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: OPERAN_TRASLADOS,
     pregunta: '¿Qué vehículos puedo trasladar?',
     respuesta:
-      'Solo vehículos disponibles que estén en la sucursal de origen: no se pueden trasladar los reservados en una solicitud activa, los entregados al cliente ni los que no tienen sucursal. Búscalos por chasis o patente. Al crear el traslado debes indicar la patente del camión y el transportista.',
+      'Solo vehículos disponibles que estén en la sucursal de origen: no se pueden trasladar los reservados en una solicitud activa, los entregados al cliente ni los que no tienen sucursal. Al elegir el origen aparecen abajo sus vehículos; puedes buscarlos por chasis o patente. Al crear el traslado debes indicar la patente del camión y el transportista.',
   },
   {
     vista: 'traslados',
@@ -413,9 +413,9 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   {
     vista: 'inventario',
     roles: GESTION_INVENTARIO,
-    pregunta: '¿Cómo cambio la ubicación de varios vehículos a la vez?',
+    pregunta: '¿Cómo asigno la ubicación de varios vehículos a la vez?',
     respuesta:
-      'Marca las casillas de los vehículos (o usa "Seleccionar los N disponibles del filtro"), elige la sucursal de destino y usa "Mover". Se omiten, con el motivo, los reservados, los entregados al cliente, los que están en un traslado interno y los que ya están en esa sucursal. Cada cambio queda en el historial. Para asignar sucursal a los importados sin ubicación, usa "Ver y asignar ubicación" (o el filtro "Sin ubicación"). Para mover una lista de autos puntual, pega sus chasis o IDV en el buscador, separados por espacios o comas.',
+      'Marca las casillas de los vehículos (o usa "Seleccionar los N disponibles del filtro"), elige en qué sucursal están y usa "Asignar". Esto no traslada nada: solo registra dónde están físicamente los vehículos (su sucursal de origen para las solicitudes). Para llevarlos a otra sucursal se usa un traslado interno. Se omiten, con el motivo, los reservados, los entregados al cliente, los que están en un traslado interno y los que ya tienen esa ubicación. Cada cambio queda en el historial. Para asignar sucursal a los importados sin ubicación, usa "Ver y asignar ubicación" (o el filtro "Sin ubicación"). Para una lista de autos puntual, pega sus chasis o IDV en el buscador, separados por espacios o comas.',
   },
   {
     vista: 'inventario',

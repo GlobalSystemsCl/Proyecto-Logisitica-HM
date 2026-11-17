@@ -23,8 +23,8 @@ export function mensajeCuentaDesactivada(): string {
 }
 
 /**
- * Mensaje al terminar el registro (fase F). La cuenta queda pendiente de
- * aprobación: el administrador la activa y puede corregir rol y sucursal.
+ * Mensaje al terminar el registro (fase F, R17). La cuenta queda activa como
+ * ejecutivo; si el rol o la sucursal no corresponden, el administrador los cambia.
  */
 export function mensajeRegistroActivo(sucursal: string | null): string {
   const email = getSoporteEmail();

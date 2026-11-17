@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Truck,
   MapPin,
@@ -54,7 +54,6 @@ interface TrasladosClientProps {
   traslados: TrasladoInterno[];
   sucursales: Sucursal[];
   marcas: Marca[];
-  vehiculosIniciales: VehiculosParaTrasladoResult;
   esOperador: boolean;
   viewerRol: string;
   viewerSucursales: number[];
@@ -64,11 +63,12 @@ interface TrasladosClientProps {
   trasladoInicialId?: string | null;
 }
 
+const SIN_VEHICULOS: VehiculosParaTrasladoResult = { vehiculos: [], total: 0, page: 1, pageSize: PAGE_SIZE, totalPages: 0 };
+
 export default function TrasladosClient({
   traslados,
   sucursales,
   marcas,
-  vehiculosIniciales,
   esOperador,
   viewerRol,
   viewerSucursales,
@@ -97,26 +97,22 @@ export default function TrasladosClient({
 
   // Búsqueda y paginación de vehículos
   const [busqueda, setBusqueda] = useState('');
-  const [sucursalFiltro, setSucursalFiltro] = useState<number | 'todas'>('todas');
   const [marcaFiltro, setMarcaFiltro] = useState<string>('todas');
   const [pagina, setPagina] = useState(1);
-  const [resultados, setResultados] = useState<VehiculosParaTrasladoResult>(vehiculosIniciales);
+  const [resultados, setResultados] = useState<VehiculosParaTrasladoResult>(SIN_VEHICULOS);
   const [cargandoVehiculos, setCargandoVehiculos] = useState(false);
-  const primerRender = useRef(true);
-
+  // Los vehículos se trasladan desde donde están: la lista es la de la sucursal
+  // de origen elegida, sin un segundo selector de sucursal.
   useEffect(() => {
     if (!esOperador) return;
-    if (primerRender.current) {
-      primerRender.current = false;
-      return;
-    }
+    if (origen === '') return;
     // Una respuesta lenta de una búsqueda anterior no debe pisar la actual.
     let vigente = true;
     const timer = setTimeout(async () => {
       setCargandoVehiculos(true);
       try {
         const res = await getVehiculosParaTrasladoAction(busqueda, pagina, PAGE_SIZE, {
-          sucursalId: sucursalFiltro === 'todas' ? null : sucursalFiltro,
+          sucursalId: origen,
           marca: marcaFiltro === 'todas' ? null : marcaFiltro,
         });
         if (vigente) setResultados(res);
@@ -128,7 +124,7 @@ export default function TrasladosClient({
       vigente = false;
       clearTimeout(timer);
     };
-  }, [busqueda, pagina, sucursalFiltro, marcaFiltro, esOperador]);
+  }, [busqueda, pagina, origen, marcaFiltro, esOperador]);
 
   const visibles = traslados.filter((t) => filtro === 'todos' || t.estado === filtro);
 
@@ -164,10 +160,11 @@ export default function TrasladosClient({
     const nuevo = valor === '' ? '' : Number(valor);
     setOrigen(nuevo);
     setSeleccionados([]);
-    if (nuevo !== '') {
-      setSucursalFiltro(nuevo);
-      setPagina(1);
-    }
+    setPagina(1);
+    // Sin la lista anterior mientras llegan los vehículos del nuevo origen.
+    setResultados(SIN_VEHICULOS);
+    setCargandoVehiculos(nuevo !== '');
+    if (nuevo !== '' && destino === nuevo) setDestino('');
   };
 
   const errorTransporte = errorAsignacionTransporte(listaEmpresas, transporte);
@@ -175,11 +172,6 @@ export default function TrasladosClient({
 
   const handleBusqueda = (valor: string) => {
     setBusqueda(valor);
-    setPagina(1);
-  };
-
-  const handleSucursalFiltro = (valor: string) => {
-    setSucursalFiltro(valor === 'todas' ? 'todas' : Number(valor));
     setPagina(1);
   };
 
@@ -349,25 +341,6 @@ export default function TrasladosClient({
                   ))}
               </select>
             </div>
-            <div className="sm:col-span-2">
-              <SelectorCamion
-                empresas={listaEmpresas}
-                valor={transporte}
-                onCambiar={setTransporte}
-                onEmpresasCambiadas={setListaEmpresas}
-                obligatorio
-              />
-            </div>
-            <div className="sm:col-span-2 space-y-1.5">
-              <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Observación</label>
-              <textarea
-                value={observacion}
-                onChange={(e) => setObservacion(e.target.value)}
-                rows={2}
-                className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none"
-                placeholder="Motivo o comentario del traslado (opcional)"
-              />
-            </div>
           </div>
 
           <div className="mt-4">
@@ -410,21 +383,6 @@ export default function TrasladosClient({
               </div>
               <div className="flex items-center gap-2">
                 <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-                  Sucursal:
-                </label>
-                <select
-                  value={sucursalFiltro === 'todas' ? 'todas' : Number(sucursalFiltro)}
-                  onChange={(e) => handleSucursalFiltro(e.target.value)}
-                  className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900 cursor-pointer"
-                >
-                  <option value="todas">Todas</option>
-                  {sucursales.map((s) => (
-                    <option key={s.id} value={s.id}>{s.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-center gap-2">
-                <label className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">
                   Marca:
                 </label>
                 <select
@@ -440,7 +398,11 @@ export default function TrasladosClient({
               </div>
             </div>
 
-            {cargandoVehiculos ? (
+            {origen === '' ? (
+              <p className="text-sm text-neutral-400 border border-dashed border-neutral-300 rounded-xl px-4 py-6 text-center">
+                Elige la sucursal de origen para ver sus vehículos.
+              </p>
+            ) : cargandoVehiculos ? (
               <div className="flex items-center justify-center border border-dashed border-neutral-300 rounded-xl px-4 py-8">
                 <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
               </div>
@@ -448,7 +410,7 @@ export default function TrasladosClient({
               <p className="text-sm text-neutral-400 border border-dashed border-neutral-300 rounded-xl px-4 py-6 text-center">
                 {busqueda.trim()
                   ? 'No se encontraron vehículos con esa patente o chasis.'
-                  : 'No hay vehículos para trasladar.'}
+                  : 'No hay vehículos disponibles en esta sucursal.'}
               </p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
@@ -517,6 +479,28 @@ export default function TrasladosClient({
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="sm:col-span-2">
+              <SelectorCamion
+                empresas={listaEmpresas}
+                valor={transporte}
+                onCambiar={setTransporte}
+                onEmpresasCambiadas={setListaEmpresas}
+                obligatorio
+              />
+            </div>
+            <div className="sm:col-span-2 space-y-1.5">
+              <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Observación</label>
+              <textarea
+                value={observacion}
+                onChange={(e) => setObservacion(e.target.value)}
+                rows={2}
+                className="w-full bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900 resize-none"
+                placeholder="Motivo o comentario del traslado (opcional)"
+              />
+            </div>
           </div>
 
           <div className="mt-4 flex justify-end">

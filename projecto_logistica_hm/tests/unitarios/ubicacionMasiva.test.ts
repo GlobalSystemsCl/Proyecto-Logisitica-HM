@@ -24,8 +24,8 @@ describe('validarCambioUbicacion', () => {
   it('should_reject_empty_selection_too_many_or_invalid_branch', () => {
     expect(validarCambioUbicacion([], 3)).toBe('Selecciona al menos un vehículo.');
     expect(validarCambioUbicacion(Array(MAX_CAMBIO_UBICACION + 1).fill('v'), 3)).toMatch(/hasta 500/);
-    expect(validarCambioUbicacion(['v1'], 0)).toBe('Elige la sucursal de destino.');
-    expect(validarCambioUbicacion(['v1'], Number.NaN)).toBe('Elige la sucursal de destino.');
+    expect(validarCambioUbicacion(['v1'], 0)).toBe('Elige la sucursal donde están los vehículos.');
+    expect(validarCambioUbicacion(['v1'], Number.NaN)).toBe('Elige la sucursal donde están los vehículos.');
   });
 });
 

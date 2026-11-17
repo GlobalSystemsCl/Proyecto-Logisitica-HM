@@ -295,12 +295,12 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     const sucursalId = Number(destinoMasivo);
     const nombre = sucursales.find((s) => s.id === sucursalId)?.nombre ?? 'la sucursal elegida';
     if (!sucursalId || seleccion.size === 0) return;
-    if (!(await confirmar({ titulo: 'Cambiar ubicación', mensaje: `¿Mover ${seleccion.size} vehículo(s) a ${nombre}?`, textoConfirmar: 'Mover' }))) return;
+    if (!(await confirmar({ titulo: 'Asignar ubicación', mensaje: `¿Registrar que ${seleccion.size} vehículo(s) están en ${nombre}?`, textoConfirmar: 'Asignar' }))) return;
     setMoviendo(true);
     try {
       const res = await cambiarUbicacionMasivaAction([...seleccion], sucursalId);
       if (!res.success) {
-        setFeedback({ type: 'error', message: res.error ?? 'No se pudo cambiar la ubicación.' });
+        setFeedback({ type: 'error', message: res.error ?? 'No se pudo asignar la ubicación.' });
         return;
       }
       const detalle = res.omitidos
@@ -311,8 +311,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
       setFeedback({
         type: res.omitidos.length > 0 && res.movidos.length === 0 ? 'error' : 'success',
         message:
-          `${res.movidos.length} vehículo(s) movidos a ${nombre}.` +
-          (res.omitidos.length > 0 ? ` No se movieron ${res.omitidos.length}: ${detalle}${resto}` : ''),
+          `${res.movidos.length} vehículo(s) quedaron ubicados en ${nombre}.` +
+          (res.omitidos.length > 0 ? ` No se actualizaron ${res.omitidos.length}: ${detalle}${resto}` : ''),
       });
       setSeleccion(new Set());
       setDestinoMasivo('');
@@ -919,7 +919,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
         <div className="bg-white border border-neutral-200 rounded-2xl p-4 flex flex-col lg:flex-row lg:items-center gap-3 text-sm">
           <div className="flex flex-wrap items-center gap-3 flex-1">
             <span className="font-semibold text-neutral-900 flex items-center gap-1.5">
-              <MapPin className="w-4 h-4" /> Cambiar ubicación
+              <MapPin className="w-4 h-4" /> Asignar ubicación
             </span>
             <span className="text-neutral-500">{seleccion.size} seleccionado(s)</span>
             <button
@@ -938,10 +938,10 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             <select
               value={destinoMasivo}
               onChange={(e) => setDestinoMasivo(e.target.value)}
-              aria-label="Sucursal de destino"
+              aria-label="Sucursal donde están los vehículos"
               className="bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
             >
-              <option value="">Sucursal de destino</option>
+              <option value="">¿En qué sucursal están?</option>
               {sucursales.map((s) => (
                 <option key={s.id} value={s.id}>{s.nombre ?? `Sucursal #${s.id}`}</option>
               ))}
@@ -951,7 +951,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
               disabled={moviendo || seleccion.size === 0 || !destinoMasivo}
               className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-white bg-neutral-900 hover:bg-neutral-700 rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {moviendo ? 'Moviendo...' : `Mover ${seleccion.size}`}
+              {moviendo ? 'Asignando...' : `Asignar a ${seleccion.size}`}
             </button>
           </div>
         </div>

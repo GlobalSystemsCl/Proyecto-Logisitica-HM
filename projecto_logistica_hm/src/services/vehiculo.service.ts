@@ -292,7 +292,7 @@ export class VehiculoService {
     try {
       const admin = createAdminClient();
       const { data: sucursal } = await admin.from('sucursal').select('id').eq('id', sucursalId).maybeSingle();
-      if (!sucursal) return { success: false, movidos: [], omitidos: [], error: 'La sucursal de destino no existe.' };
+      if (!sucursal) return { success: false, movidos: [], omitidos: [], error: 'La sucursal elegida no existe.' };
 
       const vehiculos: VehiculoUbicacion[] = [];
       const vinculosSolicitud: Array<{ vehiculo_id: string; disponibilidad: string }> = [];

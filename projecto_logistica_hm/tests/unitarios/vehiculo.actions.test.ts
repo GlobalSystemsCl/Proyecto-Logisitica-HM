@@ -168,11 +168,11 @@ describe('cambiarUbicacionMasivaAction (fase G)', () => {
   });
 
   it('should_not_audit_when_service_fails', async () => {
-    svc.cambiarUbicacionMasiva.mockResolvedValue({ success: false, movidos: [], omitidos: [], error: 'Elige la sucursal de destino.' });
+    svc.cambiarUbicacionMasiva.mockResolvedValue({ success: false, movidos: [], omitidos: [], error: 'Elige la sucursal donde están los vehículos.' });
 
     const res = await actions.cambiarUbicacionMasivaAction(['v1'], 0);
 
-    expect(res).toEqual({ success: false, movidos: [], omitidos: [], error: 'Elige la sucursal de destino.' });
+    expect(res).toEqual({ success: false, movidos: [], omitidos: [], error: 'Elige la sucursal donde están los vehículos.' });
     expect(registrarAuditoriaMasiva).not.toHaveBeenCalled();
   });
 
