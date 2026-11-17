@@ -1,4 +1,5 @@
 import { getAppUrl } from '@/lib/env';
+import { correoSimulado, ERROR_CORREO_SIMULADO } from '@/lib/correoSimulado';
 import { renderLayoutCorreo, renderTextoPlano, type LayoutCorreo } from '@/lib/plantillaCorreo';
 
 export interface SendCredentialsParams {
@@ -81,6 +82,10 @@ export class EmailService {
    * notifique no interrumpa la operación principal.
    */
   static async enviarCorreo(params: EnviarCorreoParams): Promise<ResultadoEnvio> {
+    if (correoSimulado()) {
+      console.info('[correo simulado] No se envía:', params.asunto);
+      return { success: false, error: ERROR_CORREO_SIMULADO };
+    }
     try {
       const apiKey = process.env.BREVO_API_KEY;
       const senderEmail = process.env.BREVO_SENDER_EMAIL || 'globalsystemschile@gmail.com';
