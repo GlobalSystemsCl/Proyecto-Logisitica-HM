@@ -32,6 +32,27 @@ const accionConfig: Record<string, { label: string; color: string }> = {
   recalendarizacion: { label: 'Reprogramación', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
   cancelacion_transito: { label: 'Cancelación en tránsito', color: 'bg-red-50 text-red-700 border border-red-200' },
   recepcion: { label: 'Recepción', color: 'bg-green-50 text-green-700 border border-green-200' },
+  // Prueba final 2026-11-16: el resto de las acciones que registra la app se mostraban en crudo.
+  aprobacion: { label: 'Aprobación', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  rechazo: { label: 'Rechazo', color: 'bg-red-50 text-red-700 border border-red-200' },
+  delegacion: { label: 'Delegación', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  insistencia: { label: 'Insistencia', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+  priorizacion: { label: 'Priorización', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  reorden_cola: { label: 'Reorden de la cola', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  sacar_cola: { label: 'Sacada de la cola', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  asignacion_logistica: { label: 'Asignación de Logística', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  calendarizacion: { label: 'Programación', color: 'bg-blue-50 text-blue-700 border border-blue-200' },
+  descalendarizacion: { label: 'Vuelta a la cola', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+  despacho: { label: 'Despacho', color: 'bg-sky-50 text-sky-800 border border-sky-200' },
+  entrega: { label: 'Recepción', color: 'bg-green-50 text-green-700 border border-green-200' },
+  finalizacion: { label: 'Entrega al cliente', color: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  subir_documento: { label: 'Documento subido', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  eliminar_documento: { label: 'Documento eliminado', color: 'bg-red-50 text-red-700 border border-red-200' },
+  traspaso_logistica: { label: 'Traspaso de Logística', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+  creacion_ausencia: { label: 'Ausencia registrada', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  inicio_ausencia: { label: 'Inicio de ausencia', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
+  fin_ausencia: { label: 'Fin de ausencia', color: 'bg-green-50 text-green-700 border border-green-200' },
+  cancelacion_ausencia: { label: 'Ausencia cancelada', color: 'bg-red-50 text-red-700 border border-red-200' },
 };
 
 const entidadConfig: Record<string, { label: string; color: string }> = {
@@ -83,7 +104,7 @@ function getDetalle(reg: AuditoriaRegistro): { texto: string; esCambioEstado: bo
     const nuevo = (reg.valor_nuevo?.disponibilidad as string) || '?';
     return { texto: `${anterior} → ${nuevo}`, esCambioEstado: false, anterior, nuevo };
   }
-  return { texto: reg.accion, esCambioEstado: false };
+  return { texto: accionConfig[reg.accion]?.label ?? reg.accion, esCambioEstado: false };
 }
 
 function JsonBlock({ label, data }: { label: string; data: Record<string, unknown> | null }) {

@@ -76,8 +76,8 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
       'Cancelaciones en tránsito': f.cancelaciones,
     }));
     const pendientes = reporte.pendientesMasAntiguos.map((p) => ({
-      Solicitud: p.id,
-      Traslado: p.ruta,
+      Solicitud: p.codigo,
+      Ruta: p.ruta,
       Logística: p.encargado,
       Zona: nombreZona(p.zonaId),
       'Esperando (h)': Math.round(p.antiguedadHoras),

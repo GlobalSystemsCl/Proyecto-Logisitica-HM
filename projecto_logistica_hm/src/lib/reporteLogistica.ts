@@ -173,10 +173,15 @@ export function calcularReporte(
   const respuestas = new Map<string, number[]>();
   const nombres = new Map(usuarios.map((u) => [u.id, u.nombre]));
 
-  const fila = (id: string | null | undefined): FilaEncargado => {
+  // Prueba final 2026-11-16: si el encargado ya no es de Logística, se usa el
+  // nombre que trae la solicitud en vez de "Usuario sin nombre".
+  const fila = (id: string | null | undefined, nombreRespaldo?: string | null): FilaEncargado => {
     const clave = id ?? SIN_ASIGNAR;
     if (!filas.has(clave)) {
-      const nombre = clave === SIN_ASIGNAR ? 'Sin asignar' : nombres.get(clave) ?? 'Usuario sin nombre';
+      const nombre =
+        clave === SIN_ASIGNAR
+          ? 'Sin asignar'
+          : nombres.get(clave) ?? (nombreRespaldo ? `${nombreRespaldo} (sin rol de Logística)` : 'Usuario sin nombre');
       filas.set(clave, filaVacia(clave, nombre));
     }
     return filas.get(clave)!;
@@ -189,7 +194,7 @@ export function calcularReporte(
   for (const s of solicitudes) {
     // R1: una venta sin traslado no pasa por Logística: no cuenta en su reporte.
     if (s.sin_traslado) continue;
-    const f = fila(s.logistica_id);
+    const f = fila(s.logistica_id, s.logistica_nombre);
     const atrasada = estadoPlazo(s, hoy) === 'atrasada';
 
     if (ESTADOS_PENDIENTES.includes(s.estado)) {

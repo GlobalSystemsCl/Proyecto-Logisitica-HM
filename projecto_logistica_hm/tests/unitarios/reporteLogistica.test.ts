@@ -105,6 +105,26 @@ describe('primeraCalendarizacion', () => {
 });
 
 describe('calcularReporte', () => {
+  it('should_use_request_name_when_assignee_is_no_longer_logistica', () => {
+    const r = calcularReporte(
+      [sol({ id: 'x1', estado: 'priorizada', logistica_id: 'ex', logistica_nombre: 'Maic Hernández', fecha_confirmacion: '2026-10-02T08:00:00Z' })],
+      [],
+      usuarios,
+      OPC
+    );
+    expect(r.porEncargado.find((f) => f.id === 'ex')?.nombre).toBe('Maic Hernández (sin rol de Logística)');
+  });
+
+  it('should_keep_generic_name_when_request_has_no_assignee_name', () => {
+    const r = calcularReporte(
+      [sol({ id: 'x2', estado: 'priorizada', logistica_id: 'ex', logistica_nombre: null, fecha_confirmacion: '2026-10-02T08:00:00Z' })],
+      [],
+      usuarios,
+      OPC
+    );
+    expect(r.porEncargado.find((f) => f.id === 'ex')?.nombre).toBe('Usuario sin nombre');
+  });
+
   it('should_ignore_branch_sales_without_transfer', () => {
     const r = calcularReporte(
       [sol({ id: 'v1', estado: 'entregada', logistica_id: null, sin_traslado: true, fecha_confirmacion: '2026-10-02T08:00:00Z' })],

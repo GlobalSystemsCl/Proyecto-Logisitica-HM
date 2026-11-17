@@ -91,3 +91,9 @@ Flujo completo de solicitud (crear → entregar), traslados internos en lote (cr
 ## No probado
 
 Flujo real de ausencias (hace falta un segundo usuario de Logística; lo cubren 19 tests unitarios), borrar documentos (usa `window.confirm`), exportes a Excel (descargan archivos) y vista en celular (la ventana de prueba no se pudo achicar; probar desde el teléfono en `http://<IP del PC>:3000`).
+
+## Prueba final en `main` (2026-11-16)
+
+- **Probado y correcto:** traslado T-1 despachado y recibido con foto (miniatura, visor, Escape); número T-n en tarjetas y modales; clic en toda la fila del dashboard; foco atrapado en el detalle; exportes a Excel de Tránsito (4 filas), Movimientos (18 filas y 4 hojas de resumen), Historial (233), Reportes y Calendarización (10), todos coinciden con la pantalla.
+- **Corregido en la prueba:** el Excel de Reportes mostraba el uuid en "Pendientes" (ahora el número 101-9 y la columna "Ruta"); el Historial mostraba en crudo 20 acciones (`priorizacion`, `despacho`, `subir_documento`…); el reporte llamaba "Usuario sin nombre" al encargado que ya no es de Logística (ahora "Nombre (sin rol de Logística)").
+- **No probado:** vista en celular (la ventana no se puede achicar y los iframes están bloqueados: probar desde el teléfono) y el flujo real de ausencias (requiere una segunda cuenta de Logística de prueba).
