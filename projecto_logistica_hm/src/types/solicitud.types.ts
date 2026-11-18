@@ -9,10 +9,12 @@ export type { EstadoSolicitud, TipoSolicitud, VehiculoAsociado };
 
 export interface SolicitudLista {
   id: string;
-  /** Sucursal de origen; su id es el código de sucursal (101, 102...). */
+  /** Sucursal de origen (id). */
   sucursal: number;
   /** Correlativo dentro de la sucursal de origen; el n° visible es `codigoSolicitud`. */
   numero: number | null;
+  /** Código visible de la sucursal de origen al crear la solicitud ("101", "119B"). */
+  codigo_sucursal?: string | null;
   sucursal_nombre: string | null;
   sucursal_destino: number | null;
   sucursal_destino_nombre: string | null;

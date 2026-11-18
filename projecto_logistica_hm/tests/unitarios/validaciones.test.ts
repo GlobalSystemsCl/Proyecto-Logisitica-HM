@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CODIGO_SUCURSAL_MAX,
-  parsearCodigoSucursal,
+  parsearCodigoSucursalVisible,
   requisitosPassword,
   validarCampoTexto,
   validarEmailFormato,
@@ -108,26 +108,25 @@ describe('validarCampoTexto', () => {
     expect(validarCampoTexto('Juan', 'nombre', 100)).toBeNull();
   });
 });
-describe('parsearCodigoSucursal', () => {
-  it('should_return_number_when_code_is_a_positive_integer', () => {
-    expect(parsearCodigoSucursal('101')).toBe(101);
-    expect(parsearCodigoSucursal(' 145 ')).toBe(145);
+describe('parsearCodigoSucursalVisible', () => {
+  it('should_use_number_as_id_when_code_has_no_letter', () => {
+    expect(parsearCodigoSucursalVisible('101')).toEqual({ codigo: '101', id: 101 });
+    expect(parsearCodigoSucursalVisible(' 145 ')).toEqual({ codigo: '145', id: 145 });
   });
 
-  it('should_accept_limits_when_code_is_1_or_max', () => {
-    expect(parsearCodigoSucursal('1')).toBe(1);
-    expect(parsearCodigoSucursal(String(CODIGO_SUCURSAL_MAX))).toBe(CODIGO_SUCURSAL_MAX);
+  it('should_leave_id_to_database_when_code_has_a_letter', () => {
+    expect(parsearCodigoSucursalVisible('119B')).toEqual({ codigo: '119B', id: null });
+    expect(parsearCodigoSucursalVisible(' 120a ')).toEqual({ codigo: '120A', id: null });
   });
 
-  it('should_return_null_when_code_is_zero_or_above_max', () => {
-    expect(parsearCodigoSucursal('0')).toBeNull();
-    expect(parsearCodigoSucursal(String(CODIGO_SUCURSAL_MAX + 1))).toBeNull();
+  it('should_accept_limits_when_number_is_1_or_max', () => {
+    expect(parsearCodigoSucursalVisible('1')?.id).toBe(1);
+    expect(parsearCodigoSucursalVisible(String(CODIGO_SUCURSAL_MAX))?.id).toBe(CODIGO_SUCURSAL_MAX);
   });
 
-  it('should_return_null_when_code_is_not_an_integer', () => {
-    expect(parsearCodigoSucursal('')).toBeNull();
-    expect(parsearCodigoSucursal('10.5')).toBeNull();
-    expect(parsearCodigoSucursal('-3')).toBeNull();
-    expect(parsearCodigoSucursal('A101')).toBeNull();
+  it('should_return_null_when_code_is_invalid', () => {
+    for (const v of ['', '0', String(CODIGO_SUCURSAL_MAX + 1), 'B119', '119BB', '11-9', '1.5']) {
+      expect(parsearCodigoSucursalVisible(v)).toBeNull();
+    }
   });
 });

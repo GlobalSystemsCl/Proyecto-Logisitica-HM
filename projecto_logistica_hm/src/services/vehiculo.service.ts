@@ -721,8 +721,10 @@ export class VehiculoService {
         const codigoSucursal = celda(fila, c.ubicacion);
         let sucursalId: number | null = null;
         if (codigoSucursal) {
+          // Primero el código exacto ("119B" es el acopio, no Lonquén 119A); después el número.
+          sucursalId = sucursales.get(claveCodigoSucursal(codigoSucursal)) ?? null;
           const num = Number(codigoSucursal.replace(/\D/g, ''));
-          sucursalId = sucursales.get(num) ?? null;
+          if (sucursalId === null) sucursalId = sucursales.get(num) ?? null;
           if (sucursalId === null) {
             sucursalId = sucursales.get(String(codigoSucursal).toUpperCase()) ?? null;
           }
@@ -836,14 +838,15 @@ export class VehiculoService {
     return tabs > comas ? '\t' : ',';
   }
 
-  /** Devuelve un mapa codigo -> id de sucursal (por id exacto y por nombre normalizado). */
+  /** Devuelve un mapa codigo -> id de sucursal (por código visible, id exacto y nombre normalizado). */
   private static async resolverSucursales(
     admin: SupabaseClient
   ): Promise<Map<string | number, number>> {
     const mapa = new Map<string | number, number>();
-    const { data } = await admin.from('sucursal').select('id, nombre');
-    for (const s of (data || []) as Array<{ id: number; nombre: string | null }>) {
+    const { data } = await admin.from('sucursal').select('id, codigo, nombre');
+    for (const s of (data || []) as Array<{ id: number; codigo?: string | null; nombre: string | null }>) {
       mapa.set(Number(s.id), s.id);
+      if (s.codigo) mapa.set(claveCodigoSucursal(s.codigo), s.id);
       if (s.nombre) {
         const nombreNormal = VehiculoService.normalizar(s.nombre);
         if (nombreNormal) mapa.set(nombreNormal, s.id);
@@ -924,4 +927,9 @@ export class VehiculoService {
     const n = Number(normalizado);
     return Number.isFinite(n) ? n : null;
   }
+}
+
+/** Clave del mapa de sucursales para un código visible ("119b " -> "codigo:119B"). */
+export function claveCodigoSucursal(codigo: string): string {
+  return `codigo:${codigo.trim().toUpperCase()}`;
 }

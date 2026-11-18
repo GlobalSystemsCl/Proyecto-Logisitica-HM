@@ -25,6 +25,7 @@ interface SolicitudRow {
   fecha_creacion: string | null;
   sucursal: number | null;
   numero: number | null;
+  codigo_sucursal?: string | null;
 }
 
 interface VehiculoRow {
@@ -150,7 +151,7 @@ export class AuditoriaService {
       if (allSolicitudIds.size > 0) {
         const { data: solData } = await admin
           .from('solicitud')
-          .select('id, fecha_creacion, sucursal, numero')
+          .select('id, fecha_creacion, sucursal, numero, codigo_sucursal')
           .in('id', Array.from(allSolicitudIds));
 
         if (solData) {
@@ -205,7 +206,7 @@ export class AuditoriaService {
           usuario_apellido: row.usuario?.apellido || null,
           solicitud_id: solicitudId,
           solicitud_codigo: solicitudId
-            ? codigoSolicitud({ id: solicitudId, sucursal: sol?.sucursal ?? null, numero: sol?.numero ?? null })
+            ? codigoSolicitud({ id: solicitudId, sucursal: sol?.sucursal ?? null, numero: sol?.numero ?? null, codigo_sucursal: sol?.codigo_sucursal ?? null })
             : null,
           solicitud_fecha_creacion: solicitudFecha,
           chasis,

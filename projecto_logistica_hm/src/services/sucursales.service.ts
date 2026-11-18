@@ -99,7 +99,7 @@ export class SucursalesService {
       const { data, error } = await admin
         .from('solicitud')
         .select(
-          `id, sucursal, numero, estado, tipo_solicitud, posicion_prioridad,
+          `id, sucursal, numero, codigo_sucursal, estado, tipo_solicitud, posicion_prioridad,
            fecha_creacion, fecha_tentativa_despacho, fecha_limite, motivo_cancelacion,
            ejecutivo:ejecutivo_id(id, nombre, apellido),
            jefe:jefe_local_id(id, nombre, apellido),
@@ -159,10 +159,12 @@ export class SucursalesService {
     try {
       const admin = createAdminClient();
 
+      // El código no puede repetirse, ni el id cuando el código es solo un número.
       const { data: mismoCodigo } = await admin
         .from('sucursal')
         .select('id, nombre')
-        .eq('id', input.codigo)
+        .or(input.id != null ? `codigo.eq.${input.codigo},id.eq.${input.id}` : `codigo.eq.${input.codigo}`)
+        .limit(1)
         .maybeSingle();
 
       if (mismoCodigo) {
@@ -187,7 +189,8 @@ export class SucursalesService {
       const { data, error } = await admin
         .from('sucursal')
         .insert({
-          id: input.codigo,
+          ...(input.id != null ? { id: input.id } : {}),
+          codigo: input.codigo,
           nombre: input.nombre.trim(),
           direccion: input.direccion?.trim() || null,
           slots: input.slots,

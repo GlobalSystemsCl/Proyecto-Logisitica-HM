@@ -91,7 +91,7 @@ describe('SucursalesService.deleteSucursal (brecha 016)', () => {
 });
 
 describe('SucursalesService.createSucursal', () => {
-  const INPUT = { codigo: 101, nombre: '15 NORTE-VIÑA DEL MAR', direccion: null, slots: 20, zona_id: 1 };
+  const INPUT = { codigo: '101', id: 101, nombre: '15 NORTE-VIÑA DEL MAR', direccion: null, slots: 20, zona_id: 1 };
 
   beforeEach(() => {
     admin.reset();
@@ -110,10 +110,27 @@ describe('SucursalesService.createSucursal', () => {
 
     expect(res.success).toBe(true);
     expect(res.sucursal?.id).toBe(101);
-    expect(admin.callsTo('sucursal')).toContainEqual(['eq', 'id', 101]);
+    expect(admin.callsTo('sucursal')).toContainEqual(['or', 'codigo.eq.101,id.eq.101']);
     expect(admin.callsTo('sucursal')).toContainEqual([
       'insert',
-      { id: 101, nombre: INPUT.nombre, direccion: null, slots: 20, zona_id: 1 },
+      { id: 101, codigo: '101', nombre: INPUT.nombre, direccion: null, slots: 20, zona_id: 1 },
+    ]);
+  });
+
+  it('should_let_database_assign_id_when_code_has_a_letter', async () => {
+    admin.results.sucursal = [
+      { data: null, error: null },
+      { data: [], error: null },
+      { data: { id: 409, codigo: '119B', nombre: 'LONQUEN ACOPIO-SANTIAGO' }, error: null },
+    ];
+
+    const res = await SucursalesService.createSucursal({ ...INPUT, codigo: '119B', id: null, nombre: 'LONQUEN ACOPIO-SANTIAGO' });
+
+    expect(res.success).toBe(true);
+    expect(admin.callsTo('sucursal')).toContainEqual(['or', 'codigo.eq.119B']);
+    expect(admin.callsTo('sucursal')).toContainEqual([
+      'insert',
+      { codigo: '119B', nombre: 'LONQUEN ACOPIO-SANTIAGO', direccion: null, slots: 20, zona_id: 1 },
     ]);
   });
 

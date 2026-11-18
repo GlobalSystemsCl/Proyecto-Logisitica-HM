@@ -143,7 +143,7 @@ function persona(p: { nombre: string; apellido: string } | null): string | null 
   return p ? `${p.nombre} ${p.apellido}`.trim() : null;
 }
 
-const SOLICITUD_SELECT = `id, sucursal, numero, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
+const SOLICITUD_SELECT = `id, sucursal, numero, codigo_sucursal, sucursal_destino, estado, tipo_solicitud, posicion_prioridad,
   ejecutivo_id, jefe_local_id, logistica_id, creado_por, transportista_id, patente_camion, conductor_nombre, sin_traslado,
   fecha_creacion, fecha_tentativa_despacho, fecha_despacho, fecha_entrega, fecha_limite, motivo_cancelacion,
   fecha_confirmacion, fecha_inicio_transito, fecha_recepcion, fecha_entrega_cliente,

@@ -48,8 +48,10 @@ export interface Zona {
 }
 
 export interface Sucursal {
-  /** Código de sucursal (101, 102...); arma el n° de sus solicitudes. */
+  /** Id interno. En casi todas coincide con el código; ver `codigo`. */
   id: number;
+  /** Código visible ("101", "119A", "119B"); arma el n° de sus solicitudes. */
+  codigo?: string | null;
   created_at: string;
   usuario_id: string | null;
   nombre: string | null;
@@ -63,8 +65,10 @@ export interface Sucursal {
 }
 
 export interface CreateSucursalInput {
-  /** Código de sucursal (101, 102...): se guarda como `sucursal.id` y no cambia. */
-  codigo: number;
+  /** Código visible ("101" o "119B"); no cambia. */
+  codigo: string;
+  /** Id con que se crea: el número del código si no tiene letra; si tiene, lo da la BD. */
+  id: number | null;
   nombre: string;
   direccion?: string | null;
   slots: number;
@@ -100,6 +104,7 @@ export interface SucursalSolicitudItem {
   id: string;
   sucursal: number;
   numero: number | null;
+  codigo_sucursal?: string | null;
   estado: EstadoSolicitud;
   tipo_solicitud: TipoSolicitud;
   posicion_prioridad: number | null;

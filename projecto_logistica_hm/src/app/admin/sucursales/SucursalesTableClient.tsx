@@ -161,7 +161,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
 
   function openEditModal(sucursal: Sucursal) {
     setEditingSucursal(sucursal);
-    setCodigo(String(sucursal.id));
+    setCodigo(sucursal.codigo ?? String(sucursal.id));
     setNombre(sucursal.nombre || '');
     setDireccion(sucursal.direccion || '');
     setSlots(sucursal.slots !== null && sucursal.slots !== undefined ? String(sucursal.slots) : '');
@@ -639,7 +639,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="font-semibold text-neutral-900 break-words">
-                      <span className="font-mono text-neutral-500 mr-1.5">{sucursal.id}</span>
+                      <span className="font-mono text-neutral-500 mr-1.5">{sucursal.codigo ?? sucursal.id}</span>
                       {sucursal.nombre}
                     </p>
                     {sucursal.direccion && (
@@ -696,7 +696,7 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                       {/* Nombre & Dirección */}
                       <td className="py-3.5 px-4">
                         <p className="font-semibold text-neutral-900">
-                          <span className="font-mono text-neutral-500 mr-1.5">{sucursal.id}</span>
+                          <span className="font-mono text-neutral-500 mr-1.5">{sucursal.codigo ?? sucursal.id}</span>
                           {sucursal.nombre}
                         </p>
                         {sucursal.direccion && (
@@ -787,18 +787,17 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                 </label>
                 <input
                   type="text"
-                  inputMode="numeric"
                   required
                   disabled={!!editingSucursal}
-                  placeholder="Ej. 101"
+                  placeholder="Ej. 101 o 119B"
                   value={codigo}
-                  onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => setCodigo(e.target.value.toUpperCase().replace(/[^0-9A-Z]/g, ''))}
                   className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm font-mono text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-900 disabled:bg-neutral-100 disabled:text-neutral-500"
                 />
                 <p className="text-[11px] text-neutral-500">
                   {editingSucursal
                     ? 'El código no se puede cambiar: es el inicio del número de las solicitudes de esta sucursal.'
-                    : 'El de la planilla de concesionarios. Las solicitudes de esta sucursal se numeran con él (101-1, 101-2...) y después no se puede cambiar.'}
+                    : 'El de la planilla de concesionarios: un número, o un número y una letra si comparte número con otra (119A, 119B). Las solicitudes de esta sucursal se numeran con él (101-1, 119B-1...) y después no se puede cambiar.'}
                 </p>
               </div>
 

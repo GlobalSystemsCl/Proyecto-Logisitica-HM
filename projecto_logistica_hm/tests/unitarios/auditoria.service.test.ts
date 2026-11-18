@@ -41,7 +41,7 @@ describe('AuditoriaService.getAuditoria', () => {
     const [reg] = await AuditoriaService.getAuditoria();
 
     expect(reg).toMatchObject({ solicitud_id: SOL, solicitud_codigo: '101-15', solicitud_fecha_creacion: '2026-10-01T00:00:00Z' });
-    expect(admin.callsTo('solicitud')).toContainEqual(['select', 'id, fecha_creacion, sucursal, numero']);
+    expect(admin.callsTo('solicitud')).toContainEqual(['select', 'id, fecha_creacion, sucursal, numero, codigo_sucursal']);
   });
 
   it('should_resolve_request_code_through_vehicle_reservation_records', async () => {

@@ -667,6 +667,28 @@ describe('VehiculoService', () => {
       expect(res.errores).toBe(0);
     });
 
+    it('should_match_branch_by_exact_code_when_code_has_a_letter', async () => {
+      admin.results.sucursal = [{
+        data: [
+          { id: 119, codigo: '119A', nombre: 'LONQUEN-SANTIAGO' },
+          { id: 409, codigo: '119B', nombre: 'LONQUEN ACOPIO-SANTIAGO' },
+        ],
+        error: null,
+      }];
+      admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: null }];
+      const csv = [
+        'Marca,Modelo,Chasis,Ubicación',
+        `TOY,Corolla,${CHASIS_VALIDO},119B`,
+        'TOY,Yaris,JTMW1RF79KD123456,119',
+      ].join('\n');
+
+      const res = await VehiculoService.importVehiculosCSV(csv);
+
+      expect(res.importados).toBe(2);
+      const insert = admin.callsTo('vehiculo').find((c) => c[0] === 'insert');
+      expect((insert?.[1] as Array<{ ubicacion: number }>).map((v) => v.ubicacion)).toEqual([409, 119]);
+    });
+
     it('should_import_stock_excel_columns_when_file_uses_current_format', async () => {
       admin.results.sucursal = [{ data: [{ id: 101, nombre: '15 NORTE' }], error: null }];
       admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: null }];

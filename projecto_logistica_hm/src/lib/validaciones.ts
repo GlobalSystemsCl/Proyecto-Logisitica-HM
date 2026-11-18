@@ -81,13 +81,15 @@ export function validarCampoTexto(
 export const CODIGO_SUCURSAL_MAX = 99999;
 
 /**
- * Código de sucursal escrito por el administrador: entero entre 1 y
- * `CODIGO_SUCURSAL_MAX`. `null` si no es válido. Es el id de la sucursal y el
- * prefijo del n° de sus solicitudes (`lib/codigoSolicitud`).
+ * Código visible de sucursal (migración 20261118120000): un número ("101") o
+ * un número y una letra ("119B", sucursales que comparten número, como los
+ * acopios). `id` es el id con que se crea: el número si no hay letra; con
+ * letra lo asigna la BD. `null` si no es válido.
  */
-export function parsearCodigoSucursal(valor: string): number | null {
-  const limpio = (valor || '').trim();
-  if (!/^\d+$/.test(limpio)) return null;
-  const n = Number(limpio);
-  return n >= 1 && n <= CODIGO_SUCURSAL_MAX ? n : null;
+export function parsearCodigoSucursalVisible(valor: string): { codigo: string; id: number | null } | null {
+  const m = /^(\d+)([A-Z])?$/.exec((valor || '').trim().toUpperCase());
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (n < 1 || n > CODIGO_SUCURSAL_MAX) return null;
+  return m[2] ? { codigo: `${n}${m[2]}`, id: null } : { codigo: String(n), id: n };
 }

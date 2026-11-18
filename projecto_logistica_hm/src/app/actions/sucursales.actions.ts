@@ -2,7 +2,7 @@
 
 import { requireProfile, requireRole } from '@/lib/auth/guards';
 import { mensajeErrorUsuario } from '@/lib/errores';
-import { CODIGO_SUCURSAL_MAX, parsearCodigoSucursal } from '@/lib/validaciones';
+import { CODIGO_SUCURSAL_MAX, parsearCodigoSucursalVisible } from '@/lib/validaciones';
 import { SucursalesService } from '@/services/sucursales.service';
 import { revalidatePath } from 'next/cache';
 import { OrganizacionService } from '@/services/organizacion.service';
@@ -43,11 +43,11 @@ export async function createSucursalAction(data: SucursalFormData) {
       return { success: false, error: 'El nombre de la sucursal es obligatorio.' };
     }
 
-    const codigo = parsearCodigoSucursal(data.codigo ?? '');
+    const codigo = parsearCodigoSucursalVisible(data.codigo ?? '');
     if (codigo === null) {
       return {
         success: false,
-        error: `El código de sucursal debe ser un número entero entre 1 y ${CODIGO_SUCURSAL_MAX}.`,
+        error: `El código de sucursal debe ser un número entre 1 y ${CODIGO_SUCURSAL_MAX}, opcionalmente seguido de una letra (p. ej. 119B).`,
       };
     }
 
@@ -58,7 +58,8 @@ export async function createSucursalAction(data: SucursalFormData) {
     }
 
     const result = await SucursalesService.createSucursal({
-      codigo,
+      codigo: codigo.codigo,
+      id: codigo.id,
       nombre,
       direccion: data.direccion?.trim() || null,
       slots,

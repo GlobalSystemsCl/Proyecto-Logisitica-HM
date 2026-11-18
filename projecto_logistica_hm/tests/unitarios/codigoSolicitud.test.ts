@@ -12,6 +12,11 @@ describe('codigoSolicitud', () => {
     expect(codigoSolicitud({ id: ID, sucursal: 101, numero: 15 })).toBe('101-15');
   });
 
+  it('should_use_branch_code_with_letter_when_request_has_it', () => {
+    expect(codigoSolicitud({ id: ID, sucursal: 409, numero: 3, codigo_sucursal: '119B' })).toBe('119B-3');
+    expect(codigoSolicitud({ id: ID, sucursal: 119, numero: 7, codigo_sucursal: null })).toBe('119-7');
+  });
+
   it('should_use_first_number_when_it_is_the_first_request_of_the_branch', () => {
     expect(codigoSolicitud({ id: ID, sucursal: 145, numero: 1 })).toBe('145-1');
   });

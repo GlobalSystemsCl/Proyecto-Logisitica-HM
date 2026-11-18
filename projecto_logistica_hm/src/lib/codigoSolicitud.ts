@@ -1,8 +1,10 @@
 /**
  * N° visible de una solicitud: `<código de la sucursal de origen>-<correlativo>`
- * (p. ej. `101-15`). El código de sucursal es `sucursal.id` (los códigos del
- * Excel de concesionarios) y el correlativo, `solicitud.numero`, lo asigna la
- * BD por sucursal (migración 20261024120000). Es el único lugar que arma este
+ * (p. ej. `101-15` o `119B-3`). El código de sucursal es `sucursal.codigo`,
+ * copiado en `solicitud.codigo_sucursal` al crearla (migración 20261118120000:
+ * número + letra para Lonquén/Torquemada y sus acopios). Si no viene, se usa
+ * `sucursal.id`, que coincide con el código en las demás sucursales. El
+ * correlativo, `solicitud.numero`, lo asigna la BD por sucursal (20261024120000). Es el único lugar que arma este
  * texto, para que todas las secciones muestren el mismo número.
  *
  * Funciones puras: no tocan la BD ni React.
@@ -10,14 +12,16 @@
 
 export interface DatosCodigoSolicitud {
   id: string;
-  /** Sucursal de origen (= su código). */
+  /** Sucursal de origen (id). */
   sucursal: number | null;
+  /** Código visible de la sucursal de origen ("101", "119A"); si falta, se usa el id. */
+  codigo_sucursal?: string | null;
   /** Correlativo dentro de la sucursal de origen. */
   numero?: number | null;
 }
 
 export function codigoSolicitud(s: DatosCodigoSolicitud): string {
-  if (s.sucursal != null && s.numero != null) return `${s.sucursal}-${s.numero}`;
+  if (s.sucursal != null && s.numero != null) return `${s.codigo_sucursal || s.sucursal}-${s.numero}`;
   // Sin número (sin sucursal de origen): el uuid corto que se usaba antes.
   return codigoUuid(s.id);
 }
