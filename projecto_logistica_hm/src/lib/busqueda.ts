@@ -22,7 +22,7 @@ export function escaparPatronLike(texto: string): string {
 }
 
 /** Minúsculas y sin tildes, para comparar textos que escribe el usuario. */
-function plano(texto: string): string {
+export function plano(texto: string): string {
   return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 

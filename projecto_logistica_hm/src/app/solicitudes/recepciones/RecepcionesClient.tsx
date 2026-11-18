@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { CheckCircle2, Inbox, MapPin, PackageCheck, Truck, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { CheckCircle2, Inbox, MapPin, PackageCheck, Search, Truck, X } from 'lucide-react';
 import type { SolicitudLista } from '@/types/solicitud.types';
 import type { TrasladoInterno } from '@/types/traslado.types';
 import { RecepcionModal } from '@/components/ModalesTraslado';
@@ -16,6 +16,7 @@ import { CHIP_ATRASO, getEstadoAtraso } from '../SolicitudesClient';
 import { guiasTexto } from '@/lib/guiaDespacho';
 import { rutaSolicitud } from '@/lib/origenSolicitud';
 import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
+import { coincideBusquedaBandeja, coincideBusquedaTraslado } from '@/lib/buscadorBandeja';
 
 interface Props {
   solicitudes: SolicitudLista[];
@@ -27,6 +28,16 @@ type Objetivo = { tipo: 'solicitud'; item: SolicitudLista } | { tipo: 'traslado'
 export default function RecepcionesClient({ solicitudes, traslados }: Props) {
   const [objetivo, setObjetivo] = useState<Objetivo | null>(null);
   const [feedback, setFeedback] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
+  const [busqueda, setBusqueda] = useState('');
+  const solicitudesVisibles = useMemo(
+    () => solicitudes.filter((s) => coincideBusquedaBandeja(s, busqueda)),
+    [solicitudes, busqueda]
+  );
+  const trasladosVisibles = useMemo(
+    () => traslados.filter((t) => coincideBusquedaTraslado(t, busqueda)),
+    [traslados, busqueda]
+  );
+  const filtrando = busqueda.trim() !== '';
 
   async function confirmar(datos: DatosRecepcion, fotos: File[]): Promise<string | null> {
     if (!objetivo) return null;
@@ -78,15 +89,27 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
         </div>
       ) : (
         <>
+          <div className="relative max-w-md">
+            <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="search"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value.slice(0, 60))}
+              placeholder="Buscar por N° de solicitud, ejecutivo o sucursal"
+              aria-label="Buscar recepciones pendientes"
+              className="w-full bg-white border border-neutral-300 rounded-xl pl-9 pr-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            />
+          </div>
+
           <section className="bg-white rounded-2xl border border-neutral-200 overflow-hidden">
             <h2 className="px-5 py-3 border-b border-neutral-200 font-semibold text-neutral-900 text-sm">
-              Solicitudes en tránsito ({solicitudes.length})
+              Solicitudes en tránsito ({filtrando ? `${solicitudesVisibles.length} de ${solicitudes.length}` : solicitudes.length})
             </h2>
-            {solicitudes.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-neutral-400">Ninguna.</p>
+            {solicitudesVisibles.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-neutral-400">{filtrando && solicitudes.length > 0 ? 'Ninguna coincide con la búsqueda.' : 'Ninguna.'}</p>
             ) : (
               <ul className="divide-y divide-neutral-100">
-                {solicitudes.map((s) => {
+                {solicitudesVisibles.map((s) => {
                   const chip = CHIP_ATRASO[getEstadoAtraso(s)];
                   return (
                     <li key={s.id} onClick={abrirDetalleDeFila} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3 cursor-pointer hover:bg-neutral-50">
@@ -126,13 +149,13 @@ export default function RecepcionesClient({ solicitudes, traslados }: Props) {
 
           <section className="bg-white rounded-2xl border border-neutral-200 overflow-hidden">
             <h2 className="px-5 py-3 border-b border-neutral-200 font-semibold text-neutral-900 text-sm">
-              Traslados internos en tránsito ({traslados.length})
+              Traslados internos en tránsito ({filtrando ? `${trasladosVisibles.length} de ${traslados.length}` : traslados.length})
             </h2>
-            {traslados.length === 0 ? (
-              <p className="px-5 py-6 text-sm text-neutral-400">Ninguno.</p>
+            {trasladosVisibles.length === 0 ? (
+              <p className="px-5 py-6 text-sm text-neutral-400">{filtrando && traslados.length > 0 ? 'Ninguno coincide con la búsqueda.' : 'Ninguno.'}</p>
             ) : (
               <ul className="divide-y divide-neutral-100">
-                {traslados.map((t) => (
+                {trasladosVisibles.map((t) => (
                   <li key={t.id} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3">
                     <div className="flex-1 min-w-0 space-y-1">
                       <span className="font-mono text-xs text-neutral-500">{codigoTraslado(t)}</span>

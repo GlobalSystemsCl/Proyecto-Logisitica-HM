@@ -60,7 +60,8 @@ export default function CargaMasivaUsuarios({ usuarios, sucursales, zonas, domin
   const importando = progreso !== null && resultados === null;
 
   function descargarPlantilla() {
-    descargarExcel('plantilla_usuarios.xlsx', [
+    // Plantilla que se vuelve a importar: sin encabezado, los títulos van en la fila 1.
+    void descargarExcel('plantilla_usuarios.xlsx', null, [
       { nombre: 'Usuarios', filas: filasEjemploPlantilla(sucursales[0]?.nombre ?? '', zonas[0]?.nombre ?? '') },
       {
         nombre: 'Opciones',

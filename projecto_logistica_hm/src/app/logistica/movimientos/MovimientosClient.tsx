@@ -66,7 +66,13 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
   }
 
   function exportar() {
-    descargarExcel(`movimientos_${desde}_${hasta}.xlsx`, [
+    void descargarExcel(
+      `movimientos_${desde}_${hasta}.xlsx`,
+      {
+        titulo: 'Movimientos de traslados',
+        subtitulo: `Período: ${formatFecha(desde)} al ${formatFecha(hasta)} · ${visibles.length} vehículo(s)${hayFiltros ? ' · con los filtros aplicados en pantalla' : ''}`,
+      },
+      [
       { nombre: 'Movimientos', filas: filasExcelMovimientos(visibles), encabezados: COLUMNAS_EXCEL },
       {
         nombre: 'Por transportista',
@@ -76,7 +82,8 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
       { nombre: 'Por empresa', filas: filasExcelResumen(porEmpresa, 'Empresa', 'RUT') },
       { nombre: 'Por camión', filas: filasExcelResumen(porCamion, 'Camión', 'Transportista y empresa') },
       { nombre: 'Por tramo', filas: filasExcelResumen(porTramo, 'Tramo', 'Detalle') },
-    ]);
+      ]
+    );
   }
 
   const selectCls = 'bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900';

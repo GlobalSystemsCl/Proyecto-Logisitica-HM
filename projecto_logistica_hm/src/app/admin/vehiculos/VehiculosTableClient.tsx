@@ -1977,21 +1977,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                   </p>
                 )}
                 <p className="text-[11px] text-neutral-400">
-                  Archivos Excel (.xls/.xlsx): se lee la primera hoja tal cual viene. También se aceptan .csv, .tsv y pegar texto.
+                  Archivos Excel (.xls/.xlsx): se lee la primera hoja tal cual viene. También se aceptan .csv y .tsv.
                 </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                  O pegar contenido CSV directamente
-                </label>
-                <textarea
-                  rows={6}
-                  placeholder={"Tipo de vehículo\tMarca\tMarca completa\tModelo\tIDV\tChasis\tColor\tUbicación\tPatente\nVN\tHY\tHYUNDAI\tGRAND I-10 A\t157686\tMALB251CAVM746960\tPLATA\t\t"}
-                  value={importCsv}
-                  onChange={(e) => setImportCsv(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-xs text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900 font-mono whitespace-pre resize-y"
-                />
               </div>
 
               <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-xl flex items-start gap-2.5 text-xs text-neutral-600">

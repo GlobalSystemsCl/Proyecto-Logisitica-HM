@@ -37,9 +37,15 @@ export default function TransitoClient({ filas, sinZonas }: Props) {
   const atrasados = filas.filter((f) => f.atrasado).length;
 
   function exportar() {
-    descargarExcel(`en_transito_${hoyISO()}.xlsx`, [
-      { nombre: 'En tránsito', filas: filasExcelTransito(visibles), encabezados: COLUMNAS_EXCEL },
-    ]);
+    const filtrado = Boolean(busqueda.trim() || tipo || soloAtrasados);
+    void descargarExcel(
+      `en_transito_${hoyISO()}.xlsx`,
+      {
+        titulo: 'Vehículos en tránsito',
+        subtitulo: `Despachados que aún no se recepcionan · ${visibles.length} vehículo(s)${filtrado ? ' · con los filtros aplicados en pantalla' : ''}`,
+      },
+      [{ nombre: 'En tránsito', filas: filasExcelTransito(visibles), encabezados: COLUMNAS_EXCEL }]
+    );
   }
 
   const selectCls = 'bg-white border border-neutral-300 rounded-xl px-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900';

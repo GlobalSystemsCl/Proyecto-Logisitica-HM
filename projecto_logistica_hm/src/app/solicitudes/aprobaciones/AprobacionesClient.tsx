@@ -11,6 +11,7 @@ import {
   Car,
   Clock,
   Pencil,
+  Search,
 } from 'lucide-react';
 import {
   aprobarSolicitudAction,
@@ -28,6 +29,7 @@ import { urlSinParametro } from '@/lib/enlaceNotificacion';
 import AbrirSolicitudDesdeUrl from '@/components/AbrirSolicitudDesdeUrl';
 import { useConfirmacion } from '@/components/Confirmacion';
 import { esClicEnControl } from '@/components/FilaAbreDetalle';
+import { coincideBusquedaBandeja } from '@/lib/buscadorBandeja';
 
 interface FeedbackState {
   type: 'success' | 'error';
@@ -90,6 +92,7 @@ export default function AprobacionesClient({
   const [fechaVencida, setFechaVencida] = useState<string | null>(null);
   const solicitudInicial = solicitudInicialId ? solicitudes.find((s) => s.id === solicitudInicialId) ?? null : null;
   const [detailTarget, setDetailTarget] = useState<SolicitudLista | null>(solicitudInicial);
+  const [busqueda, setBusqueda] = useState('');
 
   const esAdmin = viewer.rol === 'administrador';
   const esJefeLocal = viewer.rol === 'jefe_local';
@@ -107,6 +110,11 @@ export default function AprobacionesClient({
     }
     return lista;
   }, [solicitudes, esJefeLocal, sucursalesJefeLocal]);
+
+  const visibles = useMemo(
+    () => pendientesAprobar.filter((s) => coincideBusquedaBandeja(s, busqueda)),
+    [pendientesAprobar, busqueda]
+  );
 
   function puedoRechazar(sol: SolicitudLista): boolean {
     if (esAdmin) return true;
@@ -186,15 +194,34 @@ export default function AprobacionesClient({
         </p>
       </div>
 
+      {pendientesAprobar.length > 0 && (
+        <div className="relative max-w-md">
+          <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="search"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value.slice(0, 60))}
+            placeholder="Buscar por N° de solicitud, ejecutivo o sucursal"
+            aria-label="Buscar solicitudes por aprobar"
+            className="w-full bg-white border border-neutral-300 rounded-xl pl-9 pr-3 py-2 text-sm text-neutral-900 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+          />
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl border border-neutral-200 overflow-hidden">
         {pendientesAprobar.length === 0 ? (
           <div className="p-12 text-center text-neutral-400">
             <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-neutral-300" />
             <p>No hay solicitudes pendientes de aprobación.</p>
           </div>
+        ) : visibles.length === 0 ? (
+          <div className="p-12 text-center text-neutral-400">
+            <Search className="w-10 h-10 mx-auto mb-3 text-neutral-300" />
+            <p>Ninguna solicitud por aprobar coincide con «{busqueda.trim()}».</p>
+          </div>
         ) : (
           <div className="divide-y divide-neutral-100">
-            {pendientesAprobar.map((sol) => (
+            {visibles.map((sol) => (
               <div
                 key={sol.id}
                 onClick={(e) => !esClicEnControl(e) && setDetailTarget(sol)}

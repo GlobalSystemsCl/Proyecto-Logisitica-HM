@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Download, Loader2, X } from 'lucide-react';
 import { exportarCalendarizacionAction } from '@/app/actions/exportes.actions';
 import { descargarExcel } from '@/lib/excel';
-import { hoyISO } from '@/lib/fechas';
+import { formatFecha, hoyISO } from '@/lib/fechas';
 import { rangoPorDefectoCalendarizacion, validarRangoExporte } from '@/lib/reporteTraslados';
 
 const COLUMNAS = [
@@ -39,9 +39,14 @@ export default function DescargarCalendarizacion() {
         setError(res.error);
         return;
       }
-      descargarExcel(`calendarizacion_${rango.desde}_${rango.hasta}.xlsx`, [
-        { nombre: 'Calendarización', filas: res.filas, encabezados: COLUMNAS },
-      ]);
+      await descargarExcel(
+        `calendarizacion_${rango.desde}_${rango.hasta}.xlsx`,
+        {
+          titulo: 'Calendarización de traslados',
+          subtitulo: `Traslados programados del ${formatFecha(rango.desde)} al ${formatFecha(rango.hasta)}`,
+        },
+        [{ nombre: 'Calendarización', filas: res.filas, encabezados: COLUMNAS }]
+      );
       if (res.filas.length === 0) setAviso('No hay traslados programados en ese rango: el archivo salió solo con los títulos.');
       else setAbierto(false);
     } finally {

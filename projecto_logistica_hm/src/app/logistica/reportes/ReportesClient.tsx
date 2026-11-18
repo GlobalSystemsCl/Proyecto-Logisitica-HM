@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, BarChart3, Clock, Download, Hourglass, Timer, Truck } from 'lucide-react';
-import { utils, writeFile } from 'xlsx';
+import { descargarExcel } from '@/lib/excel';
 import {
   formatoHoras,
   porcentaje,
@@ -84,10 +84,21 @@ export default function ReportesClient({ desde, hasta, reporte, zonas }: Props) 
       [ETIQUETA_FECHA_LIMITE]: p.fechaLimite ? formatFecha(p.fechaLimite) : '',
       Atrasada: p.atrasada ? 'Sí' : 'No',
     }));
-    const libro = utils.book_new();
-    utils.book_append_sheet(libro, utils.json_to_sheet(filas), 'Por usuario de Logística');
-    utils.book_append_sheet(libro, utils.json_to_sheet(pendientes), 'Pendientes');
-    writeFile(libro, `reporte_logistica_${desde}_${hasta}.xlsx`);
+    void descargarExcel(
+      `reporte_logistica_${desde}_${hasta}.xlsx`,
+      {
+        titulo: 'Reporte de Logística',
+        subtitulo: `Período: ${formatFecha(desde)} al ${formatFecha(hasta)} · plazo objetivo de respuesta: ${sla} h`,
+      },
+      [
+        { nombre: 'Por usuario de Logística', filas },
+        {
+          nombre: 'Pendientes',
+          filas: pendientes,
+          encabezados: ['Solicitud', 'Ruta', 'Logística', 'Zona', 'Esperando (h)', ETIQUETA_FECHA_LIMITE, 'Atrasada'],
+        },
+      ]
+    );
   }
 
   const tarjetas = [

@@ -42,7 +42,13 @@ export default function PanelVehiculosSucursal({ sucursal, onCerrar }: Props) {
 
   function exportar() {
     if (!datos) return;
-    descargarExcel(`vehiculos_${sucursal.id}_${hoyISO()}.xlsx`, [
+    void descargarExcel(
+      `vehiculos_${sucursal.id}_${hoyISO()}.xlsx`,
+      {
+        titulo: `Vehículos de la sucursal ${sucursal.id}${sucursal.nombre ? ` · ${sucursal.nombre}` : ''}`,
+        subtitulo: `${datos.enSucursal.length} en la sucursal y ${datos.enCamino.length} en camino hacia ella`,
+      },
+      [
       {
         nombre: 'En la sucursal',
         filas: datos.enSucursal.map((v) => ({
@@ -57,7 +63,8 @@ export default function PanelVehiculosSucursal({ sucursal, onCerrar }: Props) {
         encabezados: ['Chasis', 'Patente', 'IDV', 'Marca', 'Modelo', 'Color', 'Estado'],
       },
       { nombre: 'En camino', filas: filasExcelTransito(datos.enCamino) },
-    ]);
+      ]
+    );
   }
 
   return createPortal(

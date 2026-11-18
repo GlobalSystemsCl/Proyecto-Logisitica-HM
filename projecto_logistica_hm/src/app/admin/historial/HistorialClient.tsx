@@ -18,7 +18,7 @@ import { AuditoriaRegistro } from '@/types/auditoria.types';
 import { AuditoriaMetricas } from '@/services/auditoria.service';
 import { getAuditoriaAction } from '@/app/actions/auditoria.actions';
 import { UsuarioNombreBoton } from '@/components/usuario-info-modal';
-import { utils, writeFile } from 'xlsx';
+import { descargarExcel } from '@/lib/excel';
 
 const accionConfig: Record<string, { label: string; color: string }> = {
   CAMBIO_ESTADO: { label: 'Cambio de Estado', color: 'bg-neutral-900 text-white' },
@@ -236,22 +236,15 @@ export default function HistorialClient({ registros, metricas }: HistorialClient
       };
     });
 
-    const ws = utils.json_to_sheet(data);
-
-    const headers = Object.keys(data[0]);
-    const range = utils.decode_range(ws['!ref'] || 'A1');
-    for (let col = range.s.c; col <= range.e.c; col++) {
-      const cell = ws[utils.encode_cell({ r: 0, c: col })];
-      if (cell) {
-        cell.s = { font: { bold: true } };
-      }
-    }
-
-    ws['!cols'] = headers.map((h) => ({ wch: Math.max(h.length, 16) }));
-
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, 'Historial Auditoría');
-    writeFile(wb, 'historial_auditoria.xlsx');
+    const filtrado = Boolean(filtrosEntidad || filtrosAccion || fechaDesde || fechaHasta);
+    void descargarExcel(
+      'historial_auditoria.xlsx',
+      {
+        titulo: 'Historial de auditoría',
+        subtitulo: `${data.length} registro(s)${filtrado ? ' · con los filtros aplicados en pantalla' : ''}`,
+      },
+      [{ nombre: 'Historial Auditoría', filas: data }]
+    );
   }
 
   const tieneFiltros = filtrosEntidad || filtrosAccion || fechaDesde || fechaHasta;
