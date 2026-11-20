@@ -6,10 +6,10 @@ import Image from 'next/image';
 import { registerAction } from '@/app/actions/auth.actions';
 import { Lock, Mail, Eye, EyeOff, AlertCircle, CheckCircle2, ArrowRight, MapPin } from 'lucide-react';
 import { textoDominios } from '@/lib/dominios';
-import { filtrarSucursales } from '@/lib/busqueda';
+import { etiquetaSucursal, filtrarSucursales } from '@/lib/busqueda';
 
 interface Props {
-  sucursales: { id: number; nombre: string | null }[];
+  sucursales: { id: number; codigo?: string | null; nombre: string | null }[];
   /** Dominios de correo permitidos, o `null` si no hay restricción. */
   dominios: string[] | null;
 }
@@ -190,7 +190,7 @@ function FormularioRegistro({ sucursales, dominios, onRegistrarOtra }: Props & {
                   </option>
                   {sucursalesVisibles.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.nombre}
+                      {etiquetaSucursal(s)}
                     </option>
                   ))}
                 </select>

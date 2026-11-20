@@ -7,7 +7,7 @@ export default async function RegistroPage() {
 
   return (
     <RegistroForm
-      sucursales={sucursales.map((s) => ({ id: s.id, nombre: s.nombre ?? 'Sucursal sin nombre' }))}
+      sucursales={sucursales.map((s) => ({ id: s.id, codigo: s.codigo ?? null, nombre: s.nombre ?? 'Sucursal sin nombre' }))}
       dominios={getDominiosPermitidos()}
     />
   );

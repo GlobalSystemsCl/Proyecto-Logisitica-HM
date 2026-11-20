@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { escaparPatronLike, filtrarSucursales, sanitizarTerminoBusqueda } from '@/lib/busqueda';
+import { escaparPatronLike, etiquetaSucursal, filtrarSucursales, sanitizarTerminoBusqueda } from '@/lib/busqueda';
 
 describe('sanitizarTerminoBusqueda', () => {
   it('should_keep_alphanumeric_and_hyphen_when_input_is_a_plate', () => {
@@ -53,5 +53,30 @@ describe('filtrarSucursales', () => {
 
   it('should_keep_the_selected_branch_when_it_does_not_match', () => {
     expect(filtrarSucursales(sucursales, 'baic', 108).map((s) => s.id)).toEqual([135, 108]);
+  });
+
+  it('should_match_visible_code_with_letter_when_branch_has_codigo', () => {
+    const conCodigo = [
+      { id: 119, codigo: '119A', nombre: 'LONQUÉN' },
+      { id: 409, codigo: '119B', nombre: 'ACOPIO LONQUÉN' },
+    ];
+    expect(filtrarSucursales(conCodigo, '119b').map((s) => s.id)).toEqual([409]);
+    expect(filtrarSucursales(conCodigo, '119').map((s) => s.id)).toEqual([119, 409]);
+    expect(filtrarSucursales(conCodigo, '409')).toEqual([]);
+  });
+});
+
+describe('etiquetaSucursal', () => {
+  it('should_show_visible_code_and_name_when_branch_has_codigo', () => {
+    expect(etiquetaSucursal({ id: 409, codigo: '119B', nombre: 'ACOPIO LONQUÉN' })).toBe('119B · ACOPIO LONQUÉN');
+  });
+
+  it('should_use_id_as_code_when_codigo_is_missing_or_blank', () => {
+    expect(etiquetaSucursal({ id: 101, nombre: '15 NORTE-VIÑA DEL MAR' })).toBe('101 · 15 NORTE-VIÑA DEL MAR');
+    expect(etiquetaSucursal({ id: 101, codigo: '  ', nombre: 'X' })).toBe('101 · X');
+  });
+
+  it('should_show_only_code_when_name_is_empty', () => {
+    expect(etiquetaSucursal({ id: 7, codigo: null, nombre: null })).toBe('7');
   });
 });

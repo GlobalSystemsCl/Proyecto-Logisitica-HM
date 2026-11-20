@@ -111,7 +111,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     vista: 'general',
     pregunta: 'Me registré, ¿ya puedo entrar? ¿Y si mi rol no es Ejecutivo?',
     respuesta:
-      'Las cuentas creadas desde el registro quedan activas como Ejecutivo en la sucursal que elegiste, así que puedes entrar de inmediato. Solo se aceptan correos corporativos (@hmotores.cl). Si no puedes entrar, revisa la contraseña o usa "¿Olvidaste tu contraseña?". Si tu rol o sucursal no corresponden, contacta al administrador.',
+      'Las cuentas creadas desde el registro quedan activas como Ejecutivo en la sucursal que elegiste (en la lista aparece con su código y nombre, por ejemplo "101 · 15 NORTE-VIÑA DEL MAR", y puedes buscarla por cualquiera de los dos), así que puedes entrar de inmediato. Solo se aceptan correos corporativos (@hmotores.cl). Si no puedes entrar, revisa la contraseña o usa "¿Olvidaste tu contraseña?". Si tu rol o sucursal no corresponden, contacta al administrador.',
   },
 
   // ---------- Dashboard ----------
