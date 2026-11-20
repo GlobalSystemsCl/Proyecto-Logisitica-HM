@@ -11,6 +11,9 @@ const svc = {
   importVehiculosCSV: vi.fn(),
   getVehiculoById: vi.fn(),
   cambiarUbicacionMasiva: vi.fn(),
+  listarImportaciones: vi.fn(),
+  getImportacion: vi.fn(),
+  revertirImportacion: vi.fn(),
 };
 
 vi.mock('@/services/auth.service', () => ({
@@ -55,6 +58,28 @@ const vehiculo = {
   precio: 1000,
   ubicacion: 1,
 };
+
+const IMP_ID = '3f2b6c1e-0a4d-4b8e-9c7f-1d2e3f4a5b6c';
+
+function importacion(extra: Record<string, unknown> = {}) {
+  return {
+    id: IMP_ID,
+    usuario_id: 'log-1',
+    usuario_nombre: 'L Uno',
+    archivo: 'stock.xlsx',
+    total: 10,
+    importados: 8,
+    duplicados: 2,
+    errores: 0,
+    created_at: '2026-11-20T12:00:00Z',
+    revertida_at: null,
+    revertida_por_nombre: null,
+    vehiculos_eliminados: null,
+    vehiculos_conservados: null,
+    vehiculos_actuales: 8,
+    ...extra,
+  };
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -145,7 +170,124 @@ describe('importVehiculosAction (auditoría R2)', () => {
     const [usuario, entidad, entidadId, accion, anterior, nuevo] = registrarAuditoria.mock.calls[0] as unknown[];
     expect([usuario, entidad, accion, anterior]).toEqual(['log-1', 'vehiculo', 'importacion', null]);
     expect(entidadId).toMatch(/^[0-9a-f-]{36}$/);
-    expect(nuevo).toEqual({ total: 10, importados: 8, duplicados: 1, errores: 1 });
+    expect(nuevo).toEqual({ archivo: null, total: 10, importados: 8, duplicados: 1, errores: 1 });
+  });
+
+  it('should_pass_actor_and_file_name_and_audit_with_the_import_id', async () => {
+    svc.importVehiculosCSV.mockResolvedValue({ success: true, importacionId: IMP_ID, total: 1, importados: 1, duplicados: 0, errores: 0 });
+
+    const res = await actions.importVehiculosAction({ csv: 'a;b', archivo: 'stock.xlsx' });
+
+    expect(svc.importVehiculosCSV).toHaveBeenCalledWith('a;b', { anioPorDefecto: undefined, usuarioId: 'log-1', archivo: 'stock.xlsx' });
+    expect((registrarAuditoria.mock.calls[0] as unknown[])[2]).toBe(IMP_ID);
+    expect(res).toEqual(expect.objectContaining({ success: true, importacionId: IMP_ID }));
+  });
+});
+
+describe('getImportacionesStockAction', () => {
+  it('should_list_imports_for_vehicle_managers', async () => {
+    svc.listarImportaciones.mockResolvedValue([importacion()]);
+
+    const res = await actions.getImportacionesStockAction();
+
+    expect(res).toEqual({ success: true, importaciones: [importacion()] });
+  });
+
+  it('should_reject_roles_without_vehicle_permission', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+
+    const res = await actions.getImportacionesStockAction();
+
+    expect(res.success).toBe(false);
+    expect(svc.listarImportaciones).not.toHaveBeenCalled();
+  });
+
+  it('should_return_error_when_service_throws', async () => {
+    svc.listarImportaciones.mockRejectedValue(new Error('No se pudieron cargar las importaciones.'));
+    const res = await actions.getImportacionesStockAction();
+    expect(res.success).toBe(false);
+  });
+});
+
+describe('revertirImportacionStockAction', () => {
+  it('should_revert_own_import_audit_it_and_report_counts', async () => {
+    svc.getImportacion.mockResolvedValue(importacion());
+    svc.revertirImportacion.mockResolvedValue({ success: true, eliminados: 7, conservados: 1 });
+
+    const res = await actions.revertirImportacionStockAction(IMP_ID, ' confirmar ');
+
+    expect(svc.revertirImportacion).toHaveBeenCalledWith(IMP_ID, 'log-1');
+    expect(res).toEqual({
+      success: true,
+      eliminados: 7,
+      conservados: 1,
+      mensaje: 'Importación revertida: 7 vehículo(s) eliminado(s) del inventario. 1 se conservaron porque ya se usan en una solicitud o un traslado.',
+    });
+    expect(registrarAuditoria).toHaveBeenCalledWith(
+      'log-1',
+      'vehiculo',
+      IMP_ID,
+      'reversion_importacion',
+      { archivo: 'stock.xlsx', importados: 8, fecha: '2026-11-20T12:00:00Z' },
+      { eliminados: 7, conservados: 1 }
+    );
+  });
+
+  it('should_reject_when_confirmation_text_is_wrong', async () => {
+    const res = await actions.revertirImportacionStockAction(IMP_ID, 'si');
+
+    expect(res).toEqual({ success: false, error: 'Escribe CONFIRMAR para confirmar.' });
+    expect(svc.getImportacion).not.toHaveBeenCalled();
+  });
+
+  it('should_reject_invalid_id', async () => {
+    const res = await actions.revertirImportacionStockAction('../x', 'CONFIRMAR');
+    expect(res).toEqual({ success: false, error: 'Importación no válida.' });
+  });
+
+  it('should_reject_when_import_does_not_exist', async () => {
+    svc.getImportacion.mockResolvedValue(null);
+    const res = await actions.revertirImportacionStockAction(IMP_ID, 'CONFIRMAR');
+    expect(res).toEqual({ success: false, error: 'La importación no existe.' });
+  });
+
+  it('should_reject_logistica_reverting_someone_elses_import', async () => {
+    svc.getImportacion.mockResolvedValue(importacion({ usuario_id: 'otro' }));
+
+    const res = await actions.revertirImportacionStockAction(IMP_ID, 'CONFIRMAR');
+
+    expect(res).toEqual({ success: false, error: 'Solo el administrador puede revertir importaciones de otro usuario.' });
+    expect(svc.revertirImportacion).not.toHaveBeenCalled();
+  });
+
+  it('should_allow_admin_to_revert_any_import', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ id: 'adm-1', rol: 'administrador' }));
+    svc.getImportacion.mockResolvedValue(importacion({ usuario_id: 'otro' }));
+    svc.revertirImportacion.mockResolvedValue({ success: true, eliminados: 8, conservados: 0 });
+
+    const res = await actions.revertirImportacionStockAction(IMP_ID, 'CONFIRMAR');
+
+    expect(res.success).toBe(true);
+    expect(svc.revertirImportacion).toHaveBeenCalledWith(IMP_ID, 'adm-1');
+  });
+
+  it('should_not_audit_when_database_rejects_the_reversion', async () => {
+    svc.getImportacion.mockResolvedValue(importacion());
+    svc.revertirImportacion.mockResolvedValue({ success: false, error: 'Esta importación ya se revirtió.' });
+
+    const res = await actions.revertirImportacionStockAction(IMP_ID, 'CONFIRMAR');
+
+    expect(res).toEqual({ success: false, error: 'Esta importación ya se revirtió.' });
+    expect(registrarAuditoria).not.toHaveBeenCalled();
+  });
+
+  it('should_reject_roles_without_vehicle_permission', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+
+    const res = await actions.revertirImportacionStockAction(IMP_ID, 'CONFIRMAR');
+
+    expect(res.success).toBe(false);
+    expect(svc.revertirImportacion).not.toHaveBeenCalled();
   });
 });
 

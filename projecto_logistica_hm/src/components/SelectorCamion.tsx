@@ -1,11 +1,11 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { Building2, Loader2, Plus } from 'lucide-react';
+import { Building2, Loader2, Plus, Search, Truck } from 'lucide-react';
 import { crearCamionAction, crearTransportistaAction } from '@/app/actions/transportistas.actions';
 import { formatearPatente, normalizarPatente, validarPatente } from '@/lib/patente';
 import { formatearRut, validarRut } from '@/lib/rut';
-import { buscarCamion } from '@/lib/transporte';
+import { buscarCamion, coincideEmpresa, filtrarCamiones } from '@/lib/transporte';
 import type { AsignacionTransporte, EmpresaTransporte } from '@/types/transportista.types';
 
 interface Props {
@@ -22,19 +22,25 @@ const INPUT = 'w-full rounded-xl border border-neutral-300 p-2.5 text-sm focus:o
 const NUEVA = '__nueva__';
 
 /**
- * R10: al programar, Logística escribe la patente del camión; se completan la
+ * R10: al programar, Logística busca el camión por patente, nombre de la
+ * empresa o RUT (o transportista) y elige uno de la lista; se completan la
  * empresa (con su RUT) y el transportista habitual, que se puede cambiar para
  * este viaje. Si la patente no está registrada, se registra aquí mismo con su
- * empresa (existente o nueva).
+ * empresa (existente o nueva), que también se busca por nombre o RUT.
  */
 export default function SelectorCamion({ empresas, valor, onCambiar, onEmpresasCambiadas, obligatorio }: Props) {
   const idLista = useId();
   const patente = valor?.patente ?? '';
   const conductor = valor?.conductorNombre ?? '';
   const encontrado = buscarCamion(empresas, patente);
-  const errorPatente = patente.trim() ? validarPatente(patente) : null;
+  const [listaAbierta, setListaAbierta] = useState(false);
+  const sugerencias = encontrado ? [] : filtrarCamiones(empresas, patente);
+  // Si lo escrito es un nombre o RUT con resultados, no es un error de patente.
+  const errorPatente = patente.trim() && sugerencias.length === 0 ? validarPatente(patente) : null;
 
   const [empresaNueva, setEmpresaNueva] = useState({ id: '', nombre: '', rut: '' });
+  const [busquedaEmpresa, setBusquedaEmpresa] = useState('');
+  const empresasFiltradas = empresas.filter((e) => e.id === empresaNueva.id || coincideEmpresa(e, busquedaEmpresa));
   const [conductorNuevo, setConductorNuevo] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -43,6 +49,12 @@ export default function SelectorCamion({ empresas, valor, onCambiar, onEmpresasC
     const camion = buscarCamion(empresas, texto)?.camion;
     // Al reconocer la patente se propone su transportista habitual.
     onCambiar({ patente: texto, conductorNombre: camion ? camion.conductor_nombre : conductor || null });
+    setListaAbierta(true);
+  }
+
+  function elegirCamion(patenteCamion: string, conductorHabitual: string | null) {
+    onCambiar({ patente: formatearPatente(patenteCamion), conductorNombre: conductorHabitual });
+    setListaAbierta(false);
   }
 
   async function registrar() {
@@ -78,6 +90,7 @@ export default function SelectorCamion({ empresas, valor, onCambiar, onEmpresasC
       onEmpresasCambiadas(lista.map((e) => (e.id === empresaId ? { ...e, camiones: [...e.camiones, camion] } : e)));
       onCambiar({ patente: camion.patente, conductorNombre: camion.conductor_nombre });
       setEmpresaNueva({ id: '', nombre: '', rut: '' });
+      setBusquedaEmpresa('');
       setConductorNuevo('');
     } finally {
       setGuardando(false);
@@ -87,29 +100,61 @@ export default function SelectorCamion({ empresas, valor, onCambiar, onEmpresasC
   return (
     <div className="space-y-2">
       <label htmlFor={`${idLista}-patente`} className="block text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-        Patente del camión{obligatorio ? ' *' : ''}
+        Camión{obligatorio ? ' *' : ''}
       </label>
-      <input
-        id={`${idLista}-patente`}
-        list={idLista}
-        value={patente}
-        onChange={(e) => cambiarPatente(e.target.value)}
-        onBlur={() => encontrado && onCambiar({ patente: formatearPatente(patente), conductorNombre: valor?.conductorNombre ?? null })}
-        placeholder="ABCD-12"
-        maxLength={10}
-        autoComplete="off"
-        className={`${INPUT} font-mono uppercase ${errorPatente ? 'border-red-400' : ''}`}
-      />
-      <datalist id={idLista}>
-        {empresas.flatMap((e) =>
-          e.camiones.map((c) => (
-            <option key={c.id} value={formatearPatente(c.patente)}>
-              {e.nombre}
-              {c.conductor_nombre ? ` · ${c.conductor_nombre}` : ''}
-            </option>
-          ))
+      <div className="relative">
+        <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <input
+          id={`${idLista}-patente`}
+          role="combobox"
+          aria-expanded={listaAbierta && sugerencias.length > 0}
+          aria-controls={`${idLista}-lista`}
+          aria-autocomplete="list"
+          value={patente}
+          onChange={(e) => cambiarPatente(e.target.value)}
+          onFocus={() => setListaAbierta(true)}
+          onBlur={() => {
+            setListaAbierta(false);
+            if (encontrado) onCambiar({ patente: formatearPatente(patente), conductorNombre: valor?.conductorNombre ?? null });
+          }}
+          onKeyDown={(e) => e.key === 'Escape' && setListaAbierta(false)}
+          placeholder="Patente, empresa o RUT"
+          maxLength={60}
+          autoComplete="off"
+          className={`${INPUT} pl-9 ${errorPatente ? 'border-red-400' : ''}`}
+        />
+        {listaAbierta && sugerencias.length > 0 && (
+          <ul
+            id={`${idLista}-lista`}
+            role="listbox"
+            className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-xl border border-neutral-200 bg-white shadow-lg py-1"
+          >
+            {sugerencias.map(({ empresa, camion }) => (
+              <li key={camion.id} role="option" aria-selected={false}>
+                <button
+                  type="button"
+                  // mousedown evita que el blur del input cierre la lista antes del clic.
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => elegirCamion(camion.patente, camion.conductor_nombre)}
+                  className="w-full text-left px-3 py-2 hover:bg-neutral-50 cursor-pointer flex items-start gap-2"
+                >
+                  <Truck className="w-4 h-4 text-neutral-400 shrink-0 mt-0.5" />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-mono font-semibold text-neutral-900">{formatearPatente(camion.patente)}</span>
+                    <span className="block text-xs text-neutral-500 truncate">
+                      {empresa.nombre} · RUT {formatearRut(empresa.rut)}
+                      {camion.conductor_nombre ? ` · ${camion.conductor_nombre}` : ''}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
         )}
-      </datalist>
+      </div>
+      {!encontrado && patente.trim() && sugerencias.length > 0 && (
+        <p className="text-xs text-neutral-500">Elige el camión de la lista.</p>
+      )}
       {errorPatente && <p className="text-xs text-red-700">{errorPatente}</p>}
 
       {encontrado && (
@@ -131,14 +176,26 @@ export default function SelectorCamion({ empresas, valor, onCambiar, onEmpresasC
         </div>
       )}
 
-      {!encontrado && normalizarPatente(patente) && !errorPatente && (
+      {!encontrado && normalizarPatente(patente) && sugerencias.length === 0 && !validarPatente(patente) && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
           <p className="text-xs font-semibold text-amber-800">
             La patente {formatearPatente(patente)} no está registrada. Regístrala con su empresa:
           </p>
+          {empresas.length > 0 && (
+            <input
+              value={busquedaEmpresa}
+              onChange={(e) => setBusquedaEmpresa(e.target.value)}
+              placeholder="Buscar empresa por nombre o RUT"
+              maxLength={60}
+              className={INPUT}
+              aria-label="Buscar empresa por nombre o RUT"
+            />
+          )}
           <select value={empresaNueva.id} onChange={(e) => setEmpresaNueva((p) => ({ ...p, id: e.target.value }))} className={INPUT} aria-label="Empresa del camión">
-            <option value="">Selecciona la empresa…</option>
-            {empresas.map((e) => (
+            <option value="">
+              {busquedaEmpresa.trim() && empresasFiltradas.length === 0 ? 'Ninguna empresa coincide…' : 'Selecciona la empresa…'}
+            </option>
+            {empresasFiltradas.map((e) => (
               <option key={e.id} value={e.id}>
                 {e.nombre} · {formatearRut(e.rut)}
               </option>

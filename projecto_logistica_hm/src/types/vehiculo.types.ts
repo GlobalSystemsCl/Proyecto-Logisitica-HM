@@ -16,6 +16,8 @@ export interface Vehiculo {
   color: string | null;
   precio: number | null;
   ubicacion: number | null;
+  /** Importación de stock que lo creó (null si se registró a mano o antes del 2026-11-20). */
+  importacion_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -84,4 +86,26 @@ export interface VehiculoEnSucursal {
   idv: string | null;
   /** Reservado en una solicitud (aún no entregado). */
   reservado: boolean;
+}
+
+/**
+ * Una importación de stock ("Importar Stock") y su reversión
+ * (`importacion_stock`, migración 20261120120000).
+ */
+export interface ImportacionStock {
+  id: string;
+  usuario_id: string | null;
+  usuario_nombre: string | null;
+  archivo: string | null;
+  total: number;
+  importados: number;
+  duplicados: number;
+  errores: number;
+  created_at: string;
+  revertida_at: string | null;
+  revertida_por_nombre: string | null;
+  vehiculos_eliminados: number | null;
+  vehiculos_conservados: number | null;
+  /** Vehículos de esta importación que siguen en el inventario. */
+  vehiculos_actuales: number;
 }

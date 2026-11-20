@@ -50,6 +50,7 @@ export default async function AdminVehiculosPage() {
           marcas={marcas}
           sucursales={sucursales}
           userRole={profile.rol}
+          userId={profile.id}
         />
       </main>
     </div>

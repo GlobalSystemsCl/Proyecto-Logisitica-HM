@@ -8,7 +8,6 @@ import {
   nombreHojaExcel,
   pngComoDataUrl,
   textoFechaExportacion,
-  tituloHoja,
 } from '@/lib/excel';
 
 const FECHA = new Date('2026-11-18T17:32:00.000Z'); // 14:32 en Chile (UTC-3)
@@ -58,18 +57,25 @@ describe('crearLibroExcel', () => {
     expect(ws.getCell('A4').value).toBeNull();
   });
 
-  it('should_add_sheet_name_to_title_when_workbook_has_several_sheets', async () => {
+  it('should_put_header_only_on_first_sheet_when_workbook_has_several_sheets', async () => {
     const libro = await crearLibroExcel(
       [
         { nombre: 'Movimientos', filas: [{ A: 1 }] },
         { nombre: 'Por empresa', filas: [{ B: 2 }] },
       ],
-      { titulo: 'Movimientos de traslados' },
-      { fecha: FECHA },
+      { titulo: 'Movimientos de traslados', subtitulo: 'Período' },
+      { logo: LOGO, fecha: FECHA },
     );
 
     expect(libro.worksheets.map((w) => w.name)).toEqual(['Movimientos', 'Por empresa']);
-    expect(libro.getWorksheet('Por empresa')!.getCell('A3').value).toBe('Movimientos de traslados — Por empresa');
+    const primera = libro.getWorksheet('Movimientos')!;
+    expect(primera.getCell('A3').value).toBe('Movimientos de traslados');
+    expect(primera.getImages()).toHaveLength(1);
+    const segunda = libro.getWorksheet('Por empresa')!;
+    expect(segunda.getImages()).toHaveLength(0);
+    expect(segunda.getCell('A1').value).toBe('B');
+    expect(segunda.getCell('A2').value).toBe(2);
+    expect(segunda.autoFilter).toEqual({ from: { row: 1, column: 1 }, to: { row: 2, column: 1 } });
   });
 
   it('should_write_only_headers_when_sheet_has_no_rows', async () => {
@@ -134,16 +140,6 @@ describe('anchoColumna', () => {
 
   it('should_use_header_length_when_there_are_no_rows', () => {
     expect(anchoColumna('Pendientes con más de 24 h', [])).toBe(26);
-  });
-});
-
-describe('tituloHoja', () => {
-  it('should_return_title_alone_when_single_sheet', () => {
-    expect(tituloHoja({ titulo: 'Reporte' }, { nombre: 'Hoja', filas: [] }, 1)).toBe('Reporte');
-  });
-
-  it('should_append_sheet_name_when_several_sheets', () => {
-    expect(tituloHoja({ titulo: 'Reporte' }, { nombre: 'Pendientes', filas: [] }, 2)).toBe('Reporte — Pendientes');
   });
 });
 

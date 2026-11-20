@@ -5,6 +5,7 @@ import {
   coincideTransporte,
   empresasParaProgramar,
   errorAsignacionTransporte,
+  filtrarCamiones,
   filtrarEmpresas,
   textoTransporte,
 } from '@/lib/transporte';
@@ -121,5 +122,54 @@ describe('errorAsignacionTransporte', () => {
 
   it('should_return_null_when_assignment_is_complete', () => {
     expect(errorAsignacionTransporte([empresa()], { patente: 'abcd12', conductorNombre: 'Pedro' })).toBeNull();
+  });
+
+  it('should_ask_to_pick_a_truck_when_text_is_a_company_search_not_a_plate', () => {
+    expect(errorAsignacionTransporte([empresa()], { patente: 'Transportes Sur', conductorNombre: 'Ana' })).toBe(
+      'Elige el camión de la lista: búscalo por patente, empresa o RUT.'
+    );
+  });
+});
+
+describe('filtrarCamiones', () => {
+  const empresas = [
+    empresa(),
+    empresa({
+      id: 'e-2',
+      nombre: 'Logística Andes',
+      rut: '77111222-K',
+      camiones: [
+        { id: 'c-2', patente: 'WXYZ34', transportista_id: 'e-2', conductor_nombre: 'Juan Pérez', activo: true },
+        { id: 'c-3', patente: 'KLMN56', transportista_id: 'e-2', conductor_nombre: null, activo: true },
+      ],
+    }),
+  ];
+  const patentes = (r: ReturnType<typeof filtrarCamiones>) => r.map((x) => x.camion.patente);
+
+  it('should_return_all_trucks_when_search_is_empty', () => {
+    expect(patentes(filtrarCamiones(empresas, ''))).toEqual(['ABCD12', 'WXYZ34', 'KLMN56']);
+  });
+
+  it('should_return_every_truck_of_a_company_when_searching_its_name_without_accents', () => {
+    expect(patentes(filtrarCamiones(empresas, 'logistica andes'))).toEqual(['WXYZ34', 'KLMN56']);
+    expect(patentes(filtrarCamiones(empresas, 'SUR'))).toEqual(['ABCD12']);
+  });
+
+  it('should_match_by_rut_with_or_without_dots_and_dash', () => {
+    expect(patentes(filtrarCamiones(empresas, '77.111.222-k'))).toEqual(['WXYZ34', 'KLMN56']);
+    expect(patentes(filtrarCamiones(empresas, '765432'))).toEqual(['ABCD12']);
+  });
+
+  it('should_match_by_plate_or_driver', () => {
+    expect(patentes(filtrarCamiones(empresas, 'wxyz-3'))).toEqual(['WXYZ34']);
+    expect(patentes(filtrarCamiones(empresas, 'perez'))).toEqual(['WXYZ34']);
+  });
+
+  it('should_return_nothing_when_nothing_matches', () => {
+    expect(filtrarCamiones(empresas, 'norte')).toEqual([]);
+  });
+
+  it('should_stop_at_the_maximum', () => {
+    expect(filtrarCamiones(empresas, '', 2)).toHaveLength(2);
   });
 });

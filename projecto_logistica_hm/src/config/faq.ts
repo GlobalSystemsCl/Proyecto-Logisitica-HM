@@ -265,7 +265,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: ['logistica'],
     pregunta: '¿Cómo programo un traslado?',
     respuesta:
-      'Arrastra la solicitud desde "Por programar" al día del despacho, o usa el botón "Programar" de la tarjeta y elige el día (la forma más cómoda en el celular). Luego escribe la patente del camión (obligatoria): se completan la empresa de transporte con su RUT y el transportista habitual, que puedes cambiar para ese viaje. Si la patente no está registrada, regístrala ahí mismo con su empresa (existente o nueva). Si la fecha queda después de la fecha límite, el sistema avisa pero te deja continuar.',
+      'Arrastra la solicitud desde "Por programar" al día del despacho, o usa el botón "Programar" de la tarjeta y elige el día (la forma más cómoda en el celular). Luego busca el camión (obligatorio) por patente, nombre de la empresa de transporte o RUT, y elígelo de la lista: se completan la empresa con su RUT y el transportista habitual, que puedes cambiar para ese viaje. Si la patente no está registrada, regístrala ahí mismo con su empresa (existente, que también se busca por nombre o RUT, o nueva). Si la fecha queda después de la fecha límite, el sistema avisa pero te deja continuar.',
   },
   {
     vista: 'calendario',
@@ -316,7 +316,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: OPERAN_TRASLADOS,
     pregunta: '¿Qué vehículos puedo trasladar?',
     respuesta:
-      'Solo vehículos disponibles que estén en la sucursal de origen: no se pueden trasladar los reservados en una solicitud activa, los entregados al cliente ni los que no tienen sucursal. Al elegir el origen aparecen abajo sus vehículos; puedes buscarlos por chasis o patente. Al crear el traslado debes indicar la patente del camión y el transportista.',
+      'Solo vehículos disponibles que estén en la sucursal de origen: no se pueden trasladar los reservados en una solicitud activa, los entregados al cliente ni los que no tienen sucursal. Al elegir el origen aparecen abajo sus vehículos; puedes buscarlos por chasis o patente. Al crear el traslado debes elegir el camión (búscalo por patente, nombre de la empresa o RUT) y el transportista.',
   },
   {
     vista: 'traslados',
@@ -339,7 +339,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: OPERAN_TRASLADOS,
     pregunta: '¿Para qué sirve el reporte de movimientos?',
     respuesta:
-      'Para revisar la factura del transportista: muestra todo lo despachado en el período (solicitudes y traslados internos), con una fila por vehículo. Por defecto muestra el mes en curso. Filtra por empresa de transporte, patente del camión o RUT, origen, destino, tipo, estado, chasis o guía, y compara con el panel "Vehículos por transportista".',
+      'Para revisar la factura del transportista: muestra todo lo despachado en el período (solicitudes y traslados internos) desde todas las sucursales, con una fila por vehículo; Logística ve lo mismo que el administrador, no solo sus zonas. Por defecto muestra el mes en curso. Filtra por empresa de transporte, patente del camión o RUT, origen, destino, tipo, estado, chasis o guía, y compara con el panel "Vehículos por transportista".',
   },
   {
     vista: 'movimientos',
@@ -431,6 +431,13 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     respuesta:
       'Usa "Importar Stock" y elige el Excel de stock o de compras tal como viene, con las columnas Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación y Patente. Los chasis repetidos se informan y no se duplican, y los que no tienen 17 caracteres se informan como error. Los vehículos sin ubicación quedan "En viaje / Container" y no se pueden pedir en una solicitud hasta que les asignes una sucursal.',
   },
+  {
+    vista: 'inventario',
+    roles: GESTION_INVENTARIO,
+    pregunta: 'Subí un Excel por error, ¿cómo lo deshago?',
+    respuesta:
+      'Usa "Revertir importación": muestra las últimas importaciones con su archivo, fecha y autor. Elige la que quieres deshacer y escribe CONFIRMAR. Se eliminan los vehículos que cargó ese archivo, salvo los que ya se usan en una solicitud o un traslado (esos se conservan y se informan). Los chasis que ya existían antes de la importación no se tocan. Logística puede revertir sus propias importaciones; el administrador, cualquiera. Queda registrado en el historial.',
+  },
 
   // ---------- Usuarios ----------
   {
@@ -475,7 +482,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: SOLO_ADMIN,
     pregunta: '¿Qué puedo administrar en Sucursales?',
     respuesta:
-      'Crear y editar sucursales: código, nombre, dirección, espacios totales (slots) y zona. El código es el de la planilla de concesionarios (101, 102...), numera las solicitudes de la sucursal (101-1, 101-2...) y no se puede cambiar después de crearla. El jefe de local a cargo se asigna desde Usuarios, y cada sucursal tiene uno solo. Al abrir una sucursal ves sus vehículos y sus solicitudes; el número abre el detalle. Una sucursal sin zona no la ve ningún usuario de Logística: el aviso amarillo indica cuántas hay y el filtro "Sin zona" las lista para asignarles una.',
+      'Crear y editar sucursales: código, nombre, dirección, espacios totales (slots) y zona. El código es el de la planilla de concesionarios (101, 102...), numera las solicitudes de la sucursal (101-1, 101-2...) y no se puede cambiar después de crearla. El jefe de local a cargo se asigna desde Usuarios, y cada sucursal tiene uno solo. Al abrir una sucursal ves sus solicitudes; el número abre el detalle. El botón del auto muestra los vehículos que están en la sucursal y los que van en camino hacia ella, igual que en Slots, y se exportan a Excel. Una sucursal sin zona no la ve ningún usuario de Logística: el aviso amarillo indica cuántas hay y el filtro "Sin zona" las lista para asignarles una.',
   },
 
   // ---------- Historial ----------

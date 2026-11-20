@@ -321,12 +321,17 @@ describe('slotsConZona', () => {
     });
     expect(fila).toEqual({
       id: 3,
+      codigo: '3',
       nombre: 'Norte',
       zona_nombre: 'Zona Centro',
       slots: 10,
       slots_ocupados: 2,
       slots_reservados: 1,
     });
+  });
+
+  it('should_usar_el_codigo_visible_when_la_sucursal_lo_tiene', () => {
+    expect(slotsConZona({ id: 409, codigo: '119B', nombre: 'Acopio', slots: 5, slots_ocupados: 0, slots_reservados: 0 }).codigo).toBe('119B');
   });
 
   it('should_dejar_zona_nula_when_sucursal_sin_zona', () => {

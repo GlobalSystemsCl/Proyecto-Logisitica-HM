@@ -29,6 +29,7 @@ const accionConfig: Record<string, { label: string; color: string }> = {
   cambio_ubicacion: { label: 'Cambio de ubicación', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
   eliminacion: { label: 'Eliminación', color: 'bg-red-50 text-red-700 border border-red-200' },
   importacion: { label: 'Importación CSV', color: 'bg-neutral-100 text-neutral-700 border border-neutral-300' },
+  reversion_importacion: { label: 'Importación revertida', color: 'bg-red-50 text-red-700 border border-red-200' },
   recalendarizacion: { label: 'Reprogramación', color: 'bg-amber-50 text-amber-800 border border-amber-200' },
   cancelacion_transito: { label: 'Cancelación en tránsito', color: 'bg-red-50 text-red-700 border border-red-200' },
   recepcion: { label: 'Recepción', color: 'bg-green-50 text-green-700 border border-green-200' },

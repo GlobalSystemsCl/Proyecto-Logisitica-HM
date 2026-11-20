@@ -1,10 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin';
-import { Vehiculo, VehiculoConDisponibilidad, VehiculoEnSucursal, CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
+import { randomUUID } from 'crypto';
+import { Vehiculo, VehiculoConDisponibilidad, VehiculoEnSucursal, CreateVehiculoInput, UpdateVehiculoInput, type ImportacionStock } from '@/types/vehiculo.types';
 import { OrganizacionService } from '@/services/organizacion.service';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { enLotes, obtenerTodasLasFilas } from '@/lib/paginacion';
 import { celda, columnasStock, esChasisValido, separarMarca, tieneColumnasMinimas } from '@/lib/importStock';
+import { LIMITE_IMPORTACIONES_LISTADAS, mensajeErrorReversion } from '@/lib/reversionImportacion';
 import {
   TAMANO_GRUPO_IDS,
   bloqueosDesdeVinculos,
@@ -20,6 +22,55 @@ export interface ResultadoCambioUbicacion {
   movidos: VehiculoUbicacion[];
   omitidos: Omitido[];
   error?: string;
+}
+
+const SELECT_IMPORTACION =
+  'id, usuario_id, archivo, total, importados, duplicados, errores, created_at, revertida_at, vehiculos_eliminados, vehiculos_conservados, ' +
+  'autor:usuario!importacion_stock_usuario_fkey(nombre, apellido), ' +
+  'revertidor:usuario!importacion_stock_revertida_por_fkey(nombre, apellido), ' +
+  'vehiculo(count)';
+
+type PersonaImportacion = { nombre: string | null; apellido: string | null } | null;
+
+export interface FilaImportacion {
+  id: string;
+  usuario_id: string | null;
+  archivo: string | null;
+  total: number | null;
+  importados: number | null;
+  duplicados: number | null;
+  errores: number | null;
+  created_at: string;
+  revertida_at: string | null;
+  vehiculos_eliminados: number | null;
+  vehiculos_conservados: number | null;
+  autor: PersonaImportacion;
+  revertidor: PersonaImportacion;
+  vehiculo: Array<{ count: number }> | null;
+}
+
+function nombrePersona(p: PersonaImportacion): string | null {
+  return p ? `${p.nombre ?? ''} ${p.apellido ?? ''}`.trim() || null : null;
+}
+
+/** Fila de `importacion_stock` (con sus embeds) al tipo de la app. */
+export function mapImportacion(r: FilaImportacion): ImportacionStock {
+  return {
+    id: r.id,
+    usuario_id: r.usuario_id ?? null,
+    usuario_nombre: nombrePersona(r.autor),
+    archivo: r.archivo ?? null,
+    total: Number(r.total ?? 0),
+    importados: Number(r.importados ?? 0),
+    duplicados: Number(r.duplicados ?? 0),
+    errores: Number(r.errores ?? 0),
+    created_at: r.created_at,
+    revertida_at: r.revertida_at ?? null,
+    revertida_por_nombre: nombrePersona(r.revertidor),
+    vehiculos_eliminados: r.vehiculos_eliminados ?? null,
+    vehiculos_conservados: r.vehiculos_conservados ?? null,
+    vehiculos_actuales: Number(r.vehiculo?.[0]?.count ?? 0),
+  };
 }
 
 export class VehiculoService {
@@ -643,9 +694,11 @@ export class VehiculoService {
 
   static async importVehiculosCSV(
     textoCSV: string,
-    opts?: { anioPorDefecto?: number }
+    opts?: { anioPorDefecto?: number; usuarioId?: string | null; archivo?: string | null }
   ): Promise<{
     success: boolean;
+    /** Registro en `importacion_stock` (solo si se insertó algo): permite revertirla. */
+    importacionId?: string;
     total?: number;
     importados?: number;
     duplicados?: number;
@@ -759,18 +812,47 @@ export class VehiculoService {
         importados++;
       }
 
+      // Registro de la importación (para poder revertirla): cada vehículo lleva su id.
+      let importacionId: string | undefined;
+      if (pendientes.length > 0) {
+        importacionId = randomUUID();
+        const { error } = await admin.from('importacion_stock').insert({
+          id: importacionId,
+          usuario_id: opts?.usuarioId ?? null,
+          archivo: opts?.archivo?.trim().slice(0, 200) || null,
+          total: filas.length - 1,
+          importados: pendientes.length,
+          duplicados,
+          errores,
+        });
+        if (error) {
+          console.error('Error al registrar la importación:', error);
+          return { success: false, error: 'No se pudo registrar la importación. No se cargó ningún vehículo.' };
+        }
+        for (const p of pendientes) p.importacion_id = importacionId;
+      }
+
       // Insertar en lotes
+      let fallidos = 0;
       for (let i = 0; i < pendientes.length; i += 500) {
         const lote = pendientes.slice(i, i + 500);
         const { error } = await admin.from('vehiculo').insert(lote);
         if (error) {
           errores += lote.length;
+          fallidos += lote.length;
           erroresDetalle.push(mensajeErrorUsuario(error, `Error al importar el lote ${i / 500 + 1}.`));
         }
+      }
+      if (importacionId && fallidos > 0) {
+        await admin
+          .from('importacion_stock')
+          .update({ importados: pendientes.length - fallidos, errores })
+          .eq('id', importacionId);
       }
 
       return {
         success: errores < importados || importados === 0 ? true : false,
+        importacionId,
         total: filas.length - 1,
         importados,
         duplicados,
@@ -784,6 +866,57 @@ export class VehiculoService {
       const msg = mensajeErrorUsuario(err, 'Error inesperado al importar vehículos');
       return { success: false, error: msg };
     }
+  }
+
+  /**
+   * Últimas importaciones de stock, con cuántos de sus vehículos siguen en el
+   * inventario (lo que una reversión podría borrar).
+   */
+  static async listarImportaciones(limite = LIMITE_IMPORTACIONES_LISTADAS): Promise<ImportacionStock[]> {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from('importacion_stock')
+      .select(SELECT_IMPORTACION)
+      .order('created_at', { ascending: false })
+      .limit(limite);
+    if (error) {
+      console.error('Error al listar importaciones de stock:', error);
+      throw new Error('No se pudieron cargar las importaciones.');
+    }
+    return ((data ?? []) as unknown as FilaImportacion[]).map(mapImportacion);
+  }
+
+  /** Una importación por id (null si no existe). */
+  static async getImportacion(id: string): Promise<ImportacionStock | null> {
+    const admin = createAdminClient();
+    const { data, error } = await admin.from('importacion_stock').select(SELECT_IMPORTACION).eq('id', id).maybeSingle();
+    if (error) {
+      console.error('Error al leer la importación:', error);
+      throw new Error('No se pudo leer la importación.');
+    }
+    return data ? mapImportacion(data as unknown as FilaImportacion) : null;
+  }
+
+  /**
+   * Revierte una importación: borra sus vehículos que no se usan en ninguna
+   * solicitud ni traslado y la marca como revertida, todo en una transacción
+   * (`fn_revertir_importacion_stock`).
+   */
+  static async revertirImportacion(
+    importacionId: string,
+    usuarioId: string
+  ): Promise<{ success: true; eliminados: number; conservados: number } | { success: false; error: string }> {
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc('fn_revertir_importacion_stock', {
+      p_importacion_id: importacionId,
+      p_usuario_id: usuarioId,
+    });
+    if (error) {
+      console.error('Error al revertir la importación:', error);
+      return { success: false, error: mensajeErrorReversion(error.message) };
+    }
+    const fila = (Array.isArray(data) ? data[0] : data) as { eliminados?: number; conservados?: number } | null;
+    return { success: true, eliminados: Number(fila?.eliminados ?? 0), conservados: Number(fila?.conservados ?? 0) };
   }
 
   // --------------------------------------------------------------------------

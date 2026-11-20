@@ -42,10 +42,11 @@ export default function PanelVehiculosSucursal({ sucursal, onCerrar }: Props) {
 
   function exportar() {
     if (!datos) return;
+    const codigo = sucursal.codigo ?? String(sucursal.id);
     void descargarExcel(
-      `vehiculos_${sucursal.id}_${hoyISO()}.xlsx`,
+      `vehiculos_${codigo}_${hoyISO()}.xlsx`,
       {
-        titulo: `Vehículos de la sucursal ${sucursal.id}${sucursal.nombre ? ` · ${sucursal.nombre}` : ''}`,
+        titulo: `Vehículos de la sucursal ${codigo}${sucursal.nombre ? ` · ${sucursal.nombre}` : ''}`,
         subtitulo: `${datos.enSucursal.length} en la sucursal y ${datos.enCamino.length} en camino hacia ella`,
       },
       [

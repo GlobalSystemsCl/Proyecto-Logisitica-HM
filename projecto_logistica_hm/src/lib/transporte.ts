@@ -1,5 +1,6 @@
-import { formatearPatente, normalizarPatente } from '@/lib/patente';
+import { formatearPatente, normalizarPatente, validarPatente } from '@/lib/patente';
 import { formatearRut } from '@/lib/rut';
+import { plano } from '@/lib/busqueda';
 import type { Camion, EmpresaTransporte, TransportistaResumen } from '@/types/transportista.types';
 
 /**
@@ -19,6 +20,40 @@ export function coincideEmpresa(empresa: EmpresaTransporte, busqueda: string): b
       (soloPatente.length >= 2 && c.patente.includes(soloPatente)) ||
       (c.conductor_nombre ?? '').toLowerCase().includes(texto)
   );
+}
+
+/** Máximo de camiones sugeridos al buscar en el selector. */
+export const MAX_SUGERENCIAS_CAMION = 8;
+
+/**
+ * Camiones (con su empresa) para el buscador del selector de transporte: por
+ * patente (con o sin guion), nombre de la empresa, RUT (con o sin puntos ni
+ * guion) o transportista habitual. Sin texto, los primeros de la lista.
+ */
+export function filtrarCamiones(
+  empresas: EmpresaTransporte[],
+  busqueda: string,
+  max = MAX_SUGERENCIAS_CAMION
+): Array<{ empresa: EmpresaTransporte; camion: Camion }> {
+  const texto = plano(busqueda);
+  const soloRut = texto.replace(/[^0-9k]/g, '');
+  const soloPatente = normalizarPatente(busqueda);
+  const resultado: Array<{ empresa: EmpresaTransporte; camion: Camion }> = [];
+  for (const empresa of empresas) {
+    const coincideLaEmpresa =
+      !texto ||
+      plano(empresa.nombre).includes(texto) ||
+      (soloRut.length >= 3 && empresa.rut.toLowerCase().replace(/[^0-9k]/g, '').includes(soloRut));
+    for (const camion of empresa.camiones) {
+      const coincide =
+        coincideLaEmpresa ||
+        (soloPatente.length >= 2 && camion.patente.includes(soloPatente)) ||
+        plano(camion.conductor_nombre ?? '').includes(texto);
+      if (coincide) resultado.push({ empresa, camion });
+      if (resultado.length >= max) return resultado;
+    }
+  }
+  return resultado;
 }
 
 /** Empresas que coinciden con la búsqueda; con `soloActivas`, oculta las inactivas. */
@@ -82,7 +117,11 @@ export function errorAsignacionTransporte(
   valor: { patente: string; conductorNombre: string | null } | null
 ): string | null {
   if (!valor?.patente.trim()) return 'Indica la patente del camión.';
-  if (!buscarCamion(empresas, valor.patente)) return 'La patente no está registrada: regístrala con su empresa antes de continuar.';
+  if (!buscarCamion(empresas, valor.patente)) {
+    // Lo escrito no es una patente (se buscó por empresa o RUT): falta elegir el camión.
+    if (validarPatente(valor.patente)) return 'Elige el camión de la lista: búscalo por patente, empresa o RUT.';
+    return 'La patente no está registrada: regístrala con su empresa antes de continuar.';
+  }
   if (!valor.conductorNombre?.trim()) return 'Indica el nombre del transportista que maneja el camión.';
   return null;
 }

@@ -40,6 +40,7 @@ import { DESCRIPCION_DISPONIBILIDAD, ETIQUETA_DISPONIBILIDAD } from '@/lib/vehic
 import { usoSlots as usoSlotsSucursal } from '@/lib/slots';
 import { coincideFiltroZona, FILTRO_SIN_ZONA, type FiltroZona, resumenSinZona } from '@/lib/sucursalesSinZona';
 import { abrirDetalleDeFila } from '@/components/FilaAbreDetalle';
+import PanelVehiculosSucursal from '@/components/PanelVehiculosSucursal';
 
 const estadoConfig: Record<EstadoSolicitud, { label: string; color: string }> = {
   pendiente_aprobacion: { label: 'Pendiente', color: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -78,6 +79,8 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSucursal, setEditingSucursal] = useState<Sucursal | null>(null);
   const [detailSucursal, setDetailSucursal] = useState<Sucursal | null>(null);
+  /** Sucursal cuyos vehículos se están viendo (mismo panel que en Slots). */
+  const [verVehiculos, setVerVehiculos] = useState<Sucursal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Sucursal | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -350,6 +353,14 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
           className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
         >
           <Eye className="w-4 h-4" />
+        </button>
+        <button
+          onClick={() => setVerVehiculos(sucursal)}
+          title="Ver los vehículos de la sucursal y los que van en camino"
+          aria-label={`Ver vehículos de ${sucursal.nombre ?? sucursal.codigo ?? sucursal.id}`}
+          className="p-1.5 rounded-lg text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100 transition-colors cursor-pointer"
+        >
+          <Car className="w-4 h-4" />
         </button>
         <button
           onClick={() => openEditModal(sucursal)}
@@ -751,6 +762,8 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
           </table>
         </div>
       </div>
+
+      {verVehiculos && <PanelVehiculosSucursal sucursal={verVehiculos} onCerrar={() => setVerVehiculos(null)} />}
 
       {/* Modal: Crear / Editar Sucursal */}
       {isModalOpen && (

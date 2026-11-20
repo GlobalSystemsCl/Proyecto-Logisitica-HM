@@ -39,15 +39,18 @@ import {
   MapPin,
 } from 'lucide-react';
 import { useConfirmacion } from '@/components/Confirmacion';
+import RevertirImportacionStock from '@/components/RevertirImportacionStock';
+import type { UserRole } from '@/types/auth.types';
 
 interface Props {
   vehiculos: VehiculoConDisponibilidad[];
   marcas: string[];
   sucursales: { id: number; nombre: string | null }[];
   userRole: string;
+  userId: string;
 }
 
-export default function VehiculosTableClient({ vehiculos, marcas, sucursales, userRole }: Props) {
+export default function VehiculosTableClient({ vehiculos, marcas, sucursales, userRole, userId }: Props) {
   // QA #15: el jefe de local consulta el inventario, pero no lo modifica.
   const puedeGestionar = puedeGestionarVehiculos(userRole);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -480,7 +483,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     const trimmed = importCsv.trim();
     if (!trimmed) return;
     startImportTransition(async () => {
-      const res = await importVehiculosAction({ csv: trimmed });
+      const res = await importVehiculosAction({ csv: trimmed, archivo: archivoImport || undefined });
       if (res.success) {
         setResultModal({
           type: 'success',
@@ -667,7 +670,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
         </div>
 
         {puedeGestionar && (
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => {
               resetImportModal();
@@ -678,6 +681,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             <Upload className="w-4 h-4" />
             <span>Importar Stock</span>
           </button>
+          <RevertirImportacionStock viewer={{ id: userId, rol: userRole as UserRole }} />
           <button
             onClick={() => {
               resetForm();

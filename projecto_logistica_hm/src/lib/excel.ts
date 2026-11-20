@@ -2,10 +2,12 @@ import type { Workbook, Worksheet } from 'exceljs';
 import { formatFechaHora } from '@/lib/fechas';
 
 /**
- * Libros Excel de los exportes. Cada hoja lleva un encabezado con el logo de
- * HMotores, el título (qué es el archivo), un subtítulo opcional (período,
- * filtros, sucursal) y la fecha de exportación; debajo va la tabla con títulos
- * en negrita, filtro y columnas con ancho según el contenido.
+ * Libros Excel de los exportes. La PRIMERA hoja lleva un encabezado con el
+ * logo de HMotores, el título (qué es el archivo), un subtítulo opcional
+ * (período, filtros, sucursal) y la fecha de exportación; las demás hojas
+ * parten directo con su tabla (2026-11-20: repetirlo en cada hoja se leía como
+ * duplicado). La tabla lleva títulos en negrita, filtro y columnas con ancho
+ * según el contenido.
  *
  * Se usa ExcelJS y no SheetJS porque la edición libre de SheetJS no escribe
  * imágenes ni estilos. SheetJS (`xlsx`) se sigue usando para LEER los Excel
@@ -44,11 +46,6 @@ export function anchoColumna(encabezado: string, filas: HojaExcel['filas']): num
 /** Excel limita el nombre de la hoja a 31 caracteres y prohíbe `\ / ? * [ ] :`. */
 export function nombreHojaExcel(nombre: string): string {
   return nombre.replace(/[\\/?*[\]:]/g, '-').slice(0, 31) || 'Hoja';
-}
-
-/** Título de la hoja: con varias hojas se agrega el nombre de cada una. */
-export function tituloHoja(encabezado: EncabezadoExcel, hoja: HojaExcel, totalHojas: number): string {
-  return totalHojas > 1 ? `${encabezado.titulo} — ${hoja.nombre}` : encabezado.titulo;
 }
 
 /** Texto de la fecha de exportación ("Exportado el 18/11/2026 14:32"). */
@@ -143,15 +140,15 @@ export async function crearLibroExcel(
   libro.created = fecha;
   const logoId = encabezado && opciones.logo ? libro.addImage({ base64: opciones.logo, extension: 'png' }) : null;
 
-  for (const hoja of hojas) {
+  hojas.forEach((hoja, i) => {
     const ws = libro.addWorksheet(nombreHojaExcel(hoja.nombre));
-    if (encabezado) {
-      escribirEncabezado(ws, tituloHoja(encabezado, hoja, hojas.length), encabezado.subtitulo, fecha, logoId);
+    if (encabezado && i === 0) {
+      escribirEncabezado(ws, encabezado.titulo, encabezado.subtitulo, fecha, logoId);
       escribirTabla(ws, hoja, FILA_TITULOS_TABLA);
     } else {
       escribirTabla(ws, hoja, 1);
     }
-  }
+  });
   return libro;
 }
 

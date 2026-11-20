@@ -3,6 +3,8 @@ import { ETIQUETA_ESTADO_CAPACIDAD, PORCENTAJE_SLOTS_EXTRA, type EstadoCapacidad
 
 export interface SlotSucursal {
   id: number;
+  /** Código visible ("119A"); si falta, el id. */
+  codigo?: string | null;
   nombre: string | null;
   zona_nombre?: string | null;
   slots: number | null;

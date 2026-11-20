@@ -9,6 +9,12 @@ import { accionCambioVehiculo, diferenciasVehiculo, resumenVehiculo } from '@/li
 import { randomUUID } from 'crypto';
 import { CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
 import { revalidatePath } from 'next/cache';
+import {
+  confirmacionReversionValida,
+  motivoNoRevertible,
+  TEXTO_CONFIRMAR_REVERSION,
+  textoResultadoReversion,
+} from '@/lib/reversionImportacion';
 
 async function verifyVehiculoPermission() {
   const profile = await requireProfile();
@@ -154,6 +160,8 @@ export async function deleteVehiculoAction(id: string) {
 export interface ImportVehiculosData {
   csv: string;
   anioPorDefecto?: number;
+  /** Nombre del archivo subido (se muestra al revertir). */
+  archivo?: string;
 }
 
 export async function importVehiculosAction(data: ImportVehiculosData) {
@@ -166,6 +174,8 @@ export async function importVehiculosAction(data: ImportVehiculosData) {
 
     const result = await VehiculoService.importVehiculosCSV(data.csv, {
       anioPorDefecto: data.anioPorDefecto,
+      usuarioId: profile.id,
+      archivo: data.archivo ?? null,
     });
 
     if (!result.success && !result.importados) {
@@ -173,7 +183,8 @@ export async function importVehiculosAction(data: ImportVehiculosData) {
     }
 
     // Un registro por importación (no uno por vehículo, para no saturar la auditoría).
-    await auditarVehiculo(profile.id, randomUUID(), 'importacion', null, {
+    await auditarVehiculo(profile.id, result.importacionId ?? randomUUID(), 'importacion', null, {
+      archivo: data.archivo ?? null,
       total: result.total ?? 0,
       importados: result.importados ?? 0,
       duplicados: result.duplicados ?? 0,
@@ -183,6 +194,7 @@ export async function importVehiculosAction(data: ImportVehiculosData) {
     revalidatePath('/admin/vehiculos');
     return {
       success: true,
+      importacionId: result.importacionId,
       mensaje: result.mensaje,
       total: result.total,
       importados: result.importados,
@@ -193,5 +205,61 @@ export async function importVehiculosAction(data: ImportVehiculosData) {
   } catch (err: unknown) {
     const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
+  }
+}
+
+/** Rutas que cambian al agregar o quitar vehículos del inventario (slots incluidos). */
+const RUTAS_INVENTARIO = ['/admin/vehiculos', '/admin/sucursales', '/logistica/slots', '/dashboard'];
+
+/** Últimas importaciones de stock, para el modal "Revertir importación". */
+export async function getImportacionesStockAction() {
+  try {
+    await verifyVehiculoPermission();
+    return { success: true as const, importaciones: await VehiculoService.listarImportaciones() };
+  } catch (err: unknown) {
+    return { success: false as const, error: mensajeErrorUsuario(err, 'No se pudieron cargar las importaciones.') };
+  }
+}
+
+/**
+ * Revierte una importación subida por error: borra los vehículos que creó y
+ * que no se usan en solicitudes ni traslados. Exige escribir CONFIRMAR. El
+ * administrador revierte cualquiera; Logística, solo las suyas.
+ */
+export async function revertirImportacionStockAction(importacionId: string, confirmacion: string) {
+  try {
+    const profile = await verifyVehiculoPermission();
+    if (!confirmacionReversionValida(confirmacion)) {
+      return { success: false as const, error: `Escribe ${TEXTO_CONFIRMAR_REVERSION} para confirmar.` };
+    }
+    if (!/^[0-9a-f-]{36}$/i.test(importacionId ?? '')) {
+      return { success: false as const, error: 'Importación no válida.' };
+    }
+
+    const importacion = await VehiculoService.getImportacion(importacionId);
+    if (!importacion) return { success: false as const, error: 'La importación no existe.' };
+    const motivo = motivoNoRevertible(importacion, profile);
+    if (motivo) return { success: false as const, error: motivo };
+
+    const res = await VehiculoService.revertirImportacion(importacionId, profile.id);
+    if (!res.success) return { success: false as const, error: res.error };
+
+    await auditarVehiculo(
+      profile.id,
+      importacionId,
+      'reversion_importacion',
+      { archivo: importacion.archivo, importados: importacion.importados, fecha: importacion.created_at },
+      { eliminados: res.eliminados, conservados: res.conservados }
+    );
+
+    for (const ruta of RUTAS_INVENTARIO) revalidatePath(ruta);
+    return {
+      success: true as const,
+      eliminados: res.eliminados,
+      conservados: res.conservados,
+      mensaje: textoResultadoReversion(res.eliminados, res.conservados),
+    };
+  } catch (err: unknown) {
+    return { success: false as const, error: mensajeErrorUsuario(err, 'Error inesperado al revertir la importación.') };
   }
 }

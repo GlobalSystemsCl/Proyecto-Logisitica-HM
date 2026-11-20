@@ -717,6 +717,7 @@ describe('VehiculoService', () => {
           color: 'PLATA',
           precio: null,
           ubicacion: 101,
+          importacion_id: res.importacionId,
         },
         {
           chasis: 'JTMW1RF79KD123456',
@@ -730,6 +731,7 @@ describe('VehiculoService', () => {
           color: null,
           precio: null,
           ubicacion: null,
+          importacion_id: res.importacionId,
         },
       ]);
     });
@@ -740,6 +742,61 @@ describe('VehiculoService', () => {
       await VehiculoService.importVehiculosCSV(CSV);
       const orders = admin.callsTo('vehiculo').filter((c) => c[0] === 'order');
       expect(orders).toEqual([['order', 'id', { ascending: true }]]);
+    });
+
+    it('should_register_the_import_and_tag_each_vehicle_with_its_id', async () => {
+      admin.results.sucursal = [{ data: [], error: null }];
+      admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: null }];
+
+      const res = await VehiculoService.importVehiculosCSV(CSV, { usuarioId: 'log-1', archivo: 'stock.xlsx' });
+
+      expect(res.importacionId).toMatch(/^[0-9a-f-]{36}$/);
+      const registro = admin.callsTo('importacion_stock').find((c) => c[0] === 'insert');
+      expect(registro?.[1]).toEqual({
+        id: res.importacionId,
+        usuario_id: 'log-1',
+        archivo: 'stock.xlsx',
+        total: 4,
+        importados: 2,
+        duplicados: 1,
+        errores: 1,
+      });
+      const insert = admin.callsTo('vehiculo').find((c) => c[0] === 'insert');
+      expect((insert?.[1] as Array<{ importacion_id: string }>).every((v) => v.importacion_id === res.importacionId)).toBe(true);
+    });
+
+    it('should_not_insert_vehicles_when_the_import_cannot_be_registered', async () => {
+      admin.results.sucursal = [{ data: [], error: null }];
+      admin.results.vehiculo = [{ data: [], error: null }];
+      admin.results.importacion_stock = [{ data: null, error: { message: 'relation does not exist' } }];
+
+      const res = await VehiculoService.importVehiculosCSV(CSV);
+
+      expect(res.success).toBe(false);
+      expect(res.error).toBe('No se pudo registrar la importación. No se cargó ningún vehículo.');
+      expect(admin.callsTo('vehiculo').some((c) => c[0] === 'insert')).toBe(false);
+    });
+
+    it('should_not_register_an_import_when_nothing_is_inserted', async () => {
+      admin.results.sucursal = [{ data: [], error: null }];
+      admin.results.vehiculo = [{ data: [{ chasis: CHASIS_VALIDO }, { chasis: 'JTMW1RF79KD123456' }], error: null }];
+
+      const res = await VehiculoService.importVehiculosCSV(CSV);
+
+      expect(res.importados).toBe(0);
+      expect(res.importacionId).toBeUndefined();
+      expect(admin.callsTo('importacion_stock')).toEqual([]);
+    });
+
+    it('should_update_the_import_counts_when_a_batch_fails', async () => {
+      admin.results.sucursal = [{ data: [], error: null }];
+      admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: { message: 'boom' } }];
+
+      const res = await VehiculoService.importVehiculosCSV(CSV);
+
+      const update = admin.callsTo('importacion_stock').find((c) => c[0] === 'update');
+      expect(update?.[1]).toEqual({ importados: 0, errores: 3 });
+      expect(admin.callsTo('importacion_stock')).toContainEqual(['eq', 'id', res.importacionId]);
     });
   });
 });

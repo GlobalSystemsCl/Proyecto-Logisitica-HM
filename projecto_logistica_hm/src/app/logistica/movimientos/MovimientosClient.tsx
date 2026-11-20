@@ -26,8 +26,6 @@ interface Props {
   hasta: string;
   errorRango: string | null;
   movimientos: MovimientoTraslado[];
-  /** Usuario de Logística sin zonas: no tiene alcance. */
-  sinZonas: boolean;
 }
 
 type VistaReporte = 'detalle' | 'empresa' | 'camion' | 'tramo';
@@ -44,7 +42,7 @@ const COLUMNAS_EXCEL = [
   'Patente camión', 'Transportista', 'Empresa de transporte', 'RUT empresa', 'Logística', 'Estado', 'Fecha recepción',
 ];
 
-export default function MovimientosClient({ desde, hasta, errorRango, movimientos, sinZonas }: Props) {
+export default function MovimientosClient({ desde, hasta, errorRango, movimientos }: Props) {
   const router = useRouter();
   const [rango, setRango] = useState({ desde, hasta });
   const [filtros, setFiltros] = useState<FiltrosMovimientos>(FILTROS_MOVIMIENTOS_VACIOS);
@@ -117,11 +115,6 @@ export default function MovimientosClient({ desde, hasta, errorRango, movimiento
       {errorRango && (
         <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
           {errorRango} Se muestra el mes en curso.
-        </p>
-      )}
-      {sinZonas && (
-        <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-          No tienes zonas asignadas, así que no hay movimientos que mostrar. Pide al administrador que te asigne una zona.
         </p>
       )}
 

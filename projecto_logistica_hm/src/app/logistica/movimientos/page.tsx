@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { AuthService } from '@/services/auth.service';
 import { SolicitudesService } from '@/services/solicitudes.service';
 import { TrasladoService } from '@/services/traslado.service';
-import { OrganizacionService } from '@/services/organizacion.service';
 import PageHeader from '@/components/PageHeader';
 import MovimientosClient from './MovimientosClient';
 import { hoyISO } from '@/lib/fechas';
@@ -15,7 +14,8 @@ export const dynamic = 'force-dynamic';
  * Reporte de movimientos (pedido del cliente, 2026-10-19): todo lo despachado
  * en un rango, solicitudes y traslados internos, una fila por vehículo. Con él
  * Logística revisa la factura del transportista y la exporta a Excel.
- * Alcance: Logística, las sucursales de origen de sus zonas; administrador, todas.
+ * Alcance: Logística y el administrador ven todo (2026-11-20: la factura del
+ * transportista abarca todas las zonas, no solo las de cada usuario).
  */
 export default async function MovimientosPage({
   searchParams,
@@ -48,14 +48,9 @@ export default async function MovimientosPage({
   const errorRango = validarRangoExporte(pedido.desde, pedido.hasta);
   const { desde, hasta } = errorRango ? porDefecto : pedido;
 
-  const origenIds = profile.rol === 'administrador' ? null : await OrganizacionService.getSucursalIdsDeZonasUsuario(profile.id);
-
   const [solicitudes, traslados] = await Promise.all([
-    SolicitudesService.getSolicitudesFiltradas(profile.id, profile.rol, {
-      despachadasDesde: desde,
-      despachadasHasta: hasta,
-    }),
-    TrasladoService.getTrasladosDespachados(desde, hasta, origenIds),
+    SolicitudesService.getSolicitudes({ despachadasDesde: desde, despachadasHasta: hasta }),
+    TrasladoService.getTrasladosDespachados(desde, hasta, null),
   ]);
 
   return (
@@ -75,7 +70,6 @@ export default async function MovimientosPage({
           hasta={hasta}
           errorRango={errorRango}
           movimientos={unirMovimientos(solicitudes, traslados, desde, hasta)}
-          sinZonas={origenIds !== null && origenIds.length === 0}
         />
       </main>
     </div>
