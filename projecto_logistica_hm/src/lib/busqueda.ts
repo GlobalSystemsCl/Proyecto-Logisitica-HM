@@ -47,11 +47,20 @@ export function filtrarSucursales<T extends { id: number; nombre: string | null;
 }
 
 /**
- * Texto de una sucursal en un selector: código visible y nombre
- * ("101 · 15 NORTE-VIÑA DEL MAR"). Los usuarios conocen su sucursal por el código.
+ * Código que se muestra de una sucursal en un selector ("101", "119B"): el
+ * visible (`sucursal.codigo`) o, si falta, el id. Los usuarios conocen su
+ * sucursal por el código.
  */
-export function etiquetaSucursal(s: { id: number; nombre: string | null; codigo?: string | null }): string {
-  const codigo = (s.codigo ?? '').trim() || String(s.id);
-  const nombre = (s.nombre ?? '').trim();
-  return nombre ? `${codigo} · ${nombre}` : codigo;
+export function codigoVisibleSucursal(s: { id: number; codigo?: string | null }): string {
+  return (s.codigo ?? '').trim() || String(s.id);
+}
+
+/**
+ * Índice resaltado al moverse con las flechas por una lista de `total`
+ * opciones: da la vuelta en los extremos; con la lista vacía queda en 0.
+ */
+export function moverIndiceLista(actual: number, total: number, paso: 1 | -1): number {
+  if (total <= 0) return 0;
+  const base = Math.min(Math.max(actual, 0), total - 1);
+  return (base + paso + total) % total;
 }

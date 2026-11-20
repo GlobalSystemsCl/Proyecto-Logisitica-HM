@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { escaparPatronLike, etiquetaSucursal, filtrarSucursales, sanitizarTerminoBusqueda } from '@/lib/busqueda';
+import {
+  codigoVisibleSucursal,
+  escaparPatronLike,
+  filtrarSucursales,
+  moverIndiceLista,
+  sanitizarTerminoBusqueda,
+} from '@/lib/busqueda';
 
 describe('sanitizarTerminoBusqueda', () => {
   it('should_keep_alphanumeric_and_hyphen_when_input_is_a_plate', () => {
@@ -66,17 +72,35 @@ describe('filtrarSucursales', () => {
   });
 });
 
-describe('etiquetaSucursal', () => {
-  it('should_show_visible_code_and_name_when_branch_has_codigo', () => {
-    expect(etiquetaSucursal({ id: 409, codigo: '119B', nombre: 'ACOPIO LONQUÉN' })).toBe('119B · ACOPIO LONQUÉN');
+describe('codigoVisibleSucursal', () => {
+  it('should_return_visible_code_when_branch_has_codigo', () => {
+    expect(codigoVisibleSucursal({ id: 409, codigo: '119B' })).toBe('119B');
   });
 
-  it('should_use_id_as_code_when_codigo_is_missing_or_blank', () => {
-    expect(etiquetaSucursal({ id: 101, nombre: '15 NORTE-VIÑA DEL MAR' })).toBe('101 · 15 NORTE-VIÑA DEL MAR');
-    expect(etiquetaSucursal({ id: 101, codigo: '  ', nombre: 'X' })).toBe('101 · X');
+  it('should_use_id_when_codigo_is_missing_or_blank', () => {
+    expect(codigoVisibleSucursal({ id: 101 })).toBe('101');
+    expect(codigoVisibleSucursal({ id: 101, codigo: '  ' })).toBe('101');
+    expect(codigoVisibleSucursal({ id: 7, codigo: null })).toBe('7');
+  });
+});
+
+describe('moverIndiceLista', () => {
+  it('should_move_down_and_up_when_inside_the_list', () => {
+    expect(moverIndiceLista(0, 5, 1)).toBe(1);
+    expect(moverIndiceLista(3, 5, -1)).toBe(2);
   });
 
-  it('should_show_only_code_when_name_is_empty', () => {
-    expect(etiquetaSucursal({ id: 7, codigo: null, nombre: null })).toBe('7');
+  it('should_wrap_around_when_at_the_ends', () => {
+    expect(moverIndiceLista(4, 5, 1)).toBe(0);
+    expect(moverIndiceLista(0, 5, -1)).toBe(4);
+  });
+
+  it('should_return_0_when_list_is_empty', () => {
+    expect(moverIndiceLista(3, 0, 1)).toBe(0);
+  });
+
+  it('should_clamp_when_current_index_is_out_of_range', () => {
+    expect(moverIndiceLista(9, 3, 1)).toBe(0);
+    expect(moverIndiceLista(9, 3, -1)).toBe(1);
   });
 });
