@@ -8,6 +8,7 @@ import {
 } from '@/types/sucursal.types';
 import { mensajeErrorUsuario } from '@/lib/errores';
 import { escaparPatronLike } from '@/lib/busqueda';
+import { soloSucursalesActivas } from '@/lib/sucursalActiva';
 
 interface SolicitudRawRow {
   id: string;
@@ -43,7 +44,11 @@ function formatPersona(p: { nombre: string; apellido: string } | null): string |
 }
 
 export class SucursalesService {
-  static async getSucursales(): Promise<Sucursal[]> {
+  /**
+   * Sucursales por nombre. Por defecto solo las activas; el administrador
+   * pide también las desactivadas (`incluirInactivas`) para verlas y nombrarlas.
+   */
+  static async getSucursales(opciones: { incluirInactivas?: boolean } = {}): Promise<Sucursal[]> {
     try {
       const admin = createAdminClient();
       const { data, error } = await admin
@@ -56,7 +61,9 @@ export class SucursalesService {
         return [];
       }
 
-      return (data || []) as unknown as Sucursal[];
+      const lista = (data || []) as unknown as Sucursal[];
+      // Se filtra aquí y no en la consulta: así funciona aunque falte la columna `activa`.
+      return opciones.incluirInactivas ? lista : soloSucursalesActivas(lista);
     } catch (err) {
       console.error('Error en getSucursales:', err);
       return [];
@@ -263,13 +270,57 @@ export class SucursalesService {
    * Antes la FK `solicitud.sucursal` era ON DELETE CASCADE: borrar la sucursal
    * borraba sus solicitudes (incluidas ventas finalizadas), observaciones,
    * reservas y metadatos de documentos, y dejaba archivos huérfanos en Storage.
-   * Ahora la FK es RESTRICT y aquí se valida antes cada dependencia para dar un
-   * mensaje claro.
+   * Ahora la FK es RESTRICT.
+   *
+   * 2026-11-23: si tiene datos ya no se rechaza: se desactiva (`activa = false`).
+   * Sin datos, se elimina.
    */
   static async deleteSucursal(id: number): Promise<{
     success: boolean;
+    /** true si tenía datos y quedó desactivada en vez de eliminada. */
+    desactivada?: boolean;
     error?: string;
   }> {
+    try {
+      const deps = await SucursalesService.getDependenciasSucursal(id);
+      if (!deps.success) return { success: false, error: deps.error };
+
+      const admin = createAdminClient();
+      if (deps.bloqueos.length > 0) {
+        const { error } = await admin.from('sucursal').update({ activa: false }).eq('id', id);
+        if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo desactivar la sucursal.') };
+        return { success: true, desactivada: true };
+      }
+
+      const { error: deleteError } = await admin.from('sucursal').delete().eq('id', id);
+      if (deleteError) {
+        return { success: false, error: mensajeErrorUsuario(deleteError, 'No se pudo eliminar la sucursal.') };
+      }
+      return { success: true, desactivada: false };
+    } catch (err: unknown) {
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al eliminar la sucursal') };
+    }
+  }
+
+  /** Vuelve a activar una sucursal desactivada. */
+  static async reactivarSucursal(id: number): Promise<{ success: boolean; error?: string }> {
+    try {
+      const admin = createAdminClient();
+      const { error } = await admin.from('sucursal').update({ activa: true }).eq('id', id);
+      if (error) return { success: false, error: mensajeErrorUsuario(error, 'No se pudo reactivar la sucursal.') };
+      return { success: true };
+    } catch (err: unknown) {
+      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al reactivar la sucursal') };
+    }
+  }
+
+  /**
+   * Datos que impiden eliminar la sucursal ("3 vehículo(s) ubicados en ella").
+   * Vacío: se puede eliminar; con datos, "eliminar" la desactiva.
+   */
+  static async getDependenciasSucursal(id: number): Promise<
+    { success: true; bloqueos: string[] } | { success: false; error: string }
+  > {
     try {
       const admin = createAdminClient();
 
@@ -306,23 +357,9 @@ export class SucursalesService {
       const bloqueos = dependencias
         .filter((d) => (d.cantidad || 0) > 0)
         .map((d) => `${d.cantidad} ${d.mensaje}`);
-
-      if (bloqueos.length > 0) {
-        return {
-          success: false,
-          error: `No se puede eliminar la sucursal: tiene ${bloqueos.join(', ')}. Reasigna o cierra esos registros primero.`,
-        };
-      }
-
-      const { error: deleteError } = await admin.from('sucursal').delete().eq('id', id);
-
-      if (deleteError) {
-        return { success: false, error: mensajeErrorUsuario(deleteError, 'No se pudo eliminar la sucursal.') };
-      }
-
-      return { success: true };
+      return { success: true, bloqueos };
     } catch (err: unknown) {
-      return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado al eliminar la sucursal') };
+      return { success: false, error: mensajeErrorUsuario(err, 'No se pudo verificar la sucursal.') };
     }
   }
 }

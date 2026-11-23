@@ -19,7 +19,7 @@ export default async function AdminSucursalesPage() {
   }
 
   const [sucursales, solicitudes, zonas] = await Promise.all([
-    SucursalesService.getSucursales(),
+    SucursalesService.getSucursales({ incluirInactivas: true }),
     SucursalesService.getSolicitudesPorSucursal(),
     OrganizacionService.getZonas(),
   ]);

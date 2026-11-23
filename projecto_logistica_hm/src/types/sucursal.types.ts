@@ -62,6 +62,8 @@ export interface Sucursal {
   zona_id?: number | null;
   zona?: Zona | null;
   encargado?: SucursalEncargado | null;
+  /** false = desactivada: solo la ve el administrador (`lib/sucursalActiva.ts`). */
+  activa?: boolean | null;
 }
 
 export interface CreateSucursalInput {

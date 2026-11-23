@@ -6,6 +6,7 @@ import {
   validarAsignacionesFormulario,
 } from '@/lib/asignaciones';
 import AsignacionesFields from '@/components/AsignacionesUsuarioFields';
+import { soloSucursalesActivas } from '@/lib/sucursalActiva';
 import { debeTraspasarTrabajo, textoTrabajoAbierto } from '@/lib/trabajoLogistica';
 import ActivacionMasivaModal from '@/components/ActivacionMasivaModal';
 import CargaMasivaUsuarios from '@/components/CargaMasivaUsuarios';
@@ -68,7 +69,9 @@ const roleLabels: Record<UserRole, { label: string; color: string }> = {
   },
 };
 
-export default function UsersTableClient({ users, sucursales, zonas, currentAdminId, adminPrincipalEmail, dominiosCorreo }: Props) {
+export default function UsersTableClient({ users, sucursales: todasLasSucursales, zonas, currentAdminId, adminPrincipalEmail, dominiosCorreo }: Props) {
+  // Las desactivadas solo sirven para nombrar la sucursal de una cuenta; no se asignan.
+  const sucursales = useMemo(() => soloSucursalesActivas(todasLasSucursales), [todasLasSucursales]);
   const opcionesDominio = dominiosCorreo ?? DOMINIOS_SIN_RESTRICCION;
   const esAdminPrincipal = (email: string) =>
     adminPrincipalEmail !== null && email.toLowerCase() === adminPrincipalEmail;
@@ -389,7 +392,7 @@ export default function UsersTableClient({ users, sucursales, zonas, currentAdmi
   /** Sucursales, estado y acciones de un usuario: los comparten la tabla y las tarjetas móviles. */
   function sucursalesUsuario(user: UserProfile) {
     const mainSuc = user.sucursal_id
-      ? sucursales.find((s) => s.id === user.sucursal_id)
+      ? todasLasSucursales.find((s) => s.id === user.sucursal_id)
       : undefined;
     const extras = (user.sucursales ?? []).filter((s) => s.id !== user.sucursal_id);
     const zonaNombres = (user.zonas ?? [])

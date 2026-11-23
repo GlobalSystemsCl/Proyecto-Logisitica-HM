@@ -14,7 +14,10 @@ const svc = {
   listarImportaciones: vi.fn(),
   getImportacion: vi.fn(),
   revertirImportacion: vi.fn(),
+  idsPorChasis: vi.fn(),
 };
+const createMarca = vi.fn();
+const getSucursales = vi.fn();
 
 vi.mock('@/services/auth.service', () => ({
   AuthService: { getCurrentUserProfile: () => getCurrentUserProfile() },
@@ -26,7 +29,12 @@ vi.mock('@/services/solicitudes.service', () => ({
     registrarAuditoriaMasiva: (...a: unknown[]) => registrarAuditoriaMasiva(...a),
   },
 }));
-vi.mock('@/services/organizacion.service', () => ({ OrganizacionService: {} }));
+vi.mock('@/services/organizacion.service', () => ({
+  OrganizacionService: { createMarca: (...a: unknown[]) => createMarca(...a) },
+}));
+vi.mock('@/services/sucursales.service', () => ({
+  SucursalesService: { getSucursales: (...a: unknown[]) => getSucursales(...a) },
+}));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 
 const actions = await import('@/app/actions/vehiculo.actions');
@@ -355,5 +363,130 @@ describe('permisos de gestión de vehículos (QA #15)', () => {
 
     expect(res.success).toBe(true);
     expect(svc.importVehiculosCSV).toHaveBeenCalled();
+  });
+});
+
+describe('crearMarcaVehiculoAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_create_brand_in_uppercase_when_user_manages_vehicles', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    createMarca.mockResolvedValue({ success: true, marca: { id: 9, codigo: 'GW', nombre: 'GREAT WALL' } });
+
+    const res = await actions.crearMarcaVehiculoAction({ codigo: ' gw ', nombre: 'great wall' });
+
+    expect(createMarca).toHaveBeenCalledWith({ codigo: 'GW', nombre: 'GREAT WALL' });
+    expect(res).toEqual({ success: true, marca: { id: 9, codigo: 'GW', nombre: 'GREAT WALL' } });
+  });
+
+  it('should_reject_invalid_brand_without_calling_service', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+
+    const res = await actions.crearMarcaVehiculoAction({ codigo: '', nombre: 'X' });
+
+    expect(res.success).toBe(false);
+    expect(createMarca).not.toHaveBeenCalled();
+  });
+
+  it('should_return_service_error_when_code_already_exists', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    createMarca.mockResolvedValue({ success: false, error: 'Ya existe una marca con el código "HY".' });
+
+    expect(await actions.crearMarcaVehiculoAction({ codigo: 'HY', nombre: 'HYUNDAI' })).toEqual({
+      success: false,
+      error: 'Ya existe una marca con el código "HY".',
+    });
+  });
+
+  it('should_reject_when_user_is_jefe_local', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+
+    const res = await actions.crearMarcaVehiculoAction({ codigo: 'GW', nombre: 'GREAT WALL' });
+
+    expect(res.success).toBe(false);
+    expect(createMarca).not.toHaveBeenCalled();
+  });
+});
+
+describe('cambiarUbicacionPorPlantillaAction', () => {
+  const VIN_A = 'LB3G43S71TX401167';
+  const VIN_B = 'MA1NZ2NP1T2E76415';
+  const VIN_C = 'MALB251CAVM784651';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getSucursales.mockResolvedValue([
+      { id: 101, codigo: '101', nombre: '15 NORTE' },
+      { id: 409, codigo: '119B', nombre: 'ACOPIO' },
+    ]);
+  });
+
+  it('should_move_only_rows_with_location_and_audit_each_vehicle', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    svc.idsPorChasis.mockResolvedValue({ ids: new Map([[VIN_A, 'v-a'], [VIN_B, 'v-b']]) });
+    svc.cambiarUbicacionMasiva.mockResolvedValue({
+      success: true,
+      movidos: [{ id: 'v-a', chasis: VIN_A, ubicacion: null }],
+      omitidos: [{ id: 'v-b', chasis: VIN_B, motivo: 'Reservado en una solicitud activa.' }],
+    });
+
+    const res = await actions.cambiarUbicacionPorPlantillaAction([
+      { fila: 2, vin: VIN_A, ubicacion: '119B · ACOPIO' },
+      { fila: 3, vin: VIN_B, ubicacion: '119B' },
+      { fila: 4, vin: VIN_C, ubicacion: '' },
+    ]);
+
+    expect(getSucursales).toHaveBeenCalledWith({ incluirInactivas: true });
+    expect(svc.cambiarUbicacionMasiva).toHaveBeenCalledTimes(1);
+    expect(svc.cambiarUbicacionMasiva).toHaveBeenCalledWith(['v-a', 'v-b'], 409);
+    expect(res).toMatchObject({ success: true, movidos: 1, sinUbicacion: 1 });
+    expect(res.errores).toEqual([{ fila: 3, vin: VIN_B, motivo: 'Reservado en una solicitud activa.' }]);
+    expect(registrarAuditoriaMasiva).toHaveBeenCalledWith([
+      expect.objectContaining({ entidadId: 'v-a', accion: 'cambio_ubicacion', nuevo: { ubicacion: 409 } }),
+    ]);
+  });
+
+  it('should_report_vins_not_in_inventory_and_unknown_locations', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    svc.idsPorChasis.mockResolvedValue({ ids: new Map() });
+
+    const res = await actions.cambiarUbicacionPorPlantillaAction([
+      { fila: 2, vin: VIN_A, ubicacion: '101' },
+      { fila: 3, vin: VIN_B, ubicacion: '999' },
+    ]);
+
+    expect(svc.cambiarUbicacionMasiva).not.toHaveBeenCalled();
+    expect(res.movidos).toBe(0);
+    expect(res.errores.map((e) => e.fila)).toEqual([2, 3]);
+    expect(res.errores[0].motivo).toBe('El VIN no está en el inventario.');
+  });
+
+  it('should_fail_when_file_is_empty', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+
+    const res = await actions.cambiarUbicacionPorPlantillaAction([]);
+
+    expect(res.success).toBe(false);
+    expect(getSucursales).not.toHaveBeenCalled();
+  });
+
+  it('should_return_error_when_vehicle_lookup_fails', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil());
+    svc.idsPorChasis.mockResolvedValue({ ids: new Map(), error: 'No se pudieron leer los vehículos.' });
+
+    const res = await actions.cambiarUbicacionPorPlantillaAction([{ fila: 2, vin: VIN_A, ubicacion: '101' }]);
+
+    expect(res).toMatchObject({ success: false, error: 'No se pudieron leer los vehículos.' });
+  });
+
+  it('should_reject_when_user_is_jefe_local', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil({ rol: 'jefe_local' }));
+
+    const res = await actions.cambiarUbicacionPorPlantillaAction([{ fila: 2, vin: VIN_A, ubicacion: '101' }]);
+
+    expect(res.success).toBe(false);
+    expect(svc.idsPorChasis).not.toHaveBeenCalled();
   });
 });

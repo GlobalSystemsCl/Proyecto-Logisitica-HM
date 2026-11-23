@@ -4,14 +4,16 @@
  *
  * Columnas del formato actual (por encabezado, sin importar mayúsculas,
  * tildes ni espacios sobrantes):
- *   Tipo de vehículo | Marca | Marca completa | Modelo | IDV | Chasis | Color | Ubicación | Patente
+ *   Marca | Marca completa | Modelo | IDV | Chasis | Color | Ubicación | Patente
+ *
+ * La columna "Tipo de vehículo" (siempre VN) se eliminó de la plantilla el
+ * 2026-11-23: si un archivo antiguo la trae, se ignora.
  *
  * Se siguen aceptando las columnas del formato anterior: C.comp (sucursal),
  * Fec.adj. (año) y P.V.D. (precio).
  */
 
 export interface ColumnasStock {
-  tipo: number;
   marca: number;
   marcaCompleta: number;
   modelo: number;
@@ -36,7 +38,6 @@ export function normalizarEncabezado(encabezado: string): string {
 }
 
 const ALIAS: Record<keyof ColumnasStock, string[]> = {
-  tipo: ['tipo de vehiculo', 'tipo vehiculo', 'tipo'],
   marca: ['marca'],
   marcaCompleta: ['marca completa'],
   modelo: ['modelo'],

@@ -39,7 +39,6 @@ describe('normalizarEncabezado', () => {
 describe('columnasStock', () => {
   it('should_find_every_column_of_the_stock_excel', () => {
     expect(columnasStock(ENCABEZADOS_EXCEL)).toEqual({
-      tipo: 0,
       marca: 1,
       marcaCompleta: 2,
       modelo: 3,
@@ -51,6 +50,11 @@ describe('columnasStock', () => {
       fechaAdjudicacion: -1,
       precio: -1,
     });
+  });
+
+  it('should_ignore_tipo_de_vehiculo_column_when_old_file_still_has_it', () => {
+    expect(columnasStock(ENCABEZADOS_EXCEL)).not.toHaveProperty('tipo');
+    expect(columnasStock(['Marca', 'Modelo', 'Chasis']).marca).toBe(0);
   });
 
   it('should_accept_legacy_columns_when_file_uses_previous_format', () => {

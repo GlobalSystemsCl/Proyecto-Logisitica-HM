@@ -23,7 +23,7 @@ export default async function AdminUsuariosPage() {
 
   const [users, sucursales, zonas] = await Promise.all([
     UsersService.getUsers(),
-    SucursalesService.getSucursales(),
+    SucursalesService.getSucursales({ incluirInactivas: true }),
     OrganizacionService.getZonas(),
   ]);
 

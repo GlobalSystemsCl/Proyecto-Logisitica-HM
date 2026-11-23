@@ -27,34 +27,33 @@ describe('SucursalesService.deleteSucursal (brecha 016)', () => {
 
     const res = await SucursalesService.deleteSucursal(4);
 
-    expect(res).toEqual({ success: true });
+    expect(res).toEqual({ success: true, desactivada: false });
     expect(admin.callsTo('sucursal')).toContainEqual(['delete']);
     expect(admin.callsTo('sucursal')).toContainEqual(['eq', 'id', 4]);
   });
 
-  it('should_reject_and_not_delete_when_branch_has_solicitudes_as_origin_or_destination', async () => {
+  it('should_deactivate_and_not_delete_when_branch_has_solicitudes_as_origin_or_destination', async () => {
     sinDependencias();
     admin.results.solicitud = [filaConCount(3)];
+    admin.results.sucursal = [{ data: null, error: null }];
+
+    const res = await SucursalesService.deleteSucursal(4);
+
+    expect(res).toEqual({ success: true, desactivada: true });
+    expect(admin.callsTo('solicitud')).toContainEqual(['or', 'sucursal.eq.4,sucursal_destino.eq.4']);
+    expect(admin.callsTo('sucursal')).toContainEqual(['update', { activa: false }]);
+    expect(admin.callsTo('sucursal')).not.toContainEqual(['delete']);
+  });
+
+  it('should_return_error_when_deactivation_fails', async () => {
+    sinDependencias();
+    admin.results.vehiculo = [filaConCount(1)];
+    admin.results.sucursal = [{ data: null, error: { message: 'column "activa" does not exist' } }];
 
     const res = await SucursalesService.deleteSucursal(4);
 
     expect(res.success).toBe(false);
-    expect(res.error).toContain('3 solicitud(es) de origen o destino');
-    expect(admin.callsTo('solicitud')).toContainEqual(['or', 'sucursal.eq.4,sucursal_destino.eq.4']);
-    expect(admin.callsTo('sucursal')).toHaveLength(0);
-  });
-
-  it('should_list_every_blocking_dependency', async () => {
-    admin.results.usuario = [filaConCount(2)];
-    admin.results.solicitud = [filaConCount(0)];
-    admin.results.vehiculo = [filaConCount(5)];
-    admin.results.traslado_interno = [filaConCount(1)];
-
-    const res = await SucursalesService.deleteSucursal(4);
-
-    expect(res.error).toBe(
-      'No se puede eliminar la sucursal: tiene 2 usuario(s) con esta sucursal asignada, 5 vehículo(s) ubicados en ella, 1 traslado(s) interno(s). Reasigna o cierra esos registros primero.'
-    );
+    expect(res.error).not.toContain('column');
   });
 
   it('should_check_transfers_by_origin_or_destination', async () => {
@@ -166,5 +165,81 @@ describe('SucursalesService.createSucursal', () => {
     const res = await SucursalesService.createSucursal(INPUT);
 
     expect(res).toEqual({ success: false, error: 'Ya existe un registro con esos datos.' });
+  });
+});
+
+describe('SucursalesService.getDependenciasSucursal', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('should_list_every_dependency_when_branch_has_data', async () => {
+    admin.results.usuario = [filaConCount(2)];
+    admin.results.solicitud = [filaConCount(0)];
+    admin.results.vehiculo = [filaConCount(5)];
+    admin.results.traslado_interno = [filaConCount(1)];
+
+    const res = await SucursalesService.getDependenciasSucursal(4);
+
+    expect(res).toEqual({
+      success: true,
+      bloqueos: ['2 usuario(s) con esta sucursal asignada', '5 vehículo(s) ubicados en ella', '1 traslado(s) interno(s)'],
+    });
+  });
+
+  it('should_return_empty_list_when_branch_has_no_data', async () => {
+    sinDependencias();
+    expect(await SucursalesService.getDependenciasSucursal(4)).toEqual({ success: true, bloqueos: [] });
+  });
+});
+
+describe('SucursalesService.reactivarSucursal', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('should_set_activa_true_when_called', async () => {
+    admin.results.sucursal = [{ data: null, error: null }];
+
+    expect(await SucursalesService.reactivarSucursal(4)).toEqual({ success: true });
+    expect(admin.callsTo('sucursal')).toContainEqual(['update', { activa: true }]);
+    expect(admin.callsTo('sucursal')).toContainEqual(['eq', 'id', 4]);
+  });
+
+  it('should_return_error_when_update_fails', async () => {
+    admin.results.sucursal = [{ data: null, error: { message: 'boom' } }];
+    const res = await SucursalesService.reactivarSucursal(4);
+    expect(res.success).toBe(false);
+    expect(res.error).toBeTruthy();
+  });
+});
+
+describe('SucursalesService.getSucursales (activas)', () => {
+  const LISTA = [
+    { id: 101, nombre: 'A', activa: true },
+    { id: 102, nombre: 'B', activa: false },
+    { id: 103, nombre: 'C' },
+  ];
+
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('should_hide_deactivated_branches_by_default', async () => {
+    admin.results.sucursal = [{ data: LISTA, error: null }];
+    const res = await SucursalesService.getSucursales();
+    expect(res.map((s) => s.id)).toEqual([101, 103]);
+  });
+
+  it('should_include_deactivated_branches_when_requested', async () => {
+    admin.results.sucursal = [{ data: LISTA, error: null }];
+    const res = await SucursalesService.getSucursales({ incluirInactivas: true });
+    expect(res.map((s) => s.id)).toEqual([101, 102, 103]);
   });
 });

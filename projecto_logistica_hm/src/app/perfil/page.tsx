@@ -17,7 +17,7 @@ export default async function PerfilPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const sucursales = await SucursalesService.getSucursales();
+  const sucursales = await SucursalesService.getSucursales({ incluirInactivas: true });
   const sucursal = sucursales.find((s) => s.id === profile.sucursal_id) ?? null;
 
   return (

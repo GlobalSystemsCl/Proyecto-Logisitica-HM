@@ -124,12 +124,47 @@ export async function deleteSucursalAction(id: number) {
       return { success: false, error: result.error || 'Error al eliminar la sucursal.' };
     }
 
-    revalidatePath('/admin/sucursales');
-    return { success: true, message: 'Sucursal eliminada exitosamente.' };
+    revalidarSucursales();
+    return {
+      success: true,
+      desactivada: Boolean(result.desactivada),
+      message: result.desactivada
+        ? 'La sucursal tiene datos, así que quedó desactivada (no se eliminó). Los usuarios ya no la ven.'
+        : 'Sucursal eliminada exitosamente.',
+    };
   } catch (err: unknown) {
     const msg = mensajeErrorUsuario(err, 'Error inesperado');
     return { success: false, error: msg };
   }
+}
+
+/** Datos que tiene la sucursal: con datos, "eliminar" la desactiva. */
+export async function getDependenciasSucursalAction(
+  id: number
+): Promise<{ success: true; bloqueos: string[] } | { success: false; error: string }> {
+  try {
+    await verifyAdminPermission();
+    return await SucursalesService.getDependenciasSucursal(id);
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
+export async function reactivarSucursalAction(id: number) {
+  try {
+    await verifyAdminPermission();
+    const result = await SucursalesService.reactivarSucursal(id);
+    if (!result.success) return { success: false, error: result.error || 'No se pudo reactivar la sucursal.' };
+    revalidarSucursales();
+    return { success: true, message: 'Sucursal reactivada: los usuarios vuelven a verla.' };
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
+/** Activar o desactivar cambia lo que ven todas las pantallas con sucursales. */
+function revalidarSucursales() {
+  revalidatePath('/', 'layout');
 }
 
 /**

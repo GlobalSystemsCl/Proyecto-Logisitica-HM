@@ -9,6 +9,18 @@ import { accionCambioVehiculo, diferenciasVehiculo, resumenVehiculo } from '@/li
 import { randomUUID } from 'crypto';
 import { CreateVehiculoInput, UpdateVehiculoInput } from '@/types/vehiculo.types';
 import { revalidatePath } from 'next/cache';
+import { OrganizacionService } from '@/services/organizacion.service';
+import { validarMarcaNueva, type MarcaCatalogo } from '@/lib/marcasVehiculo';
+import { SucursalesService } from '@/services/sucursales.service';
+import { enLotes } from '@/lib/paginacion';
+import { MAX_CAMBIO_UBICACION, type VehiculoUbicacion } from '@/lib/ubicacionMasiva';
+import {
+  analizarPlantillaUbicacion,
+  MAX_FILAS_PLANTILLA_UBICACION,
+  resumenCargaUbicaciones,
+  type ErrorFilaUbicacion,
+  type FilaPlantillaUbicacion,
+} from '@/lib/plantillaUbicacion';
 import {
   confirmacionReversionValida,
   motivoNoRevertible,
@@ -108,21 +120,106 @@ export async function cambiarUbicacionMasivaAction(ids: string[], sucursalId: nu
     const result = await VehiculoService.cambiarUbicacionMasiva(ids, sucursalId);
     if (!result.success) return result;
 
-    await SolicitudesService.registrarAuditoriaMasiva(
-      result.movidos.map((v) => ({
-        usuarioId: profile.id,
-        entidad: 'vehiculo',
-        entidadId: v.id,
-        accion: 'cambio_ubicacion',
-        anterior: { ubicacion: v.ubicacion },
-        nuevo: { ubicacion: sucursalId },
-      }))
-    );
+    await auditarCambiosUbicacion(profile.id, result.movidos, sucursalId);
 
     if (result.movidos.length > 0) revalidatePath('/admin/vehiculos');
     return result;
   } catch (err: unknown) {
     return { success: false, movidos: [], omitidos: [], error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
+/** Auditoría `cambio_ubicacion` de cada vehículo movido, con la ubicación anterior y la nueva. */
+async function auditarCambiosUbicacion(usuarioId: string, movidos: VehiculoUbicacion[], sucursalId: number) {
+  if (movidos.length === 0) return;
+  await SolicitudesService.registrarAuditoriaMasiva(
+    movidos.map((v) => ({
+      usuarioId,
+      entidad: 'vehiculo',
+      entidadId: v.id,
+      accion: 'cambio_ubicacion',
+      anterior: { ubicacion: v.ubicacion },
+      nuevo: { ubicacion: sucursalId },
+    }))
+  );
+}
+
+export interface ResultadoCargaUbicaciones {
+  success: boolean;
+  movidos: number;
+  sinUbicacion: number;
+  /** Filas que no se actualizaron, con el motivo (VIN no válido, sucursal desconocida, reservado...). */
+  errores: ErrorFilaUbicacion[];
+  mensaje?: string;
+  error?: string;
+}
+
+/**
+ * Cambio de ubicación masivo con la plantilla Excel (2026-11-23): recibe las
+ * filas VIN + Ubicación y mueve solo esos vehículos, con las mismas reglas que
+ * "Asignar ubicación" (no mueve reservados, entregados ni en traslado).
+ */
+export async function cambiarUbicacionPorPlantillaAction(filas: FilaPlantillaUbicacion[]): Promise<ResultadoCargaUbicaciones> {
+  const vacio = { movidos: 0, sinUbicacion: 0, errores: [] as ErrorFilaUbicacion[] };
+  try {
+    const profile = await verifyVehiculoPermission();
+    if (!Array.isArray(filas) || filas.length === 0) return { success: false, ...vacio, error: 'El archivo no tiene vehículos.' };
+    if (filas.length > MAX_FILAS_PLANTILLA_UBICACION) {
+      return { success: false, ...vacio, error: `El máximo es ${MAX_FILAS_PLANTILLA_UBICACION} filas por archivo.` };
+    }
+    const limpias: FilaPlantillaUbicacion[] = filas.map((f) => ({
+      fila: Number(f?.fila) || 0,
+      vin: String(f?.vin ?? '').trim().toUpperCase(),
+      ubicacion: String(f?.ubicacion ?? '').trim(),
+    }));
+
+    const sucursales = await SucursalesService.getSucursales({ incluirInactivas: true });
+    const analisis = analizarPlantillaUbicacion(limpias, sucursales);
+    const errores = [...analisis.errores];
+    const filaDeVin = new Map(limpias.map((f) => [f.vin, f.fila]));
+
+    const { ids, error } = await VehiculoService.idsPorChasis(analisis.grupos.flatMap((g) => g.vins));
+    if (error) return { success: false, ...vacio, error };
+
+    let movidos = 0;
+    for (const grupo of analisis.grupos) {
+      const idsGrupo: string[] = [];
+      for (const vin of grupo.vins) {
+        const id = ids.get(vin);
+        if (id) idsGrupo.push(id);
+        else errores.push({ fila: filaDeVin.get(vin) ?? 0, vin, motivo: 'El VIN no está en el inventario.' });
+      }
+      for (const lote of enLotes(idsGrupo, MAX_CAMBIO_UBICACION)) {
+        const r = await VehiculoService.cambiarUbicacionMasiva(lote, grupo.sucursalId);
+        if (!r.success) {
+          const vinDeId = new Map([...ids].map(([vin, id]) => [id, vin]));
+          for (const id of lote) {
+            const vin = vinDeId.get(id) ?? '';
+            errores.push({ fila: filaDeVin.get(vin) ?? 0, vin, motivo: r.error ?? 'No se pudo actualizar.' });
+          }
+          continue;
+        }
+        await auditarCambiosUbicacion(profile.id, r.movidos, grupo.sucursalId);
+        movidos += r.movidos.length;
+        for (const o of r.omitidos) errores.push({ fila: filaDeVin.get(o.chasis) ?? 0, vin: o.chasis, motivo: o.motivo });
+      }
+    }
+
+    if (movidos > 0) {
+      revalidatePath('/admin/vehiculos');
+      revalidatePath('/logistica/slots');
+      revalidatePath('/dashboard');
+    }
+    errores.sort((a, b) => a.fila - b.fila);
+    return {
+      success: true,
+      movidos,
+      sinUbicacion: analisis.sinUbicacion,
+      errores,
+      mensaje: resumenCargaUbicaciones({ movidos, noActualizados: errores.length, sinUbicacion: analisis.sinUbicacion }),
+    };
+  } catch (err: unknown) {
+    return { success: false, ...vacio, error: mensajeErrorUsuario(err, 'Error inesperado') };
   }
 }
 
@@ -212,6 +309,28 @@ export async function importVehiculosAction(data: ImportVehiculosData) {
 const RUTAS_INVENTARIO = ['/admin/vehiculos', '/admin/sucursales', '/logistica/slots', '/dashboard'];
 
 /** Últimas importaciones de stock, para el modal "Revertir importación". */
+/**
+ * Crea una marca del catálogo desde el alta de vehículos (2026-11-23): quien
+ * registra vehículos (Logística y administrador) puede agregar la marca que
+ * falta sin ir a "Marcas".
+ */
+export async function crearMarcaVehiculoAction(
+  input: MarcaCatalogo
+): Promise<{ success: boolean; marca?: MarcaCatalogo; error?: string }> {
+  try {
+    await verifyVehiculoPermission();
+    const marca = { codigo: (input?.codigo ?? '').trim().toUpperCase(), nombre: (input?.nombre ?? '').trim().toUpperCase() };
+    const error = validarMarcaNueva(marca);
+    if (error) return { success: false, error };
+    const res = await OrganizacionService.createMarca(marca);
+    if (!res.success || !res.marca) return { success: false, error: res.error || 'No se pudo crear la marca.' };
+    revalidatePath('/admin/marcas');
+    return { success: true, marca: { id: res.marca.id, codigo: res.marca.codigo, nombre: res.marca.nombre } };
+  } catch (err: unknown) {
+    return { success: false, error: mensajeErrorUsuario(err, 'Error inesperado') };
+  }
+}
+
 export async function getImportacionesStockAction() {
   try {
     await verifyVehiculoPermission();

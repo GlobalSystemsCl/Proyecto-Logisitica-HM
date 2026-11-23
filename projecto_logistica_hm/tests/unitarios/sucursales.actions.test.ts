@@ -11,12 +11,21 @@ const usuarioTieneSucursal = vi.fn();
 const getVehiculosEnSucursal = vi.fn();
 const getRecepcionesPendientes = vi.fn();
 const getTrasladosEnTransitoHacia = vi.fn();
+const deleteSucursal = vi.fn();
+const getDependenciasSucursal = vi.fn();
+const reactivarSucursal = vi.fn();
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }));
 vi.mock('@/services/auth.service', () => ({
   AuthService: { getCurrentUserProfile: () => getCurrentUserProfile() },
 }));
-vi.mock('@/services/sucursales.service', () => ({ SucursalesService: {} }));
+vi.mock('@/services/sucursales.service', () => ({
+  SucursalesService: {
+    deleteSucursal: (...a: unknown[]) => deleteSucursal(...a),
+    getDependenciasSucursal: (...a: unknown[]) => getDependenciasSucursal(...a),
+    reactivarSucursal: (...a: unknown[]) => reactivarSucursal(...a),
+  },
+}));
 vi.mock('@/services/organizacion.service', () => ({
   OrganizacionService: { usuarioTieneSucursal: (...a: unknown[]) => usuarioTieneSucursal(...a) },
 }));
@@ -30,7 +39,8 @@ vi.mock('@/services/traslado.service', () => ({
   TrasladoService: { getTrasladosEnTransitoHacia: (...a: unknown[]) => getTrasladosEnTransitoHacia(...a) },
 }));
 
-const { getVehiculosDeSucursalAction } = await import('@/app/actions/sucursales.actions');
+const { getVehiculosDeSucursalAction, deleteSucursalAction, getDependenciasSucursalAction, reactivarSucursalAction } =
+  await import('@/app/actions/sucursales.actions');
 
 function perfil(rol: UserProfile['rol']): UserProfile {
   return {
@@ -102,5 +112,94 @@ describe('getVehiculosDeSucursalAction', () => {
 
     getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
     expect(await getVehiculosDeSucursalAction(0)).toEqual({ success: false, error: 'Sucursal no válida.' });
+  });
+});
+
+describe('deleteSucursalAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_tell_branch_was_deactivated_when_it_has_data', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    deleteSucursal.mockResolvedValue({ success: true, desactivada: true });
+
+    const res = await deleteSucursalAction(4);
+
+    expect(res).toMatchObject({ success: true, desactivada: true });
+    expect('message' in res ? res.message : '').toContain('desactivada');
+  });
+
+  it('should_tell_branch_was_deleted_when_it_had_no_data', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    deleteSucursal.mockResolvedValue({ success: true, desactivada: false });
+
+    const res = await deleteSucursalAction(4);
+
+    expect(res).toMatchObject({ success: true, desactivada: false, message: 'Sucursal eliminada exitosamente.' });
+  });
+
+  it('should_reject_when_user_is_not_admin', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('logistica'));
+
+    const res = await deleteSucursalAction(4);
+
+    expect(res.success).toBe(false);
+    expect(deleteSucursal).not.toHaveBeenCalled();
+  });
+});
+
+describe('getDependenciasSucursalAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_return_dependencies_when_user_is_admin', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    getDependenciasSucursal.mockResolvedValue({ success: true, bloqueos: ['1 vehículo(s) ubicados en ella'] });
+
+    expect(await getDependenciasSucursalAction(4)).toEqual({ success: true, bloqueos: ['1 vehículo(s) ubicados en ella'] });
+    expect(getDependenciasSucursal).toHaveBeenCalledWith(4);
+  });
+
+  it('should_reject_when_user_is_not_admin', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('jefe_local'));
+
+    const res = await getDependenciasSucursalAction(4);
+
+    expect(res.success).toBe(false);
+    expect(getDependenciasSucursal).not.toHaveBeenCalled();
+  });
+});
+
+describe('reactivarSucursalAction', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should_reactivate_when_user_is_admin', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    reactivarSucursal.mockResolvedValue({ success: true });
+
+    const res = await reactivarSucursalAction(4);
+
+    expect(res.success).toBe(true);
+    expect(reactivarSucursal).toHaveBeenCalledWith(4);
+  });
+
+  it('should_return_service_error_when_reactivation_fails', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('administrador'));
+    reactivarSucursal.mockResolvedValue({ success: false, error: 'No se pudo reactivar la sucursal.' });
+
+    expect(await reactivarSucursalAction(4)).toEqual({ success: false, error: 'No se pudo reactivar la sucursal.' });
+  });
+
+  it('should_reject_when_user_is_not_admin', async () => {
+    getCurrentUserProfile.mockResolvedValue(perfil('ejecutivo'));
+
+    const res = await reactivarSucursalAction(4);
+
+    expect(res.success).toBe(false);
+    expect(reactivarSucursal).not.toHaveBeenCalled();
   });
 });

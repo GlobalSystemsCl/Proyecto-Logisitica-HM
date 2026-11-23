@@ -170,7 +170,11 @@ export async function descargarExcel(
   hojas: HojaExcel[],
 ): Promise<void> {
   const logo = encabezado ? await leerLogo() : null;
-  const libro = await crearLibroExcel(hojas, encabezado, { logo });
+  await descargarLibro(nombreArchivo, await crearLibroExcel(hojas, encabezado, { logo }));
+}
+
+/** Descarga en el navegador un libro ya armado (p. ej. una plantilla con listas desplegables). */
+export async function descargarLibro(nombreArchivo: string, libro: Workbook): Promise<void> {
   const buffer = await libro.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);

@@ -419,6 +419,20 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
   },
   {
     vista: 'inventario',
+    roles: GESTION_INVENTARIO,
+    pregunta: '¿Puedo asignar ubicaciones con un Excel?',
+    respuesta:
+      'Sí: usa "Ubicación por Excel". Descarga la plantilla, que trae los vehículos sin ubicación con su VIN; en la columna Ubicación elige la sucursal de la lista (deja vacía la fila de los que no quieras cambiar) y vuelve a subir el archivo. Solo se actualizan los vehículos del archivo que tengan ubicación, buscados por su VIN, con las mismas reglas que "Asignar": no se mueven los reservados, entregados ni en traslado. Al terminar ves cuántos cambiaron y el motivo de cada fila que no se actualizó. Cada cambio queda en el historial.',
+  },
+  {
+    vista: 'inventario',
+    roles: GESTION_INVENTARIO,
+    pregunta: '¿Cómo elijo la marca al registrar un vehículo?',
+    respuesta:
+      'En "Registrar Vehículo" busca la marca por su código (HY) o su nombre (HYUNDAI) y elígela de la lista del catálogo. Si no existe, elige "Crear marca", completa su código y nombre, y queda creada en el catálogo. El modelo sugiere los que ya existen para esa marca; si es uno nuevo, escríbelo.',
+  },
+  {
+    vista: 'inventario',
     roles: INVENTARIO,
     pregunta: '¿Por qué no puedo editar un vehículo?',
     respuesta:
@@ -429,7 +443,7 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     roles: GESTION_INVENTARIO,
     pregunta: '¿Cómo cargo el stock desde Excel?',
     respuesta:
-      'Usa "Importar Stock" y elige el Excel de stock o de compras tal como viene, con las columnas Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación y Patente. Los chasis repetidos se informan y no se duplican, y los que no tienen 17 caracteres se informan como error. Los vehículos sin ubicación quedan "En viaje / Container" y no se pueden pedir en una solicitud hasta que les asignes una sucursal.',
+      'Usa "Importar Stock" y elige el Excel de stock o de compras tal como viene, con las columnas Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación y Patente (la columna Tipo de vehículo ya no va; si el archivo la trae, se ignora). Los chasis repetidos se informan y no se duplican, y los que no tienen 17 caracteres se informan como error. Los vehículos sin ubicación quedan "En viaje / Container" y no se pueden pedir en una solicitud hasta que les asignes una sucursal.',
   },
   {
     vista: 'inventario',
@@ -483,6 +497,13 @@ export const PREGUNTAS_FAQ: readonly PreguntaFaq[] = [
     pregunta: '¿Qué puedo administrar en Sucursales?',
     respuesta:
       'Crear y editar sucursales: código, nombre, dirección, espacios totales (slots) y zona. El código es el de la planilla de concesionarios (101, 102...), numera las solicitudes de la sucursal (101-1, 101-2...) y no se puede cambiar después de crearla. El jefe de local a cargo se asigna desde Usuarios, y cada sucursal tiene uno solo. Al abrir una sucursal ves sus solicitudes; el número abre el detalle. El botón del auto muestra los vehículos que están en la sucursal y los que van en camino hacia ella, igual que en Slots, y se exportan a Excel. Una sucursal sin zona no la ve ningún usuario de Logística: el aviso amarillo indica cuántas hay y el filtro "Sin zona" las lista para asignarles una.',
+  },
+  {
+    vista: 'sucursales',
+    roles: SOLO_ADMIN,
+    pregunta: '¿Qué pasa si elimino una sucursal?',
+    respuesta:
+      'Depende de si tiene datos. Si tiene usuarios, solicitudes, vehículos o traslados, no se elimina: se desactiva (el aviso lo indica antes de confirmar). Una sucursal desactivada no aparece a los usuarios en ninguna lista; tú la sigues viendo marcada como "Desactivada" y puedes reactivarla con el botón de la flecha. Si no tiene ningún dato, se elimina definitivamente.',
   },
 
   // ---------- Historial ----------

@@ -1,4 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// ExcelJS pesa ~1 MB: su primera carga puede pasar los 5 s del timeout con la suite en paralelo.
+beforeAll(async () => {
+  await import('exceljs');
+}, 30_000);
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {

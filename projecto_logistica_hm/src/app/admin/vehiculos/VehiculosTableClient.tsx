@@ -19,6 +19,7 @@ import {
   deleteVehiculoAction,
   importVehiculosAction,
   cambiarUbicacionMasivaAction,
+  crearMarcaVehiculoAction,
 } from '@/app/actions/vehiculo.actions';
 import { esSeleccionableParaMover } from '@/lib/ubicacionMasiva';
 import {
@@ -40,17 +41,26 @@ import {
 } from 'lucide-react';
 import { useConfirmacion } from '@/components/Confirmacion';
 import RevertirImportacionStock from '@/components/RevertirImportacionStock';
+import { soloSucursalesActivas } from '@/lib/sucursalActiva';
+import SelectorMarca from '@/components/SelectorMarca';
+import UbicacionMasivaExcel from '@/components/UbicacionMasivaExcel';
+import { modelosDeMarca, type MarcaCatalogo } from '@/lib/marcasVehiculo';
 import type { UserRole } from '@/types/auth.types';
 
 interface Props {
   vehiculos: VehiculoConDisponibilidad[];
   marcas: string[];
-  sucursales: { id: number; nombre: string | null }[];
+  /** Catálogo de marcas (código + nombre) para el alta manual. */
+  catalogoMarcas: MarcaCatalogo[];
+  sucursales: { id: number; nombre: string | null; codigo?: string | null; activa?: boolean | null }[];
   userRole: string;
   userId: string;
 }
 
-export default function VehiculosTableClient({ vehiculos, marcas, sucursales, userRole, userId }: Props) {
+export default function VehiculosTableClient({ vehiculos, marcas, catalogoMarcas, sucursales: todasLasSucursales, userRole, userId }: Props) {
+  const [marcasCatalogo, setMarcasCatalogo] = useState<MarcaCatalogo[]>(catalogoMarcas);
+  // Las desactivadas solo sirven para filtrar: no se les asignan vehículos.
+  const sucursales = useMemo(() => soloSucursalesActivas(todasLasSucursales), [todasLasSucursales]);
   // QA #15: el jefe de local consulta el inventario, pero no lo modifica.
   const puedeGestionar = puedeGestionarVehiculos(userRole);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -322,6 +332,88 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
     } finally {
       setMoviendo(false);
     }
+  }
+
+  /** Marca (catálogo, con opción de crearla), modelo (sugiere los de esa marca) e IDV: igual en alta y edición. */
+  const modelosSugeridos = useMemo(
+    () => modelosDeMarca(vehiculos, { nombre: marca, codigo: marcaCodigo }),
+    [vehiculos, marca, marcaCodigo]
+  );
+
+  async function crearMarcaCatalogo(nueva: MarcaCatalogo) {
+    const res = await crearMarcaVehiculoAction(nueva);
+    if (!res.success || !res.marca) return { error: res.error || 'No se pudo crear la marca.' };
+    const creada = res.marca;
+    setMarcasCatalogo((prev) => [...prev, creada].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
+    return { marca: creada };
+  }
+
+  function camposMarcaModelo(idModelos: string) {
+    return (
+      <>
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Marca *</label>
+          <SelectorMarca
+            marcas={marcasCatalogo}
+            valor={{ codigo: marcaCodigo, nombre: marca }}
+            onChange={(m) => {
+              setMarca(m.nombre);
+              setMarcaCodigo(m.codigo);
+              setErrors((p) => ({ ...p, marca: validateMarca(m.nombre) }));
+            }}
+            onCrear={crearMarcaCatalogo}
+            error={errors.marca}
+          />
+          {errors.marca && (
+            <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
+              <AlertCircle className="w-3 h-3 shrink-0" />
+              {errors.marca}
+            </p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">Modelo *</label>
+            <input
+              type="text"
+              list={idModelos}
+              placeholder={marca ? 'Elige o escribe el modelo' : 'Elige primero la marca'}
+              value={modelo}
+              onChange={(e) => {
+                setModelo(e.target.value);
+                setErrors((p) => ({ ...p, modelo: validateModelo(e.target.value) }));
+              }}
+              className={`w-full px-3 py-2 bg-white border rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 ${
+                errors.modelo ? 'border-red-400 focus:ring-red-400' : 'border-neutral-300 focus:ring-neutral-900'
+              }`}
+            />
+            <datalist id={idModelos}>
+              {modelosSugeridos.map((m) => (
+                <option key={m} value={m} />
+              ))}
+            </datalist>
+            {errors.modelo && (
+              <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                {errors.modelo}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">IDV</label>
+            <input
+              type="text"
+              placeholder="157651"
+              value={idv}
+              onChange={(e) => setIdv(e.target.value)}
+              className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
+            />
+          </div>
+        </div>
+      </>
+    );
   }
 
   const resetForm = () => {
@@ -682,6 +774,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             <span>Importar Stock</span>
           </button>
           <RevertirImportacionStock viewer={{ id: userId, rol: userRole as UserRole }} />
+          <UbicacionMasivaExcel vehiculos={vehiculos} sucursales={sucursales} />
           <button
             onClick={() => {
               resetForm();
@@ -844,7 +937,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
               >
                 <option value={FILTRO_TODAS}>Todas</option>
                 <option value={FILTRO_EN_VIAJE}>Sin ubicación (en viaje / container)</option>
-                {sucursales.map((s) => (
+                {todasLasSucursales.map((s) => (
                   <option key={s.id} value={String(s.id)}>
                     {s.nombre || `Sucursal #${s.id}`}
                   </option>
@@ -990,10 +1083,10 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                   <div className="min-w-0 flex-1">
                     <p className="font-semibold text-neutral-900 break-words">
                       {vehiculo.marca} {vehiculo.modelo}
-                      {(vehiculo.tipo_vehiculo || vehiculo.marca_codigo) && (
+                      {vehiculo.marca_codigo && (
                         <span className="font-normal text-neutral-500">
                           {' · '}
-                          {[vehiculo.tipo_vehiculo, vehiculo.marca_codigo].filter(Boolean).join(' · ')}
+                          {vehiculo.marca_codigo}
                         </span>
                       )}
                     </p>
@@ -1042,7 +1135,6 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                     />
                   )}
                 </th>
-                <th className="py-3.5 px-4">Tipo de vehículo</th>
                 <th className="py-3.5 px-4">Marca</th>
                 <th className="py-3.5 px-4">Marca completa</th>
                 <th className="py-3.5 px-4">Modelo</th>
@@ -1058,7 +1150,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
             <tbody className="divide-y divide-neutral-200 text-sm">
               {filteredVehiculos.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="py-8 text-center text-neutral-400">
+                  <td colSpan={11} className="py-8 text-center text-neutral-400">
                     No se encontraron vehículos que coincidan con la búsqueda.
                   </td>
                 </tr>
@@ -1080,9 +1172,6 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                         )}
                       </td>
 
-                      <td className="py-3.5 px-4 text-xs text-neutral-600">
-                        {vehiculo.tipo_vehiculo || '—'}
-                      </td>
                       <td className="py-3.5 px-4 text-xs font-semibold text-neutral-700">
                         {vehiculo.marca_codigo || '—'}
                       </td>
@@ -1258,102 +1347,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 )}
               </div>
 
-              {/* Marca & Modelo */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Marca completa *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="HYUNDAI, TOYOTA..."
-                    value={marca}
-                    onChange={(e) => {
-                      setMarca(e.target.value);
-                      setErrors((p) => ({ ...p, marca: validateMarca(e.target.value) }));
-                    }}
-                    className={`w-full px-3 py-2 bg-white border rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 ${
-                      errors.marca
-                        ? 'border-red-400 focus:ring-red-400'
-                        : 'border-neutral-300 focus:ring-neutral-900'
-                    }`}
-                  />
-                  {errors.marca && (
-                    <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      {errors.marca}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Modelo *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Corolla, Spark..."
-                    value={modelo}
-                    onChange={(e) => {
-                      setModelo(e.target.value);
-                      setErrors((p) => ({ ...p, modelo: validateModelo(e.target.value) }));
-                    }}
-                    className={`w-full px-3 py-2 bg-white border rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 ${
-                      errors.modelo
-                        ? 'border-red-400 focus:ring-red-400'
-                        : 'border-neutral-300 focus:ring-neutral-900'
-                    }`}
-                  />
-                  {errors.modelo && (
-                    <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      {errors.modelo}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Tipo, código de marca e IDV (columnas del Excel de stock) */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Tipo
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="VN"
-                    value={tipoVehiculo}
-                    onChange={(e) => setTipoVehiculo(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Marca
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="HY, TO..."
-                    value={marcaCodigo}
-                    onChange={(e) => setMarcaCodigo(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    IDV
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="157651"
-                    value={idv}
-                    onChange={(e) => setIdv(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
-              </div>
+              {/* Marca (catálogo), modelo e IDV */}
+              {camposMarcaModelo('modelos-alta')}
 
               {/* Año & Color */}
               <div className="grid grid-cols-2 gap-4">
@@ -1591,102 +1586,8 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 )}
               </div>
 
-              {/* Marca & Modelo */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Marca completa *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="HYUNDAI, TOYOTA..."
-                    value={marca}
-                    onChange={(e) => {
-                      setMarca(e.target.value);
-                      setErrors((p) => ({ ...p, marca: validateMarca(e.target.value) }));
-                    }}
-                    className={`w-full px-3 py-2 bg-white border rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 ${
-                      errors.marca
-                        ? 'border-red-400 focus:ring-red-400'
-                        : 'border-neutral-300 focus:ring-neutral-900'
-                    }`}
-                  />
-                  {errors.marca && (
-                    <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      {errors.marca}
-                    </p>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Modelo *
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="Corolla, Spark..."
-                    value={modelo}
-                    onChange={(e) => {
-                      setModelo(e.target.value);
-                      setErrors((p) => ({ ...p, modelo: validateModelo(e.target.value) }));
-                    }}
-                    className={`w-full px-3 py-2 bg-white border rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 ${
-                      errors.modelo
-                        ? 'border-red-400 focus:ring-red-400'
-                        : 'border-neutral-300 focus:ring-neutral-900'
-                    }`}
-                  />
-                  {errors.modelo && (
-                    <p className="text-[11px] text-red-600 flex items-center gap-1 mt-0.5">
-                      <AlertCircle className="w-3 h-3 shrink-0" />
-                      {errors.modelo}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Tipo, código de marca e IDV (columnas del Excel de stock) */}
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Tipo
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="VN"
-                    value={tipoVehiculo}
-                    onChange={(e) => setTipoVehiculo(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    Marca
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="HY, TO..."
-                    value={marcaCodigo}
-                    onChange={(e) => setMarcaCodigo(e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-neutral-600 uppercase tracking-wider">
-                    IDV
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="157651"
-                    value={idv}
-                    onChange={(e) => setIdv(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-neutral-300 rounded-xl text-sm text-neutral-900 placeholder-neutral-300 focus:outline-none focus:ring-2 focus:ring-neutral-900"
-                  />
-                </div>
-              </div>
+              {/* Marca (catálogo), modelo e IDV */}
+              {camposMarcaModelo('modelos-edicion')}
 
               {/* Año & Color */}
               <div className="grid grid-cols-2 gap-4">
@@ -1950,7 +1851,7 @@ export default function VehiculosTableClient({ vehiculos, marcas, sucursales, us
                 <div>
                   <h2 className="text-lg font-bold text-neutral-900">Importar Stock CSV o Excel</h2>
                   <p className="text-xs text-neutral-500">
-                    Columnas del Excel de stock o compras: Tipo de vehículo, Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación, Patente.
+                    Columnas del Excel de stock o compras: Marca, Marca completa, Modelo, IDV, Chasis, Color, Ubicación, Patente. La columna Tipo de vehículo ya no se usa: si viene, se ignora.
                   </p>
                 </div>
               </div>

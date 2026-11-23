@@ -14,12 +14,17 @@ import {
   Car,
   MapPin,
   Layers,
+  RotateCcw,
+  Loader2,
 } from 'lucide-react';
 import {
   createSucursalAction,
   updateSucursalAction,
   deleteSucursalAction,
+  getDependenciasSucursalAction,
+  reactivarSucursalAction,
 } from '@/app/actions/sucursales.actions';
+import { esSucursalActiva, textoBajaSucursal } from '@/lib/sucursalActiva';
 import {
   createZonaAction,
   updateZonaAction,
@@ -83,6 +88,13 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
   const [verVehiculos, setVerVehiculos] = useState<Sucursal | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Sucursal | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  /** Datos de la sucursal a dar de baja: con datos se desactiva; sin datos se elimina. `null` = cargando. */
+  const [bloqueosBaja, setBloqueosBaja] = useState<string[] | null>(null);
+  const [reactivando, setReactivando] = useState<number | null>(null);
+  const textoBaja =
+    deleteTarget && bloqueosBaja
+      ? textoBajaSucursal(deleteTarget.nombre ?? `Sucursal ${deleteTarget.codigo ?? deleteTarget.id}`, bloqueosBaja)
+      : null;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -207,6 +219,42 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
     } finally {
       setIsDeleting(false);
     }
+  }
+
+  /** Abre la confirmación y consulta antes qué datos tiene, para decir si se elimina o se desactiva. */
+  async function pedirBaja(sucursal: Sucursal) {
+    setDeleteError(null);
+    setBloqueosBaja(null);
+    setDeleteTarget(sucursal);
+    const res = await getDependenciasSucursalAction(sucursal.id);
+    if (res.success) setBloqueosBaja(res.bloqueos);
+    else setDeleteError(res.error);
+  }
+
+  async function reactivar(sucursal: Sucursal) {
+    setReactivando(sucursal.id);
+    try {
+      const res = await reactivarSucursalAction(sucursal.id);
+      setFeedback(
+        res.success
+          ? { type: 'success', message: res.message || 'Sucursal reactivada.' }
+          : { type: 'error', message: res.error || 'No se pudo reactivar la sucursal.' },
+      );
+    } finally {
+      setReactivando(null);
+    }
+  }
+
+  function etiquetaDesactivada(sucursal: Sucursal) {
+    if (esSucursalActiva(sucursal)) return null;
+    return (
+      <span
+        title="Los usuarios no la ven. Puedes reactivarla."
+        className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-neutral-200 text-neutral-600 align-middle"
+      >
+        Desactivada
+      </span>
+    );
   }
 
   function openZonaCreate() {
@@ -369,16 +417,26 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
         >
           <Pencil className="w-4 h-4" />
         </button>
-        <button
-          onClick={() => {
-            setDeleteError(null);
-            setDeleteTarget(sucursal);
-          }}
-          title="Eliminar sucursal"
-          className="p-1.5 rounded-lg text-neutral-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-        >
-          <Trash2 className="w-4 h-4" />
-        </button>
+        {esSucursalActiva(sucursal) ? (
+          <button
+            onClick={() => void pedirBaja(sucursal)}
+            title="Eliminar sucursal (si tiene datos, se desactiva)"
+            aria-label={`Eliminar o desactivar ${sucursal.nombre ?? sucursal.codigo ?? sucursal.id}`}
+            className="p-1.5 rounded-lg text-neutral-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            onClick={() => void reactivar(sucursal)}
+            disabled={reactivando === sucursal.id}
+            title="Reactivar sucursal: los usuarios vuelven a verla"
+            aria-label={`Reactivar ${sucursal.nombre ?? sucursal.codigo ?? sucursal.id}`}
+            className="p-1.5 rounded-lg text-neutral-500 hover:text-green-700 hover:bg-green-50 transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {reactivando === sucursal.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <RotateCcw className="w-4 h-4" />}
+          </button>
+        )}
       </>
     );
   }
@@ -649,9 +707,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
               <li key={sucursal.id} className="p-4 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-semibold text-neutral-900 break-words">
+                    <p className={`font-semibold break-words ${esSucursalActiva(sucursal) ? 'text-neutral-900' : 'text-neutral-400'}`}>
                       <span className="font-mono text-neutral-500 mr-1.5">{sucursal.codigo ?? sucursal.id}</span>
                       {sucursal.nombre}
+                      {etiquetaDesactivada(sucursal)}
                     </p>
                     {sucursal.direccion && (
                       <p className="text-xs text-neutral-500 mt-0.5 flex items-center gap-1">
@@ -706,9 +765,10 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                     <tr key={sucursal.id} className="hover:bg-neutral-50 transition-colors">
                       {/* Nombre & Dirección */}
                       <td className="py-3.5 px-4">
-                        <p className="font-semibold text-neutral-900">
+                        <p className={`font-semibold ${esSucursalActiva(sucursal) ? 'text-neutral-900' : 'text-neutral-400'}`}>
                           <span className="font-mono text-neutral-500 mr-1.5">{sucursal.codigo ?? sucursal.id}</span>
                           {sucursal.nombre}
+                          {etiquetaDesactivada(sucursal)}
                         </p>
                         {sucursal.direccion && (
                           <p className="text-xs text-neutral-500 mt-0.5 flex items-center gap-1">
@@ -910,32 +970,30 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
         </div>
       )}
 
-      {/* Modal: Confirmar Eliminación */}
+      {/* Modal: eliminar o desactivar (con datos no se elimina: se desactiva) */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in" aria-modal="true" role="dialog">
           <div className="bg-white border border-neutral-200 rounded-2xl w-full max-w-md shadow-2xl max-h-[92vh] overflow-y-auto">
             <div className="p-6 space-y-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 flex items-center justify-center text-red-600 shrink-0">
+                <div className={`w-10 h-10 rounded-xl border flex items-center justify-center shrink-0 ${textoBaja?.accion === 'desactivar' ? 'bg-amber-50 border-amber-200 text-amber-600' : 'bg-red-50 border-red-200 text-red-600'}`}>
                   <AlertCircle className="w-5 h-5" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-neutral-900">Eliminar Sucursal</h2>
-                  <p className="text-sm text-neutral-500">
-                    ¿Confirmas eliminar <strong className="text-neutral-900">{deleteTarget.nombre}</strong>? Esta
-                    acción no se puede deshacer.
-                  </p>
+                  <h2 className="text-lg font-bold text-neutral-900">{textoBaja?.titulo ?? 'Eliminar sucursal'}</h2>
+                  {textoBaja ? (
+                    <p className="text-sm text-neutral-600 mt-1">{textoBaja.mensaje}</p>
+                  ) : !deleteError ? (
+                    <p className="text-sm text-neutral-500 mt-1 flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Revisando los datos de la sucursal...
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
-              {(solicitudesPorSucursal.get(deleteTarget.id)?.length || 0) > 0 && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>
-                    Esta sucursal tiene{' '}
-                    <strong>{solicitudesPorSucursal.get(deleteTarget.id)!.length} solicitud(es)</strong> de
-                    origen: no se puede eliminar mientras existan.
-                  </span>
+              {textoBaja?.accion === 'desactivar' && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800">
+                  La sucursal <strong>será desactivada, no eliminada</strong>: no se borra ningún dato.
                 </div>
               )}
 
@@ -958,10 +1016,12 @@ export default function SucursalesTableClient({ sucursales, solicitudes, zonas }
                 <button
                   type="button"
                   onClick={handleConfirmDelete}
-                  disabled={isDeleting}
-                  className="px-5 py-2 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-xl disabled:opacity-50 cursor-pointer"
+                  disabled={isDeleting || !textoBaja}
+                  className={`px-5 py-2 text-sm font-semibold text-white rounded-xl disabled:opacity-50 cursor-pointer ${textoBaja?.accion === 'desactivar' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-600 hover:bg-red-700'}`}
                 >
-                  {isDeleting ? 'Eliminando...' : 'Eliminar Definitivamente'}
+                  {isDeleting
+                    ? textoBaja?.accion === 'desactivar' ? 'Desactivando...' : 'Eliminando...'
+                    : textoBaja?.boton ?? 'Eliminar'}
                 </button>
               </div>
             </div>

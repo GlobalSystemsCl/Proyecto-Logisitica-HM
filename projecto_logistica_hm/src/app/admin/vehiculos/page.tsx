@@ -1,6 +1,7 @@
 import { AuthService } from '@/services/auth.service';
 import { VehiculoService } from '@/services/vehiculo.service';
 import { SucursalesService } from '@/services/sucursales.service';
+import { OrganizacionService } from '@/services/organizacion.service';
 import { redirect } from 'next/navigation';
 import VehiculosTableClient from './VehiculosTableClient';
 import PageHeader from '@/components/PageHeader';
@@ -23,11 +24,12 @@ export default async function AdminVehiculosPage() {
     redirect('/dashboard?error=unauthorized');
   }
 
-  const [vehiculosBase, marcas, sucursales, enTransito] = await Promise.all([
+  const [vehiculosBase, marcas, sucursales, enTransito, catalogoMarcas] = await Promise.all([
     VehiculoService.getVehiculos(),
     VehiculoService.getMarcas(),
-    SucursalesService.getSucursales(),
+    SucursalesService.getSucursales({ incluirInactivas: true }),
     VehiculoService.getDestinosEnTransito(),
+    OrganizacionService.getMarcasCatalogo(),
   ]);
   // R2: marca los vehículos que van en camino y hacia dónde.
   const vehiculos = vehiculosBase.map((v) => ({ ...v, en_transito_hacia: enTransito[v.id] ?? null }));
@@ -48,6 +50,7 @@ export default async function AdminVehiculosPage() {
         <VehiculosTableClient
           vehiculos={vehiculos}
           marcas={marcas}
+          catalogoMarcas={catalogoMarcas.map((m) => ({ id: m.id, codigo: m.codigo, nombre: m.nombre }))}
           sucursales={sucursales}
           userRole={profile.rol}
           userId={profile.id}

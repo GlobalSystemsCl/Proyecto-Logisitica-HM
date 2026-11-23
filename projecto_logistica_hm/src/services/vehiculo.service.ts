@@ -399,6 +399,26 @@ export class VehiculoService {
   }
 
   /**
+   * Id de cada chasis (VIN) que existe en el inventario, en mayúsculas.
+   * Consulta en grupos para no alargar la URL.
+   */
+  static async idsPorChasis(chasis: string[]): Promise<{ ids: Map<string, string>; error?: string }> {
+    const ids = new Map<string, string>();
+    try {
+      const admin = createAdminClient();
+      const unicos = [...new Set(chasis.map((c) => c.trim().toUpperCase()).filter(Boolean))];
+      for (const grupo of enLotes(unicos, TAMANO_GRUPO_IDS)) {
+        const { data, error } = await admin.from('vehiculo').select('id, chasis').in('chasis', grupo);
+        if (error) return { ids, error: mensajeErrorUsuario(error, 'No se pudieron leer los vehículos.') };
+        for (const v of (data ?? []) as Array<{ id: string; chasis: string }>) ids.set(v.chasis.toUpperCase(), v.id);
+      }
+      return { ids };
+    } catch (err: unknown) {
+      return { ids, error: mensajeErrorUsuario(err, 'No se pudieron leer los vehículos.') };
+    }
+  }
+
+  /**
    * Crea un nuevo vehículo
    */
   static async createVehiculo(input: CreateVehiculoInput): Promise<{
@@ -683,7 +703,7 @@ export class VehiculoService {
   //
   // Formato esperado: Excel de stock o de compras (modelo_excel/*.xls), leido
   // por encabezado con src/lib/importStock.ts:
-  //   Tipo de vehículo -> tipo_vehiculo (VN)
+  //   (Tipo de vehículo: ya no va en la plantilla; si viene, se ignora)
   //   Marca            -> marca_codigo (HY, TO...; se asegura en el catalogo)
   //   Marca completa   -> marca (HYUNDAI); si falta, el nombre del catalogo
   //   Modelo, IDV, Color, Patente -> columnas del mismo nombre
@@ -798,7 +818,6 @@ export class VehiculoService {
         pendientes.push({
           chasis,
           patente: celda(fila, c.patente).toUpperCase() || null,
-          tipo_vehiculo: celda(fila, c.tipo) || null,
           marca_codigo: marca.codigo || null,
           marca: marcaNombre,
           modelo: celda(fila, c.modelo),

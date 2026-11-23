@@ -689,7 +689,7 @@ describe('VehiculoService', () => {
       expect((insert?.[1] as Array<{ ubicacion: number }>).map((v) => v.ubicacion)).toEqual([409, 119]);
     });
 
-    it('should_import_stock_excel_columns_when_file_uses_current_format', async () => {
+    it('should_import_stock_excel_columns_and_ignore_tipo_when_file_has_it', async () => {
       admin.results.sucursal = [{ data: [{ id: 101, nombre: '15 NORTE' }], error: null }];
       admin.results.vehiculo = [{ data: [], error: null }, { data: null, error: null }];
       const csv = [
@@ -708,7 +708,6 @@ describe('VehiculoService', () => {
         {
           chasis: CHASIS_VALIDO,
           patente: null,
-          tipo_vehiculo: 'VN',
           marca_codigo: 'HY',
           marca: 'HYUNDAI',
           modelo: 'GRAND I-10 A',
@@ -722,7 +721,6 @@ describe('VehiculoService', () => {
         {
           chasis: 'JTMW1RF79KD123456',
           patente: 'ABCD-12',
-          tipo_vehiculo: 'VN',
           marca_codigo: 'TO',
           marca: 'TOYOTA',
           modelo: 'YARIS CROSS',
@@ -902,5 +900,37 @@ describe('VehiculoService.getVehiculosEnSucursal (R4)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     admin.results.vehiculo = [{ data: null, error: { message: 'boom' } }];
     expect(await VehiculoService.getVehiculosEnSucursal(101)).toEqual([]);
+  });
+});
+
+describe('VehiculoService.idsPorChasis', () => {
+  beforeEach(() => {
+    admin.reset();
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('should_map_each_existing_vin_to_its_id_in_uppercase', async () => {
+    admin.results.vehiculo = [{ data: [{ id: 'v-1', chasis: 'LB3G43S71TX401167' }], error: null }];
+
+    const res = await VehiculoService.idsPorChasis([' lb3g43s71tx401167 ', 'MA1NZ2NP1T2E76415', 'LB3G43S71TX401167']);
+
+    expect(res.error).toBeUndefined();
+    expect([...res.ids]).toEqual([['LB3G43S71TX401167', 'v-1']]);
+    expect(admin.callsTo('vehiculo')).toContainEqual(['in', 'chasis', ['LB3G43S71TX401167', 'MA1NZ2NP1T2E76415']]);
+  });
+
+  it('should_return_error_when_query_fails', async () => {
+    admin.results.vehiculo = [{ data: null, error: { message: 'boom' } }];
+
+    const res = await VehiculoService.idsPorChasis(['LB3G43S71TX401167']);
+
+    expect(res.error).toBeTruthy();
+  });
+
+  it('should_not_query_when_list_is_empty', async () => {
+    const res = await VehiculoService.idsPorChasis([]);
+    expect(res.ids.size).toBe(0);
+    expect(admin.callsTo('vehiculo')).toHaveLength(0);
   });
 });
