@@ -13,6 +13,7 @@ import {
   leerPlantillaUbicacion,
   MAX_FILAS_PLANTILLA_UBICACION,
   opcionUbicacion,
+  rangoListaUbicacion,
   resumenCargaUbicaciones,
   sucursalPorCodigo,
   vehiculosParaPlantillaUbicacion,
@@ -173,7 +174,6 @@ describe('crearPlantillaUbicaciones', () => {
     expect(hoja.getCell('A1').value).toBe('VIN');
     expect(hoja.getCell('B1').value).toBe('Ubicación');
     expect(hoja.getCell('A3').value).toBe(VIN_B);
-    expect(hoja.getCell('B2').dataValidation).toMatchObject({ type: 'list', formulae: [`${HOJA_SUCURSALES}!$A$2:$A$4`] });
 
     const opciones = libro.getWorksheet(HOJA_SUCURSALES)!;
     expect(opciones.getCell('A2').value).toBe('101 · 15 NORTE');
@@ -181,10 +181,35 @@ describe('crearPlantillaUbicaciones', () => {
     expect(opciones.getCell('A5').value).toBeNull();
   });
 
-  it('should_build_empty_template_when_there_are_no_vehicles', async () => {
+  it('should_write_a_single_dropdown_rule_when_template_has_more_than_nine_rows', async () => {
+    const vehiculos = Array.from({ length: 12 }, (_, i) => ({ chasis: `VIN${String(i).padStart(14, '0')}` }));
+    const libro = await crearPlantillaUbicaciones(vehiculos, SUCURSALES);
+    const hoja = libro.getWorksheet(HOJA_PLANTILLA)! as unknown as { dataValidations: { model: Record<string, unknown> } };
+    expect(Object.keys(hoja.dataValidations.model)).toEqual(['B2:B13']);
+
+    // Al reabrir el archivo, cada fila de la columna Ubicación tiene la lista.
+    const ExcelJS = (await import('exceljs')).default;
+    const releido = new ExcelJS.Workbook();
+    await releido.xlsx.load(await libro.xlsx.writeBuffer());
+    const hojaReleida = releido.getWorksheet(HOJA_PLANTILLA)!;
+    for (const celda of ['B2', 'B10', 'B13']) {
+      expect(hojaReleida.getCell(celda).dataValidation).toMatchObject({ type: 'list', formulae: [`${HOJA_SUCURSALES}!$A$2:$A$4`] });
+    }
+    expect(hojaReleida.getCell('B14').dataValidation).toBeUndefined();
+  });
+
+  it('should_build_empty_template_without_dropdown_when_there_are_no_vehicles', async () => {
     const libro = await crearPlantillaUbicaciones([], SUCURSALES);
     const hoja = libro.getWorksheet(HOJA_PLANTILLA)!;
     expect(hoja.getCell('A1').value).toBe('VIN');
     expect(hoja.rowCount).toBe(1);
+    expect(Object.keys((hoja as unknown as { dataValidations: { model: object } }).dataValidations.model)).toEqual([]);
+  });
+});
+
+describe('rangoListaUbicacion', () => {
+  it('should_cover_from_row_two_to_last_vehicle_row', () => {
+    expect(rangoListaUbicacion(1)).toBe('B2:B2');
+    expect(rangoListaUbicacion(797)).toBe('B2:B798');
   });
 });

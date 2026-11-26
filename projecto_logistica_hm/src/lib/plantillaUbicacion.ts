@@ -1,4 +1,4 @@
-import type { Workbook } from 'exceljs';
+import type { DataValidation, Workbook } from 'exceljs';
 import { codigoVisibleSucursal } from '@/lib/busqueda';
 import { crearLibroExcel } from '@/lib/excel';
 import { esChasisValido, normalizarEncabezado } from '@/lib/importStock';
@@ -191,18 +191,28 @@ export async function crearPlantillaUbicaciones(
   );
   const hoja = libro.getWorksheet(HOJA_PLANTILLA)!;
   hoja.getColumn(2).width = Math.max(30, ...opciones.map((o) => o.length + 2));
-  if (opciones.length > 0) {
-    const rango = `${HOJA_SUCURSALES}!$A$2:$A$${opciones.length + 1}`;
-    for (let fila = 2; fila <= vehiculos.length + 1; fila++) {
-      hoja.getCell(fila, 2).dataValidation = {
-        type: 'list',
-        allowBlank: true,
-        formulae: [rango],
-        showErrorMessage: true,
-        errorTitle: 'Ubicación',
-        error: 'Elige una sucursal de la lista.',
-      };
-    }
+  if (opciones.length > 0 && vehiculos.length > 0) {
+    // Una sola regla para toda la columna. Celda por celda, ExcelJS ordena las
+    // direcciones como texto ("B10" antes que "B2") y escribe rangos que se
+    // pisan (B2:B798 y B10:B798), que Excel puede marcar como contenido dañado.
+    (hoja as unknown as HojaConValidaciones).dataValidations.add(rangoListaUbicacion(vehiculos.length), {
+      type: 'list',
+      allowBlank: true,
+      formulae: [`${HOJA_SUCURSALES}!$A$2:$A$${opciones.length + 1}`],
+      showErrorMessage: true,
+      errorTitle: 'Ubicación',
+      error: 'Elige una sucursal de la lista.',
+    });
   }
   return libro;
+}
+
+/** `dataValidations` existe en ExcelJS 4.4, pero no está en sus tipos. */
+interface HojaConValidaciones {
+  dataValidations: { add(rango: string, validacion: DataValidation): void; model: Record<string, DataValidation> };
+}
+
+/** Celdas de la columna Ubicación con lista desplegable: "B2:B<última fila>". */
+export function rangoListaUbicacion(totalVehiculos: number): string {
+  return `B2:B${totalVehiculos + 1}`;
 }
